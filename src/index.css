@@ -167,6 +167,20 @@
     animation: fadeIn 0.3s ease-out forwards;
   }
 
+  /* Floating animation for active elements */
+  @keyframes float-subtle {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  .animate-float-subtle {
+    animation: float-subtle 3s ease-in-out infinite;
+  }
+
   /* Network topology animations */
   @keyframes float {
     0% {
