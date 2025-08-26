@@ -17,6 +17,7 @@ import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTim
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { HealthStatus } from '../types';
+import { RelatedArticles } from '../components/RelatedArticles';
 
 // HELIUS-STYLE SUBSCRIPTION COMPONENT WITH BETTER TEXT SPACING
 // FIXED NEWSLETTER SUBSCRIPTION COMPONENT
@@ -31,7 +32,7 @@ const NewsletterSubscription = () => {
     };
 
     return (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-8 lg:p-12">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-8 lg:p-12">
             <div className="flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12">
                 {/* Left side - Text content - Fixed to prevent text wrapping */}
                 <div className="flex-1 text-center lg:text-left">
@@ -51,7 +52,7 @@ const NewsletterSubscription = () => {
                             name="email"
                             placeholder="Type your email..."
                             required
-                            className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
+                            className="flex-1 px-4 py-3 bg-gray-100  border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
                         />
                         <button 
                             type="submit"
@@ -81,134 +82,6 @@ const NewsletterSubscription = () => {
     );
 };
 
-// Related Articles Component
-const RelatedArticles = ({ currentPostSlug, limit = 4 }: { currentPostSlug: string; limit?: number }) => {
-    const [relatedPosts, setRelatedPosts] = useState<RelatedPost[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchRelatedPosts = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const response = await getRelatedPosts(currentPostSlug, limit);
-                setRelatedPosts(response.data);
-            } catch (err) {
-                setError('Failed to load related articles');
-                console.error('Error fetching related posts:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (currentPostSlug) {
-            fetchRelatedPosts();
-        }
-    }, [currentPostSlug, limit]);
-
-    if (loading) {
-        return (
-            <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Related Articles
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.from({ length: limit }).map((_, i) => (
-                        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-                            <div className="animate-pulse">
-                                <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-4"></div>
-                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
-                                <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
-    if (error || relatedPosts.length === 0) {
-        return null;
-    }
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Related Articles
-                </h2>
-                <Link 
-                    to="/blog"
-                    className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                >
-                    View all articles
-                    <ArrowLeft className="w-4 h-4 ml-1 transform rotate-180" />
-                </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {relatedPosts.map((post) => (
-                    <Link
-                        key={post._id}
-                        to={`/blog/${post.slug}`}
-                        className="group block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 overflow-hidden hover:shadow-lg"
-                    >
-                        {post.imageUrl && (
-                            <div className="relative h-40 overflow-hidden">
-                                <img
-                                    src={post.imageUrl}
-                                    alt={post.title}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                            </div>
-                        )}
-
-                        <div className="p-4">
-                            {post.matchingTags && post.matchingTags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-2">
-                                    {post.matchingTags.slice(0, 2).map((tag) => (
-                                        <span
-                                            key={tag}
-                                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300 rounded-full"
-                                        >
-                                            <Tag className="w-2 h-2" />
-                                            {tag}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-
-                            <h3 className="font-bold text-base text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-2 line-clamp-2">
-                                {post.title}
-                            </h3>
-
-                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1">
-                                        <Calendar className="w-3 h-3" />
-                                        <span>{formatBlogDate(post.publishedAt)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        <span>{post.readTime} min</span>
-                                    </div>
-                                </div>
-
-                                {post.matchingTagsCount > 0 && (
-                                    <div className="text-blue-600 dark:text-blue-400 font-medium text-xs">
-                                        {post.matchingTagsCount} shared
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </Link>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 // Main BlogPost Component
 export function BlogPost() {
     const { slug } = useParams<{ slug: string }>();
@@ -218,6 +91,15 @@ export function BlogPost() {
     const [error, setError] = useState<string | null>(null);
     const [health] = useState<HealthStatus | null>(null);
     const [shareMenuOpen, setShareMenuOpen] = useState(false);
+    const XIcon = ({ className }: { className?: string }) => (
+    <svg 
+        viewBox="0 0 24 24" 
+        className={className}
+        fill="currentColor"
+    >
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+    );
 
     useEffect(() => {
         if (!slug) {
@@ -248,24 +130,24 @@ export function BlogPost() {
     };
 
     const sharePost = (platform: 'twitter' | 'copy') => {
-        if (!post) return;
+    if (!post) return;
 
-        const url = window.location.href;
-        const text = `${post.title} - ${post.excerpt}`;
+    const url = window.location.href;
+    const text = `${post.title} - ${post.excerpt}`;
 
-        switch (platform) {
-            case 'twitter':
-                window.open(
-                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
-                    '_blank'
-                );
-                break;
-            case 'copy':
-                navigator.clipboard.writeText(url).then(() => {
-                    setShareMenuOpen(false);
-                });
-                break;
-        }
+    switch (platform) {
+        case 'twitter':
+            window.open(
+                `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+                '_blank'
+            );
+            break;
+        case 'copy':
+            navigator.clipboard.writeText(url).then(() => {
+                setShareMenuOpen(false);
+            });
+            break;
+    }
     };
 
     const renderMainContent = (content: string | undefined) => {
@@ -406,20 +288,20 @@ export function BlogPost() {
                                 </div>
                             )}
                         </div>
-
                         {/* Share Button */}
                         <div className="relative">
+                            <div className="flex justify-center gap-3">
                             <button
-                                onClick={() => setShareMenuOpen(!shareMenuOpen)}
-                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                onClick={() => sharePost('twitter')}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                             >
-                                <Share2 className="w-4 h-4" />
-                                Share
+                                <XIcon className="w-4 h-4" />
+                                Share on X
                             </button>
-
+                        </div>
                             {/* Share Menu */}
                             {shareMenuOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white  border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
                                     <button
                                         onClick={() => sharePost('twitter')}
                                         className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -439,7 +321,6 @@ export function BlogPost() {
                         </div>
                     </div>
                 </header>
-
                 {/* Featured Image */}
                 {post.imageUrl && (
                     <div className="relative mb-12 rounded-xl overflow-hidden">
@@ -450,9 +331,8 @@ export function BlogPost() {
                         />
                     </div>
                 )}
-
                 {/* Content */}
-                <div className="prose prose-lg max-w-none dark:prose-invert">
+                <div className="prose prose-lg max-w-none dark:prose-invert bg-transparent">
                     {post.mainContent ? (
                         renderMainContent(post.mainContent)
                     ) : post.content ? (
@@ -461,7 +341,6 @@ export function BlogPost() {
                         <p className="text-gray-500 dark:text-gray-400 italic">No content available.</p>
                     )}
                 </div>
-
                 {/* Original Source Link */}
                 {post.sourceUrl && (
                     <div className="mt-12 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg">
@@ -474,42 +353,38 @@ export function BlogPost() {
                                 className="inline-flex items-center gap-1 font-medium hover:underline"
                             >
                                 View on Substack
-                                <ExternalLink className="w-3 h-3" />
+                                <ExternalLink className="w-3 h-3 mb-3" />
                             </a>
                         </p>
                     </div>
                 )}
             </article>
 
+        {/* Newsletter and Related Articles Section - Combined container */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-6">
             {/* Divider */}
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-            </div>
-
+            <div className="border-t border-gray-200 dark:border-gray-700 mb-5"></div>
+            
             {/* Newsletter Subscription */}
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="mb-9">
                 <NewsletterSubscription />
             </div>
-
-            {/* Divider */}
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="border-t border-gray-200 dark:border-gray-700"></div>
-            </div>
-
+            
             {/* Related Articles */}
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="mb-6">
                 <RelatedArticles currentPostSlug={post.slug} limit={3} />
             </div>
+        </div>
 
-            {/* Close on outside click */}
-            {shareMenuOpen && (
-                <div 
-                    className="fixed inset-0 z-5" 
-                    onClick={() => setShareMenuOpen(false)}
-                />
-            )}
-
-            <Footer />
+        {/* Close on outside click */}
+        {shareMenuOpen && (
+            <div 
+                className="fixed inset-0 z-5" 
+                onClick={() => setShareMenuOpen(false)}
+            />
+        )}
+        
+        <Footer />
         </div>
     );
 }

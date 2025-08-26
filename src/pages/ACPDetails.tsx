@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { useTheme } from '../hooks/useTheme';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
@@ -110,94 +111,280 @@ export default function ACPDetails() {
     }
   };
 
-const CodeBlock = ({ children, className, ...props }: any) => {
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : '';
-  const content = String(children).trim();
-  
-  // Initialize mermaid once
-  React.useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'dark',
-      securityLevel: 'loose',
-      themeVariables: {
-        primaryColor: '#3b82f6',
-        primaryTextColor: '#ffffff',
-        primaryBorderColor: '#1e40af',
-        lineColor: '#6b7280',
-        secondaryColor: '#1f2937',
-        tertiaryColor: '#374151',
-        background: '#111827',
-        mainBkg: '#1f2937',
-        secondBkg: '#374151',
-      }
-    });
-  }, []);
+// code blocks and mermaid diagrams 
 
-  // Check if this is a mermaid diagram
-  const isMermaid = language === 'mermaid' || 
-                   content.includes('flowchart') || 
-                   content.includes('graph') ||
-                   content.includes('sequenceDiagram') ||
-                   content.includes('classDiagram');
-
-  if (isMermaid) {
-    const chartId = `mermaid-chart-${Math.random().toString(36).substr(2, 9)}`;
+  const CodeBlock = ({ children, className, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const language = match ? match[1] : '';
+    const content = String(children).trim();
     
-    React.useEffect(() => {
-      const renderChart = async () => {
-        try {
-          const element = document.getElementById(chartId);
-          if (element) {
-            // Clear previous content
-            element.innerHTML = '';
-            
-            // Render the diagram
-            const { svg } = await mermaid.render(`${chartId}-svg`, content);
-            element.innerHTML = svg;
-          }
-        } catch (error) {
-          console.error('Mermaid rendering error:', error);
-          const element = document.getElementById(chartId);
-          if (element) {
-            element.innerHTML = `<div class="text-red-400 p-4">Error rendering diagram: ${error.message}</div>`;
-          }
-        }
-      };
+    // Get current theme
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
+    
+    // Improved theme variables that match your app's design system
+    const getDarkThemeVariables = () => ({
+      // Primary elements - nice blue that matches your app
+      primaryColor: '#3b82f6',
+      primaryTextColor: '#e2e8f0',  // Light gray for better readability
+      primaryBorderColor: '#1e40af',
       
-      if (document.getElementById(chartId)) {
-        renderChart();
-      }
-    }, [chartId, content]);
+      // Lines and connections
+      lineColor: '#64748b',         // Neutral gray for lines
+      
+      // Background colors using your dark palette
+      background: '#0f172a',        // dark-900
+      mainBkg: '#1e293b',          // dark-800  
+      secondBkg: '#334155',        // dark-700
+      tertiaryColor: '#475569',    // dark-600
+      
+      // Secondary elements
+      secondaryColor: '#334155',    // dark-700
+      
+      // Additional colors for better contrast
+      cScale0: '#0f172a',          // dark-900
+      cScale1: '#1e293b',          // dark-800
+      cScale2: '#334155',          // dark-700
+      cScale3: '#475569',          // dark-600
+      cScale4: '#64748b',          // dark-500
+      
+      // Text colors with good contrast
+      cScale11: '#e2e8f0',         // Light text
+      cScale12: '#f1f5f9',         // Lighter text
+      
+      // Node specific colors
+      nodeBkg: '#1e293b',          // dark-800
+      nodeTextColor: '#e2e8f0',    // Light gray
+      nodeBorder: '#3b82f6',       // Blue border
+      
+      // Special element colors
+      clusterBkg: '#334155',       // dark-700
+      clusterBorder: '#64748b',    // dark-500
+      defaultLinkColor: '#64748b', // dark-500
+      
+      // Error and success states
+      errorBkgColor: '#ef4444',
+      errorTextColor: '#fecaca',
+      successBkgColor: '#10b981',
+      successTextColor: '#a7f3d0',
+    });
 
-    return (
-      <div className="my-8 p-6 bg-gray-900 dark:bg-gray-800 rounded-lg overflow-auto">
-        <div id={chartId} className="flex justify-center min-h-[200px] items-center text-gray-400">
-          <div>Loading diagram...</div>
+    const getLightThemeVariables = () => ({
+      // Primary elements - matching blue
+      primaryColor: '#3b82f6',
+      primaryTextColor: '#1e293b',  // Dark text for contrast
+      primaryBorderColor: '#1e40af',
+      
+      // Lines and connections  
+      lineColor: '#64748b',         // Neutral gray
+      
+      // Light backgrounds
+      background: '#ffffff',
+      mainBkg: '#ffffff',
+      secondBkg: '#f8fafc',        // Very light gray
+      tertiaryColor: '#e2e8f0',    // Light gray
+      
+      // Secondary elements
+      secondaryColor: '#f1f5f9',   // Light gray
+      
+      // Scale colors for light mode
+      cScale0: '#ffffff',
+      cScale1: '#f8fafc',
+      cScale2: '#f1f5f9',
+      cScale3: '#e2e8f0',
+      cScale4: '#cbd5e1',
+      
+      // Dark text for contrast
+      cScale11: '#334155',
+      cScale12: '#1e293b',
+      
+      // Node colors for light mode
+      nodeBkg: '#ffffff',
+      nodeTextColor: '#1e293b',
+      nodeBorder: '#3b82f6',
+      
+      // Special elements
+      clusterBkg: '#f8fafc',
+      clusterBorder: '#cbd5e1',
+      defaultLinkColor: '#64748b',
+      
+      // States
+      errorBkgColor: '#ef4444',
+      errorTextColor: '#991b1b',
+      successBkgColor: '#10b981',
+      successTextColor: '#065f46',
+    });
+    
+    // Initialize mermaid with dynamic theme
+    React.useEffect(() => {
+      const mermaidTheme = isDark ? 'dark' : 'default';
+      const themeVariables = isDark ? getDarkThemeVariables() : getLightThemeVariables();
+
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: mermaidTheme,
+        securityLevel: 'loose',
+        themeVariables,
+        // Additional config for better rendering
+        flowchart: {
+          useMaxWidth: true,
+          htmlLabels: true,
+        },
+        sequence: {
+          useMaxWidth: true,
+        }
+      });
+    }, [isDark]);
+
+    // Check if this is a mermaid diagram
+    const isMermaid = language === 'mermaid' || 
+                    content.includes('flowchart') || 
+                    content.includes('graph') ||
+                    content.includes('sequenceDiagram') ||
+                    content.includes('classDiagram');
+
+    if (isMermaid) {
+      const chartId = `mermaid-chart-${Math.random().toString(36).substr(2, 9)}`;
+      
+      React.useEffect(() => {
+        const renderChart = async () => {
+          try {
+            const element = document.getElementById(chartId);
+            if (element) {
+              // Clear previous content
+              element.innerHTML = '';
+              
+              // Re-initialize with current theme
+              const mermaidTheme = isDark ? 'dark' : 'default';
+              const themeVariables = isDark ? getDarkThemeVariables() : getLightThemeVariables();
+
+              await mermaid.initialize({
+                startOnLoad: false,
+                theme: mermaidTheme,
+                securityLevel: 'loose',
+                themeVariables,
+                flowchart: {
+                  useMaxWidth: true,
+                  htmlLabels: true,
+                },
+                sequence: {
+                  useMaxWidth: true,
+                }
+              });
+              
+              // Render the diagram
+              const { svg } = await mermaid.render(`${chartId}-svg`, content);
+              element.innerHTML = svg;
+            }
+          } catch (error) {
+            console.error('Mermaid rendering error:', error);
+            const element = document.getElementById(chartId);
+            if (element) {
+              element.innerHTML = `<div class="${isDark ? 'text-red-400' : 'text-red-600'} p-4">Error rendering diagram: ${error.message}</div>`;
+            }
+          }
+        };
+        
+        if (document.getElementById(chartId)) {
+          renderChart();
+        }
+      }, [chartId, content, isDark]);
+
+      // Listen for theme changes and re-render
+      React.useEffect(() => {
+        const handleThemeChange = (event: any) => {
+          const newTheme = event.detail?.theme || theme;
+          const element = document.getElementById(chartId);
+          if (element) {
+            setTimeout(async () => {
+              try {
+                element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'} flex justify-center items-center min-h-[200px]">
+                  <div>Re-rendering diagram...</div>
+                </div>`;
+                
+                const mermaidTheme = newTheme === 'dark' ? 'dark' : 'default';
+                const themeVariables = newTheme === 'dark' ? getDarkThemeVariables() : getLightThemeVariables();
+
+                await mermaid.initialize({
+                  startOnLoad: false,
+                  theme: mermaidTheme,
+                  securityLevel: 'loose',
+                  themeVariables,
+                  flowchart: {
+                    useMaxWidth: true,
+                    htmlLabels: true,
+                  },
+                  sequence: {
+                    useMaxWidth: true,
+                  }
+                });
+                
+                const { svg } = await mermaid.render(`${chartId}-svg-${Date.now()}`, content);
+                element.innerHTML = svg;
+              } catch (error) {
+                console.error('Error re-rendering mermaid on theme change:', error);
+                element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-red-400' : 'text-red-600'} p-4">Error re-rendering diagram</div>`;
+              }
+            }, 150);
+          }
+        };
+
+        window.addEventListener('themeChanged', handleThemeChange);
+        return () => window.removeEventListener('themeChanged', handleThemeChange);
+      }, [chartId, content, theme]);
+
+      return (
+        <div className={`my-8 p-6 rounded-xl overflow-auto transition-all duration-300 border ${
+          isDark 
+            ? 'bg-dark-800/50 backdrop-blur-sm border-dark-700/50 shadow-xl' 
+            : 'bg-white border-gray-200 shadow-lg hover:shadow-xl'
+        }`}>
+          <div id={chartId} className={`flex justify-center min-h-[200px] items-center transition-colors duration-200 ${
+            isDark ? 'text-gray-400' : 'text-gray-600'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
+                isDark ? 'border-blue-400' : 'border-blue-600'
+              }`}></div>
+              <span>Loading diagram...</span>
+            </div>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  // Regular code blocks
-  return match ? (
-    <div className="my-6">
-      <SyntaxHighlighter
-        style={vscDarkPlus}
-        language={language}
-        PreTag="div"
-        className="rounded-lg"
-      >
-        {content}
-      </SyntaxHighlighter>
-    </div>
-  ) : (
-    <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono" {...props}>
-      {children}
-    </code>
-  );
-};
+    // Regular code blocks with improved styling
+    return match ? (
+      <div className={`my-4 rounded-lg border overflow-hidden ${
+        isDark 
+          ? 'bg-dark-800/50 border-dark-700/50' 
+          : 'bg-gray-50 border-gray-200'
+      }`}>
+        <div className={`px-4 py-2 text-xs font-medium border-b ${
+          isDark 
+            ? 'bg-dark-700/50 border-dark-600/50 text-gray-300' 
+            : 'bg-gray-100 border-gray-200 text-gray-600'
+        }`}>
+          {match[1]}
+        </div>
+        <pre className={`p-4 overflow-auto text-sm ${
+          isDark ? 'text-gray-300' : 'text-gray-800'
+        }`}>
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      </div>
+    ) : (
+      <code className={`px-1.5 py-0.5 rounded text-sm font-mono ${
+        isDark 
+          ? 'bg-dark-700/50 text-gray-300' 
+          : 'bg-gray-100 text-gray-800'
+      }`} {...props}>
+        {children}
+      </code>
+    );
+  };
 
   const getCleanStatus = (status: string) => {
     if (!status) return 'Unknown';

@@ -1,22 +1,15 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import { acpService } from '../services/acpService';
 import {
   Users,
-  Clock,
-  GitBranch,
-  TrendingUp,
-  Package,
   ArrowRight,
   BookOpen,
-  Tag,
-  Activity,
   MessageCircle,
-  Code,
-  Link,
-  Calendar
 } from 'lucide-react';
 
 const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
+  
   const getStatusColor = (status) => {
     const cleanStatus = status?.toLowerCase() || '';
     
@@ -66,13 +59,14 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
     );
   };
 
-  const MetadataItem = ({ icon: Icon, label, value }) => (
-    <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+  const MetadataItem = ({ icon: Icon, label, value, colorClass = '' }) => (
+    <div className={`flex items-center gap-1.5 text-gray-500 dark:text-gray-400 ${colorClass}`}>
       <Icon className="w-4 h-4" />
       <span className="text-xs font-medium">{label}</span>
       {value && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{value}</span>}
     </div>
   );
+
 
   if (viewMode === 'list') {
     return (
@@ -99,6 +93,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
               <div className="flex items-center gap-4">
                 <MetadataItem icon={Users} label={`${acp.authors?.length || 0} authors`} />
                 <MetadataItem icon={BookOpen} label={`${acp.readingTime} min read`} />
+                
               </div>
               <div className="flex items-center gap-4">
                 <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusColor(acp.status)}`}>
@@ -148,6 +143,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
             <BookOpen className="w-4 h-4" />
             <span className="text-xs font-medium">{acp.readingTime} min read</span>
           </div>
+          
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

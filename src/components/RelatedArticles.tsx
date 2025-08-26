@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Calendar, Tag, ArrowRight } from 'lucide-react';
-import { getRelatedPosts, RelatedPost, formatBlogDate } from '../api/blogApi';
+import { getRelatedPosts, RelatedPost, formatBlogDate, getBlogPosts } from '../api/blogApi';
 
 interface RelatedArticlesProps {
     currentPostSlug: string;
@@ -9,27 +9,75 @@ interface RelatedArticlesProps {
 }
 
 export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesProps) {
-    const [relatedPosts, setRelatedPosts] = useState<RelatedPost[]>([]);
+    const [posts, setPosts] = useState<RelatedPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isRecent, setIsRecent] = useState(false); // Track if we're showing recent vs related
 
     useEffect(() => {
-        const fetchRelatedPosts = async () => {
+        const fetchPosts = async () => {
             try {
                 setLoading(true);
                 setError(null);
-                const response = await getRelatedPosts(currentPostSlug, limit);
-                setRelatedPosts(response.data);
+                setIsRecent(false);
+
+                // First, try to get related posts based on tags
+                try {
+                    const relatedResponse = await getRelatedPosts(currentPostSlug, limit);
+                    
+                    if (relatedResponse.data && relatedResponse.data.length > 0) {
+                        // Success! We have related posts
+                        setPosts(relatedResponse.data);
+                        setIsRecent(false);
+                        return;
+                    }
+                } catch (relatedError) {
+                    console.warn('Related posts fetch failed, falling back to recent posts:', relatedError);
+                }
+
+                // Fallback: Get recent posts
+                console.info('No related posts found, fetching recent posts as fallback');
+                const recentResponse = await getBlogPosts(limit, 0);
+                
+                if (recentResponse.data && recentResponse.data.length > 0) {
+                    // Filter out the current post and convert to RelatedPost format
+                    const recentPosts = recentResponse.data
+                        .filter(post => post.slug !== currentPostSlug)
+                        .slice(0, limit)
+                        .map(post => ({
+                            _id: post._id,
+                            title: post.title,
+                            slug: post.slug,
+                            excerpt: post.excerpt,
+                            publishedAt: post.publishedAt,
+                            author: post.author,
+                            authors: post.authors,
+                            tags: post.tags,
+                            imageUrl: post.imageUrl,
+                            readTime: post.readTime || 5,
+                            views: post.views,
+                            matchingTagsCount: 0, // No tag matching for recent posts
+                            matchingTags: []
+                        }));
+
+                    setPosts(recentPosts);
+                    setIsRecent(true);
+                } else {
+                    // No posts at all - this should rarely happen
+                    setPosts([]);
+                }
+
             } catch (err) {
-                setError('Failed to load related articles');
-                console.error('Error fetching related posts:', err);
+                setError('Failed to load articles');
+                console.error('Error fetching posts:', err);
+                setPosts([]);
             } finally {
                 setLoading(false);
             }
         };
 
         if (currentPostSlug) {
-            fetchRelatedPosts();
+            fetchPosts();
         }
     }, [currentPostSlug, limit]);
 
@@ -54,101 +102,101 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
         );
     }
 
-    if (error || relatedPosts.length === 0) {
-        return null; // Don't show anything if there's an error or no related posts
+    // Don't show anything if we have an error AND no posts to show
+    if (error && posts.length === 0) {
+        return null;
+    }
+
+    // Don't show anything if we have no posts at all
+    if (posts.length === 0) {
+        return null;
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Related Articles
-                </h2>
+        <div className="space-y-8">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        {isRecent ? 'Recent Articles' : 'Related Articles'}
+                    </h2>
+                    {/* Show a subtle indicator when showing recent vs related */}
+                    {isRecent ? (
+                        <p className="text-gray-500 dark:text-gray-400">
+                            Showing recent articles since no related articles were found
+                        </p>
+                    ) : (
+                        <p className="text-gray-500 dark:text-gray-400">
+                            Articles with similar topics and tags
+                        </p>
+                    )}
+                </div>
                 <Link 
                     to="/blog"
-                    className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors group"
                 >
                     View all articles
-                    <ArrowRight className="w-4 h-4 ml-1" />
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
                 </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {relatedPosts.map((post) => (
+            {/* Articles Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {posts.map((post) => (
                     <Link
                         key={post._id}
                         to={`/blog/${post.slug}`}
-                        className="group block bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 overflow-hidden hover:shadow-lg"
+                        className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-1"
                     >
                         {/* Image */}
                         {post.imageUrl && (
-                            <div className="relative h-48 overflow-hidden">
+                            <div className="relative h-52 overflow-hidden">
                                 <img
                                     src={post.imageUrl}
                                     alt={post.title}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                             </div>
                         )}
 
-                        {/* Content */}
-                        <div className="p-6">
-                            {/* Matching Tags */}
-                            {post.matchingTags && post.matchingTags.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                    {post.matchingTags.slice(0, 2).map((tag) => (
-                                        <span
-                                            key={tag}
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300 rounded-full"
-                                        >
-                                            <Tag className="w-3 h-3" />
-                                            {tag}
-                                        </span>
-                                    ))}
-                                    {post.matchingTags.length > 2 && (
-                                        <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400 rounded-full">
-                                            +{post.matchingTags.length - 2} more
-                                        </span>
-                                    )}
+                        <div className="p-8">
+                            {/* Tags for related articles */}
+                            {!isRecent && post.matchingTagsCount > 0 && (
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                                        <Tag className="w-3 h-3" />
+                                        {post.matchingTagsCount} shared tag{post.matchingTagsCount > 1 ? 's' : ''}
+                                    </div>
                                 </div>
                             )}
 
                             {/* Title */}
-                            <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3 line-clamp-2">
+                            <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-4 line-clamp-2 leading-tight">
                                 {post.title}
                             </h3>
 
                             {/* Excerpt */}
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                            <p className="text-gray-600 dark:text-gray-300 mb-6 line-clamp-3 leading-relaxed">
                                 {post.excerpt}
                             </p>
 
                             {/* Meta */}
-                            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-1">
-                                        <Calendar className="w-3 h-3" />
-                                        <span>{formatBlogDate(post.publishedAt)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        <span>{post.readTime} min read</span>
-                                    </div>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>{formatBlogDate(post.publishedAt)}</span>
                                 </div>
-
-                                {/* Matching indicator */}
-                                {post.matchingTagsCount > 0 && (
-                                    <div className="text-blue-600 dark:text-blue-400 font-medium">
-                                        {post.matchingTagsCount} shared tag{post.matchingTagsCount > 1 ? 's' : ''}
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4" />
+                                    <span>{post.readTime} min read</span>
+                                </div>
                             </div>
 
                             {/* Read more indicator */}
-                            <div className="mt-4 flex items-center text-blue-600 dark:text-blue-400 font-medium text-sm group-hover:gap-2 transition-all duration-200">
+                            <div className="flex items-center text-blue-600 dark:text-blue-400 font-semibold text-sm group-hover:gap-3 transition-all duration-200">
                                 <span>Read article</span>
-                                <span className="transform group-hover:translate-x-1 transition-transform duration-200">→</span>
+                                <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                             </div>
                         </div>
                     </Link>

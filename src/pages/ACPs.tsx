@@ -39,7 +39,6 @@ interface Filters {
   track: string;
   complexity: string;
   author: string;
-  hasDiscussion: boolean | null;
 }
 
 export default function ACPs() {
@@ -62,7 +61,7 @@ export default function ACPs() {
     track: '',
     complexity: '',
     author: '',
-    hasDiscussion: null
+
   });
 
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -226,11 +225,7 @@ export default function ACPs() {
         if (!authorMatch) return false;
       }
 
-      // Discussion filter
-      if (filters.hasDiscussion !== null) {
-        const hasDiscussion = Boolean(acp.discussion);
-        if (hasDiscussion !== filters.hasDiscussion) return false;
-      }
+      
 
       return true;
     });
@@ -323,7 +318,7 @@ export default function ACPs() {
       track: '',
       complexity: '',
       author: '',
-      hasDiscussion: null
+
     });
     setSearchQuery('');
   };
@@ -489,29 +484,6 @@ export default function ACPs() {
                   )}
                 </button>
 
-                {/* Sort Dropdown */}
-                <div className="relative">
-                  <select
-                    value={`${sortBy}-${sortOrder}`}
-                    onChange={(e) => {
-                      const [newSortBy, newSortOrder] = e.target.value.split('-') as [SortOption, SortOrder];
-                      setSortBy(newSortBy);
-                      setSortOrder(newSortOrder);
-                    }}
-                    className="appearance-none px-4 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 cursor-pointer"
-                  >
-                    <option value="number-desc">Number (High to Low)</option>
-                    <option value="number-asc">Number (Low to High)</option>
-                    <option value="title-asc">Title (A to Z)</option>
-                    <option value="title-desc">Title (Z to A)</option>
-                    <option value="status-asc">Status</option>
-                    <option value="track-asc">Track</option>
-                    <option value="complexity-asc">Complexity</option>
-                    <option value="impact-desc">Impact (High to Low)</option>
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-                </div>
-
                 {/* View Mode Toggle */}
                 <div className="flex items-center bg-gray-100 dark:bg-dark-700 rounded-md p-1">
                   <button
@@ -541,7 +513,7 @@ export default function ACPs() {
             {/* Filters Panel */}
             {showFilters && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {/* Status Filter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -613,24 +585,7 @@ export default function ACPs() {
                     />
                   </div>
 
-                  {/* Has Discussion Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Discussion
-                    </label>
-                    <select
-                      value={filters.hasDiscussion === null ? '' : filters.hasDiscussion.toString()}
-                      onChange={(e) => setFilters({ 
-                        ...filters, 
-                        hasDiscussion: e.target.value === '' ? null : e.target.value === 'true' 
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-dark-700 dark:text-white"
-                    >
-                      <option value="">All</option>
-                      <option value="true">Has Discussion</option>
-                      <option value="false">No Discussion</option>
-                    </select>
-                  </div>
+                  
 
                   {/* Clear Filters */}
                   <div className="flex items-end">

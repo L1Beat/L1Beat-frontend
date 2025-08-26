@@ -95,6 +95,8 @@ export const acpService = {
     }
   },
 
+  
+
   /**
    * Search ACPs with filters
    */
@@ -107,7 +109,6 @@ export const acpService = {
       category: string;
       impact: string;
       author: string;
-      hasDiscussion: boolean;
       hasImplementation: boolean;
     }>
   ): Promise<EnhancedACP[]> {
@@ -148,10 +149,7 @@ export const acpService = {
             if (!hasAuthor) return false;
           }
           
-          if (filters.hasDiscussion !== null && filters.hasDiscussion !== undefined) {
-            const hasDiscussion = (acp.discussions?.length || 0) > 0 || !!acp.discussion;
-            if (filters.hasDiscussion !== hasDiscussion) return false;
-          }
+          
           
           if (filters.hasImplementation !== null && filters.hasImplementation !== undefined) {
             const hasImplementation = 
