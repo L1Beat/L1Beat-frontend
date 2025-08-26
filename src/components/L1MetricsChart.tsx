@@ -167,20 +167,6 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-              Data Accuracy Warning
-            </h4>
-            <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
-              Due to ongoing backend issues, TPS and transaction data may be temporarily inaccurate. We are working to restore normal service.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <MetricsChart
         title={chainId ? `${chainName || 'Chain'} Metrics` : 'Network-wide Metrics'}
         icon={<TrendingUp className="w-5 h-5 text-blue-500" />}

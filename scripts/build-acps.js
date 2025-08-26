@@ -197,6 +197,14 @@ class EnhancedACPBuilder {
 
   getGitMetadata(filePath) {
     try {
+      // Check if git is available
+      try {
+        execSync("git --version", { stdio: "ignore" });
+      } catch (error) {
+        // Git not available, but don't warn in local development
+        return { created: null, updated: null };
+      }
+      
       // Get relative path from git root to avoid absolute path issues
       const relativePath = path.relative(process.cwd(), filePath);
       // Get creation date
