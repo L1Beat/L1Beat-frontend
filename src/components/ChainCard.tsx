@@ -12,14 +12,16 @@ export function ChainCard({ chain }: ChainCardProps) {
 
   const formatTPS = (tps: Chain['tps']) => {
     if (!tps || typeof tps.value !== 'number') return 'N/A';
+    if (tps.value < 0.6) return '≤ 0.5';
     return tps.value.toFixed(2);
   };
 
   const getTPSColor = (tpsStr: string) => {
     if (tpsStr === 'N/A') return 'text-gray-400 dark:text-gray-500';
+    if (tpsStr === '≤ 0.5') return 'text-yellow-500 dark:text-yellow-400';
     const tps = Number(tpsStr);
     if (tps >= 1) return 'text-green-500 dark:text-green-400';
-    if (tps >= 0.1) return 'text-yellow-500 dark:text-yellow-400';
+    if (tps >= 0.5) return 'text-yellow-500 dark:text-yellow-400';
     return 'text-red-500 dark:text-red-400';
   };
 
