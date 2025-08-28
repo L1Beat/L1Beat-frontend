@@ -10,6 +10,10 @@ export interface Chain {
     value: number;
     timestamp: number;
   } | null;
+  cumulativeTxCount?: {
+    value: number;
+    timestamp: number;
+  } | null;
   validators: Validator[];
   networkToken?: {
     name: string;
