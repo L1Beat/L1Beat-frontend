@@ -6,11 +6,8 @@ import { Chain, TPSHistory } from '../types';
 import { 
   Activity, 
   ArrowLeft, 
-  Server, 
-  Clock, 
   Search, 
   CheckCircle, 
-  XCircle, 
   Info, 
   Copy, 
   Check,
@@ -27,6 +24,7 @@ import { StakeDistributionChart, getValidatorColor } from '../components/StakeDi
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { AddToMetaMask } from '../components/AddToMetaMask';
 import { useTheme } from '../hooks/useTheme';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
@@ -67,7 +65,7 @@ export function ChainDetails() {
         } else {
           setError('Chain not found');
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load chain details');
       } finally {
         setLoading(false);
@@ -235,6 +233,9 @@ export function ChainDetails() {
 
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-white mb-2">{chain.chainName}</h1>
+                  <div className="mt-3">
+                    <AddToMetaMask chain={chain} variant="compact" />
+                  </div>
                 </div>
 
                 {/* Quick Stats */}
@@ -468,7 +469,7 @@ export function ChainDetails() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
+                      onClick={() => setActiveTab(tab.id as 'overview' | 'validators' | 'metrics')}
                       className={`${
                         activeTab === tab.id
                           ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/20 dark:border-blue-400 dark:text-blue-400'

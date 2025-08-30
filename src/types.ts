@@ -19,8 +19,11 @@ export interface Chain {
     name: string;
     symbol: string;
     logoUri?: string;
+    decimals?: number;
   };
   explorerUrl?: string;
+  rpcUrl?: string;
+  wsUrl?: string;
 }
 
 export interface Validator {
