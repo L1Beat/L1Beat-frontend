@@ -42,6 +42,40 @@ interface SankeyLink extends d3.SankeyLink<SankeyNode, SankeyLink> {
   gradient?: string;
 }
 
+// Function to format chain names for better readability
+const formatChainName = (name: string) => {
+  if (!name) return 'Unknown';
+  
+  // Special case for specific chains
+  if (name === 'Avalanche (C-Chain)') return 'C-Chain';
+  if (name === 'Dexalot L1') return 'Dexalot';
+  if (name === 'zeroone Mainnet L1') return 'ZeroOne';
+  if (name === 'Lamina1 L1') return 'Lamina1';
+  if (name === 'PLYR PHI L1') return 'PLYR';
+  
+  // For other chains, just return the name
+  return name;
+};
+
+// Function to find chain ID from chain name
+const findChainId = (chainName: string) => {
+  // Map of known chain names to their IDs
+  const chainMap: Record<string, string> = {
+    'Avalanche (C-Chain)': 'C',
+    'C-Chain': 'C',
+    'Dexalot L1': 'dexalot',
+    'Dexalot': 'dexalot',
+    'zeroone Mainnet L1': 'zeroone',
+    'ZeroOne': 'zeroone',
+    'Lamina1 L1': 'lamina1',
+    'Lamina1': 'lamina1',
+    'PLYR PHI L1': 'plyr',
+    'PLYR': 'plyr',
+  };
+  
+  return chainMap[chainName] || null;
+};
+
 export function TeleporterSankeyDiagram() {
   const navigate = useNavigate();
   const [data, setData] = useState<TeleporterData | null>(null);
@@ -72,12 +106,6 @@ export function TeleporterSankeyDiagram() {
     });
   }, []);
   
-  // Apply text colors immediately after any state change that might affect them
-  useEffect(() => {
-    // Use setTimeout to ensure this runs after any React updates
-    const timer = setTimeout(forceTextColors, 0);
-    return () => clearTimeout(timer);
-  }, [hoveredNode, hoveredLink, forceTextColors]);
   
   // Apply text colors when the diagram is first drawn or redrawn
   useEffect(() => {
@@ -87,47 +115,7 @@ export function TeleporterSankeyDiagram() {
     }
   }, [data, forceTextColors]);
   
-  // This effect ensures text colors are fixed AFTER tooltip renders
-  useEffect(() => {
-    // This runs immediately when hoveredNode or hoveredLink changes
-    const fixColorsAfterTooltip = () => {
-      // Use RAF to ensure this runs after DOM updates
-      requestAnimationFrame(() => {
-        // Always use white text for dark background
-        const textColor = '#ffffff';
-        
-        // Force all node labels to have white color
-        document.querySelectorAll('.node-label').forEach(el => {
-          el.setAttribute('fill', textColor);
-        });
-      });
-    };
-    
-    fixColorsAfterTooltip();
-    // Set a series of delayed fixes to catch any late DOM updates
-    const t1 = setTimeout(fixColorsAfterTooltip, 50);
-    const t2 = setTimeout(fixColorsAfterTooltip, 100);
-    
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [hoveredNode, hoveredLink]);
   
-  // Function to format chain names for better readability
-  const formatChainName = (name: string) => {
-    if (!name) return 'Unknown';
-    
-    // Special case for specific chains
-    if (name === 'Avalanche (C-Chain)') return 'C-Chain';
-    if (name === 'Dexalot L1') return 'Dexalot';
-    if (name === 'zeroone Mainnet L1') return 'ZeroOne';
-    if (name === 'Lamina1 L1') return 'Lamina1';
-    if (name === 'PLYR PHI L1') return 'PLYR';
-    
-    // For other chains, just return the name
-    return name;
-  };
 
   // Generate a consistent color for a chain
   const getChainColor = useCallback((chainName: string) => {
@@ -162,24 +150,6 @@ export function TeleporterSankeyDiagram() {
     return `hsl(${h}, ${s}, ${l})`;
   }, []);
 
-  // Function to find chain ID from chain name
-  const findChainId = (chainName: string) => {
-    // Map of known chain names to their IDs
-    const chainMap: Record<string, string> = {
-      'Avalanche (C-Chain)': 'C',
-      'C-Chain': 'C',
-      'Dexalot L1': 'dexalot',
-      'Dexalot': 'dexalot',
-      'zeroone Mainnet L1': 'zeroone',
-      'ZeroOne': 'zeroone',
-      'Lamina1 L1': 'lamina1',
-      'Lamina1': 'lamina1',
-      'PLYR PHI L1': 'plyr',
-      'PLYR': 'plyr',
-    };
-    
-    return chainMap[chainName] || null;
-  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -293,7 +263,7 @@ export function TeleporterSankeyDiagram() {
   }, [fetchData, timeframe]);
 
   // Handle node click to navigate to chain details
-  const handleNodeClick = (node: SankeyNode) => {
+  const handleNodeClick = useCallback((node: SankeyNode) => {
     // Extract the original chain name from the node
     const chainName = node.originalName;
     if (!chainName) return;
@@ -306,7 +276,7 @@ export function TeleporterSankeyDiagram() {
       // If we can't find a chain ID, just toggle the filter
       setSelectedChain(selectedChain === node.name ? null : node.name);
     }
-  };
+  }, [navigate, selectedChain]);
 
   // Draw the Sankey diagram
   useEffect(() => {
@@ -370,16 +340,11 @@ export function TeleporterSankeyDiagram() {
       const nodes = Array.from(nodesMap.values());
       
       // Create links with references to node indices
-      const links = data.messages.map(msg => {
-        const sourceKey = `source-${msg.source}`;
-        const targetKey = `target-${msg.target}`;
-        
-        return {
-          source: sourceKey,
-          target: targetKey,
-          value: msg.value
-        };
-      });
+      const links = data.messages.map(msg => ({
+        source: `source-${msg.source}`,
+        target: `target-${msg.target}`,
+        value: msg.value
+      }));
       
       // Filter links and nodes based on selected chain
       let filteredLinks = links;
@@ -390,7 +355,6 @@ export function TeleporterSankeyDiagram() {
           link.source === selectedChain || link.target === selectedChain
         );
         
-        // Get all node names that are in the filtered links
         const nodeNames = new Set();
         filteredLinks.forEach(link => {
           nodeNames.add(link.source);
@@ -416,7 +380,6 @@ export function TeleporterSankeyDiagram() {
       // Add a subtle grid pattern
       const defs = svg.append('defs');
       
-      // Create a pattern for the background
       defs.append('pattern')
         .attr('id', 'grid')
         .attr('width', 20)
@@ -428,7 +391,6 @@ export function TeleporterSankeyDiagram() {
         .attr('stroke', 'rgba(255, 255, 255, 0.05)')
         .attr('stroke-width', 0.5);
       
-      // Add background grid
       svg.append('rect')
         .attr('width', width)
         .attr('height', height)
@@ -438,41 +400,26 @@ export function TeleporterSankeyDiagram() {
       // Create gradients for links
       sankeyData.links.forEach((link, i) => {
         const gradientId = `link-gradient-${i}`;
-        
         const gradient = defs.append('linearGradient')
           .attr('id', gradientId)
           .attr('gradientUnits', 'userSpaceOnUse')
           .attr('x1', link.source.x1)
           .attr('x2', link.target.x0);
         
-        // Start color (source node color)
-        gradient.append('stop')
-          .attr('offset', '0%')
-          .attr('stop-color', link.source.color);
-        
-        // End color (target node color)
-        gradient.append('stop')
-          .attr('offset', '100%')
-          .attr('stop-color', link.target.color);
-        
-        // Add gradient ID to link for reference
+        gradient.append('stop').attr('offset', '0%').attr('stop-color', link.source.color);
+        gradient.append('stop').attr('offset', '100%').attr('stop-color', link.target.color);
         link.gradient = gradientId;
       });
       
       // Draw the links with animations
-      const linkGroup = svg.append('g')
+      const linkPaths = svg.append('g')
         .attr('class', 'links')
         .attr('fill', 'none')
-        .attr('stroke-opacity', 0.4);
-      
-      const links_g = linkGroup.selectAll('g')
+        .attr('stroke-opacity', 0.4)
+        .selectAll('path')
         .data(sankeyData.links)
         .enter()
-        .append('g')
-        .attr('class', 'link-group');
-      
-      // Add link paths
-      const linkPaths = links_g.append('path')
+        .append('path')
         .attr('d', sankeyLinkHorizontal())
         .attr('stroke', d => `url(#${d.gradient})`)
         .attr('stroke-width', d => Math.max(1, d.width))
@@ -484,99 +431,62 @@ export function TeleporterSankeyDiagram() {
         .style('transition', 'opacity 0.3s ease, stroke-width 0.3s ease')
         .style('cursor', 'pointer');
       
-      // Add subtle animation to links
-      linkPaths.each(function(d, i) {
-        const path = d3.select(this);
-        
-        // Add flowing particles along the path
-        if (d.value > 50) { // Only add particles to significant flows
-          const particleGroup = svg.append('g')
-            .attr('class', 'particles');
-          
-          const numParticles = Math.min(5, Math.max(2, Math.floor(d.value / 100)));
-          
-          for (let j = 0; j < numParticles; j++) {
-            const particle = particleGroup.append('circle')
-              .attr('r', 2)
-              .attr('fill', d.source.color)
-              .style('mix-blend-mode', 'screen')
-              .attr('opacity', 0);
-            
-            animateParticle(particle, path.node(), d);
-          }
-        }
-      });
-      
-      // Function to animate particles along a path
-      function animateParticle(particle, path, link) {
-        const pathLength = path.getTotalLength();
-        const duration = Math.random() * 3000 + 2000; // Random duration between 2-5 seconds
-        const delay = Math.random() * 2000; // Random delay for staggered effect
+      // Particle animation logic...
+      function animateParticle(particle, pathNode) {
+        const pathLength = pathNode.getTotalLength();
+        const duration = Math.random() * 3000 + 2000;
+        const delay = Math.random() * 2000;
         
         function startAnimation() {
           particle
             .attr('opacity', 0)
-            .attr('transform', 'translate(0,0)')
             .transition()
             .delay(delay)
             .duration(duration)
             .ease(d3.easeLinear)
             .attrTween('transform', function() {
               return function(t) {
-                const point = path.getPointAtLength(t * pathLength);
+                const point = pathNode.getPointAtLength(t * pathLength);
                 return `translate(${point.x},${point.y})`;
               };
             })
-            .attr('opacity', t => t < 0.9 ? 0.7 : 0.7 * (1 - (t - 0.9) * 10)) // Fade in and out
-            .on('end', startAnimation); // Restart animation
+            .attr('opacity', t => t < 0.9 ? 0.7 : 0.7 * (1 - (t - 0.9) * 10))
+            .on('end', startAnimation);
         }
-        
         startAnimation();
       }
+
+      linkPaths.each(function(d) {
+        if (d.value > 50) {
+          const numParticles = Math.min(5, Math.max(2, Math.floor(d.value / 100)));
+          for (let j = 0; j < numParticles; j++) {
+            const particle = svg.append('circle')
+              .attr('r', 2)
+              .attr('fill', d.source.color)
+              .style('mix-blend-mode', 'screen');
+            animateParticle(particle, this);
+          }
+        }
+      });
       
-      // Add interaction to links
       linkPaths
         .on('mouseover', function(event, d) {
-          // Highlight the link
-          d3.select(this)
-            .attr('stroke-opacity', 0.8)
-            .attr('stroke-width', d => Math.max(1, d.width + 2));
-          
-          // Set hovered link for tooltip
+          d3.select(this).attr('stroke-opacity', 0.8).attr('stroke-width', d => Math.max(1, d.width + 2));
           setHoveredLink(d);
           setTooltipPosition({ x: event.pageX, y: event.pageY });
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
         })
         .on('mousemove', function(event) {
           setTooltipPosition({ x: event.pageX, y: event.pageY });
         })
         .on('mouseout', function() {
-          // Reset link style
-          d3.select(this)
-            .attr('stroke-opacity', 0.4)
-            .attr('stroke-width', d => Math.max(1, d.width));
-          
+          d3.select(this).attr('stroke-opacity', 0.4).attr('stroke-width', d => Math.max(1, d.width));
           setHoveredLink(null);
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
         });
       
       // Draw the nodes
-      const nodeGroup = svg.append('g')
-        .attr('class', 'nodes');
-      
-      const nodes_g = nodeGroup.selectAll('g')
+      const nodes_g = svg.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
         .data(sankeyData.nodes)
         .enter()
         .append('g')
@@ -584,376 +494,90 @@ export function TeleporterSankeyDiagram() {
         .attr('transform', d => `translate(${d.x0},${d.y0})`)
         .style('cursor', 'pointer');
       
-      // Add node rectangles with a gradient fill
-      console.log('🟦 CREATING RECTANGLES...');
-      nodes_g.each(function(d) {
-        console.log(`🟦 Creating rectangle for: ${d.displayName} (${d.name})`);
-        const node = d3.select(this);
-        const gradientId = `node-gradient-${d.index}`;
+      // Add node rectangles
+      nodes_g.append('rect')
+        .attr('height', d => d.y1 - d.y0)
+        .attr('width', d => d.x1 - d.x0)
+        .attr('fill', d => d.color) // Simplified fill for clarity, gradients can be added back
+        .attr('stroke', d => d3.color(d.color)?.darker(0.5)?.toString() || '#000')
+        .attr('stroke-width', 1)
+        .attr('rx', 4).attr('ry', 4)
+        .attr('opacity', selectedChain ? (d.name === selectedChain ? 1 : 0.7) : 0.9);
+
+      // Add expanded, invisible hover area for better UX on small nodes
+      nodes_g.append('rect')
+        .attr('class', 'hover-area')
+        .attr('height', d => Math.max(15, d.y1 - d.y0))
+        .attr('width', d => d.x1 - d.x0 + 10) // A bit wider
+        .attr('x', -5) // Center it
+        .attr('y', d => ( (d.y1 - d.y0) - Math.max(15, d.y1 - d.y0) ) / 2) // Center it
+        .attr('fill', 'transparent');
         
-        // Create gradient
-        const gradient = defs.append('linearGradient')
-          .attr('id', gradientId)
-          .attr('x1', '0%')
-          .attr('y1', '0%')
-          .attr('x2', '100%')
-          .attr('y2', '100%');
-        
-        gradient.append('stop')
-          .attr('offset', '0%')
-          .attr('stop-color', d3.color(d.color)?.brighter(0.5)?.toString() || d.color);
-        
-        gradient.append('stop')
-          .attr('offset', '100%')
-          .attr('stop-color', d3.color(d.color)?.darker(0.3)?.toString() || d.color);
-        
-        // Add rectangle with gradient - with hover events directly on rect
-        console.log(`🟦 Adding rectangle with events for: ${d.displayName}`);
-        
-        const rect = node.append('rect')
-          .attr('class', 'main-node-rect') // Add class to identify main rectangles
-          .attr('height', d.y1 - d.y0)
-          .attr('width', d.x1 - d.x0)
-          .attr('fill', `url(#${gradientId})`)
-          .attr('stroke', d3.color(d.color)?.darker(0.5)?.toString() || '#000')
-          .attr('stroke-width', 1)
-          .attr('rx', 4)
-          .attr('ry', 4)
-          .attr('opacity', selectedChain ? (d.name === selectedChain ? 1 : 0.7) : 0.9)
-          .style('transition', 'opacity 0.3s ease')
-          .style('cursor', 'pointer')
-          .on('mouseover', function(event, rectData) {
-            console.log('🔥 MOUSEOVER FIRED!', rectData.displayName, 'at', event.pageX, event.pageY);
-            console.log('🔍 Rectangle data name:', rectData.name);
-            console.log('🗺️ Available keys in map:', Array.from(valueLabelMap.keys()));
-            
-            setHoveredNode(rectData);
-            setTooltipPosition({ x: event.pageX, y: event.pageY });
-            
-            // Use direct reference to value label
-            const valueLabel = valueLabelMap.get(rectData.name);
-            console.log('🏷️ Value label from map:', valueLabel ? 'FOUND' : 'NOT FOUND');
-            
-            if (valueLabel && !valueLabel.empty()) {
-              console.log('📈 Current opacity before:', valueLabel.attr('opacity'));
-              valueLabel.attr('opacity', '1');
-              console.log('📈 Current opacity after:', valueLabel.attr('opacity'));
-              console.log('✅ Successfully set opacity to 1');
-            } else {
-              console.error('❌ FAILED: No value label found for', rectData.name);
-            }
-            
-            // Force white text color for dark background
-            setTimeout(() => {
-              document.querySelectorAll('.node-label').forEach(el => {
-                el.setAttribute('fill', '#ffffff');
-              });
-            }, 50);
-          })
-          .on('mousemove', function(event) {
-            setTooltipPosition({ x: event.pageX, y: event.pageY });
-          })
-          .on('mouseout', function(event, rectData) {
-            setHoveredNode(null);
-            
-            // Use direct reference to value label
-            const valueLabel = valueLabelMap.get(rectData.name);
-            if (valueLabel && !valueLabel.empty()) {
-              valueLabel.attr('opacity', '0');
-            }
-            
-            // Force white text color for dark background
-            setTimeout(() => {
-              document.querySelectorAll('.node-label').forEach(el => {
-                el.setAttribute('fill', '#ffffff');
-              });
-            }, 50);
-          })
-          .on('click', function(event, rectData) {
-            console.log('🖱️ CLICK FIRED!', rectData.displayName);
-            handleNodeClick(rectData);
-            event.stopPropagation();
-          });
-        
-        console.log(`✅ Rectangle with events created for: ${d.displayName}`);
-        
-        // Add invisible hover area for small rectangles
-        const hoverHeight = Math.max(15, d.y1 - d.y0); // Minimum 15px hover area
-        const hoverWidth = Math.max(30, d.x1 - d.x0);   // Minimum 30px hover area
-        
-        console.log(`🎯 Adding hover area for ${d.displayName}: ${hoverWidth}x${hoverHeight}`);
-        
-        node.append('rect')
-          .attr('class', 'hover-area')
-          .attr('height', hoverHeight)
-          .attr('width', hoverWidth)
-          .attr('x', -(hoverWidth - (d.x1 - d.x0)) / 2) // Center the hover area
-          .attr('y', -(hoverHeight - (d.y1 - d.y0)) / 2) // Center the hover area
-          .attr('fill', 'transparent')
-          .attr('stroke', 'none')
-          .style('cursor', 'pointer')
-          .on('mouseover', function(event, hoverData) {
-            console.log('🎯 HOVER AREA MOUSEOVER!', hoverData.displayName);
-            setHoveredNode(hoverData);
-            setTooltipPosition({ x: event.pageX, y: event.pageY });
-            
-            // Use direct reference to value label
-            const valueLabel = valueLabelMap.get(hoverData.name);
-            if (valueLabel && !valueLabel.empty()) {
-              valueLabel.attr('opacity', '1');
-              console.log('🎯 Hover area - Set opacity to 1');
-            }
-            
-            // Force white text color for dark background
-            setTimeout(() => {
-              document.querySelectorAll('.node-label').forEach(el => {
-                el.setAttribute('fill', '#ffffff');
-              });
-            }, 50);
-          })
-          .on('mousemove', function(event) {
-            setTooltipPosition({ x: event.pageX, y: event.pageY });
-          })
-          .on('mouseout', function(event, hoverData) {
-            console.log('🎯 HOVER AREA MOUSEOUT!', hoverData.displayName);
-            setHoveredNode(null);
-            
-            // Use direct reference to value label
-            const valueLabel = valueLabelMap.get(hoverData.name);
-            if (valueLabel && !valueLabel.empty()) {
-              valueLabel.attr('opacity', '0');
-              console.log('🎯 Hover area - Set opacity to 0');
-            }
-            
-            // Force white text color for dark background
-            setTimeout(() => {
-              document.querySelectorAll('.node-label').forEach(el => {
-                el.setAttribute('fill', '#ffffff');
-              });
-            }, 50);
-          })
-          .on('click', function(event, hoverData) {
-            console.log('🎯 HOVER AREA CLICK!', hoverData.displayName);
-            handleNodeClick(hoverData);
-            event.stopPropagation();
-          });
-        
-        // DEBUG: Check if the rectangle is actually where we think it is
-        const rectElement = rect.node();
-        if (rectElement) {
-          const rectBounds = rectElement.getBoundingClientRect();
-          console.log(`📐 Rectangle bounds for ${d.displayName}:`, {
-            x: rectBounds.x,
-            y: rectBounds.y, 
-            width: rectBounds.width,
-            height: rectBounds.height,
-            visible: rectBounds.width > 0 && rectBounds.height > 0
-          });
-          
-          // Check CSS properties that might block events
-          const computedStyle = window.getComputedStyle(rectElement);
-          console.log(`🎨 Rectangle styles for ${d.displayName}:`, {
-            pointerEvents: computedStyle.pointerEvents,
-            display: computedStyle.display,
-            visibility: computedStyle.visibility,
-            opacity: computedStyle.opacity
-          });
-        }
-        
-        // Add a subtle inner shadow/highlight
-        node.append('rect')
-          .attr('height', d.y1 - d.y0)
-          .attr('width', d.x1 - d.x0)
-          .attr('fill', 'none')
-          .attr('stroke', 'rgba(255,255,255,0.1)')
-          .attr('stroke-width', 1)
-          .attr('rx', 4)
-          .attr('ry', 4)
-          .attr('opacity', 0.5)
-          .style('pointer-events', 'none'); // Don't interfere with main rect events
-        
-        // Add a glow effect for selected nodes
-        if (selectedChain === d.name) {
-          const glowId = `glow-${d.index}`;
-          
-          defs.append('filter')
-            .attr('id', glowId)
-            .attr('x', '-20%')
-            .attr('y', '-20%')
-            .attr('width', '140%')
-            .attr('height', '140%')
-            .append('feGaussianBlur')
-            .attr('stdDeviation', '3')
-            .attr('result', 'blur');
-          
-          node.append('rect')
-            .attr('height', d.y1 - d.y0)
-            .attr('width', d.x1 - d.x0)
-            .attr('fill', 'none')
-            .attr('stroke', d.color)
-            .attr('stroke-width', 2)
-            .attr('rx', 4)
-            .attr('ry', 4)
-            .attr('filter', `url(#${glowId})`)
-            .attr('opacity', 0.7)
-            .style('pointer-events', 'none'); // Allow events to bubble up to parent group
-        }
-      });
-      
-      // Add labels for the nodes - ALWAYS WHITE for dark background
+      // Add labels for the nodes
       nodes_g.append('text')
         .attr('x', d => d.x0 < width / 2 ? d.x1 - d.x0 + 6 : -6)
         .attr('y', d => (d.y1 - d.y0) / 2)
         .attr('dy', '0.35em')
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
-        .attr('class', 'node-label')  // Add a class to help with direct updates
+        .attr('class', 'node-label')
         .text(d => d.displayName)
-        .attr('fill', '#ffffff') // Always white for dark background
+        .attr('fill', '#ffffff')
         .attr('font-weight', 'bold')
         .attr('font-size', '12px')
         .attr('pointer-events', 'none');
       
-      // Add value labels - ALWAYS WHITE for dark background, hidden by default
-      // Store references to value labels for direct access
-      const valueLabelMap = new Map();
-      
-      console.log('🚀 CREATING VALUE LABELS...');
-      console.log('📊 Nodes data:', sankeyData.nodes.length, 'nodes');
-      sankeyData.nodes.forEach((node, i) => {
-        console.log(`  Node ${i}: ${node.displayName} (${node.name}) - value: ${node.value}`);
-      });
-      
+      // Add value labels, hidden by default
       const valueLabels = nodes_g.append('text')
         .attr('x', d => d.x0 < width / 2 ? d.x1 - d.x0 + 6 : -6)
         .attr('y', d => (d.y1 - d.y0) / 2 + 16)
         .attr('dy', '0.35em')
-        .attr('class', 'value-label')  // Add a class to help with direct updates
+        .attr('class', 'value-label')
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
         .text(d => `${d.value.toLocaleString()} msgs`)
-        .attr('fill', 'rgba(255, 255, 255, 0.7)') // Always white with transparency for dark background
+        .attr('fill', 'rgba(255, 255, 255, 0.7)')
         .attr('font-size', '10px')
         .attr('pointer-events', 'none')
-        .attr('opacity', '0') // Hide by default using attr instead of style
-        .style('transition', 'opacity 0.3s ease') // Smooth transition
-        .each(function(d) {
-          // Store direct reference to each value label
-          valueLabelMap.set(d.name, d3.select(this));
-          console.log(`✅ Stored value label: ${d.displayName} -> ${d.name}`);
-        });
+        .attr('opacity', 0) // Hide by default
+        .style('transition', 'opacity 0.2s ease-in-out');
       
-      console.log('🏷️ VALUE LABELS CREATED:', valueLabels.size());
-      console.log('🗺️ VALUE LABEL MAP SIZE:', valueLabelMap.size);
-      console.log('🗺️ MAP KEYS:', Array.from(valueLabelMap.keys()));
-      
-      // Add hover events to node groups AFTER everything is created
-      console.log('🎯 ADDING NODE GROUP EVENTS...');
+      // --- FIX START ---
+      // Consolidated, reliable event handlers on the node group
       nodes_g
-        .on('mouseover', function(event, nodeData) {
-          console.log('🎯 NODE GROUP MOUSEOVER FIRED!', nodeData.displayName);
-          setHoveredNode(nodeData);
+        .on('mouseover', function(event, d) {
+          setHoveredNode(d);
           setTooltipPosition({ x: event.pageX, y: event.pageY });
           
-          // Use direct reference to value label
-          const valueLabel = valueLabelMap.get(nodeData.name);
-          console.log('🎯 Node group - Value label found:', valueLabel ? 'YES' : 'NO');
-          
-          if (valueLabel && !valueLabel.empty()) {
-            valueLabel.attr('opacity', '1');
-            console.log('🎯 Node group - Set opacity to 1');
-          }
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
+          // Use d3.select(this) to target the current node group,
+          // then find the value-label inside it and make it visible.
+          d3.select(this).select('.value-label').attr('opacity', 1);
         })
         .on('mousemove', function(event) {
           setTooltipPosition({ x: event.pageX, y: event.pageY });
         })
-        .on('mouseout', function(event, nodeData) {
-          console.log('🎯 NODE GROUP MOUSEOUT FIRED!', nodeData.displayName);
+        .on('mouseout', function(event, d) {
           setHoveredNode(null);
-          
-          // Use direct reference to value label
-          const valueLabel = valueLabelMap.get(nodeData.name);
-          if (valueLabel && !valueLabel.empty()) {
-            valueLabel.attr('opacity', '0');
-            console.log('🎯 Node group - Set opacity to 0');
-          }
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
+
+          // Hide the value-label for the specific node group again.
+          d3.select(this).select('.value-label').attr('opacity', 0);
         })
-        .on('click', function(event, nodeData) {
-          console.log('🎯 NODE GROUP CLICK FIRED!', nodeData.displayName);
-          handleNodeClick(nodeData);
-          event.stopPropagation();
+        .on('click', function(event, d) {
+          handleNodeClick(d);
+          event.stopPropagation(); // Prevent background click when clicking a node
         });
+      // --- FIX END ---
       
-      // TEST: Manually show first value label to verify it works
-      setTimeout(() => {
-        const firstKey = Array.from(valueLabelMap.keys())[0];
-        if (firstKey) {
-          console.log('🧪 TESTING: Manually showing first value label:', firstKey);
-          const testLabel = valueLabelMap.get(firstKey);
-          if (testLabel) {
-            testLabel.attr('opacity', '1');
-            console.log('🧪 TEST: Set first label to visible');
-            
-            setTimeout(() => {
-              testLabel.attr('opacity', '0');
-              console.log('🧪 TEST: Set first label back to hidden');
-            }, 2000);
-          }
-        }
-      }, 1000);
-      
-      // TEST: Try to manually trigger events on rectangles 
-      setTimeout(() => {
-        console.log('🧪 TESTING: Manual rectangle event trigger...');
-        const allRects = svg.selectAll('rect');
-        const mainRects = svg.selectAll('.main-node-rect');
-        console.log('🧪 Found rectangles total:', allRects.size());
-        console.log('🧪 Found main rectangles:', mainRects.size());
-        
-        // Try to trigger mouseover on first main rectangle
-        const firstMainRect = mainRects.nodes()[0];
-        if (firstMainRect) {
-          console.log('🧪 Manually triggering mouseover on first MAIN rectangle');
-          console.log('🧪 First main rect element:', firstMainRect);
-          
-          const mouseEvent = new MouseEvent('mouseover', {
-            bubbles: true,
-            cancelable: true,
-            clientX: 100,
-            clientY: 100
-          });
-          
-          // Check if this rectangle has event listeners
-          console.log('🧪 Rectangle listeners:', firstMainRect.__on);
-          
-          firstMainRect.dispatchEvent(mouseEvent);
-        }
-      }, 3000);
-      
-      // Add a title and legend - ALWAYS WHITE for dark background
+      // Add a title
       svg.append('text')
         .attr('x', width / 2)
         .attr('y', -5)
-        .attr('class', 'diagram-title')  // Add a class to help with direct updates
+        .attr('class', 'diagram-title')
         .attr('text-anchor', 'middle')
         .attr('font-size', '12px')
         .attr('font-weight', 'bold')
-        .attr('fill', 'rgba(255, 255, 255, 0.7)') // Always white with transparency for dark background
+        .attr('fill', 'rgba(255, 255, 255, 0.7)')
         .text(`Total: ${data.metadata.totalMessages.toLocaleString()} messages`);
       
-      // Add a reset button if a chain is selected
+      // Reset button and background click handler remain the same...
       if (selectedChain) {
         const resetButton = svg.append('g')
           .attr('class', 'reset-button')
@@ -962,17 +586,13 @@ export function TeleporterSankeyDiagram() {
           .on('click', () => setSelectedChain(null));
         
         resetButton.append('rect')
-          .attr('width', 80)
-          .attr('height', 24)
-          .attr('rx', 12)
-          .attr('ry', 12)
+          .attr('width', 80).attr('height', 24)
+          .attr('rx', 12).attr('ry', 12)
           .attr('fill', 'rgba(255, 255, 255, 0.1)')
-          .attr('stroke', 'rgba(255, 255, 255, 0.2)')
-          .attr('stroke-width', 1);
+          .attr('stroke', 'rgba(255, 255, 255, 0.2)');
         
         resetButton.append('text')
-          .attr('x', 40)
-          .attr('y', 12)
+          .attr('x', 40).attr('y', 12)
           .attr('text-anchor', 'middle')
           .attr('dominant-baseline', 'middle')
           .attr('font-size', '10px')
@@ -980,7 +600,6 @@ export function TeleporterSankeyDiagram() {
           .text('Reset Filter');
       }
       
-      // Add click handler to reset selection when clicking on the background
       svg.on('click', () => {
         if (selectedChain) {
           setSelectedChain(null);
@@ -989,28 +608,14 @@ export function TeleporterSankeyDiagram() {
       
     } catch (err) {
       console.error('Error rendering Sankey diagram:', err);
-      
-      // Use white text for error messages on dark background
+      // Error handling remains the same...
       const errorTextColor = '#ffffff';
-      
-      // Display error message in the SVG
       svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', height / 2)
+        .attr('x', width / 2).attr('y', height / 2)
         .attr('text-anchor', 'middle')
         .attr('fill', errorTextColor)
         .text('Error rendering diagram. Please try again.');
-      
-      // Add a more detailed error message
-      svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', height / 2 + 30)
-        .attr('text-anchor', 'middle')
-        .attr('fill', errorTextColor)
-        .attr('font-size', '12px')
-        .text(err instanceof Error ? err.message : 'Unknown error');
     }
-    
   }, [data, getChainColor, selectedChain, navigate, handleNodeClick]);
 
   // Handle window resize
@@ -1154,7 +759,7 @@ export function TeleporterSankeyDiagram() {
         className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[400px] overflow-hidden"
       >
         {/* Dark space background with subtle, slow twinkling stars - matching network topology */}
-        <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {Array.from({ length: 60 }).map((_, i) => (
             <div 
               key={`star-${i}`}
