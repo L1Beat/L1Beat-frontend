@@ -8,6 +8,8 @@ export interface MetaMaskError extends Error {
 export interface EthereumProvider {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   isMetaMask?: boolean;
+  isCoreWallet?: boolean;
+  providers?: EthereumProvider[];
 }
 
 declare global {
@@ -17,12 +19,50 @@ declare global {
 }
 
 /**
+ * Get the MetaMask provider specifically, even when multiple wallets are installed
+ */
+export function getMetaMaskProvider(): EthereumProvider | null {
+  if (typeof window === 'undefined' || !window.ethereum) {
+    console.log('MetaMask check: No window.ethereum available');
+    return null;
+  }
+
+  console.log('Ethereum provider info:', {
+    isMetaMask: window.ethereum.isMetaMask,
+    isCoreWallet: window.ethereum.isCoreWallet,
+    hasProviders: !!window.ethereum.providers,
+    providersCount: window.ethereum.providers ? window.ethereum.providers.length : 0
+  });
+
+  // If there are multiple providers, find MetaMask
+  if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
+    console.log('Multiple providers found, looking for MetaMask...');
+    const metamaskProvider = window.ethereum.providers.find(
+      (provider: EthereumProvider) => provider.isMetaMask
+    );
+    if (metamaskProvider) {
+      console.log('Found MetaMask in providers array');
+    } else {
+      console.log('MetaMask not found in providers array');
+    }
+    return metamaskProvider || null;
+  }
+
+  // If it's MetaMask directly
+  if (window.ethereum.isMetaMask) {
+    console.log('Found MetaMask as primary provider');
+    return window.ethereum;
+  }
+
+  console.log('MetaMask not detected');
+  return null;
+}
+
+/**
  * Check if MetaMask is installed
  */
 export function isMetaMaskInstalled(): boolean {
-  return typeof window !== 'undefined' && 
-         typeof window.ethereum !== 'undefined' && 
-         window.ethereum.isMetaMask === true;
+  return getMetaMaskProvider() !== null;
 }
 
 /**
@@ -39,7 +79,8 @@ export function generateRpcUrl(chainId: string): string {
  * Add a network to MetaMask
  */
 export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
-  if (!isMetaMaskInstalled()) {
+  const provider = getMetaMaskProvider();
+  if (!provider) {
     throw new Error('MetaMask is not installed');
   }
 
@@ -50,11 +91,23 @@ export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
   // Generate RPC URL if not provided
   const rpcUrl = chain.rpcUrl || generateRpcUrl(chain.chainId);
   
+  // Ensure chainId is in hex format
+  let hexChainId: string;
+  if (chain.chainId.startsWith('0x')) {
+    hexChainId = chain.chainId;
+  } else {
+    const numericChainId = parseInt(chain.chainId);
+    if (isNaN(numericChainId)) {
+      throw new Error('Invalid chain ID format');
+    }
+    hexChainId = `0x${numericChainId.toString(16)}`;
+  }
+  
   try {
-    await window.ethereum!.request({
+    await provider.request({
       method: 'wallet_addEthereumChain',
       params: [{
-        chainId: chain.chainId.startsWith('0x') ? chain.chainId : `0x${parseInt(chain.chainId).toString(16)}`,
+        chainId: hexChainId,
         chainName: chain.chainName,
         nativeCurrency: {
           name: chain.networkToken.name,
@@ -89,14 +142,15 @@ export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
  * Switch to a specific network in MetaMask
  */
 export async function switchToNetwork(chainId: string): Promise<boolean> {
-  if (!isMetaMaskInstalled()) {
+  const provider = getMetaMaskProvider();
+  if (!provider) {
     throw new Error('MetaMask is not installed');
   }
 
   const hexChainId = chainId.startsWith('0x') ? chainId : `0x${parseInt(chainId).toString(16)}`;
   
   try {
-    await window.ethereum!.request({
+    await provider.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: hexChainId }]
     });
@@ -123,14 +177,15 @@ export async function switchToNetwork(chainId: string): Promise<boolean> {
  * Request account access from MetaMask
  */
 export async function connectWallet(): Promise<string[]> {
-  if (!isMetaMaskInstalled()) {
+  const provider = getMetaMaskProvider();
+  if (!provider) {
     throw new Error('MetaMask is not installed');
   }
 
   try {
-    const accounts = await window.ethereum!.request({
+    const accounts = await provider.request({
       method: 'eth_requestAccounts'
-    });
+    }) as string[];
     
     return accounts;
   } catch (error) {
@@ -148,14 +203,15 @@ export async function connectWallet(): Promise<string[]> {
  * Get the current network from MetaMask
  */
 export async function getCurrentNetwork(): Promise<string> {
-  if (!isMetaMaskInstalled()) {
+  const provider = getMetaMaskProvider();
+  if (!provider) {
     throw new Error('MetaMask is not installed');
   }
 
   try {
-    const chainId = await window.ethereum!.request({
+    const chainId = await provider.request({
       method: 'eth_chainId'
-    });
+    }) as string;
     
     return chainId;
   } catch (error) {

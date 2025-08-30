@@ -30,10 +30,17 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     setErrorMessage('');
 
     try {
+      console.log('Attempting to add network to MetaMask:', {
+        chainId: chain.chainId,
+        chainName: chain.chainName,
+        networkToken: chain.networkToken
+      });
+      
       await addNetworkToMetaMask(chain);
       setStatus('success');
       setTimeout(() => setStatus('idle'), 3000);
     } catch (error) {
+      console.error('MetaMask add network error:', error);
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Failed to add network');
       setTimeout(() => setStatus('idle'), 5000);
