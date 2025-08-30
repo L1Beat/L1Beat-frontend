@@ -26,3 +26,4 @@ dist-ssr
 *.swp
 processed-acps.json
 ACPs/index.json
+CLAUDE.md

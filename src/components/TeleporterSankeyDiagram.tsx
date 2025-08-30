@@ -523,15 +523,11 @@ export function TeleporterSankeyDiagram() {
         .attr('opacity', 0) // Hide by default
         .style('transition', 'opacity 0.2s ease-in-out');
       
-      // --- FIX START ---
-      // Consolidated, reliable event handlers on the node group
+      // DO NOT TOUCH
       nodes_g
         .on('mouseover', function(event, d) {
           setHoveredNode(d);
           setTooltipPosition({ x: event.pageX, y: event.pageY });
-          
-          // Use d3.select(this) to target the current node group,
-          // then find the value-label inside it and make it visible.
           d3.select(this).select('.value-label').attr('opacity', 1);
         })
         .on('mousemove', function(event) {
@@ -539,15 +535,13 @@ export function TeleporterSankeyDiagram() {
         })
         .on('mouseout', function(event, d) {
           setHoveredNode(null);
-
-          // Hide the value-label for the specific node group again.
           d3.select(this).select('.value-label').attr('opacity', 0);
         })
         .on('click', function(event, d) {
           handleNodeClick(d);
-          event.stopPropagation(); // Prevent background click when clicking a node
+          event.stopPropagation(); 
         });
-      // --- FIX END ---
+      // DO NOT TOUCH
       
       // Add a title
       svg.append('text')
@@ -588,59 +582,7 @@ export function TeleporterSankeyDiagram() {
           setSelectedChain(null);
         }
       });
-      // After node creation, identify small chains
-      // const smallChains = sankeyData.nodes.filter(d => (d.y1 - d.y0) < 20);
-      // const leftSmallChains = smallChains.filter(d => d.x0 < width / 2);
-      // const rightSmallChains = smallChains.filter(d => d.x0 >= width / 2);
 
-      // // Left side labels - position inside the diagram
-      // leftSmallChains.forEach((d, i) => {
-      //   const labelGroup = svg.append('g')
-      //     .attr('class', 'small-chain-label');
-        
-      //   // Connecting line to left margin
-      //   labelGroup.append('line')
-      //     .attr('x1', d.x0)
-      //     .attr('y1', (d.y0 + d.y1) / 2)
-      //     .attr('x2', 10) // Keep inside left margin
-      //     .attr('y2', 30 + i * 18)
-      //     .attr('stroke', 'rgba(255,255,255,0.3)')
-      //     .attr('stroke-width', 1);
-        
-      //   // Label text inside margin
-      //   labelGroup.append('text')
-      //     .attr('x', 12)
-      //     .attr('y', 34 + i * 18)
-      //     .attr('text-anchor', 'start')
-      //     .attr('fill', '#ffffff')
-      //     .attr('font-size', '11px')
-      //     .text(`${d.displayName}: ${d.value?.toLocaleString() || 0}`);
-      // });
-
-      // // Right side labels - position inside the diagram
-      // rightSmallChains.forEach((d, i) => {
-      //   const labelGroup = svg.append('g')
-      //     .attr('class', 'small-chain-label');
-        
-      //   // Connecting line to right margin
-      //   labelGroup.append('line')
-      //     .attr('x1', d.x1)
-      //     .attr('y1', (d.y0 + d.y1) / 2)
-      //     .attr('x2', width - 10) // Keep inside right margin
-      //     .attr('y2', 30 + i * 18)
-      //     .attr('stroke', 'rgba(255,255,255,0.3)')
-      //     .attr('stroke-width', 1);
-        
-      //   // Label text inside margin
-      //   labelGroup.append('text')
-      //     .attr('x', width - 12)
-      //     .attr('y', 34 + i * 18)
-      //     .attr('text-anchor', 'end')
-      //     .attr('fill', '#ffffff')
-      //     .attr('font-size', '11px')
-      //     .text(`${d.displayName}: ${d.value?.toLocaleString() || 0}`);
-      // });
-      
     } catch (err) {
       console.error('Error rendering Sankey diagram:', err);
       // Error handling remains the same...

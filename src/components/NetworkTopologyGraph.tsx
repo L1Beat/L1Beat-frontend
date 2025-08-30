@@ -39,9 +39,9 @@ export function NetworkTopologyGraph() {
   const bulletIdCounter = useRef(0);
 
   // Bullet animation settings
-  const BULLET_BASE_SPEED = 0.15;
+  const BULLET_BASE_SPEED = 0.05;
   const MAX_BULLETS = 25;
-  const BULLET_SPAWN_RATE = 0.04;
+  const BULLET_SPAWN_RATE = 0.94;
 
   useEffect(() => {
     async function fetchData() {
