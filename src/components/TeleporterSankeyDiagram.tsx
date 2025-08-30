@@ -582,38 +582,12 @@ export function TeleporterSankeyDiagram() {
         .append('g')
         .attr('class', 'node-group')
         .attr('transform', d => `translate(${d.x0},${d.y0})`)
-        .style('cursor', 'pointer')
-        .on('click', function(event, d) {
-          handleNodeClick(d);
-          event.stopPropagation();
-        })
-        .on('mouseover', function(event, d) {
-          setHoveredNode(d);
-          setTooltipPosition({ x: event.pageX, y: event.pageY });
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
-        })
-        .on('mousemove', function(event) {
-          setTooltipPosition({ x: event.pageX, y: event.pageY });
-        })
-        .on('mouseout', function() {
-          setHoveredNode(null);
-          
-          // Force white text color for dark background
-          setTimeout(() => {
-            document.querySelectorAll('.node-label').forEach(el => {
-              el.setAttribute('fill', '#ffffff');
-            });
-          }, 50);
-        });
+        .style('cursor', 'pointer');
       
       // Add node rectangles with a gradient fill
+      console.log('🟦 CREATING RECTANGLES...');
       nodes_g.each(function(d) {
+        console.log(`🟦 Creating rectangle for: ${d.displayName} (${d.name})`);
         const node = d3.select(this);
         const gradientId = `node-gradient-${d.index}`;
         
@@ -633,8 +607,11 @@ export function TeleporterSankeyDiagram() {
           .attr('offset', '100%')
           .attr('stop-color', d3.color(d.color)?.darker(0.3)?.toString() || d.color);
         
-        // Add rectangle with gradient
-        node.append('rect')
+        // Add rectangle with gradient - with hover events directly on rect
+        console.log(`🟦 Adding rectangle with events for: ${d.displayName}`);
+        
+        const rect = node.append('rect')
+          .attr('class', 'main-node-rect') // Add class to identify main rectangles
           .attr('height', d.y1 - d.y0)
           .attr('width', d.x1 - d.x0)
           .attr('fill', `url(#${gradientId})`)
@@ -643,7 +620,145 @@ export function TeleporterSankeyDiagram() {
           .attr('rx', 4)
           .attr('ry', 4)
           .attr('opacity', selectedChain ? (d.name === selectedChain ? 1 : 0.7) : 0.9)
-          .style('transition', 'opacity 0.3s ease');
+          .style('transition', 'opacity 0.3s ease')
+          .style('cursor', 'pointer')
+          .on('mouseover', function(event, rectData) {
+            console.log('🔥 MOUSEOVER FIRED!', rectData.displayName, 'at', event.pageX, event.pageY);
+            console.log('🔍 Rectangle data name:', rectData.name);
+            console.log('🗺️ Available keys in map:', Array.from(valueLabelMap.keys()));
+            
+            setHoveredNode(rectData);
+            setTooltipPosition({ x: event.pageX, y: event.pageY });
+            
+            // Use direct reference to value label
+            const valueLabel = valueLabelMap.get(rectData.name);
+            console.log('🏷️ Value label from map:', valueLabel ? 'FOUND' : 'NOT FOUND');
+            
+            if (valueLabel && !valueLabel.empty()) {
+              console.log('📈 Current opacity before:', valueLabel.attr('opacity'));
+              valueLabel.attr('opacity', '1');
+              console.log('📈 Current opacity after:', valueLabel.attr('opacity'));
+              console.log('✅ Successfully set opacity to 1');
+            } else {
+              console.error('❌ FAILED: No value label found for', rectData.name);
+            }
+            
+            // Force white text color for dark background
+            setTimeout(() => {
+              document.querySelectorAll('.node-label').forEach(el => {
+                el.setAttribute('fill', '#ffffff');
+              });
+            }, 50);
+          })
+          .on('mousemove', function(event) {
+            setTooltipPosition({ x: event.pageX, y: event.pageY });
+          })
+          .on('mouseout', function(event, rectData) {
+            setHoveredNode(null);
+            
+            // Use direct reference to value label
+            const valueLabel = valueLabelMap.get(rectData.name);
+            if (valueLabel && !valueLabel.empty()) {
+              valueLabel.attr('opacity', '0');
+            }
+            
+            // Force white text color for dark background
+            setTimeout(() => {
+              document.querySelectorAll('.node-label').forEach(el => {
+                el.setAttribute('fill', '#ffffff');
+              });
+            }, 50);
+          })
+          .on('click', function(event, rectData) {
+            console.log('🖱️ CLICK FIRED!', rectData.displayName);
+            handleNodeClick(rectData);
+            event.stopPropagation();
+          });
+        
+        console.log(`✅ Rectangle with events created for: ${d.displayName}`);
+        
+        // Add invisible hover area for small rectangles
+        const hoverHeight = Math.max(15, d.y1 - d.y0); // Minimum 15px hover area
+        const hoverWidth = Math.max(30, d.x1 - d.x0);   // Minimum 30px hover area
+        
+        console.log(`🎯 Adding hover area for ${d.displayName}: ${hoverWidth}x${hoverHeight}`);
+        
+        node.append('rect')
+          .attr('class', 'hover-area')
+          .attr('height', hoverHeight)
+          .attr('width', hoverWidth)
+          .attr('x', -(hoverWidth - (d.x1 - d.x0)) / 2) // Center the hover area
+          .attr('y', -(hoverHeight - (d.y1 - d.y0)) / 2) // Center the hover area
+          .attr('fill', 'transparent')
+          .attr('stroke', 'none')
+          .style('cursor', 'pointer')
+          .on('mouseover', function(event, hoverData) {
+            console.log('🎯 HOVER AREA MOUSEOVER!', hoverData.displayName);
+            setHoveredNode(hoverData);
+            setTooltipPosition({ x: event.pageX, y: event.pageY });
+            
+            // Use direct reference to value label
+            const valueLabel = valueLabelMap.get(hoverData.name);
+            if (valueLabel && !valueLabel.empty()) {
+              valueLabel.attr('opacity', '1');
+              console.log('🎯 Hover area - Set opacity to 1');
+            }
+            
+            // Force white text color for dark background
+            setTimeout(() => {
+              document.querySelectorAll('.node-label').forEach(el => {
+                el.setAttribute('fill', '#ffffff');
+              });
+            }, 50);
+          })
+          .on('mousemove', function(event) {
+            setTooltipPosition({ x: event.pageX, y: event.pageY });
+          })
+          .on('mouseout', function(event, hoverData) {
+            console.log('🎯 HOVER AREA MOUSEOUT!', hoverData.displayName);
+            setHoveredNode(null);
+            
+            // Use direct reference to value label
+            const valueLabel = valueLabelMap.get(hoverData.name);
+            if (valueLabel && !valueLabel.empty()) {
+              valueLabel.attr('opacity', '0');
+              console.log('🎯 Hover area - Set opacity to 0');
+            }
+            
+            // Force white text color for dark background
+            setTimeout(() => {
+              document.querySelectorAll('.node-label').forEach(el => {
+                el.setAttribute('fill', '#ffffff');
+              });
+            }, 50);
+          })
+          .on('click', function(event, hoverData) {
+            console.log('🎯 HOVER AREA CLICK!', hoverData.displayName);
+            handleNodeClick(hoverData);
+            event.stopPropagation();
+          });
+        
+        // DEBUG: Check if the rectangle is actually where we think it is
+        const rectElement = rect.node();
+        if (rectElement) {
+          const rectBounds = rectElement.getBoundingClientRect();
+          console.log(`📐 Rectangle bounds for ${d.displayName}:`, {
+            x: rectBounds.x,
+            y: rectBounds.y, 
+            width: rectBounds.width,
+            height: rectBounds.height,
+            visible: rectBounds.width > 0 && rectBounds.height > 0
+          });
+          
+          // Check CSS properties that might block events
+          const computedStyle = window.getComputedStyle(rectElement);
+          console.log(`🎨 Rectangle styles for ${d.displayName}:`, {
+            pointerEvents: computedStyle.pointerEvents,
+            display: computedStyle.display,
+            visibility: computedStyle.visibility,
+            opacity: computedStyle.opacity
+          });
+        }
         
         // Add a subtle inner shadow/highlight
         node.append('rect')
@@ -654,7 +769,8 @@ export function TeleporterSankeyDiagram() {
           .attr('stroke-width', 1)
           .attr('rx', 4)
           .attr('ry', 4)
-          .attr('opacity', 0.5);
+          .attr('opacity', 0.5)
+          .style('pointer-events', 'none'); // Don't interfere with main rect events
         
         // Add a glow effect for selected nodes
         if (selectedChain === d.name) {
@@ -679,7 +795,8 @@ export function TeleporterSankeyDiagram() {
             .attr('rx', 4)
             .attr('ry', 4)
             .attr('filter', `url(#${glowId})`)
-            .attr('opacity', 0.7);
+            .attr('opacity', 0.7)
+            .style('pointer-events', 'none'); // Allow events to bubble up to parent group
         }
       });
       
@@ -696,8 +813,17 @@ export function TeleporterSankeyDiagram() {
         .attr('font-size', '12px')
         .attr('pointer-events', 'none');
       
-      // Add value labels - ALWAYS WHITE for dark background
-      nodes_g.append('text')
+      // Add value labels - ALWAYS WHITE for dark background, hidden by default
+      // Store references to value labels for direct access
+      const valueLabelMap = new Map();
+      
+      console.log('🚀 CREATING VALUE LABELS...');
+      console.log('📊 Nodes data:', sankeyData.nodes.length, 'nodes');
+      sankeyData.nodes.forEach((node, i) => {
+        console.log(`  Node ${i}: ${node.displayName} (${node.name}) - value: ${node.value}`);
+      });
+      
+      const valueLabels = nodes_g.append('text')
         .attr('x', d => d.x0 < width / 2 ? d.x1 - d.x0 + 6 : -6)
         .attr('y', d => (d.y1 - d.y0) / 2 + 16)
         .attr('dy', '0.35em')
@@ -706,7 +832,115 @@ export function TeleporterSankeyDiagram() {
         .text(d => `${d.value.toLocaleString()} msgs`)
         .attr('fill', 'rgba(255, 255, 255, 0.7)') // Always white with transparency for dark background
         .attr('font-size', '10px')
-        .attr('pointer-events', 'none');
+        .attr('pointer-events', 'none')
+        .attr('opacity', '0') // Hide by default using attr instead of style
+        .style('transition', 'opacity 0.3s ease') // Smooth transition
+        .each(function(d) {
+          // Store direct reference to each value label
+          valueLabelMap.set(d.name, d3.select(this));
+          console.log(`✅ Stored value label: ${d.displayName} -> ${d.name}`);
+        });
+      
+      console.log('🏷️ VALUE LABELS CREATED:', valueLabels.size());
+      console.log('🗺️ VALUE LABEL MAP SIZE:', valueLabelMap.size);
+      console.log('🗺️ MAP KEYS:', Array.from(valueLabelMap.keys()));
+      
+      // Add hover events to node groups AFTER everything is created
+      console.log('🎯 ADDING NODE GROUP EVENTS...');
+      nodes_g
+        .on('mouseover', function(event, nodeData) {
+          console.log('🎯 NODE GROUP MOUSEOVER FIRED!', nodeData.displayName);
+          setHoveredNode(nodeData);
+          setTooltipPosition({ x: event.pageX, y: event.pageY });
+          
+          // Use direct reference to value label
+          const valueLabel = valueLabelMap.get(nodeData.name);
+          console.log('🎯 Node group - Value label found:', valueLabel ? 'YES' : 'NO');
+          
+          if (valueLabel && !valueLabel.empty()) {
+            valueLabel.attr('opacity', '1');
+            console.log('🎯 Node group - Set opacity to 1');
+          }
+          
+          // Force white text color for dark background
+          setTimeout(() => {
+            document.querySelectorAll('.node-label').forEach(el => {
+              el.setAttribute('fill', '#ffffff');
+            });
+          }, 50);
+        })
+        .on('mousemove', function(event) {
+          setTooltipPosition({ x: event.pageX, y: event.pageY });
+        })
+        .on('mouseout', function(event, nodeData) {
+          console.log('🎯 NODE GROUP MOUSEOUT FIRED!', nodeData.displayName);
+          setHoveredNode(null);
+          
+          // Use direct reference to value label
+          const valueLabel = valueLabelMap.get(nodeData.name);
+          if (valueLabel && !valueLabel.empty()) {
+            valueLabel.attr('opacity', '0');
+            console.log('🎯 Node group - Set opacity to 0');
+          }
+          
+          // Force white text color for dark background
+          setTimeout(() => {
+            document.querySelectorAll('.node-label').forEach(el => {
+              el.setAttribute('fill', '#ffffff');
+            });
+          }, 50);
+        })
+        .on('click', function(event, nodeData) {
+          console.log('🎯 NODE GROUP CLICK FIRED!', nodeData.displayName);
+          handleNodeClick(nodeData);
+          event.stopPropagation();
+        });
+      
+      // TEST: Manually show first value label to verify it works
+      setTimeout(() => {
+        const firstKey = Array.from(valueLabelMap.keys())[0];
+        if (firstKey) {
+          console.log('🧪 TESTING: Manually showing first value label:', firstKey);
+          const testLabel = valueLabelMap.get(firstKey);
+          if (testLabel) {
+            testLabel.attr('opacity', '1');
+            console.log('🧪 TEST: Set first label to visible');
+            
+            setTimeout(() => {
+              testLabel.attr('opacity', '0');
+              console.log('🧪 TEST: Set first label back to hidden');
+            }, 2000);
+          }
+        }
+      }, 1000);
+      
+      // TEST: Try to manually trigger events on rectangles 
+      setTimeout(() => {
+        console.log('🧪 TESTING: Manual rectangle event trigger...');
+        const allRects = svg.selectAll('rect');
+        const mainRects = svg.selectAll('.main-node-rect');
+        console.log('🧪 Found rectangles total:', allRects.size());
+        console.log('🧪 Found main rectangles:', mainRects.size());
+        
+        // Try to trigger mouseover on first main rectangle
+        const firstMainRect = mainRects.nodes()[0];
+        if (firstMainRect) {
+          console.log('🧪 Manually triggering mouseover on first MAIN rectangle');
+          console.log('🧪 First main rect element:', firstMainRect);
+          
+          const mouseEvent = new MouseEvent('mouseover', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 100,
+            clientY: 100
+          });
+          
+          // Check if this rectangle has event listeners
+          console.log('🧪 Rectangle listeners:', firstMainRect.__on);
+          
+          firstMainRect.dispatchEvent(mouseEvent);
+        }
+      }, 3000);
       
       // Add a title and legend - ALWAYS WHITE for dark background
       svg.append('text')
@@ -966,29 +1200,6 @@ export function TeleporterSankeyDiagram() {
         )}
         
         {/* Tooltip for nodes */}
-        {hoveredNode && !hoveredLink && (
-          <div 
-            className="absolute z-10 bg-white dark:bg-dark-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 text-sm pointer-events-none"
-            style={{
-              left: `${tooltipPosition.x + 10}px`,
-              top: `${tooltipPosition.y - 80}px`,
-              transform: 'translate(-50%, -100%)'
-            }}
-          >
-            <div className="font-medium text-gray-900 dark:text-white mb-1">
-              {hoveredNode.displayName}
-            </div>
-            <div className="text-gray-600 dark:text-gray-300">
-              Total messages: <span className="font-semibold">{hoveredNode.value?.toLocaleString?.() || 0}</span>
-            </div>
-            <div className="text-gray-600 dark:text-gray-300">
-              {((hoveredNode.value || 0) / data.metadata.totalMessages * 100).toFixed(1)}% of total
-            </div>
-            <div className="text-xs text-blue-500 dark:text-blue-400 mt-1">
-              Click to {findChainId(hoveredNode.originalName || '') ? 'view chain details' : selectedChain === hoveredNode.name ? 'reset filter' : 'filter connections'}
-            </div>
-          </div>
-        )}
       </div>
       
       {/* Stats card at the bottom */}
