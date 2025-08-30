@@ -415,14 +415,14 @@ export function TeleporterSankeyDiagram() {
       const linkPaths = svg.append('g')
         .attr('class', 'links')
         .attr('fill', 'none')
-        .attr('stroke-opacity', 0.4)
+        // .attr('stroke-opacity', 0.4)
         .selectAll('path')
         .data(sankeyData.links)
         .enter()
         .append('path')
         .attr('d', sankeyLinkHorizontal())
         .attr('stroke', d => `url(#${d.gradient})`)
-        .attr('stroke-width', d => Math.max(1, d.width))
+        .attr('stroke-width', d => Math.max(3, d.width))
         .attr('opacity', d => 
           selectedChain ? 
             (d.source.name === selectedChain || d.target.name === selectedChain ? 0.8 : 0.2) : 
@@ -469,19 +469,12 @@ export function TeleporterSankeyDiagram() {
         }
       });
       
+      // Reset all links to normal state after creation
       linkPaths
-        .on('mouseover', function(event, d) {
-          d3.select(this).attr('stroke-opacity', 0.8).attr('stroke-width', d => Math.max(1, d.width + 2));
-          setHoveredLink(d);
-          setTooltipPosition({ x: event.pageX, y: event.pageY });
-        })
-        .on('mousemove', function(event) {
-          setTooltipPosition({ x: event.pageX, y: event.pageY });
-        })
-        .on('mouseout', function() {
-          d3.select(this).attr('stroke-opacity', 0.4).attr('stroke-width', d => Math.max(1, d.width));
-          setHoveredLink(null);
-        });
+        .attr('stroke-opacity', d => 
+          selectedChain ? 
+            (d.source.name === selectedChain || d.target.name === selectedChain ? 0.7 : 0.1) : 0.4)
+        .attr('stroke-width', d => Math.max(3, d.width));
       
       // Draw the nodes
       const nodes_g = svg.append('g')
@@ -605,6 +598,58 @@ export function TeleporterSankeyDiagram() {
           setSelectedChain(null);
         }
       });
+      // After node creation, identify small chains
+      // const smallChains = sankeyData.nodes.filter(d => (d.y1 - d.y0) < 20);
+      // const leftSmallChains = smallChains.filter(d => d.x0 < width / 2);
+      // const rightSmallChains = smallChains.filter(d => d.x0 >= width / 2);
+
+      // // Left side labels - position inside the diagram
+      // leftSmallChains.forEach((d, i) => {
+      //   const labelGroup = svg.append('g')
+      //     .attr('class', 'small-chain-label');
+        
+      //   // Connecting line to left margin
+      //   labelGroup.append('line')
+      //     .attr('x1', d.x0)
+      //     .attr('y1', (d.y0 + d.y1) / 2)
+      //     .attr('x2', 10) // Keep inside left margin
+      //     .attr('y2', 30 + i * 18)
+      //     .attr('stroke', 'rgba(255,255,255,0.3)')
+      //     .attr('stroke-width', 1);
+        
+      //   // Label text inside margin
+      //   labelGroup.append('text')
+      //     .attr('x', 12)
+      //     .attr('y', 34 + i * 18)
+      //     .attr('text-anchor', 'start')
+      //     .attr('fill', '#ffffff')
+      //     .attr('font-size', '11px')
+      //     .text(`${d.displayName}: ${d.value?.toLocaleString() || 0}`);
+      // });
+
+      // // Right side labels - position inside the diagram
+      // rightSmallChains.forEach((d, i) => {
+      //   const labelGroup = svg.append('g')
+      //     .attr('class', 'small-chain-label');
+        
+      //   // Connecting line to right margin
+      //   labelGroup.append('line')
+      //     .attr('x1', d.x1)
+      //     .attr('y1', (d.y0 + d.y1) / 2)
+      //     .attr('x2', width - 10) // Keep inside right margin
+      //     .attr('y2', 30 + i * 18)
+      //     .attr('stroke', 'rgba(255,255,255,0.3)')
+      //     .attr('stroke-width', 1);
+        
+      //   // Label text inside margin
+      //   labelGroup.append('text')
+      //     .attr('x', width - 12)
+      //     .attr('y', 34 + i * 18)
+      //     .attr('text-anchor', 'end')
+      //     .attr('fill', '#ffffff')
+      //     .attr('font-size', '11px')
+      //     .text(`${d.displayName}: ${d.value?.toLocaleString() || 0}`);
+      // });
       
     } catch (err) {
       console.error('Error rendering Sankey diagram:', err);
@@ -785,12 +830,9 @@ export function TeleporterSankeyDiagram() {
         {/* Tooltip for links */}
         {hoveredLink && (
           <div 
-            className="absolute z-10 bg-white dark:bg-dark-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 text-sm pointer-events-none"
-            style={{
-              left: `${tooltipPosition.x + 10}px`,
-              top: `${tooltipPosition.y - 80}px`,
-              transform: 'translate(-50%, -100%)'
-            }}
+            className={`absolute z-10 p-4 rounded-lg shadow-lg border pointer-events-none ${
+              hoveredLink.value < 100 ? 'bg-yellow-100 dark:bg-yellow-900 border-yellow-300 text-base font-bold' : 'bg-white dark:bg-dark-800 text-sm'
+            }`}
           >
             <div className="font-medium text-gray-900 dark:text-white mb-1">
               {hoveredLink.source.displayName} → {hoveredLink.target.displayName}
