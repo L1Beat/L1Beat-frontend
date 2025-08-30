@@ -115,7 +115,7 @@ export interface TeleporterDailyData {
   timeWindow: number;
 }
 
-export type TimeframeOption = 7 | 14 | 30;
+export type TimeframeOption = 7 | 14 | 30 | 90;
 
 // ============= ACP TYPES =============
 
