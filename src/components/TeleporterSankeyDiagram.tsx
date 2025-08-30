@@ -262,21 +262,11 @@ export function TeleporterSankeyDiagram() {
     return () => clearInterval(interval);
   }, [fetchData, timeframe]);
 
-  // Handle node click to navigate to chain details
+  // Handle node click to focus on chain connections
   const handleNodeClick = useCallback((node: SankeyNode) => {
-    // Extract the original chain name from the node
-    const chainName = node.originalName;
-    if (!chainName) return;
-    
-    // Find the chain ID based on the chain name
-    const chainId = findChainId(chainName);
-    if (chainId) {
-      navigate(`/chain/${chainId}`);
-    } else {
-      // If we can't find a chain ID, just toggle the filter
-      setSelectedChain(selectedChain === node.name ? null : node.name);
-    }
-  }, [navigate, selectedChain]);
+    // Toggle the selected chain to focus on its connections
+    setSelectedChain(selectedChain === node.name ? null : node.name);
+  }, [selectedChain]);
 
   // Draw the Sankey diagram
   useEffect(() => {
@@ -495,7 +485,7 @@ export function TeleporterSankeyDiagram() {
         .attr('stroke', d => d3.color(d.color)?.darker(0.5)?.toString() || '#000')
         .attr('stroke-width', 1)
         .attr('rx', 4).attr('ry', 4)
-        .attr('opacity', selectedChain ? (d.name === selectedChain ? 1 : 0.7) : 0.9);
+        .attr('opacity', d => selectedChain ? (d.name === selectedChain ? 1 : 0.7) : 0.9);
 
       // Add expanded, invisible hover area for better UX on small nodes
       nodes_g.append('rect')
