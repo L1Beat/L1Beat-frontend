@@ -94,17 +94,35 @@ class EnhancedACPBuilder {
         fs.mkdirSync(OUTPUT_DIR, { recursive: true });
       }
 
-      // Check if ACPs directory exists
-      if (!fs.existsSync(ACPS_DIR)) {
-        console.error(`❌ ACPs directory not found at ${ACPS_DIR}`);
-        console.log("🔧 Initializing submodule...");
-        try {
+      // Initialize and update submodule to get latest changes
+      console.log("🔧 Updating ACP submodule to latest changes...");
+      try {
+        // Initialize submodule if it doesn't exist
+        if (!fs.existsSync(ACPS_DIR)) {
+          console.log("📥 Initializing submodule for the first time...");
           execSync("git submodule update --init --recursive", {
             stdio: "inherit",
           });
-        } catch (error) {
-          console.error("Failed to initialize submodule:", error);
+        }
+        
+        // Always pull the latest changes from the remote
+        console.log("📥 Pulling latest ACP changes from remote...");
+        execSync("git submodule update --remote --merge public/acps", {
+          stdio: "inherit",
+        });
+        
+        console.log("✅ Submodule updated successfully");
+      } catch (error) {
+        console.warn("⚠️ Failed to update submodule automatically:", error.message);
+        console.log("📝 This might be expected in CI/CD environments without git access");
+        
+        // Check again if directory exists after attempted update
+        if (!fs.existsSync(ACPS_DIR)) {
+          console.error(`❌ ACPs directory still not found at ${ACPS_DIR}`);
+          console.error("❌ Build cannot continue without ACP data");
           process.exit(1);
+        } else {
+          console.log("📁 Using existing ACP data (may not be latest)");
         }
       }
 
