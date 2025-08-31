@@ -246,15 +246,50 @@ export default function ACPDetails() {
     if (isMermaid) {
       const chartId = `mermaid-chart-${Math.random().toString(36).substr(2, 9)}`;
       
+      // Validate and clean mermaid content
+      const validateAndCleanMermaidContent = (content: string): string => {
+        let cleanContent = content.trim();
+        
+        // Remove any problematic characters that might cause rendering issues
+        cleanContent = cleanContent
+          .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width characters
+          .replace(/\r\n/g, '\n') // Normalize line endings
+          .replace(/\r/g, '\n'); // Convert old Mac line endings
+        
+        // Check for common mermaid syntax issues and fix them
+        const lines = cleanContent.split('\n');
+        const cleanedLines = lines.map(line => {
+          // Fix edge labels with problematic characters
+          if (line.includes('-->') || line.includes('-.->') || line.includes('==>')) {
+            // Ensure edge labels are properly quoted if they contain special characters
+            return line.replace(/-->\s*\|([^|]*)\|/g, (match, label) => {
+              const cleanLabel = label.trim().replace(/[^\w\s.-]/g, '');
+              return `--> |"${cleanLabel}"|`;
+            });
+          }
+          return line;
+        });
+        
+        return cleanedLines.join('\n');
+      };
+
       React.useEffect(() => {
         const renderChart = async () => {
           try {
             const element = document.getElementById(chartId);
             if (element) {
-              // Clear previous content
-              element.innerHTML = '';
+              // Clear previous content and show loading
+              element.innerHTML = `<div class="${isDark ? 'text-gray-400' : 'text-gray-600'} flex justify-center items-center min-h-[200px]">
+                <div class="flex items-center space-x-2">
+                  <div class="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                  <span>Rendering diagram...</span>
+                </div>
+              </div>`;
               
-              // Re-initialize with current theme
+              // Validate and clean content
+              const cleanContent = validateAndCleanMermaidContent(content);
+              
+              // Re-initialize with current theme and improved config
               const mermaidTheme = isDark ? 'dark' : 'default';
               const themeVariables = isDark ? getDarkThemeVariables() : getLightThemeVariables();
 
@@ -263,24 +298,72 @@ export default function ACPDetails() {
                 theme: mermaidTheme,
                 securityLevel: 'loose',
                 themeVariables,
+                maxTextSize: 90000,
+                maxEdges: 200,
                 flowchart: {
                   useMaxWidth: true,
-                  htmlLabels: true,
+                  htmlLabels: false, // Disable HTML labels to avoid positioning issues
+                  curve: 'cardinal', // Use smoother curves
+                  padding: 20
                 },
                 sequence: {
                   useMaxWidth: true,
+                  showSequenceNumbers: false,
+                  actorMargin: 50,
+                  boxMargin: 10,
+                  boxTextMargin: 5,
+                  noteMargin: 10,
+                  messageMargin: 35
+                },
+                gantt: {
+                  useMaxWidth: true,
+                  leftPadding: 75,
+                  gridLineStartPadding: 35
+                },
+                journey: {
+                  useMaxWidth: true
                 }
               });
               
-              // Render the diagram
-              const { svg } = await mermaid.render(`${chartId}-svg`, content);
+              // Try to render with timeout protection
+              const renderTimeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Rendering timeout')), 10000)
+              );
+              
+              const renderPromise = mermaid.render(`${chartId}-svg`, cleanContent);
+              
+              const { svg } = await Promise.race([renderPromise, renderTimeout]);
               element.innerHTML = svg;
             }
           } catch (error) {
             console.error('Mermaid rendering error:', error);
             const element = document.getElementById(chartId);
             if (element) {
-              element.innerHTML = `<div class="${isDark ? 'text-red-400' : 'text-red-600'} p-4">Error rendering diagram: ${error.message}</div>`;
+              // Provide more helpful error messages
+              let errorMessage = 'Failed to render diagram';
+              if (error.message.includes('suitable point')) {
+                errorMessage = 'Diagram layout error - try simplifying the diagram structure';
+              } else if (error.message.includes('Parse error')) {
+                errorMessage = 'Diagram syntax error - please check the diagram code';
+              } else if (error.message.includes('timeout')) {
+                errorMessage = 'Diagram too complex - rendering timed out';
+              }
+              
+              element.innerHTML = `
+                <div class="border-2 border-dashed ${isDark ? 'border-red-800 bg-red-900/20 text-red-400' : 'border-red-300 bg-red-50 text-red-600'} rounded-lg p-4">
+                  <div class="flex items-center space-x-2 mb-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <strong>Diagram Error</strong>
+                  </div>
+                  <p class="text-sm">${errorMessage}</p>
+                  <details class="mt-2">
+                    <summary class="cursor-pointer text-xs opacity-75 hover:opacity-100">Show raw diagram code</summary>
+                    <pre class="mt-2 text-xs ${isDark ? 'bg-gray-800' : 'bg-gray-100'} p-2 rounded overflow-auto">${content}</pre>
+                  </details>
+                </div>
+              `;
             }
           }
         };
@@ -299,9 +382,13 @@ export default function ACPDetails() {
             setTimeout(async () => {
               try {
                 element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'} flex justify-center items-center min-h-[200px]">
-                  <div>Re-rendering diagram...</div>
+                  <div class="flex items-center space-x-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                    <span>Re-rendering diagram...</span>
+                  </div>
                 </div>`;
                 
+                const cleanContent = validateAndCleanMermaidContent(content);
                 const mermaidTheme = newTheme === 'dark' ? 'dark' : 'default';
                 const themeVariables = newTheme === 'dark' ? getDarkThemeVariables() : getLightThemeVariables();
 
@@ -310,20 +397,49 @@ export default function ACPDetails() {
                   theme: mermaidTheme,
                   securityLevel: 'loose',
                   themeVariables,
+                  maxTextSize: 90000,
+                  maxEdges: 200,
                   flowchart: {
                     useMaxWidth: true,
-                    htmlLabels: true,
+                    htmlLabels: false,
+                    curve: 'cardinal',
+                    padding: 20
                   },
                   sequence: {
                     useMaxWidth: true,
+                    showSequenceNumbers: false,
+                    actorMargin: 50,
+                    boxMargin: 10,
+                    boxTextMargin: 5,
+                    noteMargin: 10,
+                    messageMargin: 35
                   }
                 });
                 
-                const { svg } = await mermaid.render(`${chartId}-svg-${Date.now()}`, content);
+                // Add timeout protection for theme change re-render too
+                const renderTimeout = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Re-render timeout')), 8000)
+                );
+                
+                const renderPromise = mermaid.render(`${chartId}-svg-${Date.now()}`, cleanContent);
+                const { svg } = await Promise.race([renderPromise, renderTimeout]);
                 element.innerHTML = svg;
               } catch (error) {
                 console.error('Error re-rendering mermaid on theme change:', error);
-                element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-red-400' : 'text-red-600'} p-4">Error re-rendering diagram</div>`;
+                const element = document.getElementById(chartId);
+                if (element) {
+                  element.innerHTML = `
+                    <div class="border-2 border-dashed ${newTheme === 'dark' ? 'border-yellow-800 bg-yellow-900/20 text-yellow-400' : 'border-yellow-300 bg-yellow-50 text-yellow-600'} rounded-lg p-4">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        <strong>Theme Change Error</strong>
+                      </div>
+                      <p class="text-sm">Diagram failed to re-render with new theme. Refresh the page to try again.</p>
+                    </div>
+                  `;
+                }
               }
             }, 150);
           }
