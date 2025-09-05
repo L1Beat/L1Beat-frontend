@@ -14,6 +14,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
+import { AuthorCard } from '../components/AuthorCard';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { HealthStatus } from '../types';
@@ -284,7 +285,11 @@ export function BlogPost() {
                             </div>
                             {post.author && (
                                 <div className="flex items-center gap-2">
-                                    <span>By {post.author}</span>
+                                    <span>By </span>
+                                    <AuthorCard 
+                                        authorName={post.author}
+                                        authorProfiles={post.authorProfiles}
+                                    />
                                 </div>
                             )}
                         </div>
