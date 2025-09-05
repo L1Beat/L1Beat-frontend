@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import ContentRenderer from '../components/ContentRenderer';
-import parse from 'html-react-parser';
+import parse, { Element } from 'html-react-parser';
 import {
     ArrowLeft,
     Calendar,
@@ -163,7 +163,67 @@ export function BlogPost() {
 
             return (
                 <div className="prose-content">
-                    {parse(cleanContent)}
+                    {parse(cleanContent, {
+                        replace: (domNode) => {
+                            // Check if this is an HTML element
+                            if (domNode instanceof Element) {
+                                // Remove unwanted buttons that appear below images
+                                if (domNode.tagName === 'div') {
+                                    const classNames = domNode.attribs?.class || '';
+                                    // Check if this div contains image control buttons
+                                    if (classNames.includes('image-controls') || 
+                                        classNames.includes('image-buttons') ||
+                                        classNames.includes('fullscreen') ||
+                                        classNames.includes('enlarge')) {
+                                        return <></>;
+                                    }
+                                }
+                                
+                                // Remove button elements that are likely fullscreen/refresh controls
+                                if (domNode.tagName === 'button') {
+                                    const classNames = domNode.attribs?.class || '';
+                                    const title = domNode.attribs?.title || '';
+                                    const ariaLabel = domNode.attribs?.['aria-label'] || '';
+                                    
+                                    // Check for common fullscreen/refresh button indicators
+                                    if (classNames.includes('fullscreen') || 
+                                        classNames.includes('enlarge') || 
+                                        classNames.includes('refresh') ||
+                                        classNames.includes('zoom') ||
+                                        classNames.includes('expand') ||
+                                        classNames.includes('maximize') ||
+                                        title.toLowerCase().includes('fullscreen') ||
+                                        title.toLowerCase().includes('enlarge') ||
+                                        title.toLowerCase().includes('refresh') ||
+                                        title.toLowerCase().includes('expand') ||
+                                        title.toLowerCase().includes('maximize') ||
+                                        ariaLabel.toLowerCase().includes('fullscreen') ||
+                                        ariaLabel.toLowerCase().includes('enlarge') ||
+                                        ariaLabel.toLowerCase().includes('refresh') ||
+                                        ariaLabel.toLowerCase().includes('expand') ||
+                                        ariaLabel.toLowerCase().includes('maximize')) {
+                                        return <></>;
+                                    }
+                                }
+                                
+                                // Remove SVG icons that might be refresh or fullscreen buttons
+                                if (domNode.tagName === 'svg') {
+                                    const classNames = domNode.attribs?.class || '';
+                                    const viewBox = domNode.attribs?.viewBox || '';
+                                    
+                                    // Check for SVG icons commonly used for refresh/fullscreen
+                                    if (classNames.includes('refresh') ||
+                                        classNames.includes('fullscreen') ||
+                                        classNames.includes('expand') ||
+                                        classNames.includes('maximize') ||
+                                        viewBox.includes('24 24')) { // Common viewBox for lucide/heroicons
+                                        // Check parent for button context
+                                        return <></>;
+                                    }
+                                }
+                            }
+                        }
+                    })}
                 </div>
             );
         }
