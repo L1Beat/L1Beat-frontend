@@ -9,9 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "build-acps": "node scripts/build-acps.js",
-    "update-acps": "git submodule update --remote public/acps && npm run build-acps",
+    "update-acps": "git submodule foreach 'git reset --hard && git clean -fd' && npm run build-acps",
     "prebuild": "npm run build-acps",
-    "predev": "npm run build-acps"
+    "predev": "npm run update-acps"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.0.0",

@@ -211,7 +211,7 @@ export function Dashboard() {
           ) : (
             <div key={viewMode} className="animate-fade-in">
               {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {filteredChains.map((chain, index) => (
                     <div 
                       key={chain.chainId}

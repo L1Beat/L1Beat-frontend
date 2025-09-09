@@ -272,20 +272,39 @@ export async function getChains(): Promise<Chain[]> {
   return fetchWithCache('chains', async () => {
     try {
       const data = await fetchWithRetry<any[]>(`${API_URL}/chains`);
-      return data.map(chain => ({
-        ...chain,
-        tps: chain.tps ? {
-          value: Number(chain.tps.value),
-          timestamp: chain.tps.timestamp
-        } : null,
-        validators: chain.validators.map((validator: any) => ({
-          address: validator.nodeId,
-          active: validator.validationStatus === 'active',
-          uptime: validator.uptimePerformance,
-          weight: Number(validator.amountStaked),
-          explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
-        }))
+      const chains = await Promise.all(data.map(async (chain) => {
+        // Try to fetch cumulative transaction count for each chain
+        let cumulativeTxCount = null;
+        try {
+          const txCountData = await getCumulativeTxCount(chain.chainId, 1);
+          if (txCountData && txCountData.length > 0) {
+            const latest = txCountData[txCountData.length - 1];
+            cumulativeTxCount = {
+              value: latest.value,
+              timestamp: latest.timestamp
+            };
+          }
+        } catch (error) {
+          // Silently ignore errors for cumulative tx count - it's optional data
+        }
+
+        return {
+          ...chain,
+          tps: chain.tps ? {
+            value: Number(chain.tps.value),
+            timestamp: chain.tps.timestamp
+          } : null,
+          cumulativeTxCount,
+          validators: chain.validators.map((validator: any) => ({
+            address: validator.nodeId,
+            active: validator.validationStatus === 'active',
+            uptime: validator.uptimePerformance,
+            weight: Number(validator.amountStaked),
+            explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
+          }))
+        };
       }));
+      return chains;
     } catch (error) {
       console.error('Chains fetch error:', error);
       return [];

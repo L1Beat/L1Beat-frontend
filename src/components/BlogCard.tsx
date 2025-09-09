@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, Tag } from 'lucide-react';
 import { BlogPost, formatBlogDate, calculateReadTime } from '../api/blogApi';
+import { AuthorCard } from './AuthorCard';
 
 interface BlogCardProps {
     post: BlogPost; 
@@ -79,9 +80,11 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
 
                     {post.author && (
                         <div className="text-right">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">
-                                {post.author}
-                            </span>
+                            <AuthorCard 
+                                authorName={post.author}
+                                authorProfiles={post.authorProfiles}
+                                className="font-medium text-gray-700 dark:text-gray-300"
+                            />
                         </div>
                     )}
                 </div>

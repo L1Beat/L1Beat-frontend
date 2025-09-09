@@ -10,6 +10,7 @@ export interface BlogPost {
     mainContent?: string;  // NEW FIELD
     author: string;
     authors: string[];
+    authorProfiles?: AuthorProfile[];  // NEW FIELD
     publishedAt: string;
     updatedAt: string;
     tags: string[];
@@ -84,6 +85,24 @@ export interface AuthorInfo {
     bio?: string;
 }
 
+export interface AuthorProfile {
+    name: string;
+    slug: string;
+    bio?: string;
+    avatar?: string;
+    role?: string;
+    socialLinks?: {
+        twitter?: string;
+        linkedin?: string;
+        website?: string;
+        github?: string;
+        substack?: string;
+    };
+    postCount?: number;
+    joinDate?: string;
+    isActive?: boolean;
+}
+
 // Helper function to get formatted authors string
 export function getAuthorsDisplayString(post: BlogPost): string {
     if (post.authors && post.authors.length > 0) {
@@ -97,14 +116,14 @@ export function getAuthorsDisplayString(post: BlogPost): string {
             return `${otherAuthors}, and ${lastAuthor}`;
         }
     }
-    return post.author || 'L1Beat Team';
+    return post.author || 'L1Beat';
 }
 
 // Helper function to get primary author
 export function getPrimaryAuthor(post: BlogPost): string {
     return post.authors && post.authors.length > 0 
         ? post.authors[0] 
-        : post.author || 'L1Beat Team';
+        : post.author || 'L1Beat';
 }
 
 // Helper function to check if post has multiple authors

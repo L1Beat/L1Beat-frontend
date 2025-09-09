@@ -10,13 +10,20 @@ export interface Chain {
     value: number;
     timestamp: number;
   } | null;
+  cumulativeTxCount?: {
+    value: number;
+    timestamp: number;
+  } | null;
   validators: Validator[];
   networkToken?: {
     name: string;
     symbol: string;
     logoUri?: string;
+    decimals?: number;
   };
   explorerUrl?: string;
+  rpcUrl?: string;
+  wsUrl?: string;
 }
 
 export interface Validator {
@@ -108,7 +115,7 @@ export interface TeleporterDailyData {
   timeWindow: number;
 }
 
-export type TimeframeOption = 7 | 14 | 30;
+export type TimeframeOption = 7 | 14 | 30 | 90;
 
 // ============= ACP TYPES =============
 

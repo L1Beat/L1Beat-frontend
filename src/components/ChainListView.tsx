@@ -1,5 +1,5 @@
 import { Chain } from '../types';
-import { Activity, Server } from 'lucide-react';
+import { Activity, Server, Plus, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ChainListViewProps {
@@ -11,22 +11,34 @@ export function ChainListView({ chains }: ChainListViewProps) {
 
   const formatTPS = (tps: Chain['tps']) => {
     if (!tps || typeof tps.value !== 'number') return 'N/A';
+    if (tps.value < 0.5) return '< 1.0';
     return tps.value.toFixed(2);
   };
 
   const getTPSColor = (tpsStr: string) => {
     if (tpsStr === 'N/A') return 'text-gray-400 dark:text-gray-500';
+    if (tpsStr === '< 1.0') return 'text-yellow-500 dark:text-yellow-400';
     const tps = Number(tpsStr);
     if (tps >= 1) return 'text-green-500 dark:text-green-400';
-    if (tps >= 0.1) return 'text-yellow-500 dark:text-yellow-400';
+    if (tps >= 0.5) return 'text-yellow-500 dark:text-yellow-400';
     return 'text-red-500 dark:text-red-400';
   };
 
+  const formatCumulativeTxCount = (cumulativeTxCount: Chain['cumulativeTxCount']) => {
+    if (!cumulativeTxCount || typeof cumulativeTxCount.value !== 'number') return 'N/A';
+    const count = cumulativeTxCount.value;
+    if (count >= 1e9) return `${(count / 1e9).toFixed(1)}B`;
+    if (count >= 1e6) return `${(count / 1e6).toFixed(1)}M`;
+    if (count >= 1e3) return `${(count / 1e3).toFixed(1)}K`;
+    return count.toString();
+  };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {chains.map((chain, index) => {
         const tpsValue = formatTPS(chain.tps);
         const tpsColor = getTPSColor(tpsValue);
+        const cumulativeTxValue = formatCumulativeTxCount(chain.cumulativeTxCount);
         
         return (
           <div 
@@ -57,7 +69,7 @@ export function ChainListView({ chains }: ChainListViewProps) {
                 </h3>
                 <div className="flex items-center gap-4 mt-1">
                   <div className="flex items-center gap-1">
-                    <Activity className={`w-3 h-3 ${tpsColor}`} />
+                    <Zap className={`w-3 h-3 ${tpsColor}`} />
                     <span className={`text-xs font-medium ${tpsColor}`}>
                       {tpsValue} TPS
                     </span>
@@ -66,6 +78,12 @@ export function ChainListView({ chains }: ChainListViewProps) {
                     <Server className="w-3 h-3 text-blue-500 dark:text-blue-400" />
                     <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                       {chain.validators?.length || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Plus className="w-3 h-3 text-purple-500 dark:text-purple-400" />
+                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {cumulativeTxValue}
                     </span>
                   </div>
                 </div>

@@ -6,11 +6,8 @@ import { Chain, TPSHistory } from '../types';
 import { 
   Activity, 
   ArrowLeft, 
-  Server, 
-  Clock, 
   Search, 
   CheckCircle, 
-  XCircle, 
   Info, 
   Copy, 
   Check,
@@ -27,6 +24,7 @@ import { StakeDistributionChart, getValidatorColor } from '../components/StakeDi
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { AddToMetaMask } from '../components/AddToMetaMask';
 import { useTheme } from '../hooks/useTheme';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
@@ -67,7 +65,7 @@ export function ChainDetails() {
         } else {
           setError('Chain not found');
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load chain details');
       } finally {
         setLoading(false);
@@ -235,6 +233,9 @@ export function ChainDetails() {
 
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-white mb-2">{chain.chainName}</h1>
+                  <div className="mt-3">
+                    <AddToMetaMask chain={chain} variant="compact" />
+                  </div>
                 </div>
 
                 {/* Quick Stats */}
@@ -458,7 +459,7 @@ export function ChainDetails() {
           {/* Tab Navigation */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="border-b border-gray-200 dark:border-gray-700">
-              <nav className="flex space-x-8 px-8" aria-label="Tabs">
+              <nav className="grid grid-cols-4 gap-1 p-2" aria-label="Tabs">
                 {[
                   { id: 'overview', name: 'Overview', icon: TrendingUp },
                   { id: 'validators', name: 'Validators', icon: Users },
@@ -468,18 +469,19 @@ export function ChainDetails() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
+                      onClick={() => setActiveTab(tab.id as 'overview' | 'validators' | 'metrics')}
                       className={`${
                         activeTab === tab.id
-                          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                      } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
+                          ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/20 dark:border-blue-400 dark:text-blue-400'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-dark-700/50'
+                      } rounded-lg border-2 py-2 px-3 font-medium text-sm flex flex-col items-center justify-center gap-1 transition-all min-h-[60px]`}
                     >
                       <Icon className="w-4 h-4" />
-                      {tab.name}
+                      <span className="text-xs">{tab.name}</span>
                     </button>
                   );
                 })}
+                <div className="opacity-0 pointer-events-none"></div>
               </nav>
             </div>
 

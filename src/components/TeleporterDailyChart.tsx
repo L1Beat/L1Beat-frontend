@@ -267,6 +267,16 @@ export function TeleporterDailyChart() {
               >
                 30D
               </button>
+              <button
+                onClick={() => setTimeframe(90)}
+                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  timeframe === 90
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                }`}
+              >
+                90D
+              </button>
             </div>
           </div>
         </div>
