@@ -78,6 +78,13 @@ export interface CumulativeTxCountResponse {
   data: CumulativeTxCount[];
 }
 
+// Daily Active Addresses types
+export interface DailyActiveAddresses {
+  timestamp: number;
+  activeAddresses: number;
+  transactions: number;
+}
+
 // Health related types
 export interface HealthStatus {
   status: string;
@@ -115,7 +122,7 @@ export interface TeleporterDailyData {
   timeWindow: number;
 }
 
-export type TimeframeOption = 7 | 14 | 30 | 90;
+export type TimeframeOption = 7 | 14 | 30 | 360;
 
 // ============= ACP TYPES =============
 

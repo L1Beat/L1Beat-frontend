@@ -10,7 +10,7 @@ import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
 import { Footer } from '../components/Footer';
 import { LayoutGrid, Activity, Network, Search, Grid, List } from 'lucide-react';
-import { TeleporterDailyChart } from '../components/TeleporterDailyChart';
+import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
@@ -139,7 +139,7 @@ export function Dashboard() {
         </div>
 
         <div className="mb-8">
-          <TeleporterDailyChart />
+          <AvalancheNetworkMetrics />
         </div>
 
         <div className="mb-8">

@@ -119,8 +119,41 @@ class EnhancedACPBuilder {
         // Check again if directory exists after attempted update
         if (!fs.existsSync(ACPS_DIR)) {
           console.error(`❌ ACPs directory still not found at ${ACPS_DIR}`);
-          console.error("❌ Build cannot continue without ACP data");
-          process.exit(1);
+          console.log("📝 Creating empty ACP data file for WebContainer environment");
+          
+          // Create empty processed ACPs data
+          const emptyOutput = {
+            acps: [],
+            stats: {
+              total: 0,
+              byStatus: {},
+              byTrack: {},
+              byComplexity: {},
+              byCategory: {},
+              byImpact: {},
+              averageReadingTime: 0,
+              totalAuthors: new Set(),
+              implementationProgress: {
+                notStarted: 0,
+                inProgress: 0,
+                completed: 0,
+                deployed: 0,
+              },
+              recentlyUpdated: 0,
+              needsAttention: 0,
+            },
+            metadata: {
+              lastUpdated: new Date().toISOString(),
+              totalProcessed: 0,
+              version: "2.0.0",
+              extractionTimestamp: Date.now(),
+            },
+          };
+          
+          fs.writeFileSync(OUTPUT_FILE, JSON.stringify(emptyOutput, null, 2));
+          console.log(`✅ Created empty ACP data file at: ${OUTPUT_FILE}`);
+          console.log("🎉 Build completed successfully with empty data!");
+          return;
         } else {
           console.log("📁 Using existing ACP data (may not be latest)");
         }

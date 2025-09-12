@@ -1,26 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { TPSHistory, NetworkTPS, CumulativeTxCount } from '../types';
-import { getTPSHistory, getNetworkTPS, getCumulativeTxCount } from '../api';
+import { TPSHistory, NetworkTPS, CumulativeTxCount, DailyActiveAddresses } from '../types';
+import { getTPSHistory, getNetworkTPS, getCumulativeTxCount, getDailyActiveAddresses } from '../api';
 import { TrendingUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import { MetricsChart, DataPoint } from './MetricsChart';
 
 interface L1MetricsChartProps {
   chainId?: string;
   chainName?: string;
+  evmChainId?: string;
 }
 
-type MetricType = 'tps' | 'transactions';
+type MetricType = 'tps' | 'transactions' | 'activeAddresses';
 type TimeframeOption = 7 | 14 | 30;
 
 const METRICS = [
   { id: 'tps' as const, name: 'TPS' },
   { id: 'transactions' as const, name: 'Cumulative Transactions' },
+  { id: 'activeAddresses' as const, name: 'Daily Active Addresses' },
 ];
 
-export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
+export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChartProps) {
   const [tpsHistory, setTpsHistory] = useState<TPSHistory[]>([]);
   const [txHistory, setTxHistory] = useState<CumulativeTxCount[]>([]);
+  const [activeAddressesHistory, setActiveAddressesHistory] = useState<DailyActiveAddresses[]>([]);
   const [networkTPS, setNetworkTPS] = useState<NetworkTPS | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,25 +44,35 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
         if (chainId) {
           promises.push(getTPSHistory(timeframe, chainId));
           promises.push(getCumulativeTxCount(chainId, timeframe));
+          if (evmChainId && selectedMetric === 'activeAddresses') {
+            promises.push(getDailyActiveAddresses(evmChainId, timeframe));
+          } else if (selectedMetric === 'activeAddresses') {
+            // Try using chainId as evmChainId if evmChainId is not provided
+            promises.push(getDailyActiveAddresses(chainId, timeframe));
+          }
         } else {
           promises.push(getTPSHistory(timeframe));
           promises.push(getNetworkTPS());
         }
 
-        const [history, secondResult] = await Promise.all(promises);
+        const results = await Promise.all(promises);
         
         if (mounted) {
-          setTpsHistory(history.sort((a, b) => a.timestamp - b.timestamp));
+          setTpsHistory(results[0].sort((a, b) => a.timestamp - b.timestamp));
           if (chainId) {
-            setTxHistory(secondResult);
+            setTxHistory(results[1]);
+            if ((evmChainId || selectedMetric === 'activeAddresses') && results[2]) {
+              setActiveAddressesHistory(results[2]);
+            }
             setNetworkTPS(null);
           } else {
-            setNetworkTPS(secondResult);
+            setNetworkTPS(results[1]);
           }
         }
       } catch (err) {
+        console.error('Error fetching data:', err);
         if (mounted) {
-          setError('Failed to fetch data');
+          setError(`Failed to fetch ${selectedMetric} data`);
         }
       } finally {
         if (mounted) {
@@ -75,11 +88,20 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
       mounted = false;
       clearInterval(interval);
     };
-  }, [chainId, timeframe]);
+  }, [chainId, evmChainId, timeframe, selectedMetric]);
 
   const formatValue = (value: number): string => {
     if (selectedMetric === 'tps') {
       return `${value.toFixed(2)}`;
+    }
+    if (selectedMetric === 'activeAddresses') {
+      if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+      }
+      if (value >= 1_000) {
+        return `${(value / 1_000).toFixed(2)}K`;
+      }
+      return value.toString();
     }
     if (value >= 1_000_000_000) {
       return `${(value / 1_000_000_000).toFixed(2)}B`;
@@ -103,6 +125,16 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
         }
       }));
     }
+    if (selectedMetric === 'activeAddresses') {
+      console.log('Active addresses data:', activeAddressesHistory);
+      return activeAddressesHistory.map(item => ({
+        timestamp: item.timestamp,
+        value: item.activeAddresses,
+        metadata: {
+          transactions: item.transactions
+        }
+      }));
+    }
     return txHistory.map(item => ({
       timestamp: item.timestamp,
       value: item.value
@@ -117,11 +149,20 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
       }
       return lines;
     }
+    if (selectedMetric === 'activeAddresses') {
+      const lines = [`Active Addresses: ${dataPoint.value.toLocaleString()}`];
+      if (dataPoint.metadata?.transactions) {
+        lines.push(`Transactions: ${dataPoint.metadata.transactions.toLocaleString()}`);
+      }
+      return lines;
+    }
     return [`Transactions: ${dataPoint.value.toLocaleString()}`];
   };
 
   const latestValue = selectedMetric === 'tps' 
     ? tpsHistory[tpsHistory.length - 1]
+    : selectedMetric === 'activeAddresses'
+    ? activeAddressesHistory[activeAddressesHistory.length - 1]
     : txHistory[txHistory.length - 1];
 
   const lastUpdated = latestValue
@@ -138,27 +179,42 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
     setLoading(true);
     setError(null);
     
+    const promises: Promise<any>[] = [];
+    
     if (chainId) {
-      Promise.all([
-        getTPSHistory(newTimeframe, chainId),
-        getCumulativeTxCount(chainId, newTimeframe)
-      ]).then(([tpsData, txData]) => {
+      promises.push(getTPSHistory(newTimeframe, chainId));
+      promises.push(getCumulativeTxCount(chainId, newTimeframe));
+      if (evmChainId && selectedMetric === 'activeAddresses') {
+        promises.push(getDailyActiveAddresses(evmChainId, newTimeframe));
+      } else if (selectedMetric === 'activeAddresses') {
+        promises.push(getDailyActiveAddresses(chainId, newTimeframe));
+      }
+    } else {
+      promises.push(getTPSHistory(newTimeframe));
+      promises.push(getNetworkTPS());
+    }
+    
+    if (chainId) {
+      Promise.all(promises).then((results) => {
+        const [tpsData, txData, activeAddressesData] = results;
         setTpsHistory(tpsData.sort((a, b) => a.timestamp - b.timestamp));
         setTxHistory(txData);
+        if ((evmChainId || selectedMetric === 'activeAddresses') && activeAddressesData) {
+          setActiveAddressesHistory(activeAddressesData);
+        }
         setLoading(false);
       }).catch(err => {
+        console.error('Error in timeframe change:', err);
         setError('Failed to fetch data');
         setLoading(false);
       });
     } else {
-      Promise.all([
-        getTPSHistory(newTimeframe),
-        getNetworkTPS()
-      ]).then(([history, current]) => {
+      Promise.all(promises).then(([history, current]) => {
         setTpsHistory(history.sort((a, b) => a.timestamp - b.timestamp));
         setNetworkTPS(current);
         setLoading(false);
       }).catch(err => {
+        console.error('Error in network timeframe change:', err);
         setError('Failed to fetch data');
         setLoading(false);
       });
@@ -180,9 +236,13 @@ export function L1MetricsChart({ chainId, chainName }: L1MetricsChartProps) {
         color={{
           line: selectedMetric === 'tps'
             ? 'rgb(99, 102, 241)'
+            : selectedMetric === 'activeAddresses'
+            ? 'rgb(34, 197, 94)'
             : 'rgb(202, 138, 4)',
           fill: selectedMetric === 'tps'
             ? 'rgba(99, 102, 241, 0.1)'
+            : selectedMetric === 'activeAddresses'
+            ? 'rgba(34, 197, 94, 0.1)'
             : 'rgba(202, 138, 4, 0.1)'
         }}
         lastUpdated={lastUpdated}

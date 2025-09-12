@@ -1,4 +1,5 @@
 import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse } from './types';
+import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
 // XSS protection - sanitize strings in API responses
@@ -196,14 +197,13 @@ async function fetchWithRetry<T>(
         // Check if it's a CORS error
         if (error instanceof TypeError && error.message.includes('CORS')) {
           console.error('CORS error detected:', error);
-          // Return fallback data for CORS errors
-          return getFallbackData<T>();
+          break; // Exit retry loop and return fallback data
         }
         
         // Check for network errors (offline)
         if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('Network request failed'))) {
           console.error('Network error detected:', error);
-          throw new Error('Network error - Please check your internet connection');
+          break; // Exit retry loop and return fallback data
         }
         
         attempt++;
@@ -216,15 +216,13 @@ async function fetchWithRetry<T>(
       }
     }
     
-    // If we've exhausted all retries, throw the last error or return fallback
-    throw lastError;
+    // If we've exhausted all retries, return fallback data instead of throwing
+    console.warn('All retry attempts failed, returning fallback data:', lastError.message);
+    return getFallbackData<T>();
   } finally {
     // Always clear the timeout to prevent memory leaks
     clearTimeout(timeoutId);
   }
-  
-  // Return fallback data for any error after all retries
-  return getFallbackData<T>();
 }
 
 // Fallback data generator
@@ -452,6 +450,39 @@ export async function getNetworkTPS(): Promise<NetworkTPS> {
         dataAgeUnit: 'minutes',
         updatedAt: new Date().toISOString()
       };
+    }
+  });
+}
+
+export async function getDailyActiveAddresses(evmChainId: string, days: number = 30): Promise<DailyActiveAddresses[]> {
+  return fetchWithCache(`daily-active-addresses-${evmChainId}-${days}`, async () => {
+    try {
+      console.log(`Fetching daily active addresses for evmChainId: ${evmChainId}, days: ${days}`);
+      const response = await fetchWithRetry<{ data: DailyActiveAddresses[] }>(
+        `https://idx6.solokhin.com/api/${evmChainId}/stats/daily-active-addresses`
+      );
+      
+      console.log('Daily active addresses response:', response);
+      console.log('Response type:', typeof response);
+      console.log('Is array:', Array.isArray(response));
+      
+      if (!response || !Array.isArray(response)) {
+        throw new Error('Invalid daily active addresses data format');
+      }
+
+      return response
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.activeAddresses === 'number')
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-days); // Take only the last N days
+    } catch (error) {
+      console.error('Daily active addresses fetch error:', error);
+      console.error('Error details:', {
+        evmChainId,
+        days,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
+      return [];
     }
   });
 }

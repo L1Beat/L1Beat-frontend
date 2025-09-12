@@ -22,10 +22,16 @@ interface Bullet {
   direction: 'outgoing' | 'incoming';
 }
 
+interface MaxTPSData {
+  maxTps: number;
+  timestamp: number;
+  totalTxsInMinute: number;
+}
 export function NetworkTopologyGraph() {
   const navigate = useNavigate();
   const [chains, setChains] = useState<Chain[]>([]);
   const [networkTPS, setNetworkTPS] = useState<NetworkTPS | null>(null);
+  const [maxTPSData, setMaxTPSData] = useState<MaxTPSData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
@@ -43,6 +49,20 @@ export function NetworkTopologyGraph() {
   const MAX_BULLETS = 25;
   const BULLET_SPAWN_RATE = 0.94;
 
+  // Fetch max TPS data
+  const fetchMaxTPS = async () => {
+    try {
+      const response = await fetch('https://idx6.solokhin.com/api/global/overview/maxTpsObserved');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setMaxTPSData(data);
+    } catch (err) {
+      console.error('Failed to fetch max TPS data:', err);
+      setMaxTPSData(null);
+    }
+  };
   useEffect(() => {
     async function fetchData() {
       try {
@@ -51,6 +71,9 @@ export function NetworkTopologyGraph() {
           getChains(),
           getNetworkTPS()
         ]);
+        
+        // Fetch max TPS data separately (don't block main loading)
+        fetchMaxTPS();
         
         if (chainsData && chainsData.length > 0) {
           // Filter chains to include those with validators OR Avalanche chains
@@ -613,12 +636,41 @@ export function NetworkTopologyGraph() {
         
         {/* Network TPS display */}
         {networkTPS && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-sm">
+          <div className="flex items-center gap-4">
+            {/* Current Network TPS */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-sm">
+              <Activity className="w-4 h-4 text-white" />
+              <div className="flex flex-col">
+                <span className="text-xs text-blue-100 font-medium">Network TPS</span>
+                <span className="text-sm font-bold text-white">
+                  {formatTPS(networkTPS.totalTps)}
+                </span>
+              </div>
+            </div>
+            
+            {/* Max TPS Observed */}
+            {maxTPSData && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg shadow-sm">
+                <Zap className="w-4 h-4 text-white" />
+                <div className="flex flex-col">
+                  <span className="text-xs text-emerald-100 font-medium">Max TPS (7d)</span>
+                  <span className="text-sm font-bold text-white">
+                    {formatTPS(maxTPSData.maxTps)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Fallback if only maxTPS is available */}
+        {!networkTPS && maxTPSData && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg shadow-sm">
             <Activity className="w-4 h-4 text-white" />
             <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Network TPS</span>
+              <span className="text-xs text-emerald-100 font-medium">Max TPS (7d)</span>
               <span className="text-sm font-bold text-white">
-                {formatTPS(networkTPS.totalTps)}
+                {formatTPS(maxTPSData.maxTps)}
               </span>
             </div>
           </div>

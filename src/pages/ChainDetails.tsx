@@ -488,8 +488,132 @@ export function ChainDetails() {
             <div className="p-8">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div>
-                  <L1MetricsChart chainId={chain.chainId} chainName={chain.chainName} />
+                <div className="space-y-8">
+                  {/* Network Summary */}
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-blue-500" />
+                      Network Overview
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                      {/* Current TPS */}
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <Activity className="w-5 h-5 text-white" />
+                          </div>
+                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-1 rounded-full">
+                            Live
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{tpsValue}</p>
+                          <p className="text-sm text-blue-600 dark:text-blue-400">Current TPS</p>
+                          {lastUpdate && (
+                            <p className="text-xs text-blue-500 dark:text-blue-400">
+                              Updated {format(new Date(lastUpdate * 1000), 'MMM d, HH:mm')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Total Validators */}
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 border border-green-200 dark:border-green-700/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                            <Users className="w-5 h-5 text-white" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-2xl font-bold text-green-900 dark:text-green-100">{chain.validators.length}</p>
+                          <p className="text-sm text-green-600 dark:text-green-400">Total Validators</p>
+                          <p className="text-xs text-green-500 dark:text-green-400">
+                            {activeValidators} active ({((activeValidators / chain.validators.length) * 100).toFixed(1)}%)
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Network Security */}
+                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-white" />
+                          </div>
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                            averageUptime >= 99 
+                              ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/50' 
+                              : averageUptime >= 95 
+                              ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50' 
+                              : 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50'
+                          }`}>
+                            {averageUptime >= 99 ? 'Excellent' : averageUptime >= 95 ? 'Good' : 'Fair'}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{averageUptime.toFixed(1)}%</p>
+                          <p className="text-sm text-purple-600 dark:text-purple-400">Network Uptime</p>
+                        </div>
+                      </div>
+
+                      {/* Total Stake */}
+                      <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-6 border border-orange-200 dark:border-orange-700/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                            <Database className="w-5 h-5 text-white" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{formatStakeNumber(totalStake)}</p>
+                          <p className="text-sm text-orange-600 dark:text-orange-400">Total Stake</p>
+                          <p className="text-xs text-orange-500 dark:text-orange-400">
+                            {chain.networkToken?.symbol || 'tokens'} secured
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Network Status */}
+                  <div className="bg-white dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                      Network Status
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Chain Status</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Block Production</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-green-600 dark:text-green-400">Normal</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Network Load</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            Number(tpsValue) > 10 ? 'bg-orange-500' : Number(tpsValue) > 1 ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}></div>
+                          <span className={`text-sm font-medium ${
+                            Number(tpsValue) > 10 ? 'text-orange-600 dark:text-orange-400' : 
+                            Number(tpsValue) > 1 ? 'text-yellow-600 dark:text-yellow-400' : 
+                            'text-green-600 dark:text-green-400'
+                          }`}>
+                            {Number(tpsValue) > 10 ? 'High' : Number(tpsValue) > 1 ? 'Medium' : 'Low'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -729,24 +853,24 @@ export function ChainDetails() {
                     <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700/50">
                       <div className="flex items-center justify-between mb-4">
                         <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                          <Shield className="w-5 h-5 text-white" />
+                          <Database className="w-5 h-5 text-white" />
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{averageUptime.toFixed(1)}%</p>
-                        <p className="text-sm text-purple-600 dark:text-purple-400">Average Uptime</p>
+                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{formatStakeNumber(totalStake)}</p>
+                        <p className="text-sm text-purple-600 dark:text-purple-400">Total Stake</p>
                       </div>
                     </div>
 
                     <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-6 border border-orange-200 dark:border-orange-700/50">
                       <div className="flex items-center justify-between mb-4">
                         <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                          <Database className="w-5 h-5 text-white" />
+                          <Shield className="w-5 h-5 text-white" />
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{formatStakeNumber(totalStake)}</p>
-                        <p className="text-sm text-orange-600 dark:text-orange-400">Total Stake</p>
+                        <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{averageUptime.toFixed(1)}%</p>
+                        <p className="text-sm text-orange-600 dark:text-orange-400">Average Uptime</p>
                       </div>
                     </div>
                   </div>
