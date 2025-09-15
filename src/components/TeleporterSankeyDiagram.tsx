@@ -554,29 +554,6 @@ export function TeleporterSankeyDiagram() {
         .attr('fill', 'rgba(255, 255, 255, 0.7)')
         .text(`Total: ${data.metadata.totalMessages.toLocaleString()} messages`);
       
-      // Reset button and background click handler remain the same...
-      if (selectedChain) {
-        const resetButton = svg.append('g')
-          .attr('class', 'reset-button')
-          .attr('transform', `translate(${width - 80}, ${height - 30})`)
-          .style('cursor', 'pointer')
-          .on('click', () => setSelectedChain(null));
-        
-        resetButton.append('rect')
-          .attr('width', 80).attr('height', 24)
-          .attr('rx', 12).attr('ry', 12)
-          .attr('fill', 'rgba(255, 255, 255, 0.1)')
-          .attr('stroke', 'rgba(255, 255, 255, 0.2)');
-        
-        resetButton.append('text')
-          .attr('x', 40).attr('y', 12)
-          .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .attr('font-size', '10px')
-          .attr('fill', 'rgba(255, 255, 255, 0.9)')
-          .text('Reset Filter');
-      }
-      
       svg.on('click', () => {
         if (selectedChain) {
           setSelectedChain(null);
