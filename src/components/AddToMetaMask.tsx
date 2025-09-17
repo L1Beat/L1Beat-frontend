@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
 import { Chain } from '../types';
-import { isMetaMaskInstalled, addNetworkToMetaMask } from '../utils/metamask';
+import { isCoreInstalled, addNetworkToWallet } from '../utils/metamask';
 
 interface AddToMetaMaskProps {
   chain: Chain;
@@ -13,9 +13,9 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
   const [status, setStatus] = useState<'idle' | 'adding' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   
-  const handleAddToMetaMask = async () => {
-    if (!isMetaMaskInstalled()) {
-      window.open('https://metamask.io/download/', '_blank', 'noopener,noreferrer');
+  const handleAddToWallet = async () => {
+    if (!isCoreInstalled()) {
+      window.open('https://core.app/', '_blank', 'noopener,noreferrer');
       return;
     }
 
@@ -30,17 +30,17 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     setErrorMessage('');
 
     try {
-      console.log('Attempting to add network to MetaMask:', {
+      console.log('Attempting to add network to wallet:', {
         chainId: chain.chainId,
         chainName: chain.chainName,
         networkToken: chain.networkToken
       });
-      
-      await addNetworkToMetaMask(chain);
+
+      await addNetworkToWallet(chain);
       setStatus('success');
       setTimeout(() => setStatus('idle'), 3000);
     } catch (error) {
-      console.error('MetaMask add network error:', error);
+      console.error('Wallet add network error:', error);
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Failed to add network');
       setTimeout(() => setStatus('idle'), 5000);
@@ -49,11 +49,11 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
 
 
   const getButtonContent = () => {
-    if (!isMetaMaskInstalled()) {
+    if (!isCoreInstalled()) {
       return (
         <>
           <ExternalLink className="w-4 h-4" />
-          {variant === 'compact' ? 'MetaMask' : 'Install MetaMask'}
+          {variant === 'compact' ? 'CORE' : 'Install CORE'}
         </>
       );
     }
@@ -117,13 +117,13 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
   return (
     <div className={`relative ${className}`}>
       <button
-        onClick={handleAddToMetaMask}
+        onClick={handleAddToWallet}
         disabled={status === 'adding' || status === 'success'}
         className={getButtonStyles()}
         title={
-          !isMetaMaskInstalled() 
-            ? "Install MetaMask to add this network"
-            : `Add ${chain.chainName} network to MetaMask`
+          !isCoreInstalled()
+            ? "Install CORE wallet to add this network"
+            : `Add ${chain.chainName} network to wallet`
         }
       >
         {getButtonContent()}

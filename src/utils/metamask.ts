@@ -1,6 +1,6 @@
 import { Chain } from '../types';
 
-export interface MetaMaskError extends Error {
+export interface WalletError extends Error {
   code: number;
   message: string;
 }
@@ -19,11 +19,11 @@ declare global {
 }
 
 /**
- * Get the MetaMask provider specifically, even when multiple wallets are installed
+ * Get the CORE wallet provider specifically, even when multiple wallets are installed
  */
-export function getMetaMaskProvider(): EthereumProvider | null {
+export function getCoreProvider(): EthereumProvider | null {
   if (typeof window === 'undefined' || !window.ethereum) {
-    console.log('MetaMask check: No window.ethereum available');
+    console.log('CORE wallet check: No window.ethereum available');
     return null;
   }
 
@@ -34,35 +34,50 @@ export function getMetaMaskProvider(): EthereumProvider | null {
     providersCount: window.ethereum.providers ? window.ethereum.providers.length : 0
   });
 
-  // If there are multiple providers, find MetaMask
+  // If there are multiple providers, find CORE wallet first, then any other wallet
   if (window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
-    console.log('Multiple providers found, looking for MetaMask...');
-    const metamaskProvider = window.ethereum.providers.find(
-      (provider: EthereumProvider) => provider.isMetaMask
+    console.log('Multiple providers found, looking for CORE wallet...');
+    const coreProvider = window.ethereum.providers.find(
+      (provider: EthereumProvider) => provider.isCoreWallet
     );
-    if (metamaskProvider) {
-      console.log('Found MetaMask in providers array');
-    } else {
-      console.log('MetaMask not found in providers array');
+    if (coreProvider) {
+      console.log('Found CORE wallet in providers array');
+      return coreProvider;
     }
-    return metamaskProvider || null;
+
+    // Fallback to any other available wallet
+    const otherProvider = window.ethereum.providers[0];
+    if (otherProvider) {
+      console.log('CORE wallet not found, using other available wallet');
+    } else {
+      console.log('No wallet providers found in providers array');
+    }
+    return otherProvider || null;
   }
 
-  // If it's MetaMask directly
-  if (window.ethereum.isMetaMask) {
-    console.log('Found MetaMask as primary provider');
+  // If it's CORE wallet directly
+  if (window.ethereum.isCoreWallet) {
+    console.log('Found CORE wallet as primary provider');
     return window.ethereum;
   }
 
-  console.log('MetaMask not detected');
-  return null;
+  // Fallback to any other wallet
+  console.log('CORE wallet not found, using other available wallet');
+  return window.ethereum;
 }
 
 /**
- * Check if MetaMask is installed
+ * Check if CORE wallet is installed (with other wallets as fallback)
+ */
+export function isCoreInstalled(): boolean {
+  return getCoreProvider() !== null;
+}
+
+/**
+ * @deprecated Use isCoreInstalled() instead
  */
 export function isMetaMaskInstalled(): boolean {
-  return getMetaMaskProvider() !== null;
+  return isCoreInstalled();
 }
 
 /**
@@ -76,12 +91,12 @@ export function generateRpcUrl(chainId: string): string {
 }
 
 /**
- * Add a network to MetaMask
+ * Add a network to CORE wallet (or other wallet fallback)
  */
-export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
-  const provider = getMetaMaskProvider();
+export async function addNetworkToWallet(chain: Chain): Promise<boolean> {
+  const provider = getCoreProvider();
   if (!provider) {
-    throw new Error('MetaMask is not installed');
+    throw new Error('CORE wallet (or other wallet) is not installed');
   }
 
   if (!chain.networkToken) {
@@ -122,29 +137,29 @@ export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
     
     return true;
   } catch (error) {
-    const metamaskError = error as MetaMaskError;
+    const walletError = error as WalletError;
     
     // User rejected the request
-    if (metamaskError.code === 4001) {
+    if (walletError.code === 4001) {
       throw new Error('User rejected the request');
     }
     
     // Chain already added
-    if (metamaskError.code === -32602) {
+    if (walletError.code === -32602) {
       throw new Error('Invalid parameters - chain may already be added');
     }
-    
-    throw new Error(`Failed to add network: ${metamaskError.message}`);
+
+    throw new Error(`Failed to add network: ${walletError.message}`);
   }
 }
 
 /**
- * Switch to a specific network in MetaMask
+ * Switch to a specific network in CORE wallet (or other wallet fallback)
  */
 export async function switchToNetwork(chainId: string): Promise<boolean> {
-  const provider = getMetaMaskProvider();
+  const provider = getCoreProvider();
   if (!provider) {
-    throw new Error('MetaMask is not installed');
+    throw new Error('CORE wallet (or other wallet) is not installed');
   }
 
   const hexChainId = chainId.startsWith('0x') ? chainId : `0x${parseInt(chainId).toString(16)}`;
@@ -157,29 +172,29 @@ export async function switchToNetwork(chainId: string): Promise<boolean> {
     
     return true;
   } catch (error) {
-    const metamaskError = error as MetaMaskError;
+    const walletError = error as WalletError;
     
     // User rejected the request
-    if (metamaskError.code === 4001) {
+    if (walletError.code === 4001) {
       throw new Error('User rejected the request');
     }
     
-    // Chain not added to MetaMask yet
-    if (metamaskError.code === 4902) {
-      throw new Error('Chain not found in MetaMask - please add it first');
+    // Chain not added to wallet yet
+    if (walletError.code === 4902) {
+      throw new Error('Chain not found in wallet - please add it first');
     }
-    
-    throw new Error(`Failed to switch network: ${metamaskError.message}`);
+
+    throw new Error(`Failed to switch network: ${walletError.message}`);
   }
 }
 
 /**
- * Request account access from MetaMask
+ * Request account access from CORE wallet (or other wallet fallback)
  */
 export async function connectWallet(): Promise<string[]> {
-  const provider = getMetaMaskProvider();
+  const provider = getCoreProvider();
   if (!provider) {
-    throw new Error('MetaMask is not installed');
+    throw new Error('CORE wallet (or other wallet) is not installed');
   }
 
   try {
@@ -189,23 +204,23 @@ export async function connectWallet(): Promise<string[]> {
     
     return accounts;
   } catch (error) {
-    const metamaskError = error as MetaMaskError;
+    const walletError = error as WalletError;
     
-    if (metamaskError.code === 4001) {
+    if (walletError.code === 4001) {
       throw new Error('User rejected the connection request');
     }
     
-    throw new Error(`Failed to connect wallet: ${metamaskError.message}`);
+    throw new Error(`Failed to connect wallet: ${walletError.message}`);
   }
 }
 
 /**
- * Get the current network from MetaMask
+ * Get the current network from CORE wallet (or other wallet fallback)
  */
 export async function getCurrentNetwork(): Promise<string> {
-  const provider = getMetaMaskProvider();
+  const provider = getCoreProvider();
   if (!provider) {
-    throw new Error('MetaMask is not installed');
+    throw new Error('CORE wallet (or other wallet) is not installed');
   }
 
   try {
@@ -215,7 +230,14 @@ export async function getCurrentNetwork(): Promise<string> {
     
     return chainId;
   } catch (error) {
-    const metamaskError = error as MetaMaskError;
-    throw new Error(`Failed to get current network: ${metamaskError.message}`);
+    const walletError = error as WalletError;
+    throw new Error(`Failed to get current network: ${walletError.message}`);
   }
+}
+
+/**
+ * @deprecated Use addNetworkToWallet() instead
+ */
+export async function addNetworkToMetaMask(chain: Chain): Promise<boolean> {
+  return addNetworkToWallet(chain);
 }
