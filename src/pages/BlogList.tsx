@@ -112,7 +112,6 @@ export function BlogList() {
                     <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                         <div className="text-center">
                             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                                <Sparkles className="w-4 h-4" />
                                 Insights from the Avalanche Ecosystem
                             </div>
                             
@@ -169,11 +168,7 @@ export function BlogList() {
                             {/* Featured Post */}
                             {featuredPost && (
                                 <section>
-                                    <div className="flex items-center gap-3 mb-8">
-                                        <div className="w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                                            <TrendingUp className="w-4 h-4 text-white" />
-                                        </div>
-                                        
+                                    <div className="flex items-center gap-3 mb-8">                                        
                                         <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
                                     </div>
                                     
@@ -253,24 +248,16 @@ export function BlogList() {
                             {/* Latest Posts */}
                             {regularPosts.length > 0 && (
                                 <section>
-                                    <div className="flex items-center justify-between mb-8">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                                                <BookOpen className="w-4 h-4 text-white" />
-                                            </div>
-                                           
-                                            <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
-                                        </div>
-                                        
-                                        {selectedTag && (
+                                    {selectedTag && (
+                                        <div className="flex justify-end mb-8">
                                             <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-500/20 rounded-full">
                                                 <Tag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                                 <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
                                                     Filtered by: {selectedTag}
                                                 </span>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                         {regularPosts.map((post, index) => (
@@ -350,7 +337,6 @@ export function BlogList() {
                     )}
                 </div>
             </div>
-
             <Footer />
         </div>
     );

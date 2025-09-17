@@ -81,7 +81,6 @@ const NewsletterSubscription = () => {
                 {/* Left side - Text content */}
                 <div className="text-center lg:text-left">
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                        <Sparkles className="w-4 h-4" />
                         Join the Community
                     </div>
                     
@@ -98,11 +97,6 @@ const NewsletterSubscription = () => {
                     
                     <div className="flex items-center gap-6 text-white/70 text-sm">
                         <div className="flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" />
-                            <span>Weekly insights</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Eye className="w-4 h-4" />
                             <span>Exclusive content</span>
                         </div>
                     </div>
