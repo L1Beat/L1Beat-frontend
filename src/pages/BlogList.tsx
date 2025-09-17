@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, Tag, AlertCircle, RefreshCw, TrendingUp, Clock, Calendar, ArrowRight, Sparkles, BookOpen } from 'lucide-react';
 import { BlogPost, getBlogPosts, getBlogTags, BlogTag } from '../api/blogApi';
@@ -14,12 +14,15 @@ export function BlogList() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [selectedTag, setSelectedTag] = useState<string | null>(
         searchParams.get('tag')
     );
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [health, setHealth] = useState<HealthStatus | null>(null);
+    const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     const POSTS_PER_PAGE = 12;
 
@@ -56,6 +59,53 @@ export function BlogList() {
         }
     };
 
+    // Generate search suggestions
+    const generateSuggestions = useCallback((term: string) => {
+        if (!term.trim() || term.length < 2) return [];
+
+        const suggestions = new Set<string>();
+        const termLower = term.toLowerCase();
+
+        posts.forEach(post => {
+            // Add title words that start with the search term
+            post.title.split(' ').forEach(word => {
+                const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+                if (cleanWord.startsWith(termLower) && cleanWord !== termLower) {
+                    suggestions.add(word);
+                }
+            });
+
+            // Add author if it matches
+            if (post.author?.toLowerCase().includes(termLower)) {
+                suggestions.add(post.author);
+            }
+
+            // Add matching tags
+            post.tags.forEach(tag => {
+                if (tag.toLowerCase().includes(termLower)) {
+                    suggestions.add(tag);
+                }
+            });
+        });
+
+        return Array.from(suggestions).slice(0, 5);
+    }, [posts]);
+
+    // Debounce search term and generate suggestions
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+            if (searchTerm.trim() && searchTerm.length >= 2) {
+                setSearchSuggestions(generateSuggestions(searchTerm));
+                setShowSuggestions(true);
+            } else {
+                setShowSuggestions(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm, generateSuggestions]);
+
     useEffect(() => {
         fetchPosts(0, selectedTag || undefined);
         fetchTags();
@@ -75,10 +125,55 @@ export function BlogList() {
         fetchPosts(posts.length, selectedTag || undefined, true);
     };
 
-    const filteredPosts = posts.filter(post =>
-        post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    // Enhanced search function with relevance scoring
+    const searchPosts = useCallback((posts: BlogPost[], searchTerm: string) => {
+        if (!searchTerm.trim()) return posts;
+
+        const term = searchTerm.toLowerCase();
+
+        return posts
+            .map(post => {
+                let relevanceScore = 0;
+
+                // Title matches get highest score
+                if (post.title.toLowerCase().includes(term)) {
+                    relevanceScore += 10;
+                    if (post.title.toLowerCase().startsWith(term)) relevanceScore += 5;
+                }
+
+                // Excerpt matches
+                if (post.excerpt.toLowerCase().includes(term)) {
+                    relevanceScore += 5;
+                }
+
+                // Content matches (if available)
+                if (post.content?.toLowerCase().includes(term)) {
+                    relevanceScore += 3;
+                }
+
+                // Author matches
+                if (post.author?.toLowerCase().includes(term)) {
+                    relevanceScore += 4;
+                }
+
+                // Tag matches
+                post.tags.forEach(tag => {
+                    if (tag.toLowerCase().includes(term)) {
+                        relevanceScore += 2;
+                        if (tag.toLowerCase() === term) relevanceScore += 3;
+                    }
+                });
+
+                return relevanceScore > 0 ? { ...post, relevanceScore } : null;
+            })
+            .filter((post): post is BlogPost & { relevanceScore: number } => post !== null)
+            .sort((a, b) => b.relevanceScore - a.relevanceScore)
+            .map(({ relevanceScore, ...post }) => post);
+    }, []);
+
+    const filteredPosts = useMemo(() =>
+        searchPosts(posts, debouncedSearchTerm),
+        [posts, debouncedSearchTerm, searchPosts]
     );
 
     const featuredPost = filteredPosts[0];
@@ -194,8 +289,36 @@ export function BlogList() {
                                             placeholder="Search articles, topics, or authors..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-lg"
+                                            onFocus={() => setShowSuggestions(searchTerm.length >= 2 && searchSuggestions.length > 0)}
+                                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                            className="w-full pl-12 pr-16 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-lg"
                                         />
+                                        {debouncedSearchTerm && (
+                                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700 px-2">
+                                                {filteredPosts.length} result{filteredPosts.length !== 1 ? 's' : ''}
+                                            </div>
+                                        )}
+
+                                        {/* Search Suggestions */}
+                                        {showSuggestions && searchSuggestions.length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10">
+                                                {searchSuggestions.map((suggestion, index) => (
+                                                    <button
+                                                        key={index}
+                                                        onClick={() => {
+                                                            setSearchTerm(suggestion);
+                                                            setShowSuggestions(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors text-gray-900 dark:text-white first:rounded-t-xl last:rounded-b-xl"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <Search className="w-4 h-4 text-gray-400" />
+                                                            <span>{suggestion}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
