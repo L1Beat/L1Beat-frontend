@@ -271,147 +271,125 @@ export function BlogList() {
                         </div>
                     )}
 
-                    {/* Search and Filters Section - Always visible */}
-                    <section className="mb-16">
-                        <motion.div
-                            className="bg-white/80 dark:bg-dark-800/80 backdrop-blur-xl rounded-3xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 p-8"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }}
-                        >
-                            <div className="flex flex-col lg:flex-row gap-6">
-                                {/* Search Bar */}
-                                <div className="flex-1">
-                                    <div className="relative">
-                                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                        <input
-                                            type="text"
-                                            placeholder="Search articles, topics, or authors..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            onFocus={() => setShowSuggestions(searchTerm.length >= 2 && searchSuggestions.length > 0)}
-                                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                            className="w-full pl-12 pr-16 py-5 border border-gray-200 dark:border-gray-600 rounded-2xl bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-lg shadow-sm focus:shadow-lg"
-                                        />
-                                        {(debouncedSearchTerm || selectedTag) && (
+                    {/* Search and Filters Section */}
+                    <section className="mb-8">
+                        <div className="flex flex-col lg:flex-row gap-4">
+                            {/* Clean Search Bar */}
+                            <div className="flex-1">
+                                <div className="relative overflow-hidden">
+                                    {/* Search Container */}
+                                    <div className="h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 focus-within:border-blue-400 dark:focus-within:border-blue-500 shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
+
+                                        {/* Animated Gradient Background */}
+                                        {searchTerm && (
                                             <motion.div
-                                                className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2"
-                                                initial={{ opacity: 0, scale: 0.8 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                transition={{ duration: 0.2 }}
-                                            >
-                                                <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-dark-700 px-2 py-1 rounded">
-                                                    {filteredPosts.length} result{filteredPosts.length !== 1 ? 's' : ''}
-                                                </div>
-                                                {(debouncedSearchTerm || selectedTag) && (
-                                                    <motion.button
-                                                        onClick={() => {
-                                                            setSearchTerm('');
-                                                            handleTagFilter(null);
-                                                        }}
-                                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                                                        whileHover={{ scale: 1.1 }}
-                                                        whileTap={{ scale: 0.9 }}
-                                                        title="Clear search and filters"
-                                                    >
-                                                        <AlertCircle className="w-4 h-4" />
-                                                    </motion.button>
-                                                )}
-                                            </motion.div>
+                                                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-indigo-500/20"
+                                                animate={{
+                                                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"]
+                                                }}
+                                                transition={{
+                                                    duration: 2,
+                                                    repeat: Infinity,
+                                                    ease: "easeInOut"
+                                                }}
+                                                style={{
+                                                    backgroundSize: "200% 100%"
+                                                }}
+                                            />
                                         )}
 
-                                        {/* Search Suggestions */}
-                                        <AnimatePresence>
-                                            {showSuggestions && searchSuggestions.length > 0 && (
-                                                <motion.div
-                                                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10 overflow-hidden"
-                                                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                    transition={{ duration: 0.2, ease: "easeOut" }}
-                                                >
-                                                    {searchSuggestions.map((suggestion, index) => (
-                                                        <motion.button
-                                                            key={index}
-                                                            onClick={() => {
-                                                                setSearchTerm(suggestion);
-                                                                setShowSuggestions(false);
-                                                            }}
-                                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors text-gray-900 dark:text-white"
-                                                            initial={{ opacity: 0, x: -10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                            transition={{ duration: 0.15, delay: index * 0.05 }}
-                                                            whileHover={{ x: 5 }}
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <Search className="w-4 h-4 text-gray-400" />
-                                                                <span>{suggestion}</span>
-                                                            </div>
-                                                        </motion.button>
-                                                    ))}
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-                                </div>
-
-                                {/* Tag Filters */}
-                                {tags.length > 0 && (
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                                            <Filter className="w-4 h-4" />
-                                            <span className="text-sm font-medium">Filter by topic:</span>
+                                        {/* Search Icon */}
+                                        <div className="flex items-center justify-center w-10 h-full relative z-10">
+                                            <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                         </div>
 
+                                        {/* Input */}
+                                        <input
+                                            type="text"
+                                            placeholder="Search articles, topics, authors..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="flex-1 h-full bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm font-medium px-0 relative z-10"
+                                        />
+
+                                        {/* Results and Clear */}
+                                        {(debouncedSearchTerm || selectedTag) && (
+                                            <div className="flex items-center gap-2 pr-3 relative z-10">
+                                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                                    {filteredPosts.length}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setSearchTerm('');
+                                                        handleTagFilter(null);
+                                                    }}
+                                                    className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center transition-colors duration-150"
+                                                    title="Clear search"
+                                                >
+                                                    <AlertCircle className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tag Filters */}
+                            {tags.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                        <Filter className="w-3 h-3" />
+                                        <span className="text-xs font-medium">Topics:</span>
+                                    </div>
+
+                                    <motion.button
+                                        onClick={() => handleTagFilter(null)}
+                                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${!selectedTag
+                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                                        }`}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                    >
+                                        All
+                                    </motion.button>
+
+                                    {tags.slice(0, 6).map((tag) => (
                                         <motion.button
-                                            onClick={() => handleTagFilter(null)}
-                                            className={`px-5 py-2.5 text-sm font-medium rounded-full transition-all duration-300 ${!selectedTag
-                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105'
-                                                : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600 hover:scale-105 border border-gray-200 dark:border-gray-600'
+                                            key={tag.name}
+                                            onClick={() => handleTagFilter(tag.name)}
+                                            className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${selectedTag === tag.name
+                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                                             }`}
                                             whileHover={{ scale: 1.05 }}
                                             whileTap={{ scale: 0.95 }}
                                         >
-                                            All Topics
-                                        </motion.button>
-
-                                        {tags.slice(0, 6).map((tag) => (
-                                            <motion.button
-                                                key={tag.name}
-                                                onClick={() => handleTagFilter(tag.name)}
-                                                className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-all duration-300 ${selectedTag === tag.name
-                                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 transform scale-105'
-                                                    : 'bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600 hover:scale-105 border border-gray-200 dark:border-gray-600'
-                                                }`}
-                                                whileHover={{ scale: 1.05 }}
-                                                whileTap={{ scale: 0.95 }}
-                                            >
-                                                <Tag className="w-3 h-3" />
-                                                {tag.name}
-                                                <span className="ml-1 px-2 py-0.5 text-xs bg-white/20 rounded-full">
-                                                    {tag.count}
-                                                </span>
-                                            </motion.button>
-                                        ))}
-
-                                        {tags.length > 6 && (
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                +{tags.length - 6} more
+                                            <Tag className="w-2.5 h-2.5" />
+                                            {tag.name}
+                                            <span className="ml-1 px-1 py-0.5 text-xs bg-white/20 rounded-full">
+                                                {tag.count}
                                             </span>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </motion.div>
+                                        </motion.button>
+                                    ))}
+
+                                    {tags.length > 6 && (
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                            +{tags.length - 6}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </section>
 
                     {/* Content */}
                     {filteredPosts.length > 0 ? (
-                        <div className="space-y-16">
+                        <div className="space-y-8">
                             {/* Featured Post */}
                             {featuredPost && (
                                 <motion.section
-                                    className="mb-16"
+                                    className="mb-8"
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
@@ -495,40 +473,133 @@ export function BlogList() {
                             )}
                         </div>
                     ) : (
-                        /* Empty State */
-                        <div className="text-center py-20">
-                            <div className="relative inline-block mb-8">
-                                <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-2xl flex items-center justify-center">
-                                    <Search className="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                        /* Enhanced Empty State */
+                        <motion.div
+                            className="text-center py-20 px-4"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+                        >
+                            <motion.div
+                                className="relative inline-block mb-8"
+                                initial={{ scale: 0.8 }}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
+                            >
+                                <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-indigo-200 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-3xl flex items-center justify-center shadow-lg">
+                                    <Archive className="w-16 h-16 text-blue-500 dark:text-blue-400" />
                                 </div>
-                                <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                                    <AlertCircle className="w-4 h-4 text-yellow-800" />
-                                </div>
-                            </div>
-                            
-                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                                {searchTerm || selectedTag ? 'No articles found' : 'No articles available'}
-                            </h3>
-                            
-                            <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-md mx-auto">
-                                {searchTerm || selectedTag
-                                    ? 'Try adjusting your search terms or browse all articles.'
-                                    : 'Check back soon for fresh insights and analysis.'}
-                            </p>
-                            
-                            {(searchTerm || selectedTag) && (
-                                <button
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                        handleTagFilter(null);
-                                    }}
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300"
+                                <motion.div
+                                    className="absolute -top-2 -right-2 w-10 h-10 bg-orange-400 rounded-full flex items-center justify-center shadow-lg"
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: [0, 1.2, 1] }}
+                                    transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}
                                 >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Clear all filters
-                                </button>
-                            )}
-                        </div>
+                                    <AlertCircle className="w-5 h-5 text-white" />
+                                </motion.div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.6, ease: "easeOut" }}
+                            >
+                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                                    {searchTerm && selectedTag
+                                        ? 'No articles match your search and filter'
+                                        : searchTerm
+                                        ? 'No articles found for your search'
+                                        : selectedTag
+                                        ? `No articles found in "${selectedTag}"`
+                                        : 'No articles available yet'}
+                                </h3>
+
+                                <div className="max-w-lg mx-auto space-y-4">
+                                    <p className="text-lg text-gray-600 dark:text-gray-300">
+                                        {searchTerm && selectedTag
+                                            ? `No results found for "${searchTerm}" in the "${selectedTag}" category.`
+                                            : searchTerm
+                                            ? `No articles match "${searchTerm}". Try different keywords or browse by topic.`
+                                            : selectedTag
+                                            ? `No articles are currently available in the "${selectedTag}" category.`
+                                            : 'Check back soon for fresh insights and analysis from the Avalanche ecosystem.'}
+                                    </p>
+
+                                    {(searchTerm || selectedTag) && (
+                                        <motion.div
+                                            className="flex flex-col sm:flex-row gap-3 justify-center items-center pt-4"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.4, delay: 0.8, ease: "easeOut" }}
+                                        >
+                                            <motion.button
+                                                onClick={() => {
+                                                    setSearchTerm('');
+                                                    handleTagFilter(null);
+                                                }}
+                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                                                whileHover={{ scale: 1.05, y: -2 }}
+                                                whileTap={{ scale: 0.95 }}
+                                            >
+                                                <RefreshCw className="w-4 h-4" />
+                                                Clear All Filters
+                                            </motion.button>
+
+                                            {searchTerm && selectedTag && (
+                                                <>
+                                                    <motion.button
+                                                        onClick={() => setSearchTerm('')}
+                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
+                                                        whileHover={{ scale: 1.05, y: -1 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                    >
+                                                        Clear Search Only
+                                                    </motion.button>
+                                                    <motion.button
+                                                        onClick={() => handleTagFilter(null)}
+                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
+                                                        whileHover={{ scale: 1.05, y: -1 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                    >
+                                                        Clear Topic Filter
+                                                    </motion.button>
+                                                </>
+                                            )}
+                                        </motion.div>
+                                    )}
+
+                                    {/* Helpful suggestions when there are no results */}
+                                    {(searchTerm || selectedTag) && posts.length > 0 && (
+                                        <motion.div
+                                            className="mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-2xl"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.4, delay: 1, ease: "easeOut" }}
+                                        >
+                                            <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">
+                                                Try browsing these popular topics:
+                                            </h4>
+                                            <div className="flex flex-wrap justify-center gap-2">
+                                                {tags.slice(0, 4).map((tag) => (
+                                                    <motion.button
+                                                        key={tag.name}
+                                                        onClick={() => {
+                                                            setSearchTerm('');
+                                                            handleTagFilter(tag.name);
+                                                        }}
+                                                        className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-800/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                                                        whileHover={{ scale: 1.05 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                    >
+                                                        {tag.name} ({tag.count})
+                                                    </motion.button>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        </motion.div>
                     )}
                 </div>
             </div>
