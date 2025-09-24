@@ -95,8 +95,8 @@ function cleanImageUrl(url: string): string | null {
  * @returns URL to the fallback image
  */
 export function getFallbackImageUrl(): string {
-    // Return a gradient or placeholder image
-    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSJ1cmwoI2dyYWRpZW50KSIvPgo8ZGVmcz4KICA8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz4KICAgIDxzdG9wIG9mZnNldD0iNTAlIiBzdG9wLWNvbG9yPSIjOGI1Y2Y2Ii8+CiAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNhNzU1ZjciLz4KICA8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+CjxnIG9wYWNpdHk9IjAuMSI+CiAgPGNpcmNsZSBjeD0iMjAwIiBjeT0iMTIwIiByPSI0MCIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIzMDAiIGN5PSI4MCIgcj0iMjAiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iMTAwIiBjeT0iMTYwIiByPSIzMCIgZmlsbD0id2hpdGUiLz4KPC9nPgo8L3N2Zz4K';
+    // Return a fallback image
+    return 'https://i.postimg.cc/zvYYZ8Ks/image.png';
 }
 
 /**

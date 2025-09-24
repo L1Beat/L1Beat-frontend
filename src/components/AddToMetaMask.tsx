@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Chain } from '../types';
 import { isCoreInstalled, addNetworkToWallet } from '../utils/metamask';
 
@@ -52,7 +53,12 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     if (!isCoreInstalled()) {
       return (
         <>
-          <ExternalLink className="w-4 h-4" />
+          <motion.div
+            whileHover={{ rotate: 15 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </motion.div>
           {variant === 'compact' ? 'CORE' : 'Install CORE'}
         </>
       );
@@ -62,28 +68,49 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       case 'adding':
         return (
           <>
-            <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="w-4 h-4 rounded-full border-2 border-current border-t-transparent"
+            />
             {variant === 'compact' ? 'Adding...' : 'Adding to Wallet...'}
           </>
         );
       case 'success':
         return (
           <>
-            <Check className="w-4 h-4" />
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+            >
+              <Check className="w-4 h-4" />
+            </motion.div>
             {variant === 'compact' ? 'Added!' : 'Added to Wallet!'}
           </>
         );
       case 'error':
         return (
           <>
-            <AlertCircle className="w-4 h-4" />
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [0, 1.2, 1] }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+            >
+              <AlertCircle className="w-4 h-4" />
+            </motion.div>
             {variant === 'compact' ? 'Error' : 'Try Again'}
           </>
         );
       default:
         return (
           <>
-            <Wallet className="w-4 h-4" />
+            <motion.div
+              whileHover={{ y: -1 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <Wallet className="w-4 h-4" />
+            </motion.div>
             {variant === 'compact' ? 'Add' : 'Add to Wallet'}
           </>
         );
@@ -91,7 +118,7 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
   };
 
   const getButtonStyles = () => {
-    const baseStyles = "inline-flex items-center gap-2 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+    const baseStyles = "inline-flex items-center gap-2 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
     
     if (variant === 'compact') {
       switch (status) {
@@ -116,7 +143,7 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
 
   return (
     <div className={`relative ${className}`}>
-      <button
+      <motion.button
         onClick={handleAddToWallet}
         disabled={status === 'adding' || status === 'success'}
         className={getButtonStyles()}
@@ -125,26 +152,57 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
             ? "Install CORE wallet to add this network"
             : `Add ${chain.chainName} network to wallet`
         }
+        whileHover={{
+          scale: status === 'adding' || status === 'success' ? 1 : 1.02,
+          y: status === 'adding' || status === 'success' ? 0 : -1,
+          transition: { duration: 0.2, ease: "easeOut" }
+        }}
+        whileTap={{
+          scale: status === 'adding' || status === 'success' ? 1 : 0.98,
+          transition: { duration: 0.1, ease: "easeOut" }
+        }}
+        animate={{
+          scale: status === 'success' ? [1, 1.05, 1] : 1,
+          transition: status === 'success' ? { duration: 0.6, ease: "easeOut" } : { duration: 0.2 }
+        }}
       >
-        {getButtonContent()}
-      </button>
+        <div className="flex items-center gap-2">
+          {getButtonContent()}
+        </div>
+      </motion.button>
       
       {/* Error tooltip */}
-      {status === 'error' && errorMessage && (
-        <div className="absolute top-full left-0 mt-2 p-2 bg-red-900 text-red-100 text-xs rounded-lg shadow-lg z-10 max-w-xs">
-          <div className="flex items-start gap-1">
-            <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {status === 'error' && errorMessage && (
+          <motion.div
+            className="absolute top-full left-0 mt-2 p-2 bg-red-900 text-red-100 text-xs rounded-lg shadow-lg z-10 max-w-xs"
+            initial={{ opacity: 0, y: -10, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.9 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <div className="flex items-start gap-1">
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Success message for compact variant */}
-      {status === 'success' && variant === 'compact' && (
-        <div className="absolute top-full left-0 mt-2 p-2 bg-green-900 text-green-100 text-xs rounded-lg shadow-lg z-10">
-          Network added to Wallet!
-        </div>
-      )}
+      <AnimatePresence>
+        {status === 'success' && variant === 'compact' && (
+          <motion.div
+            className="absolute top-full left-0 mt-2 p-2 bg-green-900 text-green-100 text-xs rounded-lg shadow-lg z-10"
+            initial={{ opacity: 0, y: -10, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            Network added to Wallet!
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
