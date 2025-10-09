@@ -527,7 +527,7 @@ export function BlogPost() {
                     
                     {/* Related Articles */}
                     <div>
-                        <RelatedArticles currentPostSlug={post.slug} limit={3} />
+                        <RelatedArticles currentPostSlug={post.slug} limit={2} />
                     </div>
                 </div>
             </div>

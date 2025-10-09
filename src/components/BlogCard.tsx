@@ -109,7 +109,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
     return (
         <Link
             to={`/blog/${post.slug}`}
-            className="group block bg-white dark:bg-dark-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-blue-300 dark:hover:border-blue-600 transform hover:-translate-y-2 hover:scale-[1.02]"
+            className="group flex flex-col bg-white dark:bg-dark-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-blue-300 dark:hover:border-blue-600 transform hover:-translate-y-2 hover:scale-[1.02]"
         >
             {/* Banner Image */}
             <div className="relative h-48 overflow-hidden">
@@ -122,9 +122,9 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
             </div>
 
             {/* Content */}
-            <div className="p-6">
+            <div className="p-6 flex-grow flex flex-col">
                 {/* Title */}
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3 line-clamp-2">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3 line-clamp-2 h-[3.5rem]">
                     {post.title}
                 </h3>
 
