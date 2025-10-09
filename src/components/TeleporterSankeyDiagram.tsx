@@ -98,11 +98,11 @@ export function TeleporterSankeyDiagram() {
     
     // Force direct DOM updates to ensure color consistency
     document.querySelectorAll('.node-label').forEach(el => {
-      el.setAttribute('fill', textColor);
+    (el as HTMLElement).style.setProperty('fill', textColor, 'important');
     });
     
     document.querySelectorAll('.value-label, .diagram-title').forEach(el => {
-      el.setAttribute('fill', secondaryTextColor);
+      (el as HTMLElement).style.setProperty('fill', secondaryTextColor, 'important');
     });
   }, []);
   
@@ -113,7 +113,7 @@ export function TeleporterSankeyDiagram() {
       const timer = setTimeout(forceTextColors, 50);
       return () => clearTimeout(timer);
     }
-  }, [data, forceTextColors]);
+  }, [data, forceTextColors, selectedChain]);
   
   
 
