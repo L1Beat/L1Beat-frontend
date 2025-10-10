@@ -98,11 +98,11 @@ export function TeleporterSankeyDiagram() {
     
     // Force direct DOM updates to ensure color consistency
     document.querySelectorAll('.node-label').forEach(el => {
-      el.setAttribute('fill', textColor);
+    (el as HTMLElement).style.setProperty('fill', textColor, 'important');
     });
     
     document.querySelectorAll('.value-label, .diagram-title').forEach(el => {
-      el.setAttribute('fill', secondaryTextColor);
+      (el as HTMLElement).style.setProperty('fill', secondaryTextColor, 'important');
     });
   }, []);
   
@@ -113,7 +113,7 @@ export function TeleporterSankeyDiagram() {
       const timer = setTimeout(forceTextColors, 50);
       return () => clearTimeout(timer);
     }
-  }, [data, forceTextColors]);
+  }, [data, forceTextColors, selectedChain]);
   
   
 
@@ -553,29 +553,6 @@ export function TeleporterSankeyDiagram() {
         .attr('font-weight', 'bold')
         .attr('fill', 'rgba(255, 255, 255, 0.7)')
         .text(`Total: ${data.metadata.totalMessages.toLocaleString()} messages`);
-      
-      // Reset button and background click handler remain the same...
-      if (selectedChain) {
-        const resetButton = svg.append('g')
-          .attr('class', 'reset-button')
-          .attr('transform', `translate(${width - 80}, ${height - 30})`)
-          .style('cursor', 'pointer')
-          .on('click', () => setSelectedChain(null));
-        
-        resetButton.append('rect')
-          .attr('width', 80).attr('height', 24)
-          .attr('rx', 12).attr('ry', 12)
-          .attr('fill', 'rgba(255, 255, 255, 0.1)')
-          .attr('stroke', 'rgba(255, 255, 255, 0.2)');
-        
-        resetButton.append('text')
-          .attr('x', 40).attr('y', 12)
-          .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .attr('font-size', '10px')
-          .attr('fill', 'rgba(255, 255, 255, 0.9)')
-          .text('Reset Filter');
-      }
       
       svg.on('click', () => {
         if (selectedChain) {

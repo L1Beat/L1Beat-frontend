@@ -152,41 +152,6 @@ export function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setViewMode(viewMode === 'grid' ? 'list' : 'grid');
-                }}
-                className="relative flex items-center bg-gray-100 dark:bg-dark-700 rounded-lg p-1 transition-all duration-200 overflow-hidden group"
-                title={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
-              >
-                {/* Sliding background indicator */}
-                <div 
-                  className={`absolute top-1 bottom-1 w-8 bg-white dark:bg-dark-600 rounded shadow-sm transition-all duration-300 ease-out ${
-                    viewMode === 'grid' ? 'left-1' : 'left-9'
-                  }`}
-                />
-                
-                {/* Grid icon */}
-                <div className={`relative z-10 p-2 rounded transition-all duration-200 ${
-                  viewMode === 'grid'
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
-                }`}>
-                  <Grid className="w-4 h-4" />
-                </div>
-                
-                {/* List icon */}
-                <div className={`relative z-10 p-2 rounded transition-all duration-200 ${
-                  viewMode === 'list'
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
-                }`}>
-                  <List className="w-4 h-4" />
-                </div>
-              </button>
-              
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-gray-400" />
@@ -210,7 +175,7 @@ export function Dashboard() {
             </div>
           ) : (
             <div key={viewMode} className="animate-fade-in">
-              {viewMode === 'grid' ? (
+              {viewMode === 'list' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {filteredChains.map((chain, index) => (
                     <div 

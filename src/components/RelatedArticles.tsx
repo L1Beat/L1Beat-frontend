@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Calendar, Tag, ArrowRight } from 'lucide-react';
 import { getRelatedPosts, RelatedPost, formatBlogDate, getBlogPosts } from '../api/blogApi';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
 interface RelatedArticlesProps {
     currentPostSlug: string;
@@ -53,7 +54,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                             author: post.author,
                             authors: post.authors,
                             tags: post.tags,
-                            imageUrl: post.imageUrl,
+                            imageUrl: getBlogPostImageUrl(post), // Use the utility function here
                             readTime: post.readTime || 5,
                             views: post.views,
                             matchingTagsCount: 0, // No tag matching for recent posts

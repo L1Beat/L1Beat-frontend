@@ -1,6 +1,7 @@
 import { Chain } from '../types';
 import { Activity, Server, Plus, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
 interface ChainListViewProps {
   chains: Chain[];
@@ -41,26 +42,50 @@ export function ChainListView({ chains }: ChainListViewProps) {
         const cumulativeTxValue = formatCumulativeTxCount(chain.cumulativeTxCount);
         
         return (
-          <div 
+          <motion.div
             key={chain.chainId}
-            className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:shadow-lg hover:shadow-blue-500/10 hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-1 hover:scale-[1.02] transition-all duration-300 ease-out group animate-fade-in"
-            style={{
-              animationDelay: `${index * 50}ms`,
-              animationFillMode: 'both'
+            className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 cursor-pointer group"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.4,
+              delay: index * 0.05,
+              ease: [0.25, 0.46, 0.45, 0.94]
             }}
+            whileHover={{
+              y: -4,
+              scale: 1.02,
+              boxShadow: "0 10px 25px -5px rgb(59 130 246 / 0.1), 0 10px 10px -5px rgb(59 130 246 / 0.04)",
+              borderColor: "rgb(96 165 250)"
+            }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => navigate(`/chain/${chain.chainId}`)}
           >
             <div className="flex items-center gap-3">
               {chain.chainLogoUri ? (
-                <img 
-                  src={chain.chainLogoUri} 
+                <motion.img
+                  src={chain.chainLogoUri}
                   alt={`${chain.chainName} logo`}
-                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0 group-hover:scale-110 transition-transform duration-300"
+                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                  whileHover={{ scale: 1.1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
                 />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition-all duration-300">
-                  <Server className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:rotate-12 transition-transform duration-300" />
-                </div>
+                <motion.div
+                  className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0"
+                  whileHover={{
+                    scale: 1.1,
+                    backgroundColor: "rgb(191 219 254)",
+                    transition: { duration: 0.2 }
+                  }}
+                >
+                  <motion.div
+                    whileHover={{ rotate: 12 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                  >
+                    <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </motion.div>
+                </motion.div>
               )}
               
               <div className="flex-1 min-w-0">
@@ -89,7 +114,7 @@ export function ChainListView({ chains }: ChainListViewProps) {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>
