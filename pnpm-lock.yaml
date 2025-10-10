@@ -41,6 +41,9 @@ importers:
       html-react-parser:
         specifier: ^5.2.6
         version: 5.2.6(@types/react@18.3.25)(react@18.3.1)
+      katex:
+        specifier: ^0.16.23
+        version: 0.16.23
       lucide-react:
         specifier: ^0.344.0
         version: 0.344.0(react@18.3.1)
