@@ -25,6 +25,7 @@ import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { HealthStatus } from '../types';
 import { RelatedArticles } from '../components/RelatedArticles';
+import { SEO } from '../components/SEO';
 
 // Enhanced Newsletter Subscription Component
 const NewsletterSubscription = () => {
@@ -364,6 +365,19 @@ export function BlogPost() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+            {/* SEO Meta Tags */}
+            <SEO
+                title={post.title}
+                description={post.excerpt || post.subtitle || ''}
+                image={post.imageUrl}
+                url={`/blog/${post.slug}`}
+                type="article"
+                publishedTime={post.publishedAt}
+                modifiedTime={post.updatedAt}
+                author={post.author}
+                tags={post.tags}
+            />
+
             <StatusBar health={health} />
 
             {/* Article */}
