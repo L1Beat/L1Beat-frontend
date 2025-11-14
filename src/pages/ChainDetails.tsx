@@ -21,7 +21,7 @@ import {
   Shield
 } from 'lucide-react';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
-import { L1MetricsChart } from '../components/L1MetricsChart';
+import { SeparateMetricsCharts } from '../components/SeparateMetricsCharts';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
@@ -43,7 +43,7 @@ export function ChainDetails() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'validators' | 'metrics'>('overview');
+  const [activeTab, setActiveTab] = useState<'validators' | 'metrics'>('validators');
 
   useEffect(() => {
     async function fetchData() {
@@ -198,7 +198,7 @@ export function ChainDetails() {
       <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => navigate('/')}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
@@ -206,403 +206,294 @@ export function ChainDetails() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
             </button>
+            <div className="flex items-center gap-3">
+              {chain.network && (
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                  chain.network === 'mainnet'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-200'
+                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-200'
+                }`}>
+                  {chain.network === 'mainnet' ? 'Mainnet' : 'Fuji Testnet'}
+                </span>
+              )}
+              {chain.explorerUrl && (
+                <a
+                  href={chain.explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3 mr-1.5" />
+                  Explorer
+                </a>
+              )}
+            </div>
           </div>
 
-          {/* Chain Header Card */}
-          <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
-            {/* Hero Section */}
-            <div className="relative bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-12">
-              <div className="absolute inset-0 bg-black/10"></div>
-
-              {/* Network Badge in top-right corner */}
-              {chain.network && (
-                <div className="absolute top-4 right-4">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-lg ${
-                    chain.network === 'mainnet'
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-200'
-                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-200'
-                  }`}>
-                    {chain.network === 'mainnet' ? 'Mainnet' : 'Fuji Testnet'}
-                  </span>
-                </div>
-              )}
-
-              <div className="relative flex items-center gap-6">
-                {chain.chainLogoUri ? (
-                  <div className="relative">
-                    <img 
-                      src={chain.chainLogoUri} 
-                      alt={`${chain.chainName} logo`}
-                      className="w-20 h-20 rounded-2xl shadow-lg bg-white p-2"
-                    />
-                    <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                      <CheckCircle className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <Network className="w-10 h-10 text-white" />
-                  </div>
-                )}
-
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-white mb-2">{chain.chainName}</h1>
-                  <div className="mt-3">
-                    <AddToMetaMask chain={chain} variant="compact" />
-                  </div>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="hidden lg:flex items-center gap-8">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${tpsColor.replace('text-', 'text-white')}`}>
-                      {tpsValue}
-                    </div>
-                    <div className="text-white/80 text-sm">TPS</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">
-                      {chain.validators.length}
-                    </div>
-                    <div className="text-white/80 text-sm">Validators</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">
-                      {averageUptime.toFixed(1)}%
-                    </div>
-                    <div className="text-white/80 text-sm">Avg Uptime</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Chain Info Cards */}
-            <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {/* Network Token */}
-                {chain.networkToken && (
-                  <div className="bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                        {chain.networkToken.logoUri ? (
-                          <img 
-                            src={chain.networkToken.logoUri} 
-                            alt={`${chain.networkToken.name} logo`}
-                            className="w-6 h-6 rounded-full"
-                          />
-                        ) : (
-                          <Zap className="w-5 h-5 text-white" />
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Network Token</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Native currency</p>
+          {/* Compact Chain Header Card */}
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column: Chain Info */}
+                <div className="flex items-start gap-4">
+                  {chain.chainLogoUri ? (
+                    <div className="relative flex-shrink-0">
+                      <img
+                        src={chain.chainLogoUri}
+                        alt={`${chain.chainName} logo`}
+                        className="w-16 h-16 rounded-xl shadow-md bg-white p-2"
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <CheckCircle className="w-3 h-3 text-white" />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <p className="font-medium text-gray-900 dark:text-white">{chain.networkToken.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{chain.networkToken.symbol}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Performance */}
-                <div className="bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Performance</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Current metrics</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">TPS</span>
-                      <span className={`font-medium ${tpsColor}`}>{tpsValue}</span>
-                    </div>
-                    {lastUpdate && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Updated</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {format(new Date(lastUpdate * 1000), 'MMM d, HH:mm')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Security */}
-                <div className="bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg flex items-center justify-center">
-                      <Shield className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Security</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Network status</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Active</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">{activeValidators}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Uptime</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{averageUptime.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Explorer */}
-                <div className="bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-lg flex items-center justify-center">
-                      <ExternalLink className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Explorer</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Block explorer</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {chain.explorerUrl ? (
-                      <a
-                        href={chain.explorerUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium transition-colors"
-                      >
-                        View Explorer
-                        <ExternalLink className="w-3 h-3 ml-1" />
-                      </a>
-                    ) : (
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Not available</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Technical Details */}
-              <div className="bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Info className="w-5 h-5 text-blue-500" />
-                  Technical Details
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Chain ID
-                    </label>
-                    <button
-                      onClick={() => handleCopy('chainId', chain.chainId)}
-                      className="w-full flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
-                    >
-                      <span className="font-mono text-sm text-gray-900 dark:text-white truncate">
-                        {chain.chainId}
-                      </span>
-                      {copied === 'chainId' ? (
-                        <Check className="w-4 h-4 text-green-500 flex-shrink-0 ml-2" />
-                      ) : (
-                        <Copy className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 flex-shrink-0 ml-2" />
-                      )}
-                    </button>
-                  </div>
-
-                  {chain.subnetId && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Subnet ID
-                      </label>
-                      <button
-                        onClick={() => handleCopy('subnetId', chain.subnetId)}
-                        className="w-full flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
-                      >
-                        <span className="font-mono text-sm text-gray-900 dark:text-white truncate">
-                          {chain.subnetId}
-                        </span>
-                        {copied === 'subnetId' ? (
-                          <Check className="w-4 h-4 text-green-500 flex-shrink-0 ml-2" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 flex-shrink-0 ml-2" />
-                        )}
-                      </button>
+                  ) : (
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-dark-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Network className="w-8 h-8 text-gray-400" />
                     </div>
                   )}
 
-                  {chain.platformChainId && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Blockchain ID
-                      </label>
-                      <button
-                        onClick={() => handleCopy('platformChainId', chain.platformChainId)}
-                        className="w-full flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors group"
-                      >
-                        <span className="font-mono text-sm text-gray-900 dark:text-white truncate">
-                          {chain.platformChainId}
-                        </span>
-                        {copied === 'platformChainId' ? (
-                          <Check className="w-4 h-4 text-green-500 flex-shrink-0 ml-2" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 flex-shrink-0 ml-2" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{chain.chainName}</h1>
 
-              {/* Registry Metadata Section */}
-              {(chain.categories || chain.website || chain.socials || chain.rpcUrls || chain.assets) && (
-                <div className="mt-6 bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Network className="w-5 h-5 text-blue-500" />
-                    Registry Information
-                  </h3>
-
-                  <div className="space-y-4">
                     {/* Categories */}
                     {chain.categories && chain.categories.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Categories
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {chain.categories.map(category => (
-                            <span
-                              key={category}
-                              className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
-                            >
-                              {category}
-                            </span>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                        {chain.categories.map(category => (
+                          <span
+                            key={category}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                          >
+                            {category}
+                          </span>
+                        ))}
                       </div>
                     )}
 
-                    {/* Website */}
-                    {chain.website && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Official Website
-                        </label>
+                    {/* Social Links & Website */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {chain.website && (
                         <a
                           href={chain.website}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                          className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                          title="Official Website"
                         >
-                          {chain.website}
-                          <ExternalLink className="w-4 h-4 ml-1" />
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Website
                         </a>
-                      </div>
-                    )}
-
-                    {/* Social Links */}
-                    {chain.socials && chain.socials.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Social Media
-                        </label>
-                        <div className="flex flex-wrap gap-3">
-                          {chain.socials.map((social, index) => (
-                            <a
-                              key={index}
-                              href={social.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-2 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
-                            >
-                              <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                                {social.name}
-                              </span>
-                              <ExternalLink className="w-3 h-3 ml-2 text-gray-500 dark:text-gray-400" />
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* RPC URLs */}
-                    {chain.rpcUrls && chain.rpcUrls.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          RPC Endpoints
-                        </label>
-                        <div className="space-y-2">
-                          {chain.rpcUrls.map((url, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg"
-                            >
-                              <span className="font-mono text-sm text-gray-900 dark:text-white truncate pr-2">
-                                {url}
-                              </span>
-                              <button
-                                onClick={() => navigator.clipboard.writeText(url)}
-                                className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                                title="Copy to clipboard"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      )}
+                      {chain.socials?.map((social, index) => (
+                        <a
+                          key={index}
+                          href={social.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors capitalize"
+                          title={social.name}
+                        >
+                          {social.name}
+                        </a>
+                      ))}
+                    </div>
 
                     {/* Network Assets */}
                     {chain.assets && chain.assets.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Network Assets
-                        </label>
-                        <div className="space-y-2">
-                          {chain.assets.map((asset, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg"
-                            >
-                              <div>
-                                <span className="font-medium text-gray-900 dark:text-white">{asset.name}</span>
-                                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">({asset.symbol})</span>
-                              </div>
-                              <span className="text-sm text-gray-600 dark:text-gray-400">
-                                {asset.decimals} decimals
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Assets:</span>
+                        {chain.assets.map((asset, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-dark-700 rounded text-xs text-gray-700 dark:text-gray-300"
+                          >
+                            {asset.symbol}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 mb-2">
+                      <AddToMetaMask chain={chain} variant="compact" />
+                    </div>
+                    {chain.networkToken && (
+                      <div className="flex items-center gap-2 text-sm">
+                        {chain.networkToken.logoUri && (
+                          <img
+                            src={chain.networkToken.logoUri}
+                            alt={chain.networkToken.name}
+                            className="w-4 h-4 rounded-full"
+                          />
+                        )}
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {chain.networkToken.symbol}
+                        </span>
                       </div>
                     )}
                   </div>
                 </div>
-              )}
 
-              {/* Description */}
-              {chain.description && (
-                <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700/50">
-                  <div className="flex items-start gap-3">
-                    <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">About this Chain</h3>
-                      <p className="text-blue-800 dark:text-blue-200 leading-relaxed">{chain.description}</p>
+                {/* Right Column: Compact Metrics Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">TPS</span>
                     </div>
+                    <p className={`text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
+                  </div>
+
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400">Validators</span>
+                    </div>
+                    <p className="text-xl font-bold text-green-900 dark:text-green-100">{chain.validators.length}</p>
+                  </div>
+
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Uptime</span>
+                    </div>
+                    <p className="text-xl font-bold text-purple-900 dark:text-purple-100">{averageUptime.toFixed(1)}%</p>
+                  </div>
+
+                  <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 border border-orange-200 dark:border-orange-700/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Database className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Stake</span>
+                    </div>
+                    <p className="text-xl font-bold text-orange-900 dark:text-orange-100">{formatStakeNumber(totalStake)}</p>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
+
+            {/* Compact Technical Details */}
+            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-dark-700/30">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Chain ID:</span>
+                  <code className="px-2 py-1 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-white">
+                    {chain.chainId}
+                  </code>
+                  <button
+                    onClick={() => handleCopy('chainId', chain.chainId)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    title="Copy Chain ID"
+                  >
+                    {copied === 'chainId' ? (
+                      <Check className="w-3.5 h-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+
+                {chain.subnetId && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Subnet ID:</span>
+                      <code className="px-2 py-1 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-white">
+                        {chain.subnetId.slice(0, 12)}...{chain.subnetId.slice(-8)}
+                      </code>
+                      <button
+                        onClick={() => handleCopy('subnetId', chain.subnetId)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        title="Copy Subnet ID"
+                      >
+                        {copied === 'subnetId' ? (
+                          <Check className="w-3.5 h-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {chain.platformChainId && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Blockchain ID:</span>
+                      <code className="px-2 py-1 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-white">
+                        {chain.platformChainId.slice(0, 12)}...{chain.platformChainId.slice(-8)}
+                      </code>
+                      <button
+                        onClick={() => handleCopy('platformChainId', chain.platformChainId)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        title="Copy Blockchain ID"
+                      >
+                        {copied === 'platformChainId' ? (
+                          <Check className="w-3.5 h-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* RPC URLs */}
+                {chain.rpcUrls && chain.rpcUrls.length > 0 && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">RPC:</span>
+                      {chain.rpcUrls.slice(0, 1).map((url, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <code className="px-2 py-1 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded text-xs font-mono text-gray-900 dark:text-white truncate max-w-[200px]">
+                            {url}
+                          </code>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(url)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            title="Copy RPC URL"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {chain.rpcUrls.length > 1 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          +{chain.rpcUrls.length - 1} more
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {lastUpdate && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600 ml-auto">•</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      Updated {format(new Date(lastUpdate * 1000), 'MMM d, HH:mm')}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
+            {chain.description && (
+              <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div className="flex items-start gap-3">
+                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{chain.description}</p>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Tab Navigation */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="border-b border-gray-200 dark:border-gray-700">
-              <nav className="grid grid-cols-4 gap-1 p-2" aria-label="Tabs">
+              <nav className="grid grid-cols-2 gap-1 p-2" aria-label="Tabs">
                 {[
-                  { id: 'overview', name: 'Overview', icon: TrendingUp },
                   { id: 'validators', name: 'Validators', icon: Users },
                   { id: 'metrics', name: 'Metrics', icon: Activity }
                 ].map((tab) => {
@@ -610,7 +501,7 @@ export function ChainDetails() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id as 'overview' | 'validators' | 'metrics')}
+                      onClick={() => setActiveTab(tab.id as 'validators' | 'metrics')}
                       className={`${
                         activeTab === tab.id
                           ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/20 dark:border-blue-400 dark:text-blue-400'
@@ -622,142 +513,10 @@ export function ChainDetails() {
                     </button>
                   );
                 })}
-                <div className="opacity-0 pointer-events-none"></div>
               </nav>
             </div>
 
             <div className="p-8">
-              {/* Overview Tab */}
-              {activeTab === 'overview' && (
-                <div className="space-y-8">
-                  {/* Network Summary */}
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-blue-500" />
-                      Network Overview
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                      {/* Current TPS */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700/50">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                            <Activity className="w-5 h-5 text-white" />
-                          </div>
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-1 rounded-full">
-                            Live
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{tpsValue}</p>
-                          <p className="text-sm text-blue-600 dark:text-blue-400">Current TPS</p>
-                          {lastUpdate && (
-                            <p className="text-xs text-blue-500 dark:text-blue-400">
-                              Updated {format(new Date(lastUpdate * 1000), 'MMM d, HH:mm')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Total Validators */}
-                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 border border-green-200 dark:border-green-700/50">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                            <Users className="w-5 h-5 text-white" />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-2xl font-bold text-green-900 dark:text-green-100">{chain.validators.length}</p>
-                          <p className="text-sm text-green-600 dark:text-green-400">Total Validators</p>
-                          <p className="text-xs text-green-500 dark:text-green-400">
-                            {activeValidators} active ({((activeValidators / chain.validators.length) * 100).toFixed(1)}%)
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Network Security */}
-                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700/50">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-white" />
-                          </div>
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            averageUptime >= 99 
-                              ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/50' 
-                              : averageUptime >= 95 
-                              ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50' 
-                              : 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50'
-                          }`}>
-                            {averageUptime >= 99 ? 'Excellent' : averageUptime >= 95 ? 'Good' : 'Fair'}
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{averageUptime.toFixed(1)}%</p>
-                          <p className="text-sm text-purple-600 dark:text-purple-400">Network Uptime</p>
-                        </div>
-                      </div>
-
-                      {/* Total Stake */}
-                      <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-6 border border-orange-200 dark:border-orange-700/50">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                            <Database className="w-5 h-5 text-white" />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{formatStakeNumber(totalStake)}</p>
-                          <p className="text-sm text-orange-600 dark:text-orange-400">Total Stake</p>
-                          <p className="text-xs text-orange-500 dark:text-orange-400">
-                            {chain.networkToken?.symbol || 'tokens'} secured
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Network Status */}
-                  <div className="bg-white dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                      Network Status
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Chain Status</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm font-medium text-green-600 dark:text-green-400">Active</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Block Production</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm font-medium text-green-600 dark:text-green-400">Normal</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-dark-800 rounded-lg">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Network Load</span>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            Number(tpsValue) > 10 ? 'bg-orange-500' : Number(tpsValue) > 1 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}></div>
-                          <span className={`text-sm font-medium ${
-                            Number(tpsValue) > 10 ? 'text-orange-600 dark:text-orange-400' : 
-                            Number(tpsValue) > 1 ? 'text-yellow-600 dark:text-yellow-400' : 
-                            'text-green-600 dark:text-green-400'
-                          }`}>
-                            {Number(tpsValue) > 10 ? 'High' : Number(tpsValue) > 1 ? 'Medium' : 'Low'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Validators Tab */}
               {activeTab === 'validators' && (
                 <div className="space-y-6">
@@ -959,62 +718,8 @@ export function ChainDetails() {
 
               {/* Metrics Tab */}
               {activeTab === 'metrics' && (
-                <div className="space-y-8">
-                  <L1MetricsChart chainId={chain.chainId} chainName={chain.chainName} />
-                  
-                  {/* Additional Metrics Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700/50">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                          <Activity className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-1 rounded-full">
-                          Live
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{tpsValue}</p>
-                        <p className="text-sm text-blue-600 dark:text-blue-400">Transactions per Second</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 border border-green-200 dark:border-green-700/50">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                          <CheckCircle className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">{activeValidators}</p>
-                        <p className="text-sm text-green-600 dark:text-green-400">Active Validators</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700/50">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                          <Database className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{formatStakeNumber(totalStake)}</p>
-                        <p className="text-sm text-purple-600 dark:text-purple-400">Total Stake</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-6 border border-orange-200 dark:border-orange-700/50">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                          <Shield className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">{averageUptime.toFixed(1)}%</p>
-                        <p className="text-sm text-orange-600 dark:text-orange-400">Average Uptime</p>
-                      </div>
-                    </div>
-                  </div>
+                <div className="space-y-6">
+                  <SeparateMetricsCharts chainId={chain.chainId} chainName={chain.chainName} />
                 </div>
               )}
             </div>
