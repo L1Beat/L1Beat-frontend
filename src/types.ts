@@ -24,6 +24,29 @@ export interface Chain {
   explorerUrl?: string;
   rpcUrl?: string;
   wsUrl?: string;
+
+  // Registry metadata fields
+  categories?: string[];
+  website?: string;
+  socials?: Array<{
+    name: string;
+    url: string;
+  }>;
+  network?: 'mainnet' | 'fuji';
+  evmChainId?: number;
+  rpcUrls?: string[];
+  assets?: Array<{
+    symbol: string;
+    name: string;
+    decimals: number;
+  }>;
+  vmName?: string;
+  vmId?: string;
+  registryMetadata?: {
+    folderName?: string;
+    lastUpdated?: string;
+    source?: string;
+  };
 }
 
 export interface Validator {

@@ -99,6 +99,40 @@ export function ChainCard({ chain }: ChainCardProps) {
           </div>
         </div>
 
+        {/* Category Badges */}
+        {chain.categories && chain.categories.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
+            <div className="flex flex-wrap gap-2">
+              {chain.categories.slice(0, 3).map(category => (
+                <span
+                  key={category}
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                >
+                  {category}
+                </span>
+              ))}
+              {chain.categories.length > 3 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                  +{chain.categories.length - 3}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Network Badge */}
+        {chain.network && (
+          <div className="mt-3">
+            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+              chain.network === 'mainnet'
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+            }`}>
+              {chain.network === 'mainnet' ? 'Mainnet' : 'Fuji Testnet'}
+            </span>
+          </div>
+        )}
+
         {chain.networkToken && (
           <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
             <div className="flex items-center gap-2">

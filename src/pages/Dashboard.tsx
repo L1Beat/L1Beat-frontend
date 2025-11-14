@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getChains, getHealth } from '../api';
+import { getChains, getHealth, getCategories } from '../api';
 import { Chain, HealthStatus } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
@@ -9,7 +9,7 @@ import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
 import { Footer } from '../components/Footer';
-import { LayoutGrid, Activity, Network, Search, Grid, List } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Search, Grid, List, Filter } from 'lucide-react';
 import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
 
 export function Dashboard() {
@@ -20,24 +20,42 @@ export function Dashboard() {
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'fuji' | ''>('');
+  const [categories, setCategories] = useState<string[]>([]);
 
   async function fetchData() {
     try {
       setLoading(true);
       setError(null);
-      const [chainsData, healthData] = await Promise.all([
-        getChains(),
-        getHealth()
+
+      // Build filter object
+      const filters: { category?: string; network?: 'mainnet' | 'fuji' } = {};
+      if (selectedCategory) filters.category = selectedCategory;
+      if (selectedNetwork) filters.network = selectedNetwork as 'mainnet' | 'fuji';
+
+      const [chainsData, healthData, categoriesData] = await Promise.all([
+        getChains(filters),
+        getHealth(),
+        getCategories()
       ]);
-      
-      // Filter chains with at least 1 validator, but always include Avalanche chains
-      const filteredChains = chainsData.filter(chain => 
-        // Include chains with validators
-        (chain.validators && chain.validators.length >= 1) ||
-        // OR include any Avalanche chain regardless of validators
-        chain.chainName.toLowerCase().includes('avalanche') ||
-        chain.chainName.toLowerCase().includes('c-chain')
-      );
+
+      // Only apply validator filter when NO backend filters are active
+      // If user has selected category or network, show all results from backend
+      let filteredChains;
+      if (!selectedCategory && !selectedNetwork) {
+        // No filters active: apply validator filter
+        filteredChains = chainsData.filter(chain =>
+          // Include chains with validators
+          (chain.validators && chain.validators.length >= 1) ||
+          // OR include any Avalanche chain regardless of validators
+          chain.chainName.toLowerCase().includes('avalanche') ||
+          chain.chainName.toLowerCase().includes('c-chain')
+        );
+      } else {
+        // Filters active: show all backend results
+        filteredChains = chainsData;
+      }
 
       // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
@@ -48,9 +66,10 @@ export function Dashboard() {
         if (!isAvalancheA && isAvalancheB) return 1;
         return a.chainName.localeCompare(b.chainName);
       });
-      
+
       setChains(sortedChains);
       setHealth(healthData);
+      setCategories(categoriesData);
       setError(null);
     } catch (err) {
       setError('Unable to connect to the server. Please try again later.');
@@ -62,7 +81,9 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    
+  }, [selectedCategory, selectedNetwork]);
+
+  useEffect(() => {
     // Refresh health status every 5 minutes (increased from 1 minute)
     const healthInterval = setInterval(() => {
       getHealth().then(setHealth).catch(console.error);
@@ -151,7 +172,41 @@ export function Dashboard() {
               </h2>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Category Filter */}
+              <div className="relative">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="block pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm appearance-none cursor-pointer"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <Filter className="h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+
+              {/* Network Filter */}
+              <div className="relative">
+                <select
+                  value={selectedNetwork}
+                  onChange={(e) => setSelectedNetwork(e.target.value as 'mainnet' | 'fuji' | '')}
+                  className="block pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm appearance-none cursor-pointer"
+                >
+                  <option value="">All Networks</option>
+                  <option value="mainnet">Mainnet</option>
+                  <option value="fuji">Fuji Testnet</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <Network className="h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+
+              {/* Search Input */}
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-gray-400" />

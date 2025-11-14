@@ -266,10 +266,17 @@ function getFallbackData<T>(): T {
   return fallbackData as unknown as T;
 }
 
-export async function getChains(): Promise<Chain[]> {
-  return fetchWithCache('chains', async () => {
+export async function getChains(filters?: { category?: string; network?: 'mainnet' | 'fuji' }): Promise<Chain[]> {
+  const queryParams = new URLSearchParams();
+  if (filters?.category) queryParams.append('category', filters.category);
+  if (filters?.network) queryParams.append('network', filters.network);
+
+  const cacheKey = `chains_${queryParams.toString() || 'all'}`;
+
+  return fetchWithCache(cacheKey, async () => {
     try {
-      const data = await fetchWithRetry<any[]>(`${API_URL}/chains`);
+      const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const data = await fetchWithRetry<any[]>(url);
       const chains = await Promise.all(data.map(async (chain) => {
         // Try to fetch cumulative transaction count for each chain
         let cumulativeTxCount = null;
@@ -305,6 +312,18 @@ export async function getChains(): Promise<Chain[]> {
       return chains;
     } catch (error) {
       console.error('Chains fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getCategories(): Promise<string[]> {
+  return fetchWithCache('categories', async () => {
+    try {
+      const data = await fetchWithRetry<string[]>(`${API_URL}/chains/categories`);
+      return data || [];
+    } catch (error) {
+      console.error('Categories fetch error:', error);
       return [];
     }
   });

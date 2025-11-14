@@ -213,6 +213,20 @@ export function ChainDetails() {
             {/* Hero Section */}
             <div className="relative bg-gradient-to-r from-blue-600 to-indigo-700 px-8 py-12">
               <div className="absolute inset-0 bg-black/10"></div>
+
+              {/* Network Badge in top-right corner */}
+              {chain.network && (
+                <div className="absolute top-4 right-4">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-lg ${
+                    chain.network === 'mainnet'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-200'
+                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-200'
+                  }`}>
+                    {chain.network === 'mainnet' ? 'Mainnet' : 'Fuji Testnet'}
+                  </span>
+                </div>
+              )}
+
               <div className="relative flex items-center gap-6">
                 {chain.chainLogoUri ? (
                   <div className="relative">
@@ -440,6 +454,133 @@ export function ChainDetails() {
                   )}
                 </div>
               </div>
+
+              {/* Registry Metadata Section */}
+              {(chain.categories || chain.website || chain.socials || chain.rpcUrls || chain.assets) && (
+                <div className="mt-6 bg-gray-50 dark:bg-dark-700/50 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Network className="w-5 h-5 text-blue-500" />
+                    Registry Information
+                  </h3>
+
+                  <div className="space-y-4">
+                    {/* Categories */}
+                    {chain.categories && chain.categories.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Categories
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {chain.categories.map(category => (
+                            <span
+                              key={category}
+                              className="inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                            >
+                              {category}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Website */}
+                    {chain.website && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Official Website
+                        </label>
+                        <a
+                          href={chain.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
+                        >
+                          {chain.website}
+                          <ExternalLink className="w-4 h-4 ml-1" />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Social Links */}
+                    {chain.socials && chain.socials.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Social Media
+                        </label>
+                        <div className="flex flex-wrap gap-3">
+                          {chain.socials.map((social, index) => (
+                            <a
+                              key={index}
+                              href={social.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-2 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                            >
+                              <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                {social.name}
+                              </span>
+                              <ExternalLink className="w-3 h-3 ml-2 text-gray-500 dark:text-gray-400" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* RPC URLs */}
+                    {chain.rpcUrls && chain.rpcUrls.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          RPC Endpoints
+                        </label>
+                        <div className="space-y-2">
+                          {chain.rpcUrls.map((url, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg"
+                            >
+                              <span className="font-mono text-sm text-gray-900 dark:text-white truncate pr-2">
+                                {url}
+                              </span>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(url)}
+                                className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                                title="Copy to clipboard"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Network Assets */}
+                    {chain.assets && chain.assets.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Network Assets
+                        </label>
+                        <div className="space-y-2">
+                          {chain.assets.map((asset, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-3 bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-600 rounded-lg"
+                            >
+                              <div>
+                                <span className="font-medium text-gray-900 dark:text-white">{asset.name}</span>
+                                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">({asset.symbol})</span>
+                              </div>
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                {asset.decimals} decimals
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Description */}
               {chain.description && (
