@@ -9,30 +9,37 @@ import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
 import { Footer } from '../components/Footer';
-import { LayoutGrid, Activity, Network, Search, Grid, List, Filter } from 'lucide-react';
+import { FilterModal } from '../components/FilterModal';
+import { LayoutGrid, Activity, Network, Filter } from 'lucide-react';
 import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'fuji' | ''>('');
   const [categories, setCategories] = useState<string[]>([]);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   async function fetchData() {
     try {
-      setLoading(true);
+      // Only show full-page loader on initial load, use subtle indicator for refetches
+      if (chains.length === 0) {
+        setLoading(true);
+      } else {
+        setIsRefetching(true);
+      }
       setError(null);
 
       // Build filter object
-      const filters: { category?: string; network?: 'mainnet' | 'fuji' } = {};
+      const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
-      if (selectedNetwork) filters.network = selectedNetwork as 'mainnet' | 'fuji';
 
       const [chainsData, healthData, categoriesData] = await Promise.all([
         getChains(filters),
@@ -41,9 +48,9 @@ export function Dashboard() {
       ]);
 
       // Only apply validator filter when NO backend filters are active
-      // If user has selected category or network, show all results from backend
+      // If user has selected category, show all results from backend
       let filteredChains;
-      if (!selectedCategory && !selectedNetwork) {
+      if (!selectedCategory) {
         // No filters active: apply validator filter
         filteredChains = chainsData.filter(chain =>
           // Include chains with validators
@@ -75,13 +82,14 @@ export function Dashboard() {
       setError('Unable to connect to the server. Please try again later.');
     } finally {
       setLoading(false);
+      setIsRefetching(false);
       setRetrying(false);
     }
   }
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, selectedNetwork]);
+  }, [selectedCategory]);
 
   useEffect(() => {
     // Refresh health status every 5 minutes (increased from 1 minute)
@@ -100,26 +108,46 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="rounded-full h-12 w-12 border-b-2 border-blue-500"
+        />
+      </motion.div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full"
+        >
           <div className="text-center">
             <Activity className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Connection Error</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
-            <button
+            <motion.button
               onClick={() => {
                 setRetrying(true);
                 fetchData();
               }}
               disabled={retrying}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {retrying ? (
@@ -133,10 +161,10 @@ export function Dashboard() {
                   Retry Connection
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     );
   }
 
@@ -170,90 +198,111 @@ export function Dashboard() {
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Active Chains
               </h2>
+              <AnimatePresence>
+                {isRefetching && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
+                    className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"
+                  />
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Category Filter */}
-              <div className="relative">
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="block pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm appearance-none cursor-pointer"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                  <Filter className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
-
-              {/* Network Filter */}
-              <div className="relative">
-                <select
-                  value={selectedNetwork}
-                  onChange={(e) => setSelectedNetwork(e.target.value as 'mainnet' | 'fuji' | '')}
-                  className="block pl-3 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm appearance-none cursor-pointer"
-                >
-                  <option value="">All Networks</option>
-                  <option value="mainnet">Mainnet</option>
-                  <option value="fuji">Fuji Testnet</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                  <Network className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
-
-              {/* Search Input */}
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search chains by name or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-dark-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
+            <motion.button
+              onClick={() => setIsFilterModalOpen(true)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Filter className="w-4 h-4" />
+              <span className="text-sm font-medium">Filters</span>
+              <AnimatePresence>
+                {(searchTerm || selectedCategory) && (
+                  <motion.span
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
+                  >
+                    {[searchTerm, selectedCategory].filter(Boolean).length}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
           </div>
 
-          {filteredChains.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400">
-                No chains found matching "{searchTerm}"
-              </p>
-            </div>
-          ) : (
-            <div key={viewMode} className="animate-fade-in">
-              {viewMode === 'list' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {filteredChains.map((chain, index) => (
-                    <div 
-                      key={chain.chainId}
-                      className="animate-fade-in"
-                      style={{
-                        animationDelay: `${index * 50}ms`,
-                        animationFillMode: 'both'
-                      }}
-                    >
-                      <ChainCard chain={chain} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <ChainListView chains={filteredChains} />
-              )}
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {filteredChains.length === 0 ? (
+              <motion.div
+                key="no-results"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="text-center py-12"
+              >
+                <p className="text-gray-500 dark:text-gray-400">
+                  No chains found matching "{searchTerm}"
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`${viewMode}-${selectedCategory}-${searchTerm}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {viewMode === 'list' ? (
+                  <motion.div
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+                    initial="hidden"
+                    animate="visible"
+                    variants={{
+                      visible: {
+                        transition: {
+                          staggerChildren: 0.03
+                        }
+                      }
+                    }}
+                  >
+                    {filteredChains.map((chain) => (
+                      <motion.div
+                        key={chain.chainId}
+                        variants={{
+                          hidden: { opacity: 0, y: 20 },
+                          visible: { opacity: 1, y: 0 }
+                        }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                      >
+                        <ChainCard chain={chain} />
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <ChainListView chains={filteredChains} />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </main>
 
       <Footer />
+
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        categories={categories}
+      />
     </div>
   );
 }
