@@ -51,24 +51,19 @@ export function ChainCard({ chain }: ChainCardProps) {
                 className="w-10 h-10 rounded-lg shadow-sm"
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
+                onError={(e) => {
+                  e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                  e.currentTarget.onerror = null;
+                }}
               />
             ) : (
-              <motion.div
-                className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
-                whileHover={{
-                  scale: 1.1,
-                  backgroundColor: "rgb(191 219 254)",
-                  rotate: 5
-                }}
+              <motion.img
+                src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                alt={`${chain.chainName} logo`}
+                className="w-10 h-10 rounded-lg shadow-sm"
+                whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <motion.div
-                  whileHover={{ rotate: 15 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                >
-                  <Server className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                </motion.div>
-              </motion.div>
+              />
             )}
             <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -137,10 +132,14 @@ export function ChainCard({ chain }: ChainCardProps) {
           <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
             <div className="flex items-center gap-2">
               {chain.networkToken.logoUri && (
-                <img 
-                  src={chain.networkToken.logoUri} 
+                <img
+                  src={chain.networkToken.logoUri}
                   alt={`${chain.networkToken.name} logo`}
                   className="w-5 h-5 rounded-full"
+                  onError={(e) => {
+                    e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                    e.currentTarget.onerror = null;
+                  }}
                 />
               )}
               <span className="text-sm font-medium text-gray-700 dark:text-gray-200">

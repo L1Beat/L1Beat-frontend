@@ -277,29 +277,18 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
     try {
       const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const data = await fetchWithRetry<any[]>(url);
-      const chains = await Promise.all(data.map(async (chain) => {
-        // Try to fetch cumulative transaction count for each chain
-        let cumulativeTxCount = null;
-        try {
-          const txCountData = await getCumulativeTxCount(chain.chainId, 1);
-          if (txCountData && txCountData.length > 0) {
-            const latest = txCountData[txCountData.length - 1];
-            cumulativeTxCount = {
-              value: latest.value,
-              timestamp: latest.timestamp
-            };
-          }
-        } catch (error) {
-          // Silently ignore errors for cumulative tx count - it's optional data
-        }
-
+      const chains = data.map((chain) => {
         return {
           ...chain,
           tps: chain.tps ? {
             value: Number(chain.tps.value),
             timestamp: chain.tps.timestamp
           } : null,
-          cumulativeTxCount,
+          // cumulativeTxCount is now included in the backend response
+          cumulativeTxCount: chain.cumulativeTxCount ? {
+            value: chain.cumulativeTxCount.value,
+            timestamp: chain.cumulativeTxCount.timestamp
+          } : null,
           validators: chain.validators.map((validator: any) => ({
             address: validator.nodeId,
             active: validator.validationStatus === 'active',
@@ -308,7 +297,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
           }))
         };
-      }));
+      });
       return chains;
     } catch (error) {
       console.error('Chains fetch error:', error);
@@ -477,7 +466,9 @@ export async function getDailyActiveAddresses(evmChainId: string, days: number =
   return fetchWithCache(`daily-active-addresses-${evmChainId}-${days}`, async () => {
     try {
       console.log(`Fetching daily active addresses for evmChainId: ${evmChainId}, days: ${days}`);
-      const response = await fetchWithRetry<{ data: DailyActiveAddresses[] }>(
+
+      // API returns raw array, not { data: [...] }
+      const response = await fetchWithRetry<DailyActiveAddresses[]>(
         `https://idx6.solokhin.com/api/${evmChainId}/stats/daily-active-addresses`
       );
       

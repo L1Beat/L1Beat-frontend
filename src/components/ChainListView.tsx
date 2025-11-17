@@ -69,23 +69,19 @@ export function ChainListView({ chains }: ChainListViewProps) {
                   className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
                   whileHover={{ scale: 1.1 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
+                  onError={(e) => {
+                    e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                    e.currentTarget.onerror = null;
+                  }}
                 />
               ) : (
-                <motion.div
-                  className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0"
-                  whileHover={{
-                    scale: 1.1,
-                    backgroundColor: "rgb(191 219 254)",
-                    transition: { duration: 0.2 }
-                  }}
-                >
-                  <motion.div
-                    whileHover={{ rotate: 12 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  >
-                    <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </motion.div>
-                </motion.div>
+                <motion.img
+                  src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                  alt={`${chain.chainName} logo`}
+                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                  whileHover={{ scale: 1.1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                />
               )}
               
               <div className="flex-1 min-w-0">

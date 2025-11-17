@@ -242,14 +242,25 @@ export function ChainDetails() {
                         src={chain.chainLogoUri}
                         alt={`${chain.chainName} logo`}
                         className="w-16 h-16 rounded-xl shadow-md bg-white p-2"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                          e.currentTarget.onerror = null;
+                        }}
                       />
                       <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                         <CheckCircle className="w-3 h-3 text-white" />
                       </div>
                     </div>
                   ) : (
-                    <div className="w-16 h-16 bg-gray-100 dark:bg-dark-700 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Network className="w-8 h-8 text-gray-400" />
+                    <div className="relative flex-shrink-0">
+                      <img
+                        src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                        alt={`${chain.chainName} logo`}
+                        className="w-16 h-16 rounded-xl shadow-md bg-white p-2"
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                        <CheckCircle className="w-3 h-3 text-white" />
+                      </div>
                     </div>
                   )}
 
@@ -323,6 +334,10 @@ export function ChainDetails() {
                             src={chain.networkToken.logoUri}
                             alt={chain.networkToken.name}
                             className="w-4 h-4 rounded-full"
+                            onError={(e) => {
+                              e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                              e.currentTarget.onerror = null;
+                            }}
                           />
                         )}
                         <span className="text-gray-600 dark:text-gray-400">
