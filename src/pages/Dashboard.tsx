@@ -26,6 +26,9 @@ export function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
+  const [minTPS, setMinTPS] = useState<number | ''>('');
+  const [maxTPS, setMaxTPS] = useState<number | ''>('');
 
   async function fetchData() {
     try {
@@ -47,30 +50,56 @@ export function Dashboard() {
         getCategories()
       ]);
 
-      // Only apply validator filter when NO backend filters are active
-      // If user has selected category, show all results from backend
-      let filteredChains;
-      if (!selectedCategory) {
-        // No filters active: apply validator filter
-        filteredChains = chainsData.filter(chain =>
-          // Include chains with validators
+      // Apply validator filter
+      let filteredChains = chainsData;
+
+      if (!showChainsWithoutValidators) {
+        // Default behavior: only show chains with validators or Avalanche primary chains
+        filteredChains = filteredChains.filter(chain =>
           (chain.validators && chain.validators.length >= 1) ||
-          // OR include any Avalanche chain regardless of validators
           chain.chainName.toLowerCase().includes('avalanche') ||
-          chain.chainName.toLowerCase().includes('c-chain')
+          chain.chainName.toLowerCase().includes('c-chain') ||
+          chain.chainName.toLowerCase().includes('x-chain') ||
+          chain.chainName.toLowerCase().includes('p-chain')
         );
-      } else {
-        // Filters active: show all backend results
-        filteredChains = chainsData;
+      }
+      // If showChainsWithoutValidators is true, include all chains (no validator filter)
+
+      // Apply TPS filter
+      if (minTPS !== '' || maxTPS !== '') {
+        filteredChains = filteredChains.filter(chain => {
+          const tps = chain.tps?.value || 0;
+          const meetsMin = minTPS === '' || tps >= minTPS;
+          const meetsMax = maxTPS === '' || tps <= maxTPS;
+          return meetsMin && meetsMax;
+        });
       }
 
-      // Sort chains: C-Chain first, then alphabetically
+      // Sort chains: C-Chain, X-Chain, P-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
-        const isAvalancheA = a.chainName.toLowerCase().includes('c-chain');
-        const isAvalancheB = b.chainName.toLowerCase().includes('c-chain');
+        const nameA = a.chainName.toLowerCase();
+        const nameB = b.chainName.toLowerCase();
 
-        if (isAvalancheA && !isAvalancheB) return -1;
-        if (!isAvalancheA && isAvalancheB) return 1;
+        const isCChainA = nameA.includes('c-chain');
+        const isCChainB = nameB.includes('c-chain');
+        const isXChainA = nameA.includes('x-chain');
+        const isXChainB = nameB.includes('x-chain');
+        const isPChainA = nameA.includes('p-chain');
+        const isPChainB = nameB.includes('p-chain');
+
+        // C-Chain first
+        if (isCChainA && !isCChainB) return -1;
+        if (!isCChainA && isCChainB) return 1;
+
+        // X-Chain second
+        if (isXChainA && !isXChainB) return -1;
+        if (!isXChainA && isXChainB) return 1;
+
+        // P-Chain third
+        if (isPChainA && !isPChainB) return -1;
+        if (!isPChainA && isPChainB) return 1;
+
+        // Rest alphabetically
         return a.chainName.localeCompare(b.chainName);
       });
 
@@ -89,7 +118,7 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory]);
+  }, [selectedCategory, showChainsWithoutValidators, minTPS, maxTPS]);
 
   useEffect(() => {
     // Refresh health status every 5 minutes (increased from 1 minute)
@@ -220,7 +249,7 @@ export function Dashboard() {
               <Filter className="w-4 h-4" />
               <span className="text-sm font-medium">Filters</span>
               <AnimatePresence>
-                {(searchTerm || selectedCategory) && (
+                {(searchTerm || selectedCategory || showChainsWithoutValidators || minTPS !== '' || maxTPS !== '') && (
                   <motion.span
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -228,7 +257,7 @@ export function Dashboard() {
                     transition={{ duration: 0.2 }}
                     className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
                   >
-                    {[searchTerm, selectedCategory].filter(Boolean).length}
+                    {[searchTerm, selectedCategory, showChainsWithoutValidators, minTPS !== '' ? 'min' : '', maxTPS !== '' ? 'max' : ''].filter(Boolean).length}
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -302,6 +331,12 @@ export function Dashboard() {
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         categories={categories}
+        showChainsWithoutValidators={showChainsWithoutValidators}
+        onShowChainsWithoutValidatorsChange={setShowChainsWithoutValidators}
+        minTPS={minTPS}
+        onMinTPSChange={setMinTPS}
+        maxTPS={maxTPS}
+        onMaxTPSChange={setMaxTPS}
       />
     </div>
   );

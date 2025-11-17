@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Filter, Search } from 'lucide-react';
+import { X, Filter, Search, Users, Activity, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FilterModalProps {
@@ -10,6 +10,12 @@ interface FilterModalProps {
   selectedCategory: string;
   onCategoryChange: (value: string) => void;
   categories: string[];
+  showChainsWithoutValidators: boolean;
+  onShowChainsWithoutValidatorsChange: (value: boolean) => void;
+  minTPS: number | '';
+  onMinTPSChange: (value: number | '') => void;
+  maxTPS: number | '';
+  onMaxTPSChange: (value: number | '') => void;
 }
 
 export function FilterModal({
@@ -19,14 +25,34 @@ export function FilterModal({
   onSearchChange,
   selectedCategory,
   onCategoryChange,
-  categories
+  categories,
+  showChainsWithoutValidators,
+  onShowChainsWithoutValidatorsChange,
+  minTPS,
+  onMinTPSChange,
+  maxTPS,
+  onMaxTPSChange
 }: FilterModalProps) {
   const handleReset = () => {
     onSearchChange('');
     onCategoryChange('');
+    onShowChainsWithoutValidatorsChange(false);
+    onMinTPSChange('');
+    onMaxTPSChange('');
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedCategory !== '';
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      onClose();
+    }
+  };
+
+  const hasActiveFilters =
+    searchTerm !== '' ||
+    selectedCategory !== '' ||
+    showChainsWithoutValidators ||
+    minTPS !== '' ||
+    maxTPS !== '';
 
   return (
     <AnimatePresence>
@@ -38,7 +64,7 @@ export function FilterModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="fixed inset-0 bg-black bg-opacity-60 z-40"
             onClick={onClose}
           />
 
@@ -49,7 +75,8 @@ export function FilterModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
+              onKeyDown={handleKeyDown}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
             >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
@@ -104,23 +131,81 @@ export function FilterModal({
                 ))}
               </select>
             </div>
+
+            {/* Validator Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Validators
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showChainsWithoutValidators}
+                  onChange={(e) => onShowChainsWithoutValidatorsChange(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 cursor-pointer"
+                />
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Include chains without validators
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* TPS Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  <span>TPS Range</span>
+                </div>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <input
+                    type="number"
+                    placeholder="Min TPS"
+                    value={minTPS}
+                    onChange={(e) => onMinTPSChange(e.target.value === '' ? '' : Number(e.target.value))}
+                    min="0"
+                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    placeholder="Max TPS"
+                    value={maxTPS}
+                    onChange={(e) => onMaxTPSChange(e.target.value === '' ? '' : Number(e.target.value))}
+                    min="0"
+                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700">
-            <button
+            <motion.button
               onClick={handleReset}
               disabled={!hasActiveFilters}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              whileHover={hasActiveFilters ? { scale: 1.02 } : {}}
+              whileTap={hasActiveFilters ? { scale: 0.98 } : {}}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 transition-colors"
             >
+              <RotateCcw className="w-4 h-4" />
               Reset Filters
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={onClose}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               Apply
-            </button>
+            </motion.button>
           </div>
             </motion.div>
           </div>

@@ -2,7 +2,7 @@ import { Chain } from '../types';
 import { Activity, Server, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ChainCardProps {
   chain: Chain;
@@ -75,23 +75,57 @@ export function ChainCard({ chain }: ChainCardProps) {
         </div>
         
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50">
+          <motion.div
+            className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
             <div className="flex items-center gap-2 mb-1">
               <Activity className={`w-4 h-4 ${tpsColor}`} />
               <span className="text-sm text-gray-600 dark:text-gray-300">TPS</span>
             </div>
-            <span className={`text-lg font-bold ${tpsColor}`}>{tpsValue}</span>
-          </div>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={tpsValue}
+                initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                transition={{
+                  duration: 0.4,
+                  ease: [0.4, 0.0, 0.2, 1]
+                }}
+                className={`text-lg font-bold ${tpsColor} inline-block`}
+              >
+                {tpsValue}
+              </motion.span>
+            </AnimatePresence>
+          </motion.div>
 
-          <div className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50">
+          <motion.div
+            className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
             <div className="flex items-center gap-2 mb-1">
               <Server className="w-4 h-4 text-blue-500 dark:text-blue-400" />
               <span className="text-sm text-gray-600 dark:text-gray-300">Validators</span>
             </div>
-            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-              {chain.validators?.length || 0}
-            </span>
-          </div>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={chain.validators?.length || 0}
+                initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                transition={{
+                  duration: 0.4,
+                  ease: [0.4, 0.0, 0.2, 1]
+                }}
+                className="text-lg font-bold text-blue-600 dark:text-blue-400 inline-block"
+              >
+                {chain.validators?.length || 0}
+              </motion.span>
+            </AnimatePresence>
+          </motion.div>
         </div>
 
         {/* Category Badges */}
