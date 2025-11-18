@@ -10,6 +10,12 @@ interface ChainListViewProps {
 export function ChainListView({ chains }: ChainListViewProps) {
   const navigate = useNavigate();
 
+  const handleNavigate = (chainId: string) => {
+    // Save current scroll position before navigating
+    sessionStorage.setItem('dashboardScrollPosition', window.scrollY.toString());
+    navigate(`/chain/${chainId}`);
+  };
+
   const formatTPS = (tps: Chain['tps']) => {
     if (!tps || typeof tps.value !== 'number') return 'N/A';
     if (tps.value < 0.5) return '< 1.0';
@@ -59,7 +65,7 @@ export function ChainListView({ chains }: ChainListViewProps) {
               borderColor: "rgb(96 165 250)"
             }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/chain/${chain.chainId}`)}
+            onClick={() => handleNavigate(chain.chainId)}
           >
             <div className="flex items-center gap-3">
               {chain.chainLogoUri ? (

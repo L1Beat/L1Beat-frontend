@@ -21,7 +21,7 @@ import {
   Shield
 } from 'lucide-react';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
-import { SeparateMetricsCharts } from '../components/SeparateMetricsCharts';
+import { L1MetricsChart } from '../components/L1MetricsChart';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
@@ -241,7 +241,7 @@ export function ChainDetails() {
                       <img
                         src={chain.chainLogoUri}
                         alt={`${chain.chainName} logo`}
-                        className="w-16 h-16 rounded-xl shadow-md bg-white p-2"
+                        className="w-16 h-16 rounded-xl shadow-md bg-transparent p-2"
                         onError={(e) => {
                           e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
                           e.currentTarget.onerror = null;
@@ -256,7 +256,7 @@ export function ChainDetails() {
                       <img
                         src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
                         alt={`${chain.chainName} logo`}
-                        className="w-16 h-16 rounded-xl shadow-md bg-white p-2"
+                        className="w-16 h-16 rounded-xl shadow-md bg-transparent p-2"
                       />
                       <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
                         <CheckCircle className="w-3 h-3 text-white" />
@@ -369,7 +369,7 @@ export function ChainDetails() {
                   <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700/50">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Uptime</span>
+                      <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Avg Validator Uptime</span>
                     </div>
                     <p className="text-xl font-bold text-purple-900 dark:text-purple-100">{averageUptime.toFixed(1)}%</p>
                   </div>
@@ -504,7 +504,8 @@ export function ChainDetails() {
 
           </div>
 
-          {/* Tab Navigation */}
+          {/* Tab Navigation - Only show when TPS data is available */}
+          {tpsValue !== 'N/A' && (
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="grid grid-cols-2 gap-1 p-2" aria-label="Tabs">
@@ -623,7 +624,7 @@ export function ChainDetails() {
                               }}
                             >
                               <div className="flex items-center gap-1">
-                              Uptime
+                              Avg Validator Uptime
                                 {sortBy === 'uptime' && (
                                   <span className="text-blue-500">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
@@ -734,11 +735,12 @@ export function ChainDetails() {
               {/* Metrics Tab */}
               {activeTab === 'metrics' && (
                 <div className="space-y-6">
-                  <SeparateMetricsCharts chainId={chain.chainId} chainName={chain.chainName} />
+                  <L1MetricsChart chainId={chain.chainId} chainName={chain.chainName} evmChainId={chain.evmChainId} />
                 </div>
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
       

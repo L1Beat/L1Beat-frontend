@@ -75,29 +75,17 @@ export function Dashboard() {
         });
       }
 
-      // Sort chains: C-Chain, X-Chain, P-Chain first, then alphabetically
+      // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
         const nameA = a.chainName.toLowerCase();
         const nameB = b.chainName.toLowerCase();
 
         const isCChainA = nameA.includes('c-chain');
         const isCChainB = nameB.includes('c-chain');
-        const isXChainA = nameA.includes('x-chain');
-        const isXChainB = nameB.includes('x-chain');
-        const isPChainA = nameA.includes('p-chain');
-        const isPChainB = nameB.includes('p-chain');
 
         // C-Chain first
         if (isCChainA && !isCChainB) return -1;
         if (!isCChainA && isCChainB) return 1;
-
-        // X-Chain second
-        if (isXChainA && !isXChainB) return -1;
-        if (!isXChainA && isXChainB) return 1;
-
-        // P-Chain third
-        if (isPChainA && !isPChainB) return -1;
-        if (!isPChainA && isPChainB) return 1;
 
         // Rest alphabetically
         return a.chainName.localeCompare(b.chainName);
@@ -128,6 +116,20 @@ export function Dashboard() {
 
     return () => clearInterval(healthInterval);
   }, []);
+
+  useEffect(() => {
+    // Restore scroll position when returning from chain details
+    const savedScrollPosition = sessionStorage.getItem('dashboardScrollPosition');
+    if (savedScrollPosition && !loading) {
+      const scrollY = parseInt(savedScrollPosition, 10);
+      // Use setTimeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        window.scrollTo(0, scrollY);
+        // Clear the saved position after restoring
+        sessionStorage.removeItem('dashboardScrollPosition');
+      }, 0);
+    }
+  }, [loading]);
 
   // Filter chains based on search term
   const filteredChains = chains.filter(chain =>

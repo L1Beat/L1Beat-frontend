@@ -11,6 +11,12 @@ interface ChainCardProps {
 export function ChainCard({ chain }: ChainCardProps) {
   const navigate = useNavigate();
 
+  const handleNavigate = () => {
+    // Save current scroll position before navigating
+    sessionStorage.setItem('dashboardScrollPosition', window.scrollY.toString());
+    navigate(`/chain/${chain.chainId}`);
+  };
+
   const formatTPS = (tps: Chain['tps']) => {
     if (!tps || typeof tps.value !== 'number') return 'N/A';
     if (tps.value < 0.6) return '< 1.0';
@@ -32,7 +38,7 @@ export function ChainCard({ chain }: ChainCardProps) {
   return (
     <motion.div
       className="stat-card cursor-pointer"
-      onClick={() => navigate(`/chain/${chain.chainId}`)}
+      onClick={handleNavigate}
       whileHover={{
         y: -4,
         scale: 1.02,
