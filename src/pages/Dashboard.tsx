@@ -10,7 +10,7 @@ import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
-import { LayoutGrid, Activity, Network, Filter } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
 import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,8 +27,6 @@ export function Dashboard() {
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
-  const [minTPS, setMinTPS] = useState<number | ''>('');
-  const [maxTPS, setMaxTPS] = useState<number | ''>('');
 
   async function fetchData() {
     try {
@@ -50,30 +48,24 @@ export function Dashboard() {
         getCategories()
       ]);
 
+      // Permanently exclude X-Chain and P-Chain
+      const excludedChains = chainsData.filter(chain => {
+        const name = chain.chainName.toLowerCase();
+        return !name.includes('x-chain') && !name.includes('p-chain');
+      });
+
       // Apply validator filter
-      let filteredChains = chainsData;
+      let filteredChains = excludedChains;
 
       if (!showChainsWithoutValidators) {
         // Default behavior: only show chains with validators or Avalanche primary chains
         filteredChains = filteredChains.filter(chain =>
           (chain.validators && chain.validators.length >= 1) ||
           chain.chainName.toLowerCase().includes('avalanche') ||
-          chain.chainName.toLowerCase().includes('c-chain') ||
-          chain.chainName.toLowerCase().includes('x-chain') ||
-          chain.chainName.toLowerCase().includes('p-chain')
+          chain.chainName.toLowerCase().includes('c-chain')
         );
       }
       // If showChainsWithoutValidators is true, include all chains (no validator filter)
-
-      // Apply TPS filter
-      if (minTPS !== '' || maxTPS !== '') {
-        filteredChains = filteredChains.filter(chain => {
-          const tps = chain.tps?.value || 0;
-          const meetsMin = minTPS === '' || tps >= minTPS;
-          const meetsMax = maxTPS === '' || tps <= maxTPS;
-          return meetsMin && meetsMax;
-        });
-      }
 
       // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
@@ -106,7 +98,7 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, showChainsWithoutValidators, minTPS, maxTPS]);
+  }, [selectedCategory, showChainsWithoutValidators]);
 
   useEffect(() => {
     // Refresh health status every 5 minutes (increased from 1 minute)
@@ -242,28 +234,45 @@ export function Dashboard() {
               </AnimatePresence>
             </div>
 
-            <motion.button
-              onClick={() => setIsFilterModalOpen(true)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              <Filter className="w-4 h-4" />
-              <span className="text-sm font-medium">Filters</span>
-              <AnimatePresence>
-                {(searchTerm || selectedCategory || showChainsWithoutValidators || minTPS !== '' || maxTPS !== '') && (
-                  <motion.span
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
-                  >
-                    {[searchTerm, selectedCategory, showChainsWithoutValidators, minTPS !== '' ? 'min' : '', maxTPS !== '' ? 'max' : ''].filter(Boolean).length}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.button>
+            <div className="flex items-center gap-3">
+              {/* Compact Search Bar */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search chains..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-48 pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Filter Button */}
+              <motion.button
+                onClick={() => setIsFilterModalOpen(true)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Filter className="w-4 h-4" />
+                <span className="text-sm font-medium">Filters</span>
+                <AnimatePresence>
+                  {(selectedCategory || showChainsWithoutValidators) && (
+                    <motion.span
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
+                    >
+                      {[selectedCategory, showChainsWithoutValidators].filter(Boolean).length}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </div>
           </div>
 
           <AnimatePresence mode="wait">
@@ -328,17 +337,11 @@ export function Dashboard() {
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         categories={categories}
         showChainsWithoutValidators={showChainsWithoutValidators}
         onShowChainsWithoutValidatorsChange={setShowChainsWithoutValidators}
-        minTPS={minTPS}
-        onMinTPSChange={setMinTPS}
-        maxTPS={maxTPS}
-        onMaxTPSChange={setMaxTPS}
       />
     </div>
   );

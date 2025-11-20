@@ -504,8 +504,7 @@ export function ChainDetails() {
 
           </div>
 
-          {/* Tab Navigation - Only show when TPS data is available */}
-          {tpsValue !== 'N/A' && (
+          {/* Tab Navigation */}
           <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="grid grid-cols-2 gap-1 p-2" aria-label="Tabs">
@@ -740,7 +739,6 @@ export function ChainDetails() {
               )}
             </div>
           </div>
-          )}
         </div>
       </div>
       

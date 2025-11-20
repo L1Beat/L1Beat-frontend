@@ -1,44 +1,29 @@
 import React from 'react';
-import { X, Filter, Search, Users, Activity, RotateCcw } from 'lucide-react';
+import { X, Filter, Users, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FilterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  searchTerm: string;
-  onSearchChange: (value: string) => void;
   selectedCategory: string;
   onCategoryChange: (value: string) => void;
   categories: string[];
   showChainsWithoutValidators: boolean;
   onShowChainsWithoutValidatorsChange: (value: boolean) => void;
-  minTPS: number | '';
-  onMinTPSChange: (value: number | '') => void;
-  maxTPS: number | '';
-  onMaxTPSChange: (value: number | '') => void;
 }
 
 export function FilterModal({
   isOpen,
   onClose,
-  searchTerm,
-  onSearchChange,
   selectedCategory,
   onCategoryChange,
   categories,
   showChainsWithoutValidators,
-  onShowChainsWithoutValidatorsChange,
-  minTPS,
-  onMinTPSChange,
-  maxTPS,
-  onMaxTPSChange
+  onShowChainsWithoutValidatorsChange
 }: FilterModalProps) {
   const handleReset = () => {
-    onSearchChange('');
     onCategoryChange('');
     onShowChainsWithoutValidatorsChange(false);
-    onMinTPSChange('');
-    onMaxTPSChange('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -48,11 +33,8 @@ export function FilterModal({
   };
 
   const hasActiveFilters =
-    searchTerm !== '' ||
     selectedCategory !== '' ||
-    showChainsWithoutValidators ||
-    minTPS !== '' ||
-    maxTPS !== '';
+    showChainsWithoutValidators;
 
   return (
     <AnimatePresence>
@@ -96,40 +78,36 @@ export function FilterModal({
 
           {/* Content */}
           <div className="p-6 space-y-6">
-            {/* Search Input */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Search
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by chain name or ID..."
-                  value={searchTerm}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
-
             {/* Category Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Category
               </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => onCategoryChange(e.target.value)}
-                className="block w-full pl-3 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm cursor-pointer"
-              >
-                <option value="">All Categories</option>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => onCategoryChange('')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    selectedCategory === ''
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  All
+                </button>
                 {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <button
+                    key={cat}
+                    onClick={() => onCategoryChange(selectedCategory === cat ? '' : cat)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      selectedCategory === cat
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {cat}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
             {/* Validator Filter */}
@@ -151,38 +129,6 @@ export function FilterModal({
                   </span>
                 </div>
               </label>
-            </div>
-
-            {/* TPS Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4" />
-                  <span>TPS Range</span>
-                </div>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <input
-                    type="number"
-                    placeholder="Min TPS"
-                    value={minTPS}
-                    onChange={(e) => onMinTPSChange(e.target.value === '' ? '' : Number(e.target.value))}
-                    min="0"
-                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="number"
-                    placeholder="Max TPS"
-                    value={maxTPS}
-                    onChange={(e) => onMaxTPSChange(e.target.value === '' ? '' : Number(e.target.value))}
-                    min="0"
-                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
