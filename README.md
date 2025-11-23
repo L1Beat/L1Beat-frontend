@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/muhammetselimfe/L1Beat/refs/heads/main/public/l1_logo_main_2.png" alt="L1Beat Logo" width="200"/>
+  <img src="./public/logo-dark-animated.svg" alt="L1Beat Logo" width="200"/>
   <h1>L1Beat - Avalanche L1 Analytics</h1>
   <p>A comprehensive analytics platform for tracking and analyzing Avalanche L1s.</p>
   
