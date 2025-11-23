@@ -89,7 +89,9 @@ export function MetricsChart({
     );
   }
 
-  if (error || !data.length) {
+  // Only show error if there's an actual error AND no data
+  // If there's data (even if all 0s), show the chart
+  if (error && !data.length) {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-6">
@@ -106,10 +108,10 @@ export function MetricsChart({
         <div className="h-64 flex flex-col items-center justify-center">
           <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
           <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
-            {error || 'No data available'}
+            {error}
           </p>
           {onRetry && (
-            <button 
+            <button
               onClick={onRetry}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
@@ -117,6 +119,31 @@ export function MetricsChart({
               Retry
             </button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // If no data at all (shouldn't happen with L1MetricsChart's fallback), show empty state
+  if (!data.length) {
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            {icon}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+              {description && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="h-64 flex flex-col items-center justify-center">
+          <AlertTriangle className="h-12 w-12 text-gray-400 mb-4" />
+          <p className="text-gray-600 dark:text-gray-300 text-center">
+            No data available
+          </p>
         </div>
       </div>
     );

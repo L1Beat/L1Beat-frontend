@@ -31,6 +31,36 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
 
+  // Generate fallback data with 0 values for the given timeframe
+  const generateFallbackData = (days: number): TPSHistory[] => {
+    const now = Math.floor(Date.now() / 1000);
+    const dayInSeconds = 24 * 60 * 60;
+    return Array.from({ length: days }, (_, i) => ({
+      timestamp: now - (days - i - 1) * dayInSeconds,
+      totalTps: 0,
+      chainCount: 0
+    }));
+  };
+
+  const generateFallbackTxData = (days: number): CumulativeTxCount[] => {
+    const now = Math.floor(Date.now() / 1000);
+    const dayInSeconds = 24 * 60 * 60;
+    return Array.from({ length: days }, (_, i) => ({
+      timestamp: now - (days - i - 1) * dayInSeconds,
+      value: 0
+    }));
+  };
+
+  const generateFallbackActiveAddressesData = (days: number): DailyActiveAddresses[] => {
+    const now = Math.floor(Date.now() / 1000);
+    const dayInSeconds = 24 * 60 * 60;
+    return Array.from({ length: days }, (_, i) => ({
+      timestamp: now - (days - i - 1) * dayInSeconds,
+      activeAddresses: 0,
+      transactions: 0
+    }));
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -56,13 +86,25 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
         }
 
         const results = await Promise.all(promises);
-        
+
         if (mounted) {
-          setTpsHistory(results[0].sort((a, b) => a.timestamp - b.timestamp));
+          // Use fallback data if API returns empty arrays
+          const tpsData = results[0] && results[0].length > 0
+            ? results[0].sort((a, b) => a.timestamp - b.timestamp)
+            : generateFallbackData(timeframe);
+          setTpsHistory(tpsData);
+
           if (chainId) {
-            setTxHistory(results[1]);
+            const txData = results[1] && results[1].length > 0
+              ? results[1]
+              : generateFallbackTxData(timeframe);
+            setTxHistory(txData);
+
             if ((evmChainId || selectedMetric === 'activeAddresses') && results[2]) {
-              setActiveAddressesHistory(results[2]);
+              const activeAddressData = results[2].length > 0
+                ? results[2]
+                : generateFallbackActiveAddressesData(timeframe);
+              setActiveAddressesHistory(activeAddressData);
             }
             setNetworkTPS(null);
           } else {
@@ -72,7 +114,13 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
       } catch (err) {
         console.error('Error fetching data:', err);
         if (mounted) {
-          setError(`Failed to fetch ${selectedMetric} data`);
+          // Use fallback data on error instead of showing error state
+          setTpsHistory(generateFallbackData(timeframe));
+          if (chainId) {
+            setTxHistory(generateFallbackTxData(timeframe));
+            setActiveAddressesHistory(generateFallbackActiveAddressesData(timeframe));
+          }
+          setError(null); // Don't show error, just use 0 values
         }
       } finally {
         if (mounted) {
@@ -197,25 +245,48 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
     if (chainId) {
       Promise.all(promises).then((results) => {
         const [tpsData, txData, activeAddressesData] = results;
-        setTpsHistory(tpsData.sort((a, b) => a.timestamp - b.timestamp));
-        setTxHistory(txData);
+        // Use fallback data if empty
+        const finalTpsData = tpsData && tpsData.length > 0
+          ? tpsData.sort((a, b) => a.timestamp - b.timestamp)
+          : generateFallbackData(newTimeframe);
+        setTpsHistory(finalTpsData);
+
+        const finalTxData = txData && txData.length > 0
+          ? txData
+          : generateFallbackTxData(newTimeframe);
+        setTxHistory(finalTxData);
+
         if ((evmChainId || selectedMetric === 'activeAddresses') && activeAddressesData) {
-          setActiveAddressesHistory(activeAddressesData);
+          const finalActiveAddressData = activeAddressesData.length > 0
+            ? activeAddressesData
+            : generateFallbackActiveAddressesData(newTimeframe);
+          setActiveAddressesHistory(finalActiveAddressData);
         }
+        setError(null);
         setLoading(false);
       }).catch(err => {
         console.error('Error in timeframe change:', err);
-        setError('Failed to fetch data');
+        // Use fallback data on error
+        setTpsHistory(generateFallbackData(newTimeframe));
+        setTxHistory(generateFallbackTxData(newTimeframe));
+        setActiveAddressesHistory(generateFallbackActiveAddressesData(newTimeframe));
+        setError(null);
         setLoading(false);
       });
     } else {
       Promise.all(promises).then(([history, current]) => {
-        setTpsHistory(history.sort((a, b) => a.timestamp - b.timestamp));
+        const finalHistory = history && history.length > 0
+          ? history.sort((a, b) => a.timestamp - b.timestamp)
+          : generateFallbackData(newTimeframe);
+        setTpsHistory(finalHistory);
         setNetworkTPS(current);
+        setError(null);
         setLoading(false);
       }).catch(err => {
         console.error('Error in network timeframe change:', err);
-        setError('Failed to fetch data');
+        // Use fallback data on error
+        setTpsHistory(generateFallbackData(newTimeframe));
+        setError(null);
         setLoading(false);
       });
     }
