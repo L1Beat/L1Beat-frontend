@@ -571,25 +571,41 @@ export function NetworkTopologyGraph() {
                 {isCenter ? (
                   <div className="absolute inset-3 rounded-full bg-white dark:bg-gray-100 flex items-center justify-center shadow-inner">
                     {chain.chainLogoUri ? (
-                      <img 
-                        src={chain.chainLogoUri} 
+                      <img
+                        src={chain.chainLogoUri}
+                        alt={chain.chainName}
+                        className="w-3/4 h-3/4 object-contain rounded-full"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                          e.currentTarget.onerror = null;
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
                         alt={chain.chainName}
                         className="w-3/4 h-3/4 object-contain rounded-full"
                       />
-                    ) : (
-                      <Server className="w-1/2 h-1/2 text-blue-600" />
                     )}
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     {chain.chainLogoUri ? (
-                      <img 
-                        src={chain.chainLogoUri} 
+                      <img
+                        src={chain.chainLogoUri}
+                        alt={chain.chainName}
+                        className="w-2/3 h-2/3 object-contain rounded-full"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                          e.currentTarget.onerror = null;
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
                         alt={chain.chainName}
                         className="w-2/3 h-2/3 object-contain rounded-full"
                       />
-                    ) : (
-                      <Server className="w-1/2 h-1/2 text-gray-300" />
                     )}
                   </div>
                 )}
