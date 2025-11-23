@@ -25,6 +25,7 @@ import { L1MetricsChart } from '../components/L1MetricsChart';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
@@ -158,8 +159,8 @@ export function ChainDetails() {
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-300">Loading chain details...</p>
+            <LoadingSpinner size="lg" />
+            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading chain details...</p>
           </div>
         </div>
       </div>

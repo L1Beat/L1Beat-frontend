@@ -9,8 +9,11 @@ import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
 import { Footer } from '../components/Footer';
-import { LayoutGrid, Activity, Network, Search, Grid, List } from 'lucide-react';
+import { FilterModal } from '../components/FilterModal';
+import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
+import { LayoutGrid, Activity, Network, Filter, Search, Grid, List } from 'lucide-react';
 import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
@@ -78,11 +81,7 @@ export function Dashboard() {
   );
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <LoadingPage />;
   }
 
   if (error) {

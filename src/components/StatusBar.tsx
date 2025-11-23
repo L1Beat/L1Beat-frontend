@@ -3,6 +3,7 @@ import { HealthStatus } from '../types';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from '../hooks/useTheme';
 
 interface StatusBarProps {
   health: HealthStatus | null;
@@ -16,6 +17,7 @@ export function StatusBar({ health }: StatusBarProps) {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   useEffect(() => {
     const controlNavbar = () => {
@@ -98,9 +100,9 @@ export function StatusBar({ health }: StatusBarProps) {
                     }`}
                 />
                 <img
-                  src="https://raw.githubusercontent.com/muhammetselimfe/L1Beat/refs/heads/main/public/l1_logo_main_2.png"
+                  src={theme === 'light' ? '/logo-light-animated.svg' : '/logo-dark-animated.svg'}
                   alt="L1Beat"
-                  className={`h-8 w-auto relative ${isAnimating ? 'animate-heartbeat' : ''
+                  className={`h-10 w-auto relative ${isAnimating ? 'animate-heartbeat' : ''
                     } transition-transform duration-300`}
                 />
               </button>

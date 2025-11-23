@@ -3,6 +3,7 @@ import { getChains, getNetworkTPS } from '../api';
 import { Chain, NetworkTPS } from '../types';
 import { Server, AlertTriangle, RefreshCw, Zap, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface NodePosition {
   x: number;
@@ -301,8 +302,8 @@ export function NetworkTopologyGraph() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
         <div className="h-[400px] flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading network topology...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network topology...</p>
         </div>
       </div>
     );

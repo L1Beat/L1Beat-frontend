@@ -18,6 +18,7 @@ import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
 import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users } from 'lucide-react';
 import { getChains } from '../api';
 import { getCumulativeTxCount } from '../api';
+import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
   CategoryScale,
@@ -410,8 +411,8 @@ export function AvalancheNetworkMetrics() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading network metrics...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network metrics...</p>
         </div>
       </div>
     );

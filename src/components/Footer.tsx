@@ -1,14 +1,16 @@
 import { Github, Mail } from 'lucide-react';
 import { siX } from 'simple-icons/icons';
+import { useTheme } from '../hooks/useTheme';
 
 export function Footer() {
+  const { theme } = useTheme();
   return (
     <footer className="bg-white dark:bg-dark-800 border-t border-gray-200 dark:border-dark-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <img 
-              src="https://raw.githubusercontent.com/muhammetselimfe/L1Beat/refs/heads/main/public/l1_logo_main_2.png"
+            <img
+              src={theme === 'light' ? '/logo-light-animated.svg' : '/logo-dark-animated.svg'}
               alt="L1Beat Logo"
               className="h-8 w-auto mb-4"
             />

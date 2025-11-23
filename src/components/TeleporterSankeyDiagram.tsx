@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { RefreshCw, AlertTriangle, MessageSquare, ArrowUpDown, Activity, Clock } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
+import { LoadingSpinner } from './LoadingSpinner';
 
 // Get API base URL from environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
@@ -626,8 +627,8 @@ export function TeleporterSankeyDiagram() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
         <div className="h-[400px] flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading message flow data...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading message flow data...</p>
         </div>
       </div>
     );

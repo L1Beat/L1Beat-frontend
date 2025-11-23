@@ -6,6 +6,7 @@ import { BlogPost, getBlogPosts, getBlogTags, BlogTag } from '../api/blogApi';
 import { BlogCard } from '../components/BlogCard';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getHealth } from '../api';
 
 export function BlogList() {
@@ -186,8 +187,8 @@ export function BlogList() {
                 <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-600 dark:text-gray-300">Loading amazing content...</p>
+                        <LoadingSpinner size="lg" />
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Loading amazing content...</p>
                     </div>
                 </div>
             </div>

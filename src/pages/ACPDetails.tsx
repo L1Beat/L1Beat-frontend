@@ -12,6 +12,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   ArrowLeft,
   ExternalLink,
@@ -549,8 +550,8 @@ export default function ACPDetails() {
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <LoadingSpinner size="lg" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-2">
               Loading ACP-{acpNumber}...
             </h2>
             <p className="text-gray-600 dark:text-gray-300">

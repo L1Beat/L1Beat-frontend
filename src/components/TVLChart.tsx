@@ -16,6 +16,7 @@ import { TVLHistory, TVLHealth } from '../types';
 import { getTVLHistory, getTVLHealth } from '../api';
 import { useTheme } from '../hooks/useTheme';
 import { AlertTriangle, TrendingUp, RefreshCw, Info } from 'lucide-react';
+import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
   CategoryScale,
@@ -105,8 +106,8 @@ export function TVLChart() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6">
         <div className="h-64 flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading TVL data...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading TVL data...</p>
         </div>
       </div>
     );
