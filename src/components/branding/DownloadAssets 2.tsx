@@ -1,6 +1,6 @@
 import { Download, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
-import { L1BeatLogo } from './L1BeatLogo';
+import { L1BeatLogo } from '../L1BeatLogo';
 
 interface DownloadAssetsProps {
   theme: 'dark' | 'light';

@@ -1,4 +1,4 @@
-import { L1BeatLogo } from './L1BeatLogo';
+import { L1BeatLogo } from '../L1BeatLogo';
 import { Check, X } from 'lucide-react';
 
 interface UsageGuidelinesProps {

@@ -1,4 +1,4 @@
-import { L1BeatLogo } from './L1BeatLogo';
+import { L1BeatLogo } from '../L1BeatLogo';
 import { TrendingUp, Activity, BarChart3, Network } from 'lucide-react';
 
 interface ExampleApplicationsProps {

@@ -172,3 +172,4 @@ export function L1BeatLogo({
     </div>
   );
 }
+

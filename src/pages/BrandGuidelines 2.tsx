@@ -100,7 +100,7 @@ export function BrandGuidelines() {
                 </div>
                 <h3 className="mb-2">Clean & Modern</h3>
                 <p className="text-muted-foreground">
-                Minimalist, data-driven design optimized for both light and dark themes.
+                  Minimalist design inspired by Nansen.ai, optimized for both light and dark themes.
                 </p>
               </div>
             </section>
