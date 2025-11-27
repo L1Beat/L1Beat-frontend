@@ -461,7 +461,7 @@ export default function ACPDetails() {
           }`}>
             <div className="flex items-center space-x-2">
               <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
-                isDark ? 'border-blue-400' : 'border-blue-600'
+                isDark ? 'border-[#ef4444]' : 'border-[#ef4444]'
               }`}></div>
               <span>Loading diagram...</span>
             </div>
@@ -533,7 +533,7 @@ export default function ACPDetails() {
       case 'final':
         return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30';
       case 'draft':
-        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30';
+        return 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20 dark:bg-[#ef4444]/20 dark:text-[#ef4444] dark:border-[#ef4444]/30';
       case 'review':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-500/30';
       case 'stagnant':
@@ -586,7 +586,7 @@ export default function ACPDetails() {
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626]"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -620,7 +620,7 @@ export default function ACPDetails() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl font-mono text-blue-600 dark:text-blue-400 font-bold">
+                  <span className="text-2xl font-mono text-[#ef4444] dark:text-[#ef4444] font-bold">
                     ACP-{acp.number}
                   </span>
                   
@@ -640,7 +640,7 @@ export default function ACPDetails() {
                         href={`https://github.com/${author.github}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        className="inline-flex items-center text-sm text-[#ef4444] hover:text-[#dc2626] dark:text-[#ef4444] dark:hover:text-[#dc2626]"
                       >
                         {author.name}
                         <ExternalLink className="w-3 h-3 ml-1" />
@@ -714,16 +714,16 @@ export default function ACPDetails() {
       if (text.startsWith(':::note')) {
         const noteContent = text.replace(/^:::note\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
+          <div className="my-6 p-4 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border-l-4 border-[#ef4444] rounded-r-lg">
             <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-5 h-5 text-blue-500 mt-0.5">
+              <div className="flex-shrink-0 w-5 h-5 text-[#ef4444] mt-0.5">
                 <svg fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
               <div className="flex-1">
-                <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Note</div>
-                <div className="text-sm text-blue-700 dark:text-blue-300">{noteContent}</div>
+                <div className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444] mb-1">Note</div>
+                <div className="text-sm text-[#ef4444] dark:text-[#ef4444]">{noteContent}</div>
               </div>
             </div>
           </div>

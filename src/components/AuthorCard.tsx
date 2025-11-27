@@ -93,7 +93,7 @@ export function AuthorCard({
     <span
       ref={triggerRef}
       onClick={openModal}
-      className={`group inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-300 cursor-pointer transform hover:scale-105 ${className}`}
+      className={`group inline-flex items-center gap-1 hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-all duration-300 cursor-pointer transform hover:scale-105 ${className}`}
     >
       {displayAuthor.avatar ? (
         <img 
@@ -140,20 +140,20 @@ export function AuthorCard({
             <img
               src={displayAuthor.avatar}
               alt={displayAuthor.name}
-              className="w-12 h-12 rounded-full border-2 border-gray-100 dark:border-gray-700 transition-all duration-300 group-hover:scale-110 group-hover:border-blue-300 dark:group-hover:border-blue-500"
+              className="w-12 h-12 rounded-full border-2 border-gray-100 dark:border-gray-700 transition-all duration-300 group-hover:scale-110 group-hover:border-[#ef4444] dark:group-hover:border-[#ef4444]"
             />
           ) : (
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:from-blue-600 group-hover:to-purple-700">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:from-[#dc2626] group-hover:to-[#b91c1c]">
               <User className="w-6 h-6 text-white transition-all duration-300 group-hover:scale-110" />
             </div>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white text-lg truncate transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-400">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-lg truncate transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
             {displayAuthor.name}
           </h3>
           {displayAuthor.role && (
-            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-all duration-300 hover:scale-105 hover:text-blue-700 dark:hover:text-blue-300">
+            <p className="text-sm text-[#ef4444] dark:text-[#ef4444] font-medium transition-all duration-300 hover:scale-105 hover:text-[#dc2626] dark:hover:text-[#dc2626]">
               {displayAuthor.role}
             </p>
           )}
@@ -170,13 +170,13 @@ export function AuthorCard({
       {/* Stats */}
       <div className="flex items-center gap-6 mb-4 text-sm text-gray-500 dark:text-gray-400">
         {displayAuthor.postCount !== undefined && (
-          <div className="flex items-center gap-1 group transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-400">
+            <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
             <Users className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
             <span>{displayAuthor.postCount} {displayAuthor.postCount === 1 ? 'post' : 'posts'}</span>
           </div>
         )}
         {displayAuthor.joinDate && (
-          <div className="flex items-center gap-1 group transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-400">
+            <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
             <Calendar className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
             <span>Since {formatJoinDate(displayAuthor.joinDate)}</span>
           </div>
@@ -185,7 +185,7 @@ export function AuthorCard({
 
       {/* Social Links */}
       {displayAuthor.socialLinks && (
-        <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-300 hover:border-blue-200 dark:hover:border-blue-700">
+        <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-300 hover:border-[#ef4444]/30 dark:hover:border-[#ef4444]/30">
           {displayAuthor.socialLinks.website && (
             <a
               href={displayAuthor.socialLinks.website}
@@ -202,7 +202,7 @@ export function AuthorCard({
               href={displayAuthor.socialLinks.twitter}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+              className="p-2 rounded-lg text-gray-400 hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
               title="Twitter"
             >
               <Twitter className="w-4 h-4" />
@@ -213,7 +213,7 @@ export function AuthorCard({
               href={displayAuthor.socialLinks.linkedin}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+              className="p-2 rounded-lg text-gray-400 hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
               title="LinkedIn"
             >
               <Linkedin className="w-4 h-4" />

@@ -296,7 +296,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
     <div className="space-y-4">
       <MetricsChart
         title={chainId ? `${chainName || 'Chain'} Metrics` : 'Network-wide Metrics'}
-        icon={<TrendingUp className="w-5 h-5 text-blue-500" />}
+        icon={<TrendingUp className="w-5 h-5 text-[#ef4444]" />}
         data={getChartData()}
         loading={loading}
         error={error}
@@ -306,12 +306,12 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
         tooltipFormatter={tooltipFormatter}
         color={{
           line: selectedMetric === 'tps'
-            ? 'rgb(99, 102, 241)'
+            ? 'rgb(239, 68, 68)' // Brand red #ef4444
             : selectedMetric === 'activeAddresses'
-            ? 'rgb(34, 197, 94)'
-            : 'rgb(202, 138, 4)',
+            ? 'rgb(34, 197, 94)' // Keep green for positive metrics
+            : 'rgb(202, 138, 4)', // Keep yellow for warnings
           fill: selectedMetric === 'tps'
-            ? 'rgba(99, 102, 241, 0.1)'
+            ? 'rgba(239, 68, 68, 0.1)' // Brand red with opacity
             : selectedMetric === 'activeAddresses'
             ? 'rgba(34, 197, 94, 0.1)'
             : 'rgba(202, 138, 4, 0.1)'
@@ -324,7 +324,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
                 onClick={() => handleTimeframeChange(7)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 7
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -334,7 +334,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
                 onClick={() => handleTimeframeChange(14)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 14
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -344,7 +344,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
                 onClick={() => handleTimeframeChange(30)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 30
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >

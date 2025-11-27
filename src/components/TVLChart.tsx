@@ -119,7 +119,7 @@ export function TVLChart() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-500" />
+              <TrendingUp className="w-5 h-5 text-[#ef4444]" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Value Locked (TVL)</h3>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -135,7 +135,7 @@ export function TVLChart() {
           <button 
             onClick={fetchData}
             disabled={retrying}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {retrying ? (
               <>
@@ -163,8 +163,8 @@ export function TVLChart() {
         label: 'Total Value Locked (TVL)',
         data: tvlHistory.map(item => item.tvl),
         fill: true,
-        borderColor: isDark ? 'rgb(96, 165, 250)' : 'rgb(59, 130, 246)',
-        backgroundColor: isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+        borderColor: isDark ? 'rgb(239, 68, 68)' : 'rgb(239, 68, 68)', // Brand red #ef4444
+        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)', // Brand red with opacity
         borderWidth: isDark ? 2 : 1.5,
         tension: 0.4,
         pointRadius: 4,
@@ -230,7 +230,7 @@ export function TVLChart() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <TrendingUp className="w-5 h-5 text-[#ef4444]" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Value Locked (TVL)</h3>
           </div>
           {tvlHealth && (
@@ -251,10 +251,10 @@ export function TVLChart() {
         )}
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-6 flex items-start gap-2">
-        <Info className="w-5 h-5 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+      <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 mb-6 flex items-start gap-2">
+        <Info className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444] mt-0.5 flex-shrink-0" />
         <div>
-          <p className="text-sm text-blue-700 dark:text-blue-300">
+          <p className="text-sm text-[#ef4444] dark:text-[#ef4444]">
             This TVL data currently only includes assets locked in the Avalanche C-Chain. Data from other chains will be added in future updates.
           </p>
         </div>

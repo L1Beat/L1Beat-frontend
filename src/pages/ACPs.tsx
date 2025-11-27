@@ -288,7 +288,7 @@ export default function ACPs() {
         return 'bg-green-500 text-white';
       case 'draft':
       case 'proposed':
-        return 'bg-blue-500 text-white';
+        return 'bg-[#ef4444] text-white';
       case 'review':
         return 'bg-yellow-500 text-white';
       case 'withdrawn':
@@ -304,7 +304,7 @@ export default function ACPs() {
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
       case 'Low':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
+        return 'bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]';
       case 'Medium':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'High':
@@ -358,7 +358,7 @@ export default function ACPs() {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
@@ -412,7 +412,7 @@ export default function ACPs() {
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">Total ACPs</div>
                   </div>
-                  <FileText className="w-8 h-8 text-blue-500 opacity-50" />
+                  <FileText className="w-8 h-8 text-[#ef4444] opacity-50" />
                 </div>
               </motion.div>
 
@@ -484,7 +484,7 @@ export default function ACPs() {
                     placeholder="Search ACPs by number, title, or author..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark-700 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-[#ef4444] focus:border-transparent dark:bg-dark-700 dark:text-white"
                   />
                 </div>
               </div>
@@ -496,14 +496,14 @@ export default function ACPs() {
                   onClick={() => setShowFilters(!showFilters)}
                   className={`inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium transition-colors ${
                     showFilters
-                      ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-500/10'
+                      ? 'border-[#ef4444] text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20'
                       : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600'
                   }`}
                 >
                   <Filter className="w-4 h-4 mr-2" />
                   Filters
                   {Object.values(filters).filter(f => f !== '' && f !== null).length > 0 && (
-                    <span className="ml-2 px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full">
+                    <span className="ml-2 px-2 py-0.5 text-xs bg-[#ef4444] text-white rounded-full">
                       {Object.values(filters).filter(f => f !== '' && f !== null).length}
                     </span>
                   )}
@@ -671,7 +671,7 @@ export default function ACPs() {
             {filteredAndSortedACPs.length === 0 && (searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
               <motion.button
                 onClick={clearFilters}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#ef4444] dark:text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-md hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
@@ -717,7 +717,7 @@ export default function ACPs() {
                       <div className="flex flex-col sm:flex-row gap-2 justify-center items-center pt-2">
                         <motion.button
                           onClick={clearFilters}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] rounded-md transition-colors"
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           transition={{ duration: 0.2, ease: "easeOut" }}
@@ -805,7 +805,7 @@ export default function ACPs() {
           {/* Load More / Pagination (if needed) */}
           {filteredAndSortedACPs.length > 0 && filteredAndSortedACPs.length < acps.length && (
             <div className="mt-8 text-center">
-              <button className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <button className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]">
                 Load More
               </button>
             </div>

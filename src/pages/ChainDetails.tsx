@@ -177,7 +177,7 @@ export function ChainDetails() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{error}</h2>
             <button
               onClick={() => navigate('/')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
@@ -274,7 +274,7 @@ export function ChainDetails() {
                         {chain.categories.map(category => (
                           <span
                             key={category}
-                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]"
                           >
                             {category}
                           </span>
@@ -351,10 +351,10 @@ export function ChainDetails() {
 
                 {/* Right Column: Compact Metrics Grid */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700/50">
+                  <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
                     <div className="flex items-center gap-2 mb-1">
-                      <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">TPS</span>
+                      <Activity className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444]" />
+                      <span className="text-xs font-medium text-[#ef4444] dark:text-[#ef4444]">TPS</span>
                     </div>
                     <p className={`text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
                   </div>
@@ -497,7 +497,7 @@ export function ChainDetails() {
             {chain.description && (
               <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4">
                 <div className="flex items-start gap-3">
-                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <Info className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444] mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{chain.description}</p>
                 </div>
               </div>
@@ -520,7 +520,7 @@ export function ChainDetails() {
                       onClick={() => setActiveTab(tab.id as 'validators' | 'metrics')}
                       className={`${
                         activeTab === tab.id
-                          ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/20 dark:border-blue-400 dark:text-blue-400'
+                          ? 'bg-[#ef4444]/10 border-[#ef4444] text-[#ef4444] dark:bg-[#ef4444]/20 dark:border-[#ef4444] dark:text-[#ef4444]'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-dark-700/50'
                       } rounded-lg border-2 py-2 px-3 font-medium text-sm flex flex-col items-center justify-center gap-1 transition-all min-h-[60px]`}
                     >
@@ -555,7 +555,7 @@ export function ChainDetails() {
                         placeholder="Search validators..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-dark-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-dark-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#ef4444] focus:border-[#ef4444] sm:text-sm"
                       />
                     </div>
                   </div>
@@ -586,7 +586,7 @@ export function ChainDetails() {
                               <div className="flex items-center gap-1">
                               Validator
                                 {sortBy === 'address' && (
-                                  <span className="text-blue-500">
+                                  <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
@@ -606,7 +606,7 @@ export function ChainDetails() {
                               <div className="flex items-center gap-1">
                               Stake
                                 {sortBy === 'stake' && (
-                                  <span className="text-blue-500">
+                                  <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
@@ -626,7 +626,7 @@ export function ChainDetails() {
                               <div className="flex items-center gap-1">
                               Avg Validator Uptime
                                 {sortBy === 'uptime' && (
-                                  <span className="text-blue-500">
+                                  <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
@@ -713,7 +713,7 @@ export function ChainDetails() {
                       <div className="px-6 py-4 bg-gray-50 dark:bg-dark-700/50 border-t border-gray-200 dark:border-gray-700">
                         <button
                           onClick={() => setShowAllValidators(true)}
-                          className="w-full text-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium py-2 transition-colors"
+                          className="w-full text-center text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] text-sm font-medium py-2 transition-colors"
                         >
                           Show All Validators ({filteredValidators.length})
                         </button>

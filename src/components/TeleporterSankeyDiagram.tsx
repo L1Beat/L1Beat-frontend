@@ -644,7 +644,7 @@ export function TeleporterSankeyDiagram() {
           </p>
           <button 
             onClick={fetchData}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
           >
             <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
             Retry
@@ -670,7 +670,7 @@ export function TeleporterSankeyDiagram() {
               onClick={() => setTimeframe('daily')}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'daily'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-[#ef4444] text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
               }`}
             >
@@ -680,7 +680,7 @@ export function TeleporterSankeyDiagram() {
               onClick={() => setTimeframe('weekly')}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'weekly'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-[#ef4444] text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
               }`}
             >
@@ -762,13 +762,13 @@ export function TeleporterSankeyDiagram() {
       {/* Stats card at the bottom */}
       <div className="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         {/* Message stats card */}
-        <div className="flex items-center bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg overflow-hidden shadow-lg">
+        <div className="flex items-center bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-lg overflow-hidden shadow-lg">
           <div className="px-3 py-2 flex items-center gap-2">
             <div className="bg-white/20 rounded-full p-1.5">
               <MessageSquare className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Total Messages</span>
+              <span className="text-xs text-white/90 font-medium">Total Messages</span>
               <span className="text-lg font-bold text-white">{formatNumber(data.metadata.totalMessages)}</span>
             </div>
           </div>
@@ -778,7 +778,7 @@ export function TeleporterSankeyDiagram() {
               <Activity className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Timeframe</span>
+              <span className="text-xs text-white/90 font-medium">Timeframe</span>
               <span className="text-sm font-bold text-white">{timeframe === 'daily' ? 'Daily' : 'Weekly'}</span>
             </div>
           </div>

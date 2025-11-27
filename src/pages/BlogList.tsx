@@ -201,7 +201,7 @@ export function BlogList() {
 
             <div className="flex-1">
                 {/* Hero Section */}
-                <div className="relative bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 overflow-hidden">
+                <div className="relative bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#b91c1c] overflow-hidden">
                     {/* Background Effects */}
                     <div className="absolute inset-0 bg-black/10"></div>
                     <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http://www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.03%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
@@ -209,7 +209,7 @@ export function BlogList() {
                     {/* Floating Elements */}
                     <div className="absolute top-20 left-10 w-32 h-32 bg-white/10 rounded-full blur-xl animate-pulse"></div>
                     <div className="absolute bottom-20 right-10 w-24 h-24 bg-purple-300/20 rounded-full blur-lg animate-bounce"></div>
-                    <div className="absolute top-1/2 left-1/3 w-16 h-16 bg-blue-300/15 rounded-full blur-md animate-ping"></div>
+                    <div className="absolute top-1/2 left-1/3 w-16 h-16 bg-[#ef4444]/15 rounded-full blur-md animate-ping"></div>
                     
                     <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                         <div className="text-center">
@@ -227,7 +227,7 @@ export function BlogList() {
                             </h1>
                             
                             <p className="text-xl md:text-2xl text-white/90 max-w-3xl mx-auto leading-relaxed mb-10 animate-[fadeIn_1s_ease-out_0.8s_both]">
-                                Deep dives into <span className="font-semibold text-blue-200">Avalanche L1s</span>, analytics, and the <span className="font-semibold text-purple-200">future of finance</span>.
+                                Deep dives into <span className="font-semibold text-white/90">Avalanche L1s</span>, analytics, and the <span className="font-semibold text-white/80">future of finance</span>.
                             </p>
 
                             {/* Stats */}
@@ -279,12 +279,12 @@ export function BlogList() {
                             <div className="flex-1">
                                 <div className="relative overflow-hidden">
                                     {/* Search Container */}
-                                    <div className="h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 focus-within:border-blue-400 dark:focus-within:border-blue-500 shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
+                                    <div className="h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 focus-within:border-[#ef4444] dark:focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
 
                                         {/* Animated Gradient Background */}
                                         {searchTerm && (
                                             <motion.div
-                                                className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-indigo-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-indigo-500/20"
+                                                className="absolute inset-0 bg-gradient-to-r from-[#ef4444]/10 via-[#dc2626]/10 to-[#b91c1c]/10 dark:from-[#ef4444]/20 dark:via-[#dc2626]/20 dark:to-[#b91c1c]/20"
                                                 animate={{
                                                     backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"]
                                                 }}
@@ -346,7 +346,7 @@ export function BlogList() {
                                     <motion.button
                                         onClick={() => handleTagFilter(null)}
                                         className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${!selectedTag
-                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                                            ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                                         }`}
                                         whileHover={{ scale: 1.05 }}
@@ -360,7 +360,7 @@ export function BlogList() {
                                             key={tag.name}
                                             onClick={() => handleTagFilter(tag.name)}
                                             className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${selectedTag === tag.name
-                                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                                                ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
                                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                                             }`}
                                             whileHover={{ scale: 1.05 }}
@@ -397,7 +397,7 @@ export function BlogList() {
                                 >
                                     <div className="flex items-center gap-4 mb-8">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
+                                            <div className="w-3 h-3 bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-full"></div>
                                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Featured Article</h2>
                                         </div>
                                         <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
@@ -412,9 +412,9 @@ export function BlogList() {
                                 <section>
                                     {selectedTag && (
                                         <div className="flex justify-end mb-8">
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-500/20 rounded-full">
-                                                <Tag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                                <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                            <div className="flex items-center gap-2 px-4 py-2 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-full">
+                                                <Tag className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444]" />
+                                                <span className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">
                                                     Filtered by: {selectedTag}
                                                 </span>
                                             </div>
@@ -425,7 +425,7 @@ export function BlogList() {
                                         {/* Section Header */}
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-2.5 h-2.5 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full"></div>
+                                                <div className="w-2.5 h-2.5 bg-gradient-to-r from-[#dc2626] to-[#ef4444] rounded-full"></div>
                                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Articles</h2>
                                             </div>
                                             <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
@@ -456,7 +456,7 @@ export function BlogList() {
                                     <button
                                         onClick={loadMore}
                                         disabled={loadingMore}
-                                        className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                                        className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-[#ef4444] to-[#dc2626] hover:from-[#dc2626] hover:to-[#b91c1c] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                                     >
                                         {loadingMore ? (
                                             <>
@@ -487,8 +487,8 @@ export function BlogList() {
                                 animate={{ scale: 1 }}
                                 transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
                             >
-                                <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-indigo-200 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-3xl flex items-center justify-center shadow-lg">
-                                    <Archive className="w-16 h-16 text-blue-500 dark:text-blue-400" />
+                                <div className="w-32 h-32 bg-gradient-to-br from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/30 dark:to-[#dc2626]/30 rounded-3xl flex items-center justify-center shadow-lg">
+                                    <Archive className="w-16 h-16 text-[#ef4444] dark:text-[#ef4444]" />
                                 </div>
                                 <motion.div
                                     className="absolute -top-2 -right-2 w-10 h-10 bg-orange-400 rounded-full flex items-center justify-center shadow-lg"
@@ -538,7 +538,7 @@ export function BlogList() {
                                                     setSearchTerm('');
                                                     handleTagFilter(null);
                                                 }}
-                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ef4444] to-[#dc2626] hover:from-[#dc2626] hover:to-[#b91c1c] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                                                 whileHover={{ scale: 1.05, y: -2 }}
                                                 whileTap={{ scale: 0.95 }}
                                             >
@@ -572,12 +572,12 @@ export function BlogList() {
                                     {/* Helpful suggestions when there are no results */}
                                     {(searchTerm || selectedTag) && posts.length > 0 && (
                                         <motion.div
-                                            className="mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-2xl"
+                                            className="mt-8 p-6 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-2xl"
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ duration: 0.4, delay: 1, ease: "easeOut" }}
                                         >
-                                            <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-3">
+                                            <h4 className="text-lg font-semibold text-[#ef4444] dark:text-[#ef4444] mb-3">
                                                 Try browsing these popular topics:
                                             </h4>
                                             <div className="flex flex-wrap justify-center gap-2">
@@ -588,7 +588,7 @@ export function BlogList() {
                                                             setSearchTerm('');
                                                             handleTagFilter(tag.name);
                                                         }}
-                                                        className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-800/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                                                        className="px-3 py-1.5 text-sm bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
                                                         whileHover={{ scale: 1.05 }}
                                                         whileTap={{ scale: 0.95 }}
                                                     >

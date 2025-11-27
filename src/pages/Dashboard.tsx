@@ -12,7 +12,6 @@ import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
 import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
-import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
@@ -159,7 +158,7 @@ export function Dashboard() {
               disabled={retrying}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {retrying ? (
                 <>
@@ -180,14 +179,14 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background text-foreground">
       <StatusBar health={health} />
       
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-12">
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Network className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+            <h2 className="text-xl font-semibold">
               Avalanche Interchain Messaging
             </h2>
           </div>
@@ -199,14 +198,10 @@ export function Dashboard() {
         </div>
 
         <div className="mb-8">
-          <AvalancheNetworkMetrics />
-        </div>
-
-        <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <LayoutGrid className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <h2 className="text-xl font-semibold">
                 Active Chains
               </h2>
               <AnimatePresence>
@@ -234,7 +229,7 @@ export function Dashboard() {
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-48 pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-48 pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:border-[#ef4444]"
                 />
               </div>
 
@@ -254,7 +249,7 @@ export function Dashboard() {
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0, opacity: 0 }}
                       transition={{ duration: 0.2 }}
-                      className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
+                      className="ml-1 px-2 py-0.5 text-xs font-semibold bg-[#ef4444] text-white rounded-full"
                     >
                       {[selectedCategory, showChainsWithoutValidators].filter(Boolean).length}
                     </motion.span>

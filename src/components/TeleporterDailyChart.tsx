@@ -420,10 +420,10 @@ export function AvalancheNetworkMetrics() {
 
   if (!data.length) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6">
+      <div className="bg-card rounded-xl border border-border p-6">
         <div className="flex items-center gap-2 mb-6">
-          <BarChart3 className="w-5 h-5 text-blue-500" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Avalanche Network Metrics</h3>
+          <BarChart3 className="w-5 h-5 text-[#ef4444]" />
+          <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
         </div>
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
@@ -432,7 +432,7 @@ export function AvalancheNetworkMetrics() {
           <button 
             onClick={() => fetchData()}
             disabled={retrying}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {retrying ? (
               <>
@@ -565,15 +565,15 @@ export function AvalancheNetworkMetrics() {
   const latestData = data[data.length - 1];
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Avalanche Network Metrics</h3>
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="w-5 h-5 text-[#ef4444]" />
+              <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-muted-foreground">
               {currentMetric.description}
             </p>
           </div>
@@ -583,7 +583,7 @@ export function AvalancheNetworkMetrics() {
             <div className="relative">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors min-w-[180px] justify-between"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-accent rounded-lg text-sm font-medium transition-colors min-w-[180px] justify-between"
               >
                 <div className="flex items-center gap-2">
                   <currentMetric.icon className="w-4 h-4" />
@@ -593,17 +593,17 @@ export function AvalancheNetworkMetrics() {
               </button>
               
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-dark-800 rounded-lg shadow-lg border border-gray-200 dark:border-dark-700 py-1 z-10">
+                <div className="absolute right-0 mt-1 w-64 bg-card rounded-lg shadow-lg border border-border py-1 z-10">
                   {METRICS.map(metric => {
                     const Icon = metric.icon;
                     return (
                       <button
                         key={metric.id}
                         onClick={() => handleMetricChange(metric.id)}
-                        className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-dark-700/50 transition-colors ${
+                        className={`w-full text-left px-4 py-3 text-sm hover:bg-accent transition-colors ${
                           selectedMetric === metric.id
-                            ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                            : 'text-gray-700 dark:text-gray-200'
+                            ? 'bg-[#ef4444]/10 text-[#ef4444]'
+                            : ''
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -626,7 +626,7 @@ export function AvalancheNetworkMetrics() {
                 onClick={() => handleTimeframeChange(7)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 7
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -636,7 +636,7 @@ export function AvalancheNetworkMetrics() {
                 onClick={() => handleTimeframeChange(14)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 14
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -646,7 +646,7 @@ export function AvalancheNetworkMetrics() {
                 onClick={() => handleTimeframeChange(30)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 30
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -656,7 +656,7 @@ export function AvalancheNetworkMetrics() {
                 onClick={() => handleTimeframeChange(360)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 360
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-[#ef4444] text-white'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
                 }`}
               >
@@ -667,24 +667,24 @@ export function AvalancheNetworkMetrics() {
         </div>
 
         {/* Current Value Display */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-500/20">
+        <div className="bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
                 <currentMetric.icon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                <p className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">
                   Current {currentMetric.name}
                 </p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                <p className="text-2xl font-bold text-[#ef4444] dark:text-[#ef4444]">
                   {latestData ? currentMetric.valueFormatter(latestData.value) : '0'} {currentMetric.unit}
                 </p>
               </div>
             </div>
             {latestData && (
               <div className="text-right">
-                <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm">
+                <div className="flex items-center gap-1 text-[#ef4444] dark:text-[#ef4444] text-sm">
                   <Clock className="w-4 h-4" />
                   <span>
                     {format(parseISO(latestData.date), 'MMM d, yyyy')}

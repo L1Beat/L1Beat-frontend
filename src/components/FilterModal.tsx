@@ -63,7 +63,7 @@ export function FilterModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <Filter className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Filter Chains
               </h2>
@@ -88,7 +88,7 @@ export function FilterModal({
                   onClick={() => onCategoryChange('')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     selectedCategory === ''
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#ef4444] text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
                 >
@@ -100,7 +100,7 @@ export function FilterModal({
                     onClick={() => onCategoryChange(selectedCategory === cat ? '' : cat)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                       selectedCategory === cat
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[#ef4444] text-white'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
@@ -120,7 +120,7 @@ export function FilterModal({
                   type="checkbox"
                   checked={showChainsWithoutValidators}
                   onChange={(e) => onShowChainsWithoutValidatorsChange(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 cursor-pointer"
+                  className="w-4 h-4 text-[#ef4444] border-gray-300 rounded focus:ring-[#ef4444] dark:border-gray-600 dark:bg-gray-700 cursor-pointer"
                 />
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-gray-500" />
@@ -148,7 +148,7 @@ export function FilterModal({
               onClick={onClose}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="px-6 py-2 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:ring-offset-2"
             >
               Apply
             </motion.button>

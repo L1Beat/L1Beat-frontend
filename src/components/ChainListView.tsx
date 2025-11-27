@@ -102,8 +102,8 @@ export function ChainListView({ chains }: ChainListViewProps) {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Server className="w-3 h-3 text-blue-500 dark:text-blue-400" />
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                    <Server className="w-3 h-3 text-[#ef4444] dark:text-[#ef4444]" />
+                    <span className="text-xs font-medium text-[#ef4444] dark:text-[#ef4444]">
                       {chain.validators?.length || 0}
                     </span>
                   </div>
