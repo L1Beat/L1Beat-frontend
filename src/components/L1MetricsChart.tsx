@@ -224,72 +224,6 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
     setTimeframe(newTimeframe);
-    setLoading(true);
-    setError(null);
-    
-    const promises: Promise<any>[] = [];
-    
-    if (chainId) {
-      promises.push(getTPSHistory(newTimeframe, chainId));
-      promises.push(getCumulativeTxCount(chainId, newTimeframe));
-      if (evmChainId && selectedMetric === 'activeAddresses') {
-        promises.push(getDailyActiveAddresses(evmChainId, newTimeframe));
-      } else if (selectedMetric === 'activeAddresses') {
-        promises.push(getDailyActiveAddresses(chainId, newTimeframe));
-      }
-    } else {
-      promises.push(getTPSHistory(newTimeframe));
-      promises.push(getNetworkTPS());
-    }
-    
-    if (chainId) {
-      Promise.all(promises).then((results) => {
-        const [tpsData, txData, activeAddressesData] = results;
-        // Use fallback data if empty
-        const finalTpsData = tpsData && tpsData.length > 0
-          ? tpsData.sort((a, b) => a.timestamp - b.timestamp)
-          : generateFallbackData(newTimeframe);
-        setTpsHistory(finalTpsData);
-
-        const finalTxData = txData && txData.length > 0
-          ? txData
-          : generateFallbackTxData(newTimeframe);
-        setTxHistory(finalTxData);
-
-        if ((evmChainId || selectedMetric === 'activeAddresses') && activeAddressesData) {
-          const finalActiveAddressData = activeAddressesData.length > 0
-            ? activeAddressesData
-            : generateFallbackActiveAddressesData(newTimeframe);
-          setActiveAddressesHistory(finalActiveAddressData);
-        }
-        setError(null);
-        setLoading(false);
-      }).catch(err => {
-        console.error('Error in timeframe change:', err);
-        // Use fallback data on error
-        setTpsHistory(generateFallbackData(newTimeframe));
-        setTxHistory(generateFallbackTxData(newTimeframe));
-        setActiveAddressesHistory(generateFallbackActiveAddressesData(newTimeframe));
-        setError(null);
-        setLoading(false);
-      });
-    } else {
-      Promise.all(promises).then(([history, current]) => {
-        const finalHistory = history && history.length > 0
-          ? history.sort((a, b) => a.timestamp - b.timestamp)
-          : generateFallbackData(newTimeframe);
-        setTpsHistory(finalHistory);
-        setNetworkTPS(current);
-        setError(null);
-        setLoading(false);
-      }).catch(err => {
-        console.error('Error in network timeframe change:', err);
-        // Use fallback data on error
-        setTpsHistory(generateFallbackData(newTimeframe));
-        setError(null);
-        setLoading(false);
-      });
-    }
   };
 
   return (
@@ -298,7 +232,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId }: L1MetricsChar
         title={chainId ? `${chainName || 'Chain'} Metrics` : 'Network-wide Metrics'}
         icon={<TrendingUp className="w-5 h-5 text-[#ef4444]" />}
         data={getChartData()}
-        loading={loading}
+        loading={loading && getChartData().length === 0 && (tpsHistory.length === 0 || (chainId && txHistory.length === 0))}
         error={error}
         onRetry={() => handleTimeframeChange(timeframe)}
         valueFormatter={formatValue}

@@ -54,11 +54,11 @@ const METRICS = [
     description: 'Total messages sent across the network daily',
     icon: MessageSquare,
     color: {
-      light: 'rgb(99, 102, 241)',
-      dark: 'rgb(129, 140, 248)',
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
       fill: {
-        light: 'rgba(99, 102, 241, 0.1)',
-        dark: 'rgba(129, 140, 248, 0.2)'
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
       }
     },
     valueFormatter: (value: number) => value.toLocaleString(),
@@ -70,11 +70,11 @@ const METRICS = [
     description: 'Total unique active addresses across all chains daily',
     icon: Users,
     color: {
-      light: 'rgb(34, 197, 94)',
-      dark: 'rgb(74, 222, 128)',
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
       fill: {
-        light: 'rgba(34, 197, 94, 0.1)',
-        dark: 'rgba(74, 222, 128, 0.2)'
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
       }
     },
     valueFormatter: (value: number) => {
@@ -94,11 +94,11 @@ const METRICS = [
     description: 'Total transactions processed across all chains',
     icon: BarChart3,
     color: {
-      light: 'rgb(168, 85, 247)',
-      dark: 'rgb(196, 181, 253)',
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
       fill: {
-        light: 'rgba(168, 85, 247, 0.1)',
-        dark: 'rgba(196, 181, 253, 0.2)'
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
       }
     },
     valueFormatter: (value: number) => {
@@ -396,18 +396,14 @@ export function AvalancheNetworkMetrics() {
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
     setTimeframe(newTimeframe);
-    // Don't show loading spinner for timeframe changes to maintain smooth transitions
-    fetchData(newTimeframe, selectedMetric, true);
   };
 
   const handleMetricChange = (metric: MetricType) => {
     setSelectedMetric(metric);
     setIsDropdownOpen(false);
-    // Show loading for metric changes since it's a different data type
-    fetchData(timeframe, metric, false);
   };
 
-  if (loading) {
+  if (loading && data.length === 0) {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">

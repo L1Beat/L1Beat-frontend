@@ -399,7 +399,7 @@ export default function ACPs() {
           {stats && (
             <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
               <motion.div
-                className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
@@ -407,17 +407,17 @@ export default function ACPs() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-[#ef4444]">
                       {stats.total}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Total ACPs</div>
+                    <div className="text-sm font-medium text-[#ef4444]/80">Total ACPs</div>
                   </div>
-                  <FileText className="w-8 h-8 text-[#ef4444] opacity-50" />
+                  <FileText className="w-8 h-8 text-[#ef4444]" />
                 </div>
               </motion.div>
 
               <motion.div
-                className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700/50"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
@@ -425,17 +425,17 @@ export default function ACPs() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                       {stats.totalAuthors || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Contributors</div>
+                    <div className="text-sm font-medium text-green-600/80 dark:text-green-400/80">Contributors</div>
                   </div>
-                  <Users className="w-8 h-8 text-green-500 opacity-50" />
+                  <Users className="w-8 h-8 text-green-500" />
                 </div>
               </motion.div>
               
               <motion.div
-                className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700/50"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
@@ -443,17 +443,17 @@ export default function ACPs() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                       {stats.implementationProgress?.deployed || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Deployed</div>
+                    <div className="text-sm font-medium text-blue-600/80 dark:text-blue-400/80">Deployed</div>
                   </div>
-                  <CheckCircle className="w-8 h-8 text-green-500 opacity-50" />
+                  <CheckCircle className="w-8 h-8 text-blue-500" />
                 </div>
               </motion.div>
 
               <motion.div
-                className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-700/50"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
@@ -461,30 +461,30 @@ export default function ACPs() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                       {stats.recentlyUpdated || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Recently Updated</div>
+                    <div className="text-sm font-medium text-yellow-600/80 dark:text-yellow-400/80">Recently Updated</div>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-yellow-500 opacity-50" />
+                  <TrendingUp className="w-8 h-8 text-yellow-500" />
                 </div>
               </motion.div>
             </div>
           )}
 
           {/* Controls Bar */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               {/* Search Bar */}
               <div className="flex-1 max-w-xl">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-[#ef4444] transition-colors w-5 h-5" />
                   <input
                     type="text"
                     placeholder="Search ACPs by number, title, or author..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-[#ef4444] focus:border-transparent dark:bg-dark-700 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/50 dark:bg-dark-900/50 focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all dark:text-white"
                   />
                 </div>
               </div>

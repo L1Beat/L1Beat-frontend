@@ -425,28 +425,28 @@ export function BlogPost() {
                     )}
 
                     {/* Meta Info Card */}
-                    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+                    <div className="bg-card border border-border rounded-2xl p-6 mb-8">
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                             {/* Left side - Meta info */}
-                            <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg flex items-center justify-center">
-                                        <Calendar className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444]" />
+                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                        <Calendar className="w-4 h-4 text-[#ef4444]" />
                                     </div>
                                     <span className="font-medium">{formattedDate}</span>
                                 </div>
                                 
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-green-100 dark:bg-green-500/20 rounded-lg flex items-center justify-center">
-                                        <Clock className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                        <Clock className="w-4 h-4 text-[#ef4444]" />
                                     </div>
                                     <span className="font-medium">{readTime} min read</span>
                                 </div>
                                 
                                 {post.views && (
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                            <Eye className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                        <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                            <Eye className="w-4 h-4 text-[#ef4444]" />
                                         </div>
                                         <span className="font-medium">{post.views.toLocaleString()} views</span>
                                     </div>
@@ -454,11 +454,11 @@ export function BlogPost() {
                                 
                                 {post.author && (
                                     <div className="flex items-center gap-2">
-                                        <span className="text-gray-600 dark:text-gray-400">By</span>
+                                        <span className="text-muted-foreground">By</span>
                                         <AuthorCard 
                                             authorName={post.author}
                                             authorProfiles={post.authorProfiles}
-                                            className="font-medium"
+                                            className="font-medium hover:text-[#ef4444] transition-colors"
                                         />
                                     </div>
                                 )}
@@ -468,7 +468,7 @@ export function BlogPost() {
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => sharePost('twitter')}
-                                    className="group flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-200 transform hover:scale-105"
+                                    className="group flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ef4444] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 border border-[#ef4444]/20 rounded-lg transition-all duration-200 transform hover:scale-105"
                                 >
                                     <XIcon className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200" />
                                     Share

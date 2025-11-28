@@ -120,35 +120,36 @@ export function TeleporterSankeyDiagram() {
 
   // Generate a consistent color for a chain
   const getChainColor = useCallback((chainName: string) => {
-    // Predefined colors for common chains
-    const colorMap: Record<string, string> = {
-      'Avalanche (C-Chain)': '#E84142', // Avalanche red
-      'C-Chain': '#E84142', // Avalanche red
-      'Dexalot L1': '#2775CA', // Blue
-      'Dexalot': '#2775CA', // Blue
-      'zeroone Mainnet L1': '#8A2BE2', // Purple
-      'ZeroOne': '#8A2BE2', // Purple
-      'Lamina1 L1': '#00BFFF', // Deep sky blue
-      'Lamina1': '#00BFFF', // Deep sky blue
-      'PLYR PHI L1': '#32CD32', // Lime green
-      'PLYR': '#32CD32', // Lime green
-    };
+    // Target strict brand colors
+    // C-Chain: Primary Red (#ef4444)
+    // Others: Neutral/Grayscale to highlight C-Chain's centrality
     
-    // Return predefined color if available
-    if (colorMap[chainName]) {
-      return colorMap[chainName];
+    const name = chainName.toLowerCase();
+    
+    if (name.includes('c-chain') || name.includes('avalanche')) {
+      return '#ef4444'; // Brand Red
     }
-    
-    // Hash the chain name to get a consistent hue
+
+    // Generate consistent neutral/slate colors for other chains
+    // Use a deterministic hash to pick from a slate palette
     const hash = chainName.split('').reduce((acc, char) => {
       return char.charCodeAt(0) + ((acc << 5) - acc);
     }, 0);
     
-    const h = Math.abs(hash) % 360;
-    const s = '80%';
-    const l = '60%';
+    // Palette of neutral colors that look good on dark background
+    // Ranging from Slate-400 to Slate-600 and Zinc-400 to Zinc-600
+    const neutrals = [
+      '#94a3b8', // slate-400
+      '#64748b', // slate-500
+      '#475569', // slate-600
+      '#a1a1aa', // zinc-400
+      '#71717a', // zinc-500
+      '#52525b', // zinc-600
+      '#9ca3af', // gray-400
+      '#6b7280', // gray-500
+    ];
     
-    return `hsl(${h}, ${s}, ${l})`;
+    return neutrals[Math.abs(hash) % neutrals.length];
   }, []);
 
 

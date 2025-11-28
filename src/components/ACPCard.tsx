@@ -131,7 +131,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
       className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer group h-full flex flex-col"
       whileHover={{
         boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
-        borderColor: "rgb(96 165 250)",
+        borderColor: "#ef4444",
         y: -4,
         scale: 1.02
       }}

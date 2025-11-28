@@ -633,51 +633,49 @@ export function NetworkTopologyGraph() {
       </div>
       
       {/* Updated legend with network TPS */}
-      <div className="mt-4 flex justify-between items-center">
+      <div className="mt-4 flex justify-between items-center gap-4">
         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <Server className="w-4 h-4" />
-          <span>Active chains: <span className="font-semibold">{chains.length}</span></span>
+          <span>Active chains: <span className="font-semibold text-gray-900 dark:text-white">{chains.length}</span></span>
         </div>
-        
-        {/* Network TPS display */}
-        {networkTPS && (
-          <div className="flex items-center gap-4">
-            {/* Current Network TPS */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-lg shadow-sm">
-              <Activity className="w-4 h-4 text-white" />
-              <div className="flex flex-col">
-                <span className="text-xs text-white/90 font-medium">Network TPS</span>
-                <span className="text-sm font-bold text-white">
-                  {formatTPS(networkTPS.totalTps)}
-                </span>
-              </div>
-            </div>
-            
-            {/* Max TPS Observed */}
-            {maxTPSData && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg shadow-sm">
-                <Zap className="w-4 h-4 text-white" />
+
+        {/* Network Performance Stats - Merged Card */}
+        {(networkTPS || maxTPSData) && (
+          <div className="flex items-center bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-lg overflow-hidden shadow-lg">
+            {/* Current TPS */}
+            {networkTPS && (
+              <div className="px-3 py-2 flex items-center gap-2">
+                <div className="bg-white/20 rounded-full p-1.5">
+                  <Activity className="w-4 h-4 text-white" />
+                </div>
                 <div className="flex flex-col">
-                  <span className="text-xs text-emerald-100 font-medium">Max TPS (7d)</span>
+                  <span className="text-xs text-white/90 font-medium">Network TPS</span>
+                  <span className="text-sm font-bold text-white">
+                    {formatTPS(networkTPS.totalTps)}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Divider if both exist */}
+            {networkTPS && maxTPSData && (
+              <div className="h-full w-px bg-white/20"></div>
+            )}
+
+            {/* Max TPS */}
+            {maxTPSData && (
+              <div className="px-3 py-2 flex items-center gap-2">
+                <div className="bg-white/20 rounded-full p-1.5">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-white/90 font-medium">Max TPS (7d)</span>
                   <span className="text-sm font-bold text-white">
                     {formatTPS(maxTPSData.maxTps)}
                   </span>
                 </div>
               </div>
             )}
-          </div>
-        )}
-        
-        {/* Fallback if only maxTPS is available */}
-        {!networkTPS && maxTPSData && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg shadow-sm">
-            <Activity className="w-4 h-4 text-white" />
-            <div className="flex flex-col">
-              <span className="text-xs text-emerald-100 font-medium">Max TPS (7d)</span>
-              <span className="text-sm font-bold text-white">
-                {formatTPS(maxTPSData.maxTps)}
-              </span>
-            </div>
           </div>
         )}
       </div>

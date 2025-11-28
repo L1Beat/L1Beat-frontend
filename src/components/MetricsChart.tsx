@@ -73,8 +73,8 @@ export function MetricsChart({
   const isDark = theme === 'dark';
 
   const defaultColors = {
-    line: isDark ? 'rgb(129, 140, 248)' : 'rgb(99, 102, 241)',
-    fill: isDark ? 'rgba(129, 140, 248, 0.2)' : 'rgba(99, 102, 241, 0.1)'
+    line: 'rgb(239, 68, 68)',
+    fill: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)'
   };
 
   const chartColors = color || defaultColors;

@@ -1,5 +1,5 @@
 import { Chain } from '../types';
-import { Activity, Server, Plus, Zap } from 'lucide-react';
+import { Server, Zap, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -31,26 +31,16 @@ export function ChainListView({ chains }: ChainListViewProps) {
     return 'text-red-500 dark:text-red-400';
   };
 
-  const formatCumulativeTxCount = (cumulativeTxCount: Chain['cumulativeTxCount']) => {
-    if (!cumulativeTxCount || typeof cumulativeTxCount.value !== 'number') return 'N/A';
-    const count = cumulativeTxCount.value;
-    if (count >= 1e9) return `${(count / 1e9).toFixed(1)}B`;
-    if (count >= 1e6) return `${(count / 1e6).toFixed(1)}M`;
-    if (count >= 1e3) return `${(count / 1e3).toFixed(1)}K`;
-    return count.toString();
-  };
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {chains.map((chain, index) => {
         const tpsValue = formatTPS(chain.tps);
         const tpsColor = getTPSColor(tpsValue);
-        const cumulativeTxValue = formatCumulativeTxCount(chain.cumulativeTxCount);
         
         return (
           <motion.div
             key={chain.chainId}
-            className="bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 cursor-pointer group"
+            className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 p-4 cursor-pointer group transition-all duration-300 hover:border-[#ef4444]/50 hover:shadow-[0_10px_25px_-5px_rgba(239,68,68,0.1),0_8px_10px_-6px_rgba(239,68,68,0.05)]"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
@@ -61,8 +51,6 @@ export function ChainListView({ chains }: ChainListViewProps) {
             whileHover={{
               y: -4,
               scale: 1.02,
-              boxShadow: "0 10px 25px -5px rgb(59 130 246 / 0.1), 0 10px 10px -5px rgb(59 130 246 / 0.04)",
-              borderColor: "rgb(96 165 250)"
             }}
             whileTap={{ scale: 0.98 }}
             onClick={() => handleNavigate(chain.chainId)}
@@ -72,7 +60,7 @@ export function ChainListView({ chains }: ChainListViewProps) {
                 <motion.img
                   src={chain.chainLogoUri}
                   alt={`${chain.chainName} logo`}
-                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                  className="w-10 h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
                   whileHover={{ scale: 1.1 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
                   onError={(e) => {
@@ -84,33 +72,35 @@ export function ChainListView({ chains }: ChainListViewProps) {
                 <motion.img
                   src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
                   alt={`${chain.chainName} logo`}
-                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                  className="w-10 h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
                   whileHover={{ scale: 1.1 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
                 />
               )}
               
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate mb-1.5">
                   {chain.chainName}
                 </h3>
-                <div className="flex items-center gap-4 mt-1">
-                  <div className="flex items-center gap-1">
-                    <Zap className={`w-3 h-3 ${tpsColor}`} />
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <div className="flex items-center gap-1 min-w-[70px]">
+                    <Zap className={`w-3 h-3 ${tpsColor} flex-shrink-0`} />
                     <span className={`text-xs font-medium ${tpsColor}`}>
                       {tpsValue} TPS
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Server className="w-3 h-3 text-[#ef4444] dark:text-[#ef4444]" />
-                    <span className="text-xs font-medium text-[#ef4444] dark:text-[#ef4444]">
+                  <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                  <div className="flex items-center gap-1 min-w-[30px]">
+                    <Server className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                       {chain.validators?.length || 0}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Plus className="w-3 h-3 text-purple-500 dark:text-purple-400" />
-                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {cumulativeTxValue}
+                  <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+                  <div className="flex items-center gap-1 cursor-help" title="Coming Soon">
+                    <Shield className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-500/20">
+                      STAGE
                     </span>
                   </div>
                 </div>

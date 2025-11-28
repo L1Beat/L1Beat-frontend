@@ -142,37 +142,40 @@ export function StakeDistributionChart({ validators }: StakeDistributionChartPro
           <div className="space-y-6">
             {/* Statistics Cards */}
             <div className="grid grid-cols-1 gap-4">
-              <div className="bg-gradient-to-br from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/30 dark:to-[#dc2626]/30 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+              {/* Total Stake - Primary Brand Color */}
+              <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
                 <div className="flex items-center gap-3 mb-2">
-                  <Coins className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
-                  <span className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">Total Stake</span>
+                  <Coins className="w-5 h-5 text-[#ef4444]" />
+                  <span className="text-sm font-medium text-[#ef4444]">Total Stake</span>
                 </div>
-                <p className="text-2xl font-bold text-[#ef4444] dark:text-[#ef4444]">
+                <p className="text-2xl font-bold text-[#ef4444]">
                   {formatStakeNumber(totalStake)}
                 </p>
-                <p className="text-xs text-[#ef4444] dark:text-[#ef4444]">tokens</p>
+                <p className="text-xs text-[#ef4444]/80">tokens</p>
               </div>
 
-              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-lg p-4 border border-green-200 dark:border-green-700/50">
+              {/* Validators - Neutral/Dark Theme */}
+              <div className="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
                 <div className="flex items-center gap-3 mb-2">
-                  <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  <span className="text-sm font-medium text-green-700 dark:text-green-300">Validators</span>
+                  <Users className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Validators</span>
                 </div>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {validators.length}
                 </p>
-                <p className="text-xs text-green-600 dark:text-green-400">total nodes</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">total nodes</p>
               </div>
 
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-lg p-4 border border-purple-200 dark:border-purple-700/50">
+              {/* Average Stake - Neutral/Dark Theme */}
+              <div className="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
                 <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Average Stake</span>
+                  <TrendingUp className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Average Stake</span>
                 </div>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {formatStakeNumber(totalStake / validators.length)}
                 </p>
-                <p className="text-xs text-purple-600 dark:text-purple-400">tokens</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">tokens</p>
               </div>
             </div>
           </div>
