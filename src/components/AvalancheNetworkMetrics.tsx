@@ -15,9 +15,8 @@ import {
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users } from 'lucide-react';
-import { getChains } from '../api';
-import { getCumulativeTxCount } from '../api';
+import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users, Activity, Fuel, Coins } from 'lucide-react';
+import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getNetworkFeesPaidHistory } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
@@ -45,12 +44,166 @@ interface MetricData {
   };
 }
 
-type MetricType = 'dailyMessageVolume' | 'dailyActiveAddresses' | 'cumulativeTransactions';
+type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'feesPaid';
 
 const METRICS = [
   { 
+    id: 'networkTPS' as const, 
+    name: 'Network TPS',
+    description: 'Average transactions per second across the entire network',
+    icon: Activity,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => value.toFixed(2),
+    unit: 'TPS'
+  },
+  { 
+    id: 'dailyActiveAddresses' as const, 
+    name: 'Daily Active Addresses',
+    description: 'Total unique active addresses across all chains daily',
+    icon: Users,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => {
+      if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+      }
+      if (value >= 1_000) {
+        return `${(value / 1_000).toFixed(1)}K`;
+      }
+      return value.toLocaleString();
+    },
+    unit: 'addresses'
+  },
+  {
+    id: 'dailyTxCount' as const,
+    name: 'Daily Transaction Count',
+    description: 'Total transactions processed across the entire network daily',
+    icon: BarChart3,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => {
+      if (value >= 1_000_000_000) {
+        return `${(value / 1_000_000_000).toFixed(2)}B`;
+      }
+      if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+      }
+      if (value >= 1_000) {
+        return `${(value / 1_000).toFixed(1)}K`;
+      }
+      return value.toLocaleString();
+    },
+    unit: 'transactions'
+  },
+  {
+    id: 'maxTPS' as const,
+    name: 'Max TPS',
+    description: 'Maximum transactions per second recorded daily',
+    icon: Activity,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => value.toFixed(2),
+    unit: 'TPS'
+  },
+  {
+    id: 'gasUsed' as const,
+    name: 'Daily Gas Used',
+    description: 'Total gas consumed by transactions across the network',
+    icon: Fuel,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => {
+      if (value >= 1_000_000_000_000) {
+        return `${(value / 1_000_000_000_000).toFixed(2)}T`;
+      }
+      if (value >= 1_000_000_000) {
+        return `${(value / 1_000_000_000).toFixed(2)}B`;
+      }
+      if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+      }
+      return value.toLocaleString();
+    },
+    unit: 'gas'
+  },
+  {
+    id: 'feesPaid' as const,
+    name: 'Fees Paid',
+    description: 'Total fees paid for transactions across the network',
+    icon: Coins,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => {
+      if (value >= 1_000_000_000) {
+        return `${(value / 1_000_000_000).toFixed(2)}B`;
+      }
+      if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+      }
+      if (value >= 1_000) {
+        return `${(value / 1_000).toFixed(2)}K`;
+      }
+      return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    },
+    unit: 'AVAX'
+  },
+  { 
     id: 'dailyMessageVolume' as const, 
     name: 'Daily Message Volume',
+    description: 'Total messages sent across the network daily',
+    icon: MessageSquare,
+    color: {
+      light: 'rgb(239, 68, 68)',
+      dark: 'rgb(239, 68, 68)',
+      fill: {
+        light: 'rgba(239, 68, 68, 0.1)',
+        dark: 'rgba(239, 68, 68, 0.2)'
+      }
+    },
+    valueFormatter: (value: number) => value.toLocaleString(),
+    unit: 'messages'
+  },
+  /*
+  { 
+    id: 'dailyActiveAddresses' as const, 
+    name: 'Daily Active Addresses',
     description: 'Total messages sent across the network daily',
     icon: MessageSquare,
     color: {
@@ -115,6 +268,7 @@ const METRICS = [
     },
     unit: 'transactions'
   }
+  */
 ];
 
 export function AvalancheNetworkMetrics() {
@@ -124,7 +278,7 @@ export function AvalancheNetworkMetrics() {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>('dailyMessageVolume');
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>('networkTPS');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const isDark = theme === 'dark';
@@ -145,230 +299,148 @@ export function AvalancheNetworkMetrics() {
 
       let processedData: MetricData[] = [];
       
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+
       // Route to different endpoints based on selected metric
       switch (metricToFetch) {
-        case 'dailyMessageVolume':
-          const messageResponse = await fetch(`https://idx6.solokhin.com/api/global/metrics/dailyMessageVolume?days=${daysToFetch}`);
-          if (!messageResponse.ok) {
-            throw new Error(`HTTP error! status: ${messageResponse.status}`);
+        case 'networkTPS':
+          const tpsResponse = await fetch(`${API_BASE_URL}/api/tps/network/history?days=${daysToFetch}`);
+          if (!tpsResponse.ok) {
+            throw new Error(`HTTP error! status: ${tpsResponse.status}`);
+          }
+          const tpsJson = await tpsResponse.json();
+          
+          // Handle { success: boolean, data: [...] } format
+          const tpsData = Array.isArray(tpsJson) ? tpsJson : (tpsJson.data || []);
+          
+          if (!Array.isArray(tpsData)) {
+            throw new Error('Expected array response from network TPS API');
           }
           
-          const messageData = await messageResponse.json();
-          if (!Array.isArray(messageData)) {
-            throw new Error('Expected array response from message volume API');
-          }
-          
-          processedData = messageData
-            .filter(item => item && typeof item.date === 'string' && typeof item.timestamp === 'number')
+          processedData = tpsData
+            .filter(item => item && typeof item.timestamp === 'number' && (typeof item.totalTps === 'number' || typeof item.value === 'number'))
             .map(item => ({
               timestamp: item.timestamp,
-              date: item.date,
-              value: item.messageCount || 0
-            }))
-            .sort((a, b) => a.timestamp - b.timestamp);
-          break;
-          
-        case 'dailyActiveAddresses':
-          // First, get all chains to know which EVM chain IDs to query
-          const chains = await getChains();
-          
-          // Filter chains that have EVM chain IDs (numeric chain IDs)
-          const evmChains = chains.filter(chain => {
-            const numericChainId = parseInt(chain.chainId);
-            return !isNaN(numericChainId) && numericChainId > 0;
-          });
-          
-          console.log(`Found ${evmChains.length} EVM chains to query for active addresses`);
-          
-          // Fetch active addresses data for each EVM chain
-          const addressPromises = evmChains.map(async (chain) => {
-            try {
-              const response = await fetch(`https://idx6.solokhin.com/api/${chain.chainId}/stats/daily-active-addresses?days=${daysToFetch}`);
-              if (!response.ok) {
-                console.warn(`Failed to fetch active addresses for chain ${chain.chainId}: ${response.status}`);
-                return { chainId: chain.chainId, chainName: chain.chainName, data: [] };
-              }
-              
-              const data = await response.json();
-              if (!Array.isArray(data)) {
-                console.warn(`Invalid data format for chain ${chain.chainId}`);
-                return { chainId: chain.chainId, chainName: chain.chainName, data: [] };
-              }
-              
-              return { 
-                chainId: chain.chainId, 
-                chainName: chain.chainName, 
-                data: data.filter(item => item && typeof item.timestamp === 'number' && typeof item.activeAddresses === 'number')
-              };
-            } catch (error) {
-              console.warn(`Error fetching active addresses for chain ${chain.chainId}:`, error);
-              return { chainId: chain.chainId, chainName: chain.chainName, data: [] };
-            }
-          });
-          
-          const chainResults = await Promise.all(addressPromises);
-          
-          // Aggregate data by date
-          const dateMap = new Map<string, { timestamp: number; totalAddresses: number; chains: Array<{chainId: string; chainName: string; value: number}> }>();
-          
-          chainResults.forEach(({ chainId, chainName, data }) => {
-            data.forEach(item => {
-              const dateKey = new Date(item.timestamp * 1000).toISOString().split('T')[0];
-              
-              if (!dateMap.has(dateKey)) {
-                dateMap.set(dateKey, {
-                  timestamp: item.timestamp,
-                  totalAddresses: 0,
-                  chains: []
-                });
-              }
-              
-              const existing = dateMap.get(dateKey)!;
-              existing.totalAddresses += item.activeAddresses;
-              existing.chains.push({
-                chainId,
-                chainName,
-                value: item.activeAddresses
-              });
-            });
-          });
-          
-          // Convert to array and sort
-          processedData = Array.from(dateMap.entries())
-            .map(([date, data]) => ({
-              timestamp: data.timestamp,
-              date,
-              value: data.totalAddresses,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.totalTps || item.value || 0,
               metadata: {
-                chainCount: data.chains.length,
-                chains: data.chains
+                chainCount: item.chainCount
               }
             }))
             .sort((a, b) => a.timestamp - b.timestamp);
-          
-          console.log(`Aggregated active addresses data: ${processedData.length} days, ${evmChains.length} chains`);
           break;
+
+        case 'dailyActiveAddresses':
+          const activeAddressesData = await getNetworkActiveAddressesHistory(daysToFetch);
           
-        case 'cumulativeTransactions':
-          // Get all chains to know which chain IDs to query
-          const chainsForTx = await getChains();
-          
-          // Include ALL chains, not just numeric ones - some might have string IDs
-          const validChainsForTx = chainsForTx.filter(chain => {
-            // Include all chains that have a chainId
-            return chain.chainId && chain.chainId.trim() !== '';
-          });
-          
-          console.log(`Found ${validChainsForTx.length} chains to query for cumulative transactions`);
-          console.log('All chains to query:', validChainsForTx.map(c => `${c.chainName} (${c.chainId})`));
-          
-          // Generate timestamps for each day in the timeframe
-          const timestamps: number[] = [];
-          const now = Math.floor(Date.now() / 1000);
-          const oneDayInSeconds = 24 * 60 * 60;
-          
-          for (let i = daysToFetch - 1; i >= 0; i--) {
-            timestamps.push(now - (i * oneDayInSeconds));
-          }
-          
-          // Fetch current cumulative transaction count for each chain at each timestamp
-          const txPromises = validChainsForTx.map(async (chain) => {
-            try {
-              // Fetch the current cumulative count for this chain
-              console.log(`Fetching cumulative transactions for chain ${chain.chainId} (${chain.chainName})`);
-              const url = `https://idx6.solokhin.com/api/${chain.chainId}/stats/cumulative-txs?timestamp=${now}`;
-              console.log(`Request URL: ${url}`);
-              
-              const response = await fetch(url);
-              console.log(`Response status for ${chain.chainId}:`, response.status);
-              
-              if (!response.ok) {
-                console.warn(`Failed to fetch cumulative transactions for chain ${chain.chainName} (${chain.chainId}): ${response.status}`);
-                return { chainId: chain.chainId, chainName: chain.chainName, currentCount: 0 };
+          processedData = activeAddressesData
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.activeAddresses === 'number')
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.activeAddresses,
+              metadata: {
+                // Network active addresses endpoint might not return chainCount yet
               }
-              
-              const data = await response.json();
-              console.log(`Raw response data for ${chain.chainId}:`, data);
-              
-              // Extract the cumulativeTxs field specifically
-              const currentCount = data.cumulativeTxs || 0;
-              
-              console.log(`Extracted count for ${chain.chainName} (${chain.chainId}): ${currentCount.toLocaleString()}`);
-              
-              if (currentCount === 0) {
-                console.warn(`Zero transactions found for ${chain.chainName} (${chain.chainId}) - this might indicate an API issue`);
-              }
-              
-              return { 
-                chainId: chain.chainId, 
-                chainName: chain.chainName, 
-                currentCount: currentCount
-              };
-            } catch (error) {
-              console.error(`Error fetching cumulative transactions for chain ${chain.chainName} (${chain.chainId}):`, error);
-              return { chainId: chain.chainId, chainName: chain.chainName, currentCount: 0 };
-            }
-          });
-          
-          const txResults = await Promise.all(txPromises);
-          console.log('All transaction results:');
-          txResults.forEach(result => {
-            console.log(`  ${result.chainName} (${result.chainId}): ${result.currentCount.toLocaleString()}`);
-          });
-          
-          // Calculate total current cumulative transactions
-          const totalCurrentTransactions = txResults.reduce((sum, result) => sum + result.currentCount, 0);
-          
-          console.log(`Total cumulative transactions across all chains: ${totalCurrentTransactions.toLocaleString()}`);
-          console.log('Top contributing chains:', 
-            txResults
-              .filter(r => r.currentCount > 0)
-              .sort((a, b) => b.currentCount - a.currentCount)
-              .slice(0, 10)
-              .map(r => `${r.chainName}: ${r.currentCount.toLocaleString()}`)
-          );
-          
-          if (totalCurrentTransactions === 0) {
-            console.error('No transaction data found for any chain. Details:');
-            console.error('- Total chains queried:', validChainsForTx.length);
-            console.error('- Chains with data:', txResults.filter(r => r.currentCount > 0).length);
-            console.error('- Failed chains:', txResults.filter(r => r.currentCount === 0).map(r => r.chainName));
-            throw new Error(`No transaction data available from any of the ${validChainsForTx.length} chains queried`);
-          }
-          
-          // For cumulative transactions, we'll show the current total for each day
-          // (since cumulative means it only goes up, the current value represents the total)
-          processedData = timestamps.map(timestamp => ({
-            timestamp,
-            date: new Date(timestamp * 1000).toISOString().split('T')[0],
-            value: totalCurrentTransactions,
-            metadata: {
-              chainCount: txResults.filter(r => r.currentCount > 0).length,
-              chains: txResults
-                .filter(r => r.currentCount > 0)
-                .map(r => ({
-                  chainId: r.chainId,
-                  chainName: r.chainName,
-                  value: r.currentCount
-                }))
-            }
-          }));
-          
-          console.log(`Generated cumulative transactions data: ${processedData.length} days, total: ${totalCurrentTransactions.toLocaleString()}`);
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
           break;
+
+        case 'dailyTxCount':
+          const txCountData = await getNetworkTxCountHistory(daysToFetch);
           
-        default:
-          throw new Error(`Unknown metric: ${metricToFetch}`);
+          processedData = txCountData
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.value,
+              metadata: {
+                // Network tx count endpoint might not return chainCount yet
+              }
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+          break;
+
+        case 'maxTPS':
+          const maxTPSData = await getNetworkMaxTPSHistory(daysToFetch);
+          
+          processedData = maxTPSData
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.value,
+              metadata: {}
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+          break;
+
+        case 'gasUsed':
+          const gasUsedData = await getNetworkGasUsedHistory(daysToFetch);
+          
+          processedData = gasUsedData
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.value,
+              metadata: {}
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+          break;
+
+        case 'feesPaid':
+          const feesPaidData = await getNetworkFeesPaidHistory(daysToFetch);
+          
+          processedData = feesPaidData
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.value,
+              metadata: {}
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+          break;
+
+        case 'dailyMessageVolume':
+          // The external API doesn't support filtering by days effectively in all cases, 
+          // so we fetch and slice the data manually to ensure the chart reflects the selected timeframe.
+          // We request enough data (365 days) if the user asks for 1Y, otherwise we can request less but slicing is safer.
+          // Actually the external API seems to respect 'days' now, but let's be robust.
+          const requestedDays = daysToFetch === 360 ? 365 : daysToFetch;
+          const messageVolumeData = await getDailyMessageVolumeFromExternal(requestedDays);
+          
+          // Ensure we sort by timestamp ascending
+          const sortedData = messageVolumeData.sort((a, b) => a.timestamp - b.timestamp);
+          
+          // Slice the data to match the requested timeframe if the API returns more
+          const slicedData = sortedData.slice(-daysToFetch);
+
+          processedData = slicedData
+            .map(item => ({
+              timestamp: item.timestamp,
+              date: new Date(item.timestamp * 1000).toISOString(),
+              value: item.value,
+              metadata: {}
+            }));
+          break;
       }
-      
+
       if (processedData.length > 0) {
         setData(processedData);
       } else {
         throw new Error('No data available for selected metric');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Failed to fetch ${metricToFetch} data:`, err);
-      setError(`Failed to load ${currentMetric.name.toLowerCase()} data`);
+      // Handle 404 specifically
+      if (err.message && err.message.includes('404')) {
+        setError(`${currentMetric.name} data is coming soon`);
+      } else {
+        setError(`Failed to load ${currentMetric.name.toLowerCase()} data`);
+      }
     } finally {
       if (!skipLoading) {
         setLoading(false);
@@ -425,23 +497,25 @@ export function AvalancheNetworkMetrics() {
           <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
             {error || 'No network metrics data available'}
           </p>
-          <button 
-            onClick={() => fetchData()}
-            disabled={retrying}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {retrying ? (
-              <>
-                <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                Retrying...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
-                Retry
-              </>
-            )}
-          </button>
+          {!error?.includes('coming soon') && (
+            <button 
+              onClick={() => fetchData()}
+              disabled={retrying}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {retrying ? (
+                <>
+                  <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
+                  Retry
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -505,13 +579,18 @@ export function AvalancheNetworkMetrics() {
             const dataPoint = data[context.dataIndex];
             const lines = [`${currentMetric.name}: ${currentMetric.valueFormatter(context.parsed.y)} ${currentMetric.unit}`];
             
+            // Add additional info for Network TPS
+            if (selectedMetric === 'networkTPS' && dataPoint.metadata?.chainCount) {
+              lines.push(`Active Chains: ${dataPoint.metadata.chainCount}`);
+            }
+            
             // Add additional info for Daily Active Addresses
             if (selectedMetric === 'dailyActiveAddresses' && dataPoint.metadata?.chainCount) {
               lines.push(`Across ${dataPoint.metadata.chainCount} chains`);
             }
             
-            // Add additional info for Cumulative Transactions
-            if (selectedMetric === 'cumulativeTransactions' && dataPoint.metadata?.chainCount) {
+            // Add additional info for Daily Transaction Count
+            if (selectedMetric === 'dailyTxCount' && dataPoint.metadata?.chainCount) {
               lines.push(`Across ${dataPoint.metadata.chainCount} chains`);
             }
             
@@ -629,16 +708,6 @@ export function AvalancheNetworkMetrics() {
                 7D
               </button>
               <button
-                onClick={() => handleTimeframeChange(14)}
-                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  timeframe === 14
-                    ? 'bg-[#ef4444] text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
-                }`}
-              >
-                14D
-              </button>
-              <button
                 onClick={() => handleTimeframeChange(30)}
                 className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   timeframe === 30
@@ -647,6 +716,16 @@ export function AvalancheNetworkMetrics() {
                 }`}
               >
                 30D
+              </button>
+              <button
+                onClick={() => handleTimeframeChange(90)}
+                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  timeframe === 90
+                    ? 'bg-[#ef4444] text-white'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                }`}
+              >
+                90D
               </button>
               <button
                 onClick={() => handleTimeframeChange(360)}

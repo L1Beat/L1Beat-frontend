@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { getChains, getNetworkTPS } from '../api';
-import { Chain, NetworkTPS } from '../types';
-import { Server, AlertTriangle, RefreshCw, Zap, Activity } from 'lucide-react';
+import { getChains } from '../api';
+import { Chain } from '../types';
+import { Server, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -23,16 +23,9 @@ interface Bullet {
   direction: 'outgoing' | 'incoming';
 }
 
-interface MaxTPSData {
-  maxTps: number;
-  timestamp: number;
-  totalTxsInMinute: number;
-}
 export function NetworkTopologyGraph() {
   const navigate = useNavigate();
   const [chains, setChains] = useState<Chain[]>([]);
-  const [networkTPS, setNetworkTPS] = useState<NetworkTPS | null>(null);
-  const [maxTPSData, setMaxTPSData] = useState<MaxTPSData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
@@ -50,31 +43,11 @@ export function NetworkTopologyGraph() {
   const MAX_BULLETS = 25;
   const BULLET_SPAWN_RATE = 0.94;
 
-  // Fetch max TPS data
-  const fetchMaxTPS = async () => {
-    try {
-      const response = await fetch('https://idx6.solokhin.com/api/global/overview/maxTpsObserved');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setMaxTPSData(data);
-    } catch (err) {
-      console.error('Failed to fetch max TPS data:', err);
-      setMaxTPSData(null);
-    }
-  };
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chainsData, networkTPSData] = await Promise.all([
-          getChains(),
-          getNetworkTPS()
-        ]);
-        
-        // Fetch max TPS data separately (don't block main loading)
-        fetchMaxTPS();
+        const chainsData = await getChains();
         
         if (chainsData && chainsData.length > 0) {
           // Filter chains to include those with validators OR Avalanche chains
@@ -86,7 +59,6 @@ export function NetworkTopologyGraph() {
           
           if (validChains.length > 0) {
             setChains(validChains);
-            setNetworkTPS(networkTPSData);
             setError(null);
           } else {
             setError('No chains with validators available');
@@ -143,6 +115,14 @@ export function NetworkTopologyGraph() {
   // Format TPS value as whole number without decimals or thousands separators
   const formatTPS = (tpsValue: number): string => {
     return Math.round(tpsValue).toString();
+  };
+
+  // Format large numbers
+  const formatNumber = (num: number): string => {
+    if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+    return num.toLocaleString();
   };
 
   // Calculate radial positions around center
@@ -338,6 +318,11 @@ export function NetworkTopologyGraph() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Network Topology
           </h3>
+          {chains.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+              {chains.length} Chains
+            </span>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -628,54 +613,6 @@ export function NetworkTopologyGraph() {
               <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 
                 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
             </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Updated legend with network TPS */}
-      <div className="mt-4 flex justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-          <Server className="w-4 h-4" />
-          <span>Active chains: <span className="font-semibold text-gray-900 dark:text-white">{chains.length}</span></span>
-        </div>
-
-        {/* Network Performance Stats - Merged Card */}
-        {(networkTPS || maxTPSData) && (
-          <div className="flex items-center bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-lg overflow-hidden shadow-lg">
-            {/* Current TPS */}
-            {networkTPS && (
-              <div className="px-3 py-2 flex items-center gap-2">
-                <div className="bg-white/20 rounded-full p-1.5">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-white/90 font-medium">Network TPS</span>
-                  <span className="text-sm font-bold text-white">
-                    {formatTPS(networkTPS.totalTps)}
-                  </span>
-                </div>
-              </div>
-            )}
-            
-            {/* Divider if both exist */}
-            {networkTPS && maxTPSData && (
-              <div className="h-full w-px bg-white/20"></div>
-            )}
-
-            {/* Max TPS */}
-            {maxTPSData && (
-              <div className="px-3 py-2 flex items-center gap-2">
-                <div className="bg-white/20 rounded-full p-1.5">
-                  <Zap className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs text-white/90 font-medium">Max TPS (7d)</span>
-                  <span className="text-sm font-bold text-white">
-                    {formatTPS(maxTPSData.maxTps)}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

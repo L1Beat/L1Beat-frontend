@@ -67,8 +67,8 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
       <div className="bg-[#ef4444]/10 border-b border-[#ef4444]/20 px-6 py-2 flex items-center justify-center gap-2">
         <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
         <p className="text-sm font-medium text-[#ef4444]">
-          L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
-        </p>
+              L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
+            </p>
       </div>
 
       {/* Main Navigation */}
@@ -184,8 +184,8 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
                   </Link>
                 );
               })}
-            </div>
-          </div>
+        </div>
+      </div>
         </nav>
       )}
     </div>

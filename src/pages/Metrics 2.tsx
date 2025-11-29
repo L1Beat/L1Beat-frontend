@@ -1,6 +1,6 @@
 import React from 'react';
 import { StatusBar } from '../components/StatusBar';
-import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
+import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { getHealth } from '../api';
 import { useEffect, useState } from 'react';
 import { HealthStatus } from '../types';

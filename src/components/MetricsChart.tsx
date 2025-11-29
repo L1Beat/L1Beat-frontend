@@ -266,7 +266,7 @@ export function MetricsChart({
         </div>
       </div>
 
-      <div className="h-64">
+      <div className="h-[300px] sm:h-[400px]">
         <Line data={chartData} options={options} />
       </div>
     </div>

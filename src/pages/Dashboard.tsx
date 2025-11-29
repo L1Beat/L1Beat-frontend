@@ -8,6 +8,7 @@ import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
+import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
@@ -183,6 +184,8 @@ export function Dashboard() {
       <StatusBar health={health} />
       
       <main className="max-w-7xl mx-auto px-6 py-12">
+        <NetworkMetricsBar />
+        
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />

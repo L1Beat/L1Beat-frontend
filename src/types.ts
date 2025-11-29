@@ -108,6 +108,66 @@ export interface DailyActiveAddresses {
   transactions: number;
 }
 
+// Daily Transaction Count types
+export interface DailyTxCount {
+  timestamp: number;
+  value: number;
+}
+
+export interface DailyTxCountLatest {
+  timestamp: number;
+  value: number;
+  chainCount?: number;
+}
+
+// Max TPS types
+export interface MaxTPSHistory {
+  timestamp: number;
+  value: number;
+}
+
+export interface MaxTPSLatest {
+  timestamp: number;
+  value: number;
+  chainCount?: number; // For network-wide stats
+}
+
+// Gas Used types
+export interface GasUsedHistory {
+  timestamp: number;
+  value: number;
+}
+
+export interface GasUsedLatest {
+  timestamp: number;
+  value: number;
+  chainCount?: number; // For network-wide stats
+}
+
+// Avg Gas Price types
+export interface AvgGasPriceHistory {
+  timestamp: number;
+  value: number;
+}
+
+export interface AvgGasPriceLatest {
+  timestamp: number;
+  value: number;
+  chainCount?: number; // For network-wide stats
+}
+
+// Fees Paid types
+export interface FeesPaidHistory {
+  timestamp: number;
+  value: number;
+}
+
+export interface FeesPaidLatest {
+  timestamp: number;
+  value: number;
+  chainCount?: number; // For network-wide stats
+}
+
 // Health related types
 export interface HealthStatus {
   status: string;
@@ -118,7 +178,7 @@ export interface HealthStatus {
 export interface TeleporterMessage {
   source: string;
   target: string;
-  count: number;
+  value: number;
 }
 
 export interface TeleporterMessageData {

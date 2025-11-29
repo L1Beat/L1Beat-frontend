@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { format } from 'date-fns';
-import { RefreshCw, AlertTriangle, MessageSquare, ArrowUpDown, Activity, Clock } from 'lucide-react';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -159,25 +159,26 @@ export function TeleporterSankeyDiagram() {
       setError(null);
       
       // Use the appropriate endpoint based on the selected timeframe
-      const endpoint = timeframe === 'daily' 
+      const primaryEndpoint = timeframe === 'daily' 
         ? `${API_BASE_URL}/api/teleporter/messages/daily-count`
         : `${API_BASE_URL}/api/teleporter/messages/weekly-count`;
-      
-      const response = await fetch(endpoint);
+
+      const response = await fetch(primaryEndpoint);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const rawData = await response.json();
+      const dataArray = Array.isArray(rawData) ? rawData : (rawData.data || []);
       
       // Process the API response format
-      if (!rawData || !rawData.data || !Array.isArray(rawData.data)) {
+      if (!Array.isArray(dataArray)) {
         throw new Error('Invalid data format: Missing data array');
       }
       
       // Transform the data to our expected format
-      const messages = rawData.data.map((item: any) => ({
+      const messages = dataArray.map((item: any) => ({
         source: item.sourceChain || 'Unknown',
         target: item.destinationChain || 'Unknown',
         value: Number(item.messageCount) || 0
@@ -760,47 +761,8 @@ export function TeleporterSankeyDiagram() {
         {/* Tooltip for nodes */}
       </div>
       
-      {/* Stats card at the bottom */}
-      <div className="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        {/* Message stats card */}
-        <div className="flex items-center bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-2 flex items-center gap-2">
-            <div className="bg-white/20 rounded-full p-1.5">
-              <MessageSquare className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-white/90 font-medium">Total Messages</span>
-              <span className="text-lg font-bold text-white">{formatNumber(data.metadata.totalMessages)}</span>
-            </div>
-          </div>
-          <div className="h-full w-px bg-white/20"></div>
-          <div className="px-3 py-2 flex items-center gap-2">
-            <div className="bg-white/20 rounded-full p-1.5">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-white/90 font-medium">Timeframe</span>
-              <span className="text-sm font-bold text-white">{timeframe === 'daily' ? 'Daily' : 'Weekly'}</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Last updated badge - simplified version without time and refresh button */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-dark-700/50 rounded-full shadow-sm border border-gray-100 dark:border-dark-700/50">
-          <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Last updated:</span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white">
-                {format(new Date(data.metadata.updatedAt), 'MMM d, yyyy')}
-              </span>
-            </div>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {getTimeSinceUpdate()}
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* Stats card at the bottom removed - moved to NetworkMetricsBar */}
+      
     </div>
   );
 }

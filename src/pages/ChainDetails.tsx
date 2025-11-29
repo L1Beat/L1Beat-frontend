@@ -743,7 +743,12 @@ export function ChainDetails() {
               {/* Metrics Tab */}
               {activeTab === 'metrics' && (
                 <div className="space-y-6">
-                  <L1MetricsChart chainId={chain.chainId} chainName={chain.chainName} evmChainId={chain.evmChainId} />
+                  <L1MetricsChart 
+  chainId={chain.chainId} 
+  chainName={chain.chainName} 
+  evmChainId={chain.evmChainId} 
+  tokenSymbol={chain.networkToken?.symbol}
+/>
                 </div>
               )}
             </div>
