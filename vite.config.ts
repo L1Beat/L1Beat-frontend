@@ -46,7 +46,11 @@ async function getBlogRoutes(apiBaseUrl: string) {
 export default defineConfig(async ({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
-  const apiBaseUrl = 'https://l1beat-backend-prod-9ie8i.ondigitalocean.app'; // Hardcoded to ensure it works in build environment
+  const apiBaseUrl = env.VITE_API_BASE_URL;
+
+  if (!apiBaseUrl && mode === 'production') {
+    console.warn('Warning: VITE_API_BASE_URL is not defined. Prerendering dynamic routes may fail.');
+  }
 
   // Define base routes
   let routesToPrerender = ['/', '/blog', '/acps', '/404'];
