@@ -1,3 +1,9 @@
+declare global {
+  interface Window {
+    prerenderReady?: boolean;
+  }
+}
+
 // Chain related types
 export interface Chain {
   chainId: string;
