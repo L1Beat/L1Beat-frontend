@@ -2,66 +2,14 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-// @ts-ignore - vite-plugin-prerender doesn't have types and needs require
-const vitePrerender = require('vite-plugin-prerender');
-const Renderer = require('@prerenderer/renderer-puppeteer');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Helper to fetch blog routes
-async function getBlogRoutes(apiBaseUrl: string) {
-  try {
-    // Use fetch (available in Node 18+)
-    // API has a max limit of 100 per request
-    const response = await fetch(`${apiBaseUrl}/api/blog/posts?limit=100`);
-    if (!response.ok) {
-      console.warn(`Failed to fetch blog routes: ${response.status} ${response.statusText}`);
-      return [];
-    }
-    
-    const data: any = await response.json();
-    console.log('Blog API response structure:', JSON.stringify(data).slice(0, 200) + '...'); // Log first 200 chars
-
-    // Assuming the API returns { data: [{ slug: '...' }] }
-    if (data && Array.isArray(data.data)) {
-      return data.data.map((post: any) => `/blog/${post.slug}`);
-    } else if (Array.isArray(data)) {
-      // Handle array response directly
-      return data.map((post: any) => `/blog/${post.slug}`);
-    }
-    
-    console.warn('Unexpected API response format');
-    return [];
-  } catch (e) {
-    console.warn('Warning: Could not fetch blog routes for prerendering. Blog SEO tags may not work.');
-    console.warn(e);
-    return [];
-  }
-}
 
 export default defineConfig(async ({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
   const apiBaseUrl = env.VITE_API_BASE_URL;
-
-  if (!apiBaseUrl && mode === 'production') {
-    console.warn('Warning: VITE_API_BASE_URL is not defined. Prerendering dynamic routes may fail.');
-  }
-
-  // Define base routes
-  let routesToPrerender = ['/', '/blog', '/acps', '/404'];
-
-  // Only fetch dynamic routes during production build to save time
-  if (mode === 'production') {
-    console.log('Fetching blog routes for prerendering...');
-    const blogRoutes = await getBlogRoutes(apiBaseUrl);
-    console.log(`Found ${blogRoutes.length} blog posts to prerender.`);
-    routesToPrerender = [...routesToPrerender, ...blogRoutes];
-  }
 
   return {
     define: {
@@ -70,35 +18,6 @@ export default defineConfig(async ({ mode }) => {
     },
     plugins: [
       react(),
-      vitePrerender({
-        // The path to the directory where the build files are generated
-        staticDir: path.join(__dirname, 'dist'),
-        
-        // The list of routes to prerender
-        routes: routesToPrerender,
-
-        // The renderer to use (Puppeteer)
-        renderer: new Renderer({
-          // Wait for a specific amount of time (e.g., 5 seconds) for data to load
-          renderAfterTime: 5000, 
-          // Optional: Run headless
-          headless: true,
-          // Chrome launch options
-          launchOptions: {
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-          },
-        }),
-        
-        // Post-process the HTML to fix any paths or data
-        postProcess(renderedRoute: any) {
-          // Replace any localhost references with production URL if necessary
-          renderedRoute.html = renderedRoute.html.replace(
-            /http:\/\/localhost:\d+/g, 
-            'https://l1beat.io'
-          );
-          return renderedRoute;
-        },
-      }),
     ],
     publicDir: 'public',
     build: {
@@ -120,5 +39,5 @@ export default defineConfig(async ({ mode }) => {
         'Expires': '0',
       },
     },
-  } as any; // Cast to any to avoid UserConfig type mismatch with vite-plugin-prerender
+  };
 });
