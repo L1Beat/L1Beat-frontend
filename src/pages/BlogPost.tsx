@@ -191,6 +191,17 @@ export function BlogPost() {
         fetchPost();
     }, [slug, navigate]);
 
+    // Set prerenderReady when loading is done and content is ready
+    useEffect(() => {
+        if (!loading && (post || error)) {
+            // Give React a moment to render the SEO component
+            const timer = setTimeout(() => {
+                window.prerenderReady = true;
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, post, error]);
+
     const fetchPost = async () => {
         if (!slug) return;
 
@@ -208,8 +219,6 @@ export function BlogPost() {
             console.error('Error fetching post:', err);
         } finally {
             setLoading(false);
-            // Mark as ready for prerendering
-            window.prerenderReady = true;
         }
     };
 
