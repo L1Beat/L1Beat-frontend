@@ -1,8 +1,10 @@
 // src/pages/ACPs.tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   FileText,
   ExternalLink,
@@ -286,7 +288,7 @@ export default function ACPs() {
         return 'bg-green-500 text-white';
       case 'draft':
       case 'proposed':
-        return 'bg-blue-500 text-white';
+        return 'bg-[#ef4444] text-white';
       case 'review':
         return 'bg-yellow-500 text-white';
       case 'withdrawn':
@@ -302,7 +304,7 @@ export default function ACPs() {
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
       case 'Low':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
+        return 'bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]';
       case 'Medium':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'High':
@@ -318,7 +320,6 @@ export default function ACPs() {
       track: '',
       complexity: '',
       author: '',
-
     });
     setSearchQuery('');
   };
@@ -329,8 +330,8 @@ export default function ACPs() {
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <LoadingSpinner size="lg" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-2">
               Loading ACPs...
             </h2>
             <p className="text-gray-600 dark:text-gray-300">
@@ -357,7 +358,7 @@ export default function ACPs() {
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
@@ -397,69 +398,93 @@ export default function ACPs() {
           {/* Statistics Cards */}
           {stats && (
             <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <motion.div
+                className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                whileHover={{ y: -2, transition: { duration: 0.2 } }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-[#ef4444]">
                       {stats.total}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Total ACPs</div>
+                    <div className="text-sm font-medium text-[#ef4444]/80">Total ACPs</div>
                   </div>
-                  <FileText className="w-8 h-8 text-blue-500 opacity-50" />
+                  <FileText className="w-8 h-8 text-[#ef4444]" />
                 </div>
-              </div>
-              
-              <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              </motion.div>
+
+              <motion.div
+                className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700/50"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+                whileHover={{ y: -2, transition: { duration: 0.2 } }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                       {stats.totalAuthors || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Contributors</div>
+                    <div className="text-sm font-medium text-green-600/80 dark:text-green-400/80">Contributors</div>
                   </div>
-                  <Users className="w-8 h-8 text-green-500 opacity-50" />
+                  <Users className="w-8 h-8 text-green-500" />
                 </div>
-              </div>
+              </motion.div>
               
-              <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <motion.div
+                className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700/50"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
+                whileHover={{ y: -2, transition: { duration: 0.2 } }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                       {stats.implementationProgress?.deployed || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Deployed</div>
+                    <div className="text-sm font-medium text-blue-600/80 dark:text-blue-400/80">Deployed</div>
                   </div>
-                  <CheckCircle className="w-8 h-8 text-green-500 opacity-50" />
+                  <CheckCircle className="w-8 h-8 text-blue-500" />
                 </div>
-              </div>
-              
-              <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              </motion.div>
+
+              <motion.div
+                className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-700/50"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
+                whileHover={{ y: -2, transition: { duration: 0.2 } }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                       {stats.recentlyUpdated || 0}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Recently Updated</div>
+                    <div className="text-sm font-medium text-yellow-600/80 dark:text-yellow-400/80">Recently Updated</div>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-yellow-500 opacity-50" />
+                  <TrendingUp className="w-8 h-8 text-yellow-500" />
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
 
           {/* Controls Bar */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               {/* Search Bar */}
               <div className="flex-1 max-w-xl">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-[#ef4444] transition-colors w-5 h-5" />
                   <input
                     type="text"
                     placeholder="Search ACPs by number, title, or author..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-dark-700 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/50 dark:bg-dark-900/50 focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all dark:text-white"
                   />
                 </div>
               </div>
@@ -471,41 +496,72 @@ export default function ACPs() {
                   onClick={() => setShowFilters(!showFilters)}
                   className={`inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium transition-colors ${
                     showFilters
-                      ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-500/10'
+                      ? 'border-[#ef4444] text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20'
                       : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600'
                   }`}
                 >
                   <Filter className="w-4 h-4 mr-2" />
                   Filters
                   {Object.values(filters).filter(f => f !== '' && f !== null).length > 0 && (
-                    <span className="ml-2 px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full">
+                    <span className="ml-2 px-2 py-0.5 text-xs bg-[#ef4444] text-white rounded-full">
                       {Object.values(filters).filter(f => f !== '' && f !== null).length}
                     </span>
                   )}
                 </button>
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center bg-gray-100 dark:bg-dark-700 rounded-md p-1">
-                  <button
+                <div className="flex items-center bg-gray-100 dark:bg-dark-700 rounded-md p-1 relative">
+                  {/* Background slider */}
+                  <motion.div
+                    className="absolute bg-white dark:bg-dark-600 shadow-sm rounded"
+                    layoutId="viewToggleBackground"
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      left: viewMode === 'grid' ? '4px' : '36px',
+                    }}
+                    transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  />
+                  <motion.button
                     onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded ${
+                    className={`relative z-10 p-2 rounded ${
                       viewMode === 'grid'
-                        ? 'bg-white dark:bg-dark-600 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        ? 'text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400'
                     }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
                   >
-                    <Grid className="w-4 h-4" />
-                  </button>
-                  <button
+                    <motion.div
+                      animate={{
+                        rotate: viewMode === 'grid' ? [0, -10, 10, 0] : 0
+                      }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                    >
+                      <Grid className="w-4 h-4" />
+                    </motion.div>
+                  </motion.button>
+                  <motion.button
                     onClick={() => setViewMode('list')}
-                    className={`p-2 rounded ${
+                    className={`relative z-10 p-2 rounded ${
                       viewMode === 'list'
-                        ? 'bg-white dark:bg-dark-600 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                        ? 'text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400'
                     }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
                   >
-                    <List className="w-4 h-4" />
-                  </button>
+                    <motion.div
+                      animate={{
+                        rotate: viewMode === 'list' ? [0, -10, 10, 0] : 0
+                      }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                    >
+                      <List className="w-4 h-4" />
+                    </motion.div>
+                  </motion.button>
                 </div>
               </div>
             </div>
@@ -608,49 +664,148 @@ export default function ACPs() {
           </div>
 
           {/* Results Count */}
-          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Showing {filteredAndSortedACPs.length} of {acps.length} ACPs
+          <div className="mb-4 flex items-center justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {filteredAndSortedACPs.length} of {acps.length} ACPs
+            </div>
+            {filteredAndSortedACPs.length === 0 && (searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
+              <motion.button
+                onClick={clearFilters}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#ef4444] dark:text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-md hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Clear All Filters
+              </motion.button>
+            )}
           </div>
 
           {/* ACPs Grid/List */}
-          {filteredAndSortedACPs.length === 0 ? (
-            <div className="text-center py-12">
-              <Archive className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No ACPs found
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Try adjusting your search or filters
-              </p>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredAndSortedACPs.map((acp) => (
-                <EnhancedACPCard
-                  key={acp.number}
-                  acp={acp}
-                  viewMode="grid"
-                  onClick={(acp) => navigate(`/acps/${acp.number}`)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredAndSortedACPs.map((acp) => (
-                <EnhancedACPCard
-                  key={acp.number}
-                  acp={acp}
-                  viewMode="list"
-                  onClick={(acp) => navigate(`/acps/${acp.number}`)}
-                />
-              ))}
-            </div>
-          )}
+          <LayoutGroup>
+            <AnimatePresence mode="wait">
+              {filteredAndSortedACPs.length === 0 ? (
+                <motion.div
+                  key="empty-state"
+                  className="text-center py-12 px-4"
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                >
+                  <motion.div
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3, delay: 0.1, ease: "easeOut" }}
+                  >
+                    <Archive className="w-16 h-16 mx-auto text-gray-400 mb-6" />
+                  </motion.div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                    No ACPs match your criteria
+                  </h3>
+                  <div className="max-w-md mx-auto space-y-3">
+                    <p className="text-gray-600 dark:text-gray-400">
+                      {searchQuery && Object.values(filters).some(f => f !== '' && f !== null)
+                        ? `No results found for "${searchQuery}" with current filters applied.`
+                        : searchQuery
+                        ? `No results found for "${searchQuery}".`
+                        : 'No ACPs match the current filter criteria.'}
+                    </p>
+
+                    {(searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
+                      <div className="flex flex-col sm:flex-row gap-2 justify-center items-center pt-2">
+                        <motion.button
+                          onClick={clearFilters}
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] rounded-md transition-colors"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Clear All Filters
+                        </motion.button>
+                        {searchQuery && (
+                          <motion.button
+                            onClick={() => setSearchQuery('')}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 rounded-md transition-colors"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                          >
+                            Clear Search
+                          </motion.button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ) : viewMode === 'grid' ? (
+                <motion.div
+                  key="grid-view"
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  {filteredAndSortedACPs.map((acp, index) => (
+                    <motion.div
+                      key={acp.number}
+                      layout
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.2,
+                        delay: index * 0.02,
+                        ease: "easeOut"
+                      }}
+                    >
+                      <EnhancedACPCard
+                        acp={acp}
+                        viewMode="grid"
+                        onClick={(acp) => navigate(`/acps/${acp.number}`)}
+                      />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="list-view"
+                  className="space-y-4"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  {filteredAndSortedACPs.map((acp, index) => (
+                    <motion.div
+                      key={acp.number}
+                      layout
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.18,
+                        delay: index * 0.015,
+                        ease: "easeOut"
+                      }}
+                    >
+                      <EnhancedACPCard
+                        acp={acp}
+                        viewMode="list"
+                        onClick={(acp) => navigate(`/acps/${acp.number}`)}
+                      />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </LayoutGroup>
 
           {/* Load More / Pagination (if needed) */}
           {filteredAndSortedACPs.length > 0 && filteredAndSortedACPs.length < acps.length && (
             <div className="mt-8 text-center">
-              <button className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <button className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]">
                 Load More
               </button>
             </div>

@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, Tag } from 'lucide-react';
+import { Calendar, Clock, Tag, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { BlogPost, formatBlogDate, calculateReadTime } from '../api/blogApi';
+import { AuthorCard } from './AuthorCard';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
 interface BlogCardProps {
     post: BlogPost; 
@@ -11,85 +14,136 @@ interface BlogCardProps {
 export function BlogCard({ post, featured = false }: BlogCardProps) {
     const readTime = post.readTime || calculateReadTime(post.content || '');
     const formattedDate = formatBlogDate(post.publishedAt || '');
+    const imageUrl = getBlogPostImageUrl(post);
+
+    if (featured) {
+        return (
+            <motion.div
+                whileHover={{
+                    y: -4,
+                    boxShadow: "0 20px 40px -12px rgb(0 0 0 / 0.15)"
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="group block bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
+                <Link to={`/blog/${post.slug}`} className="block">
+                    <div className="flex flex-col lg:flex-row">
+                        {/* Left Column: Text Block - Determines height */}
+                        <div className="w-full lg:w-[35%] p-6 lg:p-8 flex flex-col justify-center">
+                            <div className="space-y-4">
+                                {/* Pill-shaped tag at the top */}
+                                {post.tags && post.tags.length > 0 && (
+                                    <div className="inline-flex">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full">
+                                            <Tag className="w-3 h-3" />
+                                            {post.tags[0]}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Date line */}
+                                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                    <Calendar className="w-4 h-4" />
+                                    <span className="text-sm">{formattedDate}</span>
+                                </div>
+
+                                {/* Large multi-line headline */}
+                                <motion.h2
+                                    className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900 dark:text-white leading-tight"
+                                    whileHover={{ color: "#ef4444" }}
+                                    transition={{ duration: 0.3, ease: "easeOut" }}
+                                >
+                                    {post.title}
+                                </motion.h2>
+
+                                {/* Rectangular paragraph */}
+                                <p className="text-sm lg:text-base text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-4">
+                                    {post.excerpt}
+                                </p>
+
+                                {/* Avatar circle + author name at bottom */}
+                                {post.author && (
+                                    <div className="flex items-center gap-3 pt-2">
+                                        {post.authorProfiles && post.authorProfiles.length > 0 && post.authorProfiles[0].avatar ? (
+                                            <img
+                                                src={post.authorProfiles[0].avatar}
+                                                alt={post.author}
+                                                className="w-8 h-8 rounded-full object-cover"
+                                                onError={(e) => {
+                                                    e.currentTarget.style.display = 'none';
+                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                }}
+                                            />
+                                        ) : null}
+                                        <div className={`w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center ${
+                                            post.authorProfiles && post.authorProfiles.length > 0 && post.authorProfiles[0].avatar ? 'hidden' : ''
+                                        }`}>
+                                            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                                                {post.author.charAt(0).toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{post.author}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right Column: Image Block - Adjusts to left column height */}
+                        <div className="w-full lg:w-[65%] p-6 lg:p-8 flex flex-col justify-center">
+                            <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg relative overflow-hidden">
+                                <motion.img
+                                    src={imageUrl}
+                                    alt={post.title}
+                                    className="max-w-full max-h-full object-contain"
+                                    whileHover={{ scale: 1.02 }}
+                                    transition={{ duration: 0.4, ease: "easeOut" }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </Link>
+            </motion.div>
+        );
+    }
 
     return (
         <Link
             to={`/blog/${post.slug}`}
-            className={`group block bg-white dark:bg-dark-800 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-blue-300 dark:hover:border-blue-600 ${featured ? 'md:col-span-2 lg:col-span-3' : ''
-                }`}
+            className="group flex flex-col bg-white dark:bg-dark-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-[#ef4444]/50 dark:hover:border-[#ef4444]/50 transform hover:-translate-y-2 hover:scale-[1.02]"
         >
-            {/* Image */}
-            {post.imageUrl && (
-                <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-48'}`}>
-                    <img
-                        src={post.imageUrl}
-                        alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-            )}
+            {/* Banner Image */}
+            <div className="relative h-48 overflow-hidden">
+                <img
+                    src={imageUrl}
+                    alt={post.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            </div>
 
             {/* Content */}
-            <div className={`p-6 ${featured ? 'md:p-8' : ''}`}>
-                {/* Tags */}
-                {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-3">
-                        {post.tags.slice(0, 3).map((tag) => (
-                            <span
-                                key={tag}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300 rounded-full"
-                            >
-                                <Tag className="w-3 h-3" />
-                                {tag}
-                            </span>
-                        ))}
-                        {post.tags.length > 3 && (
-                            <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400 rounded-full">
-                                +{post.tags.length - 3} more
-                            </span>
-                        )}
-                    </div>
-                )}
-
+            <div className="p-6 flex-grow flex flex-col">
                 {/* Title */}
-                <h3 className={`font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3 line-clamp-2 ${featured ? 'text-2xl md:text-3xl' : 'text-xl'
-                    }`}>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-[#ef4444] dark:group-hover:text-[#ef4444] transition-colors mb-3 line-clamp-2 h-[3.5rem]">
                     {post.title}
                 </h3>
 
-                {/* Excerpt */}
-                <p className={`text-gray-600 dark:text-gray-300 mb-4 line-clamp-3 ${featured ? 'text-base md:text-lg' : 'text-sm'
-                    }`}>
-                    {post.excerpt}
-                </p>
-
                 {/* Meta */}
                 <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                            <Calendar className="w-4 h-4" />
-                            <span>{formattedDate}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <Clock className="w-4 h-4" />
-                            <span>{readTime} min read</span>
-                        </div>
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        <span>{formattedDate}</span>
                     </div>
 
                     {post.author && (
                         <div className="text-right">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">
-                                {post.author}
-                            </span>
+                            <AuthorCard
+                                authorName={post.author}
+                                authorProfiles={post.authorProfiles}
+                                className="font-medium text-gray-700 dark:text-gray-300"
+                            />
                         </div>
                     )}
-                </div>
-
-                {/* Read more indicator */}
-                <div className="mt-4 flex items-center text-blue-600 dark:text-blue-400 font-medium text-sm group-hover:gap-2 transition-all duration-200">
-                    <span>Read more</span>
-                    <span className="transform group-hover:translate-x-1 transition-transform duration-200">→</span>
                 </div>
             </div>
         </Link>

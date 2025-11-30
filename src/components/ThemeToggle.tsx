@@ -1,4 +1,3 @@
-import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useState, useEffect } from 'react';
 import * as d3 from 'd3';
@@ -48,18 +47,10 @@ export function ThemeToggle() {
   return (
     <button
       onClick={handleClick}
-      className="theme-toggle"
+      className="px-4 py-2 rounded-lg border border-border hover:bg-accent transition-colors"
       aria-label="Toggle theme"
     >
-      {theme === 'dark' ? (
-        <Sun 
-          className={`w-5 h-5 text-yellow-400 ${isAnimating ? 'theme-icon-enter' : ''}`}
-        />
-      ) : (
-        <Moon 
-          className={`w-5 h-5 text-indigo-500 ${isAnimating ? 'theme-icon-enter' : ''}`}
-        />
-      )}
+      {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
     </button>
   );
 }

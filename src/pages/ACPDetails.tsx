@@ -8,10 +8,11 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   ArrowLeft,
   ExternalLink,
@@ -26,7 +27,8 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
-  BookOpen
+  BookOpen,
+  Info
 } from 'lucide-react';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
@@ -215,20 +217,42 @@ export default function ACPDetails() {
       successTextColor: '#065f46',
     });
     
-    // Initialize mermaid with dynamic theme
+    // Initialize mermaid with dynamic theme for high contrast
     React.useEffect(() => {
-      const mermaidTheme = isDark ? 'dark' : 'default';
-      const themeVariables = isDark ? getDarkThemeVariables() : getLightThemeVariables();
+      const themeVariables = isDark ? {
+        // Dark mode - Force high contrast node colors
+        primaryColor: '#1e293b', // dark-800
+        primaryTextColor: '#ffffff', 
+        primaryBorderColor: '#94a3b8', // light gray border
+        lineColor: '#e2e8f0', // light lines
+        secondaryColor: '#334155',
+        tertiaryColor: '#475569',
+        mainBkg: '#1e293b',
+        nodeBkg: '#1e293b',
+        nodeTextColor: '#ffffff',
+      } : {
+        // Light mode - Default clear colors
+        primaryColor: '#ffffff',
+        primaryTextColor: '#0f172a',
+        primaryBorderColor: '#334155',
+        lineColor: '#334155',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#e2e8f0',
+        mainBkg: '#ffffff',
+        nodeBkg: '#ffffff',
+        nodeTextColor: '#0f172a',
+      };
 
       mermaid.initialize({
         startOnLoad: false,
-        theme: mermaidTheme,
+        theme: 'base', // Use base theme to apply our custom variables strictly
         securityLevel: 'loose',
+        fontFamily: 'Inter, system-ui, sans-serif',
         themeVariables,
-        // Additional config for better rendering
         flowchart: {
           useMaxWidth: true,
           htmlLabels: true,
+          curve: 'basis'
         },
         sequence: {
           useMaxWidth: true,
@@ -239,143 +263,135 @@ export default function ACPDetails() {
     // Check if this is a mermaid diagram
     const isMermaid = language === 'mermaid' || 
                     content.includes('flowchart') || 
-                    content.includes('graph') ||
-                    content.includes('sequenceDiagram') ||
+                    content.includes('graph') || 
+                    content.includes('sequenceDiagram') || 
                     content.includes('classDiagram');
 
     if (isMermaid) {
-      const chartId = `mermaid-chart-${Math.random().toString(36).substr(2, 9)}`;
+      const chartIdRef = React.useRef(`mermaid-chart-${Math.random().toString(36).substr(2, 9)}`);
+      const chartId = chartIdRef.current;
       
       React.useEffect(() => {
         const renderChart = async () => {
           try {
             const element = document.getElementById(chartId);
             if (element) {
-              // Clear previous content
-              element.innerHTML = '';
+              element.innerHTML = `<div class="flex justify-center items-center min-h-[200px] ${isDark ? 'text-gray-400' : 'text-gray-500'}">
+                <div class="flex items-center space-x-2">
+                  <div class="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
+                  <span>Rendering diagram...</span>
+                </div>
+              </div>`;
               
-              // Re-initialize with current theme
-              const mermaidTheme = isDark ? 'dark' : 'default';
-              const themeVariables = isDark ? getDarkThemeVariables() : getLightThemeVariables();
-
-              await mermaid.initialize({
-                startOnLoad: false,
-                theme: mermaidTheme,
-                securityLevel: 'loose',
-                themeVariables,
-                flowchart: {
-                  useMaxWidth: true,
-                  htmlLabels: true,
-                },
-                sequence: {
-                  useMaxWidth: true,
-                }
-              });
+              const cleanContent = content.trim();
+              const uniqueId = `svg-${chartId}-${Date.now()}`;
               
-              // Render the diagram
-              const { svg } = await mermaid.render(`${chartId}-svg`, content);
-              element.innerHTML = svg;
+              try {
+                const { svg } = await mermaid.render(uniqueId, cleanContent);
+                element.innerHTML = svg;
+              } catch (renderError) {
+                console.error('Mermaid render failed:', renderError);
+                element.innerHTML = `
+                  <div class="border-2 border-dashed border-red-300 bg-red-50 text-red-600 rounded-lg p-4">
+                    <p class="font-medium mb-2">Failed to render diagram</p>
+                    <pre class="text-xs bg-white p-2 rounded overflow-auto border border-red-100">${cleanContent}</pre>
+                  </div>
+                `;
+              }
             }
           } catch (error) {
-            console.error('Mermaid rendering error:', error);
-            const element = document.getElementById(chartId);
-            if (element) {
-              element.innerHTML = `<div class="${isDark ? 'text-red-400' : 'text-red-600'} p-4">Error rendering diagram: ${error.message}</div>`;
-            }
+            console.error('Mermaid wrapper error:', error);
           }
         };
         
-        if (document.getElementById(chartId)) {
-          renderChart();
-        }
-      }, [chartId, content, isDark]);
-
-      // Listen for theme changes and re-render
-      React.useEffect(() => {
-        const handleThemeChange = (event: any) => {
-          const newTheme = event.detail?.theme || theme;
-          const element = document.getElementById(chartId);
-          if (element) {
-            setTimeout(async () => {
-              try {
-                element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'} flex justify-center items-center min-h-[200px]">
-                  <div>Re-rendering diagram...</div>
-                </div>`;
-                
-                const mermaidTheme = newTheme === 'dark' ? 'dark' : 'default';
-                const themeVariables = newTheme === 'dark' ? getDarkThemeVariables() : getLightThemeVariables();
-
-                await mermaid.initialize({
-                  startOnLoad: false,
-                  theme: mermaidTheme,
-                  securityLevel: 'loose',
-                  themeVariables,
-                  flowchart: {
-                    useMaxWidth: true,
-                    htmlLabels: true,
-                  },
-                  sequence: {
-                    useMaxWidth: true,
-                  }
-                });
-                
-                const { svg } = await mermaid.render(`${chartId}-svg-${Date.now()}`, content);
-                element.innerHTML = svg;
-              } catch (error) {
-                console.error('Error re-rendering mermaid on theme change:', error);
-                element.innerHTML = `<div class="${newTheme === 'dark' ? 'text-red-400' : 'text-red-600'} p-4">Error re-rendering diagram</div>`;
-              }
-            }, 150);
-          }
-        };
-
-        window.addEventListener('themeChanged', handleThemeChange);
-        return () => window.removeEventListener('themeChanged', handleThemeChange);
-      }, [chartId, content, theme]);
+        const timeoutId = setTimeout(renderChart, 100);
+        return () => clearTimeout(timeoutId);
+      }, [chartId, content, isDark]); // Re-render on theme change
 
       return (
-        <div className={`my-8 p-6 rounded-xl overflow-auto transition-all duration-300 border ${
+        <div className={`my-8 p-4 rounded-xl border shadow-sm overflow-hidden transition-colors duration-200 ${
           isDark 
-            ? 'bg-dark-800/50 backdrop-blur-sm border-dark-700/50 shadow-xl' 
-            : 'bg-white border-gray-200 shadow-lg hover:shadow-xl'
+            ? 'bg-dark-800 border-dark-700' 
+            : 'bg-white border-gray-200'
         }`}>
-          <div id={chartId} className={`flex justify-center min-h-[200px] items-center transition-colors duration-200 ${
-            isDark ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            <div className="flex items-center space-x-2">
-              <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
-                isDark ? 'border-blue-400' : 'border-blue-600'
-              }`}></div>
-              <span>Loading diagram...</span>
-            </div>
-          </div>
+          <div id={chartId} className="flex justify-center min-h-[150px] items-center w-full overflow-x-auto" />
         </div>
       );
     }
 
     // Regular code blocks with improved styling
-    return match ? (
-      <div className={`my-4 rounded-lg border overflow-hidden ${
-        isDark 
-          ? 'bg-dark-800/50 border-dark-700/50' 
-          : 'bg-gray-50 border-gray-200'
-      }`}>
-        <div className={`px-4 py-2 text-xs font-medium border-b ${
+    if (match) {
+      const [isCopied, setIsCopied] = React.useState(false);
+
+      const handleCopy = async () => {
+        await navigator.clipboard.writeText(content);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      };
+
+      return (
+        <div className={`my-6 rounded-xl overflow-hidden border transition-colors duration-200 ${
           isDark 
-            ? 'bg-dark-700/50 border-dark-600/50 text-gray-300' 
-            : 'bg-gray-100 border-gray-200 text-gray-600'
+            ? 'bg-[#1e1e1e] border-dark-700 shadow-lg' 
+            : 'bg-white border-gray-200 shadow-md'
         }`}>
-          {match[1]}
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${
+            isDark 
+              ? 'bg-dark-800 border-dark-700' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]" />
+                <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]" />
+                <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]" />
+              </div>
+              <span className={`ml-2 text-xs font-medium font-mono ${
+                isDark ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                {match[1]}
+              </span>
+            </div>
+            <button
+              onClick={handleCopy}
+              className={`p-1.5 rounded-md transition-all duration-200 ${
+                isDark 
+                  ? 'text-gray-400 hover:bg-dark-700 hover:text-white' 
+                  : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+              }`}
+              title="Copy code"
+            >
+              {isCopied ? (
+                <Check className="w-4 h-4 text-green-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          <div className="relative group">
+            <SyntaxHighlighter
+              style={isDark ? vscDarkPlus : oneLight}
+              language={match[1]}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                padding: '1.5rem',
+                background: 'transparent',
+                fontSize: '0.875rem',
+                lineHeight: '1.6',
+              }}
+              codeTagProps={{
+                style: { fontFamily: 'JetBrains Mono, monospace' }
+              }}
+            >
+              {content}
+            </SyntaxHighlighter>
+          </div>
         </div>
-        <pre className={`p-4 overflow-auto text-sm ${
-          isDark ? 'text-gray-300' : 'text-gray-800'
-        }`}>
-          <code className={className} {...props}>
-            {children}
-          </code>
-        </pre>
-      </div>
-    ) : (
+      );
+    }
+
+    return (
       <code className={`px-1.5 py-0.5 rounded text-sm font-mono ${
         isDark 
           ? 'bg-dark-700/50 text-gray-300' 
@@ -416,7 +432,7 @@ export default function ACPDetails() {
       case 'final':
         return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30';
       case 'draft':
-        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30';
+        return 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20 dark:bg-[#ef4444]/20 dark:text-[#ef4444] dark:border-[#ef4444]/30';
       case 'review':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-500/30';
       case 'stagnant':
@@ -433,8 +449,8 @@ export default function ACPDetails() {
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <LoadingSpinner size="lg" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-2">
               Loading ACP-{acpNumber}...
             </h2>
             <p className="text-gray-600 dark:text-gray-300">
@@ -469,7 +485,7 @@ export default function ACPDetails() {
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626]"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -480,6 +496,12 @@ export default function ACPDetails() {
       </div>
     );
   }
+
+  const githubUrl = `https://github.com/avalanche-foundation/ACPs/blob/main/ACPs/${acp.folderName || acp.number}/README.md`;
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
@@ -499,75 +521,105 @@ export default function ACPDetails() {
           </div>
 
           {/* ACP Header */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-8 p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl font-mono text-blue-600 dark:text-blue-400 font-bold">
-                    ACP-{acp.number}
-                  </span>
+          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8 overflow-hidden">
+            <div className="p-8">
+              <div className="flex flex-col gap-6">
+                {/* Top Row: ID and Status */}
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-4">
+                    <span className="text-3xl font-mono font-bold text-[#ef4444]">
+                      ACP-{acp.number}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 ${getStatusColor(acp.status)}`}>
+                      {getStatusIcon(acp.status)}
+                      {acp.status}
+                    </span>
+                  </div>
                   
-                </div>
-
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                  <ReactMarkdown>{acp.title}</ReactMarkdown>
-                </h1>
-
-                {/* Authors */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Users className="w-5 h-5 text-gray-400" />
-                  <div className="flex flex-wrap gap-2">
-                    {acp.authors?.map((author, index) => (
-                      <a
-                        key={index}
-                        href={`https://github.com/${author.github}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {author.name}
-                        <ExternalLink className="w-3 h-3 ml-1" />
-                      </a>
-                    )) || <span className="text-sm text-gray-600 dark:text-gray-400">Unknown</span>}
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300`}>
+                      {acp.track} Track
+                    </span>
+                    {acp.complexity && (
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300`}>
+                        {acp.complexity} Complexity
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-white leading-tight">
+                  <ReactMarkdown>{acp.title}</ReactMarkdown>
+                </h1>
+
+                {/* Author and Meta */}
+                <div className="flex flex-wrap items-center gap-6 text-sm border-y border-gray-100 dark:border-gray-700 py-6">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-gray-400" />
+                    <div className="flex flex-wrap gap-2">
+                      {acp.authors?.map((author, index) => (
+                        <a
+                          key={index}
+                          href={`https://github.com/${author.github}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-gray-900 dark:text-white hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors"
+                        >
+                          @{author.name}
+                        </a>
+                      )) || <span className="text-gray-500">Unknown</span>}
+                    </div>
+                  </div>
+
+                  <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 hidden sm:block" />
+
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <Clock className="w-4 h-4" />
+                    <span>Created {new Date(acp.created).toLocaleDateString()}</span>
+                  </div>
+
+                  {acp.updated && (
+                    <>
+                      <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 hidden sm:block" />
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Last updated {new Date(acp.updated).toLocaleDateString()}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
+                  <button
+                    onClick={() => window.open(githubUrl, '_blank', 'noopener,noreferrer')}
+                    className="inline-flex items-center px-5 py-2.5 rounded-lg shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-all cursor-pointer"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    View on GitHub
+                  </button>
+
                   {acp.discussion && (
                     <a
                       href={acp.discussion}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                      onClick={(e) => handleLinkClick(e, acp.discussion!)}
+                      className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all"
                     >
                       <LinkIcon className="w-4 h-4 mr-2" />
-                      View Discussion
-                      <ExternalLink className="w-3 h-3 ml-1" />
+                      Discussion
                     </a>
                   )}
 
-                  <a
-                    href={`https://github.com/avalanche-foundation/ACPs/tree/main/ACPs/${acp.folderName || acp.number}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
-                  >
-                    <Github className="w-4 h-4 mr-2" />
-                    View on GitHub
-                    <ExternalLink className="w-3 h-3 ml-1" />
-                  </a>
-
                   <button
                     onClick={copyToClipboard}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors"
+                    className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all ml-auto"
                   >
                     {copied ? (
                       <>
                         <Check className="w-4 h-4 mr-2 text-green-500" />
-                        Copied!
+                        Copied
                       </>
                     ) : (
                       <>
@@ -589,7 +641,33 @@ export default function ACPDetails() {
   rehypePlugins={[rehypeKatex]}
   components={{
     code: CodeBlock,
+    // Custom image handler to fix relative paths
+    img: ({ node, ...props }) => {
+      let src = props.src || '';
+      // If relative path, prepend GitHub raw URL
+      if (src && !src.startsWith('http') && !src.startsWith('//') && !src.startsWith('data:')) {
+        const baseUrl = `https://raw.githubusercontent.com/avalanche-foundation/ACPs/main/ACPs/${acp.folderName || acp.number}`;
+        const cleanPath = src.replace(/^\.\//, ''); // Remove leading ./
+        src = `${baseUrl}/${cleanPath}`;
+      }
+      return (
+        <img
+          {...props}
+          src={src}
+          className="max-w-full h-auto rounded-lg shadow-md my-8 border border-gray-200 dark:border-gray-700 block mx-auto dark:bg-white dark:p-2"
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            console.warn('Failed to load image:', src);
+          }}
+        />
+      );
+    },
     // Handle custom note blocks
+    div: ({ children, className, ...props }) => {
+      // Pass through regular divs
+      return <div className={className} {...props}>{children}</div>;
+    },
     p: ({ children, ...props }) => {
       const text = String(children);
       
@@ -597,16 +675,16 @@ export default function ACPDetails() {
       if (text.startsWith(':::note')) {
         const noteContent = text.replace(/^:::note\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-lg">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-5 h-5 text-blue-500 mt-0.5">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Note</div>
-                <div className="text-sm text-blue-700 dark:text-blue-300">{noteContent}</div>
+          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-[#ef4444] bg-[#ef4444]/5 dark:bg-[#ef4444]/10">
+            <div className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-5 h-5 text-[#ef4444] mt-0.5">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div className="flex-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                  <span className="font-bold text-gray-900 dark:text-white block mb-1">Note</span>
+                  {noteContent}
+                </div>
               </div>
             </div>
           </div>
@@ -616,16 +694,16 @@ export default function ACPDetails() {
       if (text.startsWith(':::warning')) {
         const warningContent = text.replace(/^:::warning\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 rounded-r-lg">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-5 h-5 text-yellow-500 mt-0.5">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Warning</div>
-                <div className="text-sm text-yellow-700 dark:text-yellow-300">{warningContent}</div>
+          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-yellow-500 bg-yellow-500/5 dark:bg-yellow-500/10">
+            <div className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="flex-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                  <span className="font-bold text-gray-900 dark:text-white block mb-1">Warning</span>
+                  {warningContent}
+                </div>
               </div>
             </div>
           </div>
@@ -633,7 +711,7 @@ export default function ACPDetails() {
       }
       
       // Regular paragraph
-      return <p {...props}>{children}</p>;
+      return <p {...props} className="mb-4 leading-relaxed text-gray-800 dark:text-gray-300">{children}</p>;
     }
   }}
 >

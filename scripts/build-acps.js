@@ -94,17 +94,68 @@ class EnhancedACPBuilder {
         fs.mkdirSync(OUTPUT_DIR, { recursive: true });
       }
 
-      // Check if ACPs directory exists
-      if (!fs.existsSync(ACPS_DIR)) {
-        console.error(`❌ ACPs directory not found at ${ACPS_DIR}`);
-        console.log("🔧 Initializing submodule...");
-        try {
+      // Initialize and update submodule to get latest changes
+      console.log("🔧 Updating ACP submodule to latest changes...");
+      try {
+        // Initialize submodule if it doesn't exist
+        if (!fs.existsSync(ACPS_DIR)) {
+          console.log("📥 Initializing submodule for the first time...");
           execSync("git submodule update --init --recursive", {
             stdio: "inherit",
           });
-        } catch (error) {
-          console.error("Failed to initialize submodule:", error);
-          process.exit(1);
+        }
+        
+        // Always pull the latest changes from the remote
+        console.log("📥 Pulling latest ACP changes from remote...");
+        execSync("git submodule update --remote --merge public/acps", {
+          stdio: "inherit",
+        });
+        
+        console.log("✅ Submodule updated successfully");
+      } catch (error) {
+        console.warn("⚠️ Failed to update submodule automatically:", error.message);
+        console.log("📝 This might be expected in CI/CD environments without git access");
+        
+        // Check again if directory exists after attempted update
+        if (!fs.existsSync(ACPS_DIR)) {
+          console.error(`❌ ACPs directory still not found at ${ACPS_DIR}`);
+          console.log("📝 Creating empty ACP data file for WebContainer environment");
+          
+          // Create empty processed ACPs data
+          const emptyOutput = {
+            acps: [],
+            stats: {
+              total: 0,
+              byStatus: {},
+              byTrack: {},
+              byComplexity: {},
+              byCategory: {},
+              byImpact: {},
+              averageReadingTime: 0,
+              totalAuthors: new Set(),
+              implementationProgress: {
+                notStarted: 0,
+                inProgress: 0,
+                completed: 0,
+                deployed: 0,
+              },
+              recentlyUpdated: 0,
+              needsAttention: 0,
+            },
+            metadata: {
+              lastUpdated: new Date().toISOString(),
+              totalProcessed: 0,
+              version: "2.0.0",
+              extractionTimestamp: Date.now(),
+            },
+          };
+          
+          fs.writeFileSync(OUTPUT_FILE, JSON.stringify(emptyOutput, null, 2));
+          console.log(`✅ Created empty ACP data file at: ${OUTPUT_FILE}`);
+          console.log("🎉 Build completed successfully with empty data!");
+          return;
+        } else {
+          console.log("📁 Using existing ACP data (may not be latest)");
         }
       }
 
@@ -197,6 +248,14 @@ class EnhancedACPBuilder {
 
   getGitMetadata(filePath) {
     try {
+      // Check if git is available
+      try {
+        execSync("git --version", { stdio: "ignore" });
+      } catch (error) {
+        // Git not available, but don't warn in local development
+        return { created: null, updated: null };
+      }
+      
       // Get relative path from git root to avoid absolute path issues
       const relativePath = path.relative(process.cwd(), filePath);
       // Get creation date

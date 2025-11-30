@@ -3,8 +3,18 @@ import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { Validator } from '../types';
 import { useTheme } from '../hooks/useTheme';
+import { TrendingUp, Users, Coins } from 'lucide-react';
 
 ChartJS.register(ArcElement, Tooltip);
+
+// Export the color generation function for use in other components
+export const getValidatorColor = (index: number, isDark: boolean, alpha = 1) => {
+  // Use pastel colors with lower saturation and higher lightness
+  const hue = (index * 137.508) % 360; // Golden angle approximation
+  const saturation = isDark ? '45%' : '40%'; // Lower saturation for pastel effect
+  const lightness = isDark ? '70%' : '75%'; // Higher lightness for pastel effect
+  return `hsla(${hue}, ${saturation}, ${lightness}, ${alpha})`;
+};
 
 interface StakeDistributionChartProps {
   validators: Validator[];
@@ -14,39 +24,55 @@ export function StakeDistributionChart({ validators }: StakeDistributionChartPro
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { data, totalStake, colors } = useMemo(() => {
+  // Format large numbers with abbreviations, converting from blockchain denomination
+  const formatStakeNumber = (num: number): string => {
+    // Convert from blockchain denomination to actual tokens (divide by 10^9)
+    const actualTokens = num / 1_000_000_000;
+    
+    if (actualTokens >= 1_000_000) {
+      return `${(actualTokens / 1_000_000).toFixed(2)}M`;
+    } else if (actualTokens >= 1_000) {
+      return `${(actualTokens / 1_000).toFixed(2)}K`;
+    } else {
+      return actualTokens.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+  };
+
+  const { data, totalStake } = useMemo(() => {
     // Calculate total stake
     const total = validators.reduce((sum, v) => sum + v.weight, 0);
     
     // Sort validators by stake weight in descending order
     const sortedValidators = [...validators].sort((a, b) => b.weight - a.weight);
 
-    // Generate colors for the chart
-    const generateColor = (index: number, alpha = 1) => {
-      const hue = (index * 137.508) % 360; // Golden angle approximation
-      const saturation = isDark ? '80%' : '70%';
-      const lightness = isDark ? '60%' : '50%';
-      return `hsla(${hue}, ${saturation}, ${lightness}, ${alpha})`;
-    };
+    // Get top 50 validators for display
+    const top50 = sortedValidators.slice(0, 50);
+    const othersStake = sortedValidators.slice(50).reduce((sum, v) => sum + v.weight, 0);
 
-    // Generate colors map for validators
-    const validatorColors = new Map(
-      sortedValidators.map((validator, index) => [
-        validator.address,
-        {
-          background: generateColor(index, 0.8),
-          border: generateColor(index),
-        }
-      ])
+    // Prepare data for the chart (top 50 + others)
+    const chartData = [...top50];
+    if (othersStake > 0) {
+      chartData.push({
+        address: 'Others',
+        weight: othersStake,
+        active: true,
+        uptime: 0
+      } as Validator);
+    }
+
+    const values = chartData.map(v => v.weight);
+    const backgroundColor = chartData.map((_, i) => 
+      i < 50 ? getValidatorColor(i, isDark, 0.8) : '#6b7280'
     );
-
-    // Prepare data for the chart
-    const values = sortedValidators.map(v => v.weight);
-    const backgroundColor = sortedValidators.map((_, i) => generateColor(i, 0.8));
-    const borderColor = sortedValidators.map((_, i) => generateColor(i));
+    const borderColor = chartData.map((_, i) => 
+      i < 50 ? getValidatorColor(i, isDark) : '#4b5563'
+    );
 
     return {
       data: {
+        labels: chartData.map(v => 
+          v.address === 'Others' ? 'Others' : `${v.address.slice(0, 8)}...${v.address.slice(-4)}`
+        ),
         datasets: [{
           data: values,
           backgroundColor,
@@ -55,7 +81,6 @@ export function StakeDistributionChart({ validators }: StakeDistributionChartPro
         }],
       },
       totalStake: total,
-      colors: validatorColors,
     };
   }, [validators, isDark]);
 
@@ -78,8 +103,8 @@ export function StakeDistributionChart({ validators }: StakeDistributionChartPro
           label: (context: any) => {
             const value = context.raw;
             const percentage = ((value / totalStake) * 100).toFixed(1);
-            const validatorAddress = validators[context.dataIndex].address;
-            return `${validatorAddress}: ${value.toLocaleString()} tokens (${percentage}%)`;
+            const formattedStake = formatStakeNumber(value);
+            return `${formattedStake} tokens (${percentage}%)`;
           },
         },
       },
@@ -87,46 +112,75 @@ export function StakeDistributionChart({ validators }: StakeDistributionChartPro
   };
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Stake Distribution</h3>
-      <div className="flex flex-col md:flex-row items-start gap-4">
-        <div className="w-full md:w-3/4 h-[500px]">
-          <Pie data={data} options={options} />
+    <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-[#ef4444] rounded-lg">
+            <TrendingUp className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Stake Distribution</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Top validators by stake amount</p>
+          </div>
         </div>
-        <div className="w-full md:w-1/4">
-          <div className="bg-gray-50 dark:bg-dark-700/50 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Statistics</h4>
-            <dl className="space-y-2">
-              <div>
-                <dt className="text-sm text-gray-500 dark:text-gray-400">Total Stake</dt>
-                <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {totalStake.toLocaleString()} tokens
-                </dd>
+      </div>
+
+      {/* Statistics */}
+      <div className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Chart Section */}
+          <div className="lg:col-span-2">
+            <div className="h-80 flex items-center justify-center">
+              <div className="w-full h-full max-w-sm">
+                <Pie data={data} options={options} />
               </div>
-              <div>
-                <dt className="text-sm text-gray-500 dark:text-gray-400">Validators</dt>
-                <dd className="text-lg font-semibold text-gray-900 dark:text-white">
+            </div>
+          </div>
+
+          {/* Statistics and Top Validators */}
+          <div className="space-y-6">
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 gap-4">
+              {/* Total Stake - Primary Brand Color */}
+              <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+                <div className="flex items-center gap-3 mb-2">
+                  <Coins className="w-5 h-5 text-[#ef4444]" />
+                  <span className="text-sm font-medium text-[#ef4444]">Total Stake</span>
+                </div>
+                <p className="text-2xl font-bold text-[#ef4444]">
+                  {formatStakeNumber(totalStake)}
+                </p>
+                <p className="text-xs text-[#ef4444]/80">tokens</p>
+              </div>
+
+              {/* Validators - Neutral/Dark Theme */}
+              <div className="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-3 mb-2">
+                  <Users className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Validators</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {validators.length}
-                </dd>
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">total nodes</p>
               </div>
-              <div>
-                <dt className="text-sm text-gray-500 dark:text-gray-400">Average Stake</dt>
-                <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {(totalStake / validators.length).toLocaleString()} tokens
-                </dd>
+
+              {/* Average Stake - Neutral/Dark Theme */}
+              <div className="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Average Stake</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatStakeNumber(totalStake / validators.length)}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">tokens</p>
               </div>
-            </dl>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-// Export the color generation function to be used in the validators table
-export function getValidatorColor(index: number, isDark: boolean, alpha = 1): string {
-  const hue = (index * 137.508) % 360;
-  const saturation = isDark ? '80%' : '70%';
-  const lightness = isDark ? '60%' : '50%';
-  return `hsla(${hue}, ${saturation}, ${lightness}, ${alpha})`;
 }

@@ -1,66 +1,107 @@
 import React, { useEffect, useState } from 'react';
-import { getChains, getHealth } from '../api';
+import { getChains, getHealth, getCategories } from '../api';
 import { Chain, HealthStatus } from '../types';
 import { ChainCard } from '../components/ChainCard';
+import { ChainListView } from '../components/ChainListView';
 import { StatusBar } from '../components/StatusBar';
 import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
+import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
-import { LayoutGrid, Activity, Network, Search } from 'lucide-react';
-import { TeleporterDailyChart } from '../components/TeleporterDailyChart';
+import { FilterModal } from '../components/FilterModal';
+import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
+import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
 
   async function fetchData() {
     try {
-      setLoading(true);
+      // Only show full-page loader on initial load, use subtle indicator for refetches
+      if (chains.length === 0) {
+        setLoading(true);
+      } else {
+        setIsRefetching(true);
+      }
       setError(null);
-      const [chainsData, healthData] = await Promise.all([
-        getChains(),
-        getHealth()
+
+      // Build filter object
+      const filters: { category?: string } = {};
+      if (selectedCategory) filters.category = selectedCategory;
+
+      const [chainsData, healthData, categoriesData] = await Promise.all([
+        getChains(filters),
+        getHealth(),
+        getCategories()
       ]);
-      
-      // Filter chains with at least 1 validator, but always include Avalanche chains
-      const filteredChains = chainsData.filter(chain => 
-        // Include chains with validators
-        (chain.validators && chain.validators.length >= 1) ||
-        // OR include any Avalanche chain regardless of validators
-        chain.chainName.toLowerCase().includes('avalanche') ||
-        chain.chainName.toLowerCase().includes('c-chain')
-      );
+
+      // Permanently exclude X-Chain and P-Chain
+      const excludedChains = chainsData.filter(chain => {
+        const name = chain.chainName.toLowerCase();
+        return !name.includes('x-chain') && !name.includes('p-chain');
+      });
+
+      // Apply validator filter
+      let filteredChains = excludedChains;
+
+      if (!showChainsWithoutValidators) {
+        // Default behavior: only show chains with validators or Avalanche primary chains
+        filteredChains = filteredChains.filter(chain =>
+          (chain.validators && chain.validators.length >= 1) ||
+          chain.chainName.toLowerCase().includes('avalanche') ||
+          chain.chainName.toLowerCase().includes('c-chain')
+        );
+      }
+      // If showChainsWithoutValidators is true, include all chains (no validator filter)
 
       // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
-        const isAvalancheA = a.chainName.toLowerCase().includes('c-chain');
-        const isAvalancheB = b.chainName.toLowerCase().includes('c-chain');
+        const nameA = a.chainName.toLowerCase();
+        const nameB = b.chainName.toLowerCase();
 
-        if (isAvalancheA && !isAvalancheB) return -1;
-        if (!isAvalancheA && isAvalancheB) return 1;
+        const isCChainA = nameA.includes('c-chain');
+        const isCChainB = nameB.includes('c-chain');
+
+        // C-Chain first
+        if (isCChainA && !isCChainB) return -1;
+        if (!isCChainA && isCChainB) return 1;
+
+        // Rest alphabetically
         return a.chainName.localeCompare(b.chainName);
       });
-      
+
       setChains(sortedChains);
       setHealth(healthData);
+      setCategories(categoriesData);
       setError(null);
     } catch (err) {
       setError('Unable to connect to the server. Please try again later.');
     } finally {
       setLoading(false);
+      setIsRefetching(false);
       setRetrying(false);
     }
   }
 
   useEffect(() => {
     fetchData();
-    
+  }, [selectedCategory, showChainsWithoutValidators]);
+
+  useEffect(() => {
     // Refresh health status every 5 minutes (increased from 1 minute)
     const healthInterval = setInterval(() => {
       getHealth().then(setHealth).catch(console.error);
@@ -69,6 +110,20 @@ export function Dashboard() {
     return () => clearInterval(healthInterval);
   }, []);
 
+  useEffect(() => {
+    // Restore scroll position when returning from chain details
+    const savedScrollPosition = sessionStorage.getItem('dashboardScrollPosition');
+    if (savedScrollPosition && !loading) {
+      const scrollY = parseInt(savedScrollPosition, 10);
+      // Use setTimeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        window.scrollTo(0, scrollY);
+        // Clear the saved position after restoring
+        sessionStorage.removeItem('dashboardScrollPosition');
+      }, 0);
+    }
+  }, [loading]);
+
   // Filter chains based on search term
   const filteredChains = chains.filter(chain =>
     chain.chainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -76,28 +131,35 @@ export function Dashboard() {
   );
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <LoadingPage />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full"
+        >
           <div className="text-center">
             <Activity className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Connection Error</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
-            <button
+            <motion.button
               onClick={() => {
                 setRetrying(true);
                 fetchData();
               }}
               disabled={retrying}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {retrying ? (
                 <>
@@ -110,22 +172,24 @@ export function Dashboard() {
                   Retry Connection
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background text-foreground">
       <StatusBar health={health} />
       
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        <NetworkMetricsBar />
+        
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Network className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+            <h2 className="text-xl font-semibold">
               Avalanche Interchain Messaging
             </h2>
           </div>
@@ -137,49 +201,139 @@ export function Dashboard() {
         </div>
 
         <div className="mb-8">
-          <TeleporterDailyChart />
-        </div>
-
-        <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <LayoutGrid className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <h2 className="text-xl font-semibold">
                 Active Chains
               </h2>
+              <AnimatePresence>
+                {isRefetching && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <LoadingSpinner size="sm" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+            <div className="flex items-center gap-3">
+              {/* Compact Search Bar */}
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#ef4444] transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search chains..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search chains by name or ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-dark-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
+
+              {/* Filter Button */}
+              <motion.button
+                onClick={() => setIsFilterModalOpen(true)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
+                  (selectedCategory || showChainsWithoutValidators)
+                    ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
+                    : 'bg-white dark:bg-dark-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-800 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                <span>Filters</span>
+                <AnimatePresence>
+                  {(selectedCategory || showChainsWithoutValidators) && (
+                    <motion.span
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="ml-1 px-2 py-0.5 text-xs font-bold bg-[#ef4444] text-white rounded-full"
+                    >
+                      {[selectedCategory, showChainsWithoutValidators].filter(Boolean).length}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
             </div>
           </div>
 
-          {filteredChains.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400">
-                No chains found matching "{searchTerm}"
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredChains.map(chain => (
-                <ChainCard key={chain.chainId} chain={chain} />
-              ))}
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {filteredChains.length === 0 ? (
+              <motion.div
+                key="no-results"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="text-center py-12"
+              >
+                <p className="text-gray-500 dark:text-gray-400">
+                  No chains found matching "{searchTerm}"
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`${viewMode}-${selectedCategory}-${searchTerm}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {viewMode === 'list' ? (
+                  <motion.div
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+                    initial="hidden"
+                    animate="visible"
+                    variants={{
+                      visible: {
+                        transition: {
+                          staggerChildren: 0.03
+                        }
+                      }
+                    }}
+                  >
+                    {filteredChains.map((chain) => (
+                      <motion.div
+                        key={chain.chainId}
+                        variants={{
+                          hidden: { opacity: 0, y: 20 },
+                          visible: { opacity: 1, y: 0 }
+                        }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                      >
+                        <ChainCard chain={chain} />
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <ChainListView chains={filteredChains} />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </main>
 
       <Footer />
+
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        categories={categories}
+        showChainsWithoutValidators={showChainsWithoutValidators}
+        onShowChainsWithoutValidatorsChange={setShowChainsWithoutValidators}
+      />
     </div>
   );
 }

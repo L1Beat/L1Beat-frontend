@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Calendar, Tag, ArrowRight } from 'lucide-react';
 import { getRelatedPosts, RelatedPost, formatBlogDate, getBlogPosts } from '../api/blogApi';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
 interface RelatedArticlesProps {
     currentPostSlug: string;
@@ -53,7 +54,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                             author: post.author,
                             authors: post.authors,
                             tags: post.tags,
-                            imageUrl: post.imageUrl,
+                            imageUrl: getBlogPostImageUrl(post), // Use the utility function here
                             readTime: post.readTime || 5,
                             views: post.views,
                             matchingTagsCount: 0, // No tag matching for recent posts
@@ -133,7 +134,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                 </div>
                 <Link 
                     to="/blog"
-                    className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors group"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] transition-colors group"
                 >
                     View all articles
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
@@ -146,7 +147,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                     <Link
                         key={post._id}
                         to={`/blog/${post.slug}`}
-                        className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-1"
+                        className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-[#ef4444]/50 dark:hover:border-[#ef4444]/50 transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-1"
                     >
                         {/* Image */}
                         {post.imageUrl && (
@@ -164,7 +165,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                             {/* Tags for related articles */}
                             {!isRecent && post.matchingTagsCount > 0 && (
                                 <div className="flex items-center gap-2 mb-4">
-                                    <div className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                                    <div className="flex items-center gap-1 px-3 py-1 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full text-xs font-medium">
                                         <Tag className="w-3 h-3" />
                                         {post.matchingTagsCount} shared tag{post.matchingTagsCount > 1 ? 's' : ''}
                                     </div>
@@ -172,7 +173,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                             )}
 
                             {/* Title */}
-                            <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-4 line-clamp-2 leading-tight">
+                            <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-[#ef4444] dark:group-hover:text-[#ef4444] transition-colors mb-4 line-clamp-2 leading-tight">
                                 {post.title}
                             </h3>
 
@@ -194,7 +195,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                             </div>
 
                             {/* Read more indicator */}
-                            <div className="flex items-center text-blue-600 dark:text-blue-400 font-semibold text-sm group-hover:gap-3 transition-all duration-200">
+                            <div className="flex items-center text-[#ef4444] dark:text-[#ef4444] font-semibold text-sm group-hover:gap-3 transition-all duration-200">
                                 <span>Read article</span>
                                 <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                             </div>

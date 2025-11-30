@@ -6,15 +6,60 @@
   :root {
     --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    
+    /* Design system colors - Light mode */
+    --background: #ffffff;
+    --foreground: oklch(0.145 0 0);
+    --card: #ffffff;
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: #030213;
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.95 0.0058 264.53);
+    --secondary-foreground: #030213;
+    --muted: #ececf0;
+    --muted-foreground: #717182;
+    --accent: #e9ebef;
+    --accent-foreground: #030213;
+    --destructive: #d4183d;
+    --destructive-foreground: #ffffff;
+    --border: rgba(0, 0, 0, 0.1);
+    --input: transparent;
+    --input-background: #f3f3f5;
+    --switch-background: #cbced4;
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
   }
 
   .dark {
     --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    
+    /* Design system colors - Dark mode */
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.396 0.141 25.723);
+    --destructive-foreground: oklch(0.637 0.237 25.331);
+    --border: oklch(0.269 0 0);
+    --input: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
   }
 
   body {
-    @apply bg-gradient-to-br from-gray-50 to-gray-100 dark:from-dark-950 dark:to-dark-900 min-h-screen transition-colors duration-200;
+    @apply bg-background text-foreground min-h-screen transition-colors duration-200;
   }
 
   /* Improve chart readability in dark mode */
@@ -25,16 +70,16 @@
 
 @layer components {
   .stat-card {
-    @apply relative overflow-hidden bg-white dark:bg-dark-800/50 backdrop-blur-sm rounded-xl shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] transition-all duration-300 transform hover:-translate-y-1 border border-gray-100/10 dark:border-dark-700/50;
+    @apply relative overflow-hidden bg-card rounded-xl border border-border transition-all duration-300;
   }
 
   .stat-card::before {
     content: '';
-    @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-90;
+    @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#ef4444] to-[#dc2626] opacity-90;
   }
 
   .chart-container {
-    @apply bg-white dark:bg-dark-800/50 backdrop-blur-sm rounded-xl shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] transition-all duration-300 border border-gray-100/10 dark:border-dark-700/50;
+    @apply bg-card rounded-xl border border-border transition-all duration-300;
   }
 
   .status-pill {
@@ -150,7 +195,7 @@
     animation: heartbeat-glow 1s cubic-bezier(0.4, 0, 0.6, 1);
   }
 
-  /* Fade in animation for network topology labels */
+  /* Modern blog animations */
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -163,8 +208,73 @@
     }
   }
 
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200px 0;
+    }
+    100% {
+      background-position: calc(200px + 100%) 0;
+    }
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    background-size: 200px 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  /* Floating animation for active elements */
+  @keyframes float-subtle {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  .animate-float-subtle {
+    animation: float-subtle 3s ease-in-out infinite;
   }
 
   /* Network topology animations */
@@ -209,6 +319,50 @@
 
   .animate-pulse-slow {
     animation: pulse-slow 4s ease-in-out infinite;
+  }
+
+  /* Subtle node breathing animation */
+  @keyframes node-breathe {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
+  .animate-node-breathe {
+    animation: node-breathe 3s ease-in-out infinite;
+  }
+
+  /* More visible breathing for network nodes */
+  @keyframes node-pulse {
+    0%, 100% {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.06);
+    }
+  }
+
+  .animate-node-pulse {
+    animation: node-pulse 2.5s ease-in-out infinite;
+  }
+
+  /* Glow pulse for node breathing effect */
+  @keyframes node-glow-pulse {
+    0%, 100% {
+      opacity: 0.1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.25;
+      transform: scale(1.1);
+    }
+  }
+
+  .animate-node-glow-pulse {
+    animation: node-glow-pulse 2.5s ease-in-out infinite;
   }
 
   @keyframes ripple {
@@ -315,7 +469,7 @@
   }
 
   .prose a {
-    @apply text-blue-600 dark:text-blue-400 hover:underline;
+    @apply text-[#ef4444] dark:text-[#ef4444] hover:underline;
   }
 
   /* Replace the existing .prose list styles with these */
@@ -338,7 +492,7 @@
   .prose>ul>li::before,
   .prose li:not(li li)::before {
     content: '•';
-    @apply absolute left-0 text-blue-500 font-bold text-lg;
+    @apply absolute left-0 text-[#ef4444] font-bold text-lg;
   }
 
   /* Level 2 nested lists */
@@ -373,7 +527,7 @@
 
   .prose ol>li::before {
     content: '•';
-    @apply absolute left-0 text-blue-500 font-bold text-lg;
+    @apply absolute left-0 text-[#ef4444] font-bold text-lg;
   }
 
   .prose ol ol>li::before {

@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import { motion } from 'framer-motion';
 import { acpService } from '../services/acpService';
 import {
   Users,
@@ -20,7 +21,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
         return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
       case 'draft':
       case 'proposed':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
+        return 'bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]';
       case 'review':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
       case 'withdrawn':
@@ -70,19 +71,29 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
 
   if (viewMode === 'list') {
     return (
-      <div
+      <motion.div
         onClick={() => onClick(acp)}
-        className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer group"
+        className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 cursor-pointer group"
+        whileHover={{
+          boxShadow: "0 10px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
+          borderColor: "rgb(239, 68, 68)",
+          y: -2
+        }}
+        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
         <div className="flex items-center justify-between gap-6">
           <div className="flex-1">
             <div className="flex items-center gap-4 mb-2">
-              <span className="text-lg font-bold font-mono text-blue-600 dark:text-blue-400">
+              <span className="text-lg font-bold font-mono text-[#ef4444] dark:text-[#ef4444]">
                 ACP-{acp.number}
               </span>
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              <motion.h3
+                className="text-base font-semibold text-gray-900 dark:text-white"
+                whileHover={{ color: "#ef4444" }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
                 <ReactMarkdown>{acp.title}</ReactMarkdown>
-              </h3>
+              </motion.h3>
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
               <ReactMarkdown>{acp.abstract}</ReactMarkdown>
@@ -102,21 +113,34 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
                 {getComplexityIndicator(acp.complexity)}
               </div>
             </div>
-            <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-transform duration-300 group-hover:translate-x-1" />
+            <motion.div
+              whileHover={{ x: 4, color: "#ef4444" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <ArrowRight className="w-6 h-6 text-gray-400" />
+            </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div
+    <motion.div
       onClick={() => onClick(acp)}
-      className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer group h-full flex flex-col"
+      className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer group h-full flex flex-col"
+      whileHover={{
+        boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
+        borderColor: "#ef4444",
+        y: -4,
+        scale: 1.02
+      }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       <div className="flex-1">
         <div className="flex items-start justify-between mb-3">
-          <span className="text-xl font-bold font-mono text-blue-600 dark:text-blue-400">
+          <span className="text-xl font-bold font-mono text-[#ef4444] dark:text-[#ef4444]">
             ACP-{acp.number}
           </span>
           <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(acp.status)}`}>
@@ -124,9 +148,13 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
           </span>
         </div>
 
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-2 leading-tight">
+        <motion.h3
+          className="text-lg font-semibold text-gray-900 dark:text-white mb-2 leading-tight"
+          whileHover={{ color: "#ef4444" }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
           <ReactMarkdown>{acp.title}</ReactMarkdown>
-        </h3>
+        </motion.h3>
 
         <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-4 leading-relaxed">
           <ReactMarkdown>{acp.abstract}</ReactMarkdown>
@@ -157,7 +185,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
           {getComplexityIndicator(acp.complexity)}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

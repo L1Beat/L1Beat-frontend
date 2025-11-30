@@ -15,7 +15,7 @@ export function NotFound() {
       
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
-          <FileQuestion className="w-16 h-16 text-blue-500 mx-auto mb-6" />
+          <FileQuestion className="w-16 h-16 text-[#ef4444] mx-auto mb-6" />
           
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
             Page Not Found
@@ -27,7 +27,7 @@ export function NotFound() {
           
           <button
             onClick={() => navigate('/')}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors duration-200"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Dashboard

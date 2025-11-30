@@ -9,21 +9,26 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "build-acps": "node scripts/build-acps.js",
-    "update-acps": "git submodule update --remote public/acps && npm run build-acps",
+    "update-acps": "git submodule foreach 'git reset --hard && git clean -fd' && npm run build-acps",
     "prebuild": "npm run build-acps",
-    "predev": "npm run build-acps"
+    "predev": "npm run update-acps"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/react-virtual": "^3.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "axios": "^1.11.0",
     "chart.js": "^4.4.2",
     "cjs": "^0.0.11",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "d3": "^7.8.5",
     "d3-sankey": "^0.12.3",
     "date-fns": "^3.3.1",
+    "framer-motion": "^12.23.16",
     "github-markdown-css": "^5.5.1",
     "html-react-parser": "^5.2.6",
+    "katex": "^0.16.23",
     "lucide-react": "^0.344.0",
     "marked": "^12.0.0",
     "mermaid": "^11.9.0",
@@ -40,6 +45,7 @@
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
     "simple-icons": "^11.7.0",
+    "tailwind-merge": "^3.4.0",
     "unified": "^11.0.5",
     "unist-util-select": "^5.1.0",
     "unist-util-visit": "^5.0.0",
@@ -48,6 +54,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@prerenderer/renderer-puppeteer": "^1.2.4",
     "@tailwindcss/typography": "^0.5.16",
     "@types/d3": "^7.4.3",
     "@types/d3-sankey": "^0.12.3",
@@ -55,6 +62,7 @@
     "@types/mdast": "^4.0.4",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
+    "@types/react-helmet": "^6.1.11",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
     "eslint": "^9.9.1",
@@ -63,9 +71,13 @@
     "globals": "^15.9.0",
     "node": "^18.0.0",
     "postcss": "^8.4.35",
+    "react-helmet-async": "^2.0.5",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vite-plugin-prerender": "^1.0.8",
+    "vite-ssg": "^28.2.2",
+    "vite-ssg-sitemap": "^0.10.0"
   }
 }

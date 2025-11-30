@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { getChains, getNetworkTPS } from '../api';
-import { Chain, NetworkTPS } from '../types';
-import { Server, AlertTriangle, RefreshCw, Zap, Activity } from 'lucide-react';
+import { getChains } from '../api';
+import { Chain } from '../types';
+import { Server, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface NodePosition {
   x: number;
@@ -25,7 +26,6 @@ interface Bullet {
 export function NetworkTopologyGraph() {
   const navigate = useNavigate();
   const [chains, setChains] = useState<Chain[]>([]);
-  const [networkTPS, setNetworkTPS] = useState<NetworkTPS | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
@@ -39,18 +39,15 @@ export function NetworkTopologyGraph() {
   const bulletIdCounter = useRef(0);
 
   // Bullet animation settings
-  const BULLET_BASE_SPEED = 0.15;
+  const BULLET_BASE_SPEED = 0.05;
   const MAX_BULLETS = 25;
-  const BULLET_SPAWN_RATE = 0.04;
+  const BULLET_SPAWN_RATE = 0.94;
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chainsData, networkTPSData] = await Promise.all([
-          getChains(),
-          getNetworkTPS()
-        ]);
+        const chainsData = await getChains();
         
         if (chainsData && chainsData.length > 0) {
           // Filter chains to include those with validators OR Avalanche chains
@@ -62,7 +59,6 @@ export function NetworkTopologyGraph() {
           
           if (validChains.length > 0) {
             setChains(validChains);
-            setNetworkTPS(networkTPSData);
             setError(null);
           } else {
             setError('No chains with validators available');
@@ -94,8 +90,9 @@ export function NetworkTopologyGraph() {
 
   // Calculate node sizes based on TPS and importance
   const getNodeSize = (chain: Chain, isCenter: boolean) => {
+    // Center node (C-Chain) is larger for prominence
     if (isCenter) {
-      return 80; // Center node size
+      return 64; // Significantly larger than other nodes
     }
     
     // Base size for satellite nodes
@@ -118,6 +115,14 @@ export function NetworkTopologyGraph() {
   // Format TPS value as whole number without decimals or thousands separators
   const formatTPS = (tpsValue: number): string => {
     return Math.round(tpsValue).toString();
+  };
+
+  // Format large numbers
+  const formatNumber = (num: number): string => {
+    if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+    return num.toLocaleString();
   };
 
   // Calculate radial positions around center
@@ -262,10 +267,11 @@ export function NetworkTopologyGraph() {
   }, [chains, positions, cChain]);
 
   const getRandomBulletColor = () => {
+    // Use brand red variations for bullets
     const colors = [
-      '#3b82f6', '#60a5fa', '#93c5fd',
-      '#6366f1', '#818cf8', '#a5b4fc',
-      '#8b5cf6', '#a78bfa', '#c4b5fd'
+      '#ef4444', '#dc2626', '#f87171', // Brand red variations
+      '#ef4444', '#dc2626', '#b91c1c', // More brand red
+      '#fca5a5', '#ef4444', '#dc2626'  // Lighter and darker reds
     ];
     return colors[Math.floor(Math.random() * colors.length)];
   };
@@ -278,8 +284,8 @@ export function NetworkTopologyGraph() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
         <div className="h-[400px] flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading network topology...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network topology...</p>
         </div>
       </div>
     );
@@ -295,7 +301,7 @@ export function NetworkTopologyGraph() {
           </p>
           <button 
             onClick={() => window.location.reload()}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
           >
             <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
             Retry
@@ -312,11 +318,11 @@ export function NetworkTopologyGraph() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Network Topology
           </h3>
-          <div className="ml-2 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+          {chains.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
               {chains.length} Chains
             </span>
-          </div>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -346,7 +352,7 @@ export function NetworkTopologyGraph() {
               
               setBullets(newBullets);
             }}
-            className="p-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/30 transition-colors"
+            className="p-1.5 rounded-full bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
             title="Animate network"
           >
             <Zap className="w-4 h-4" />
@@ -381,9 +387,9 @@ export function NetworkTopologyGraph() {
           <defs>
             {/* Radial gradient for center glow */}
             <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="rgba(59, 130, 246, 0.4)" />
-              <stop offset="50%" stopColor="rgba(59, 130, 246, 0.2)" />
-              <stop offset="100%" stopColor="rgba(59, 130, 246, 0)" />
+              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.4)" />
+              <stop offset="50%" stopColor="rgba(239, 68, 68, 0.2)" />
+              <stop offset="100%" stopColor="rgba(239, 68, 68, 0)" />
             </radialGradient>
             
             {/* Glow filter for bullets */}
@@ -392,24 +398,28 @@ export function NetworkTopologyGraph() {
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
             
-            {/* Connection line gradient */}
+            {/* Connection line gradient - brand red */}
             <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgba(59, 130, 246, 0.6)" />
-              <stop offset="50%" stopColor="rgba(59, 130, 246, 0.3)" />
-              <stop offset="100%" stopColor="rgba(59, 130, 246, 0.6)" />
+              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.4)" />
+              <stop offset="50%" stopColor="rgba(239, 68, 68, 0.2)" />
+              <stop offset="100%" stopColor="rgba(239, 68, 68, 0.4)" />
+            </linearGradient>
+            
+            {/* Animated connection line gradient for active connections */}
+            <linearGradient id="activeConnectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgba(239, 68, 68, 0.8)">
+                <animate attributeName="stop-opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" />
+              </stop>
+              <stop offset="50%" stopColor="rgba(239, 68, 68, 0.6)">
+                <animate attributeName="stop-opacity" values="0.6;0.3;0.6" dur="2s" repeatCount="indefinite" />
+              </stop>
+              <stop offset="100%" stopColor="rgba(239, 68, 68, 0.8)">
+                <animate attributeName="stop-opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite" />
+              </stop>
             </linearGradient>
           </defs>
           
-          {/* Center glow effect */}
-          {cChain && positions.get(cChain.chainId) && (
-            <circle
-              cx={positions.get(cChain.chainId)?.x}
-              cy={positions.get(cChain.chainId)?.y}
-              r="120"
-              fill="url(#centerGlow)"
-              className="animate-pulse-slow"
-            />
-          )}
+          {/* Center glow effect removed - nodes are now uniform */}
           
           {/* Radial connections from center to all other chains */}
           {chains.map(chain => {
@@ -428,11 +438,20 @@ export function NetworkTopologyGraph() {
                 y1={centerPosition.y}
                 x2={position.x}
                 y2={position.y}
-                stroke={isHighlighted ? '#60a5fa' : 'url(#connectionGradient)'}
+                stroke={isHighlighted ? 'url(#activeConnectionGradient)' : 'url(#connectionGradient)'}
                 strokeWidth={isHighlighted ? 2 : 1}
                 strokeOpacity={isHighlighted ? 0.8 : 0.4}
                 className="transition-all duration-300"
-              />
+              >
+                {isHighlighted && (
+                  <animate
+                    attributeName="stroke-opacity"
+                    values="0.4;0.8;0.4"
+                    dur="2s"
+                    repeatCount="indefinite"
+                  />
+                )}
+              </line>
             );
           })}
           
@@ -494,7 +513,8 @@ export function NetworkTopologyGraph() {
               key={chain.chainId}
               className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 cursor-pointer
                 ${isHovered || isSelected ? 'scale-110 z-20' : 'scale-100 z-10'}
-                ${isCenter ? 'z-30' : ''}
+                ${!isHovered && !isSelected ? 'animate-node-pulse' : ''}
+                hover:scale-105
               `}
               style={{
                 left: `${position.x}px`,
@@ -506,69 +526,62 @@ export function NetworkTopologyGraph() {
               onMouseLeave={() => setHoveredChain(null)}
               onClick={() => handleChainClick(chain)}
             >
-              {/* Center node special styling */}
-              {isCenter && (
-                <>
-                  {/* Outer glow ring */}
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 opacity-30 animate-pulse-slow scale-125"></div>
-                  {/* Middle ring */}
-                  <div className="absolute inset-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 opacity-50 animate-pulse-slow scale-110"></div>
-                </>
-              )}
+              {/* Center node - no special styling, same as other nodes */}
               
               {/* Node container */}
               <div className={`
                 relative w-full h-full rounded-full flex items-center justify-center transition-all duration-300 border-2
-                ${isCenter 
-                  ? 'bg-gradient-to-br from-blue-500 to-blue-700 border-blue-300 shadow-2xl shadow-blue-500/50' 
-                  : 'bg-gradient-to-br from-gray-700 to-gray-800 border-gray-500 shadow-lg hover:border-blue-400'
-                }
+                bg-gradient-to-br from-gray-700 to-gray-800 border-gray-500 shadow-lg hover:border-[#ef4444]
                 ${isHovered || isSelected 
-                  ? 'shadow-2xl border-blue-400' 
+                  ? 'shadow-2xl border-[#ef4444] animate-pulse' 
                   : ''}
               `}>
                 {/* Ripple effect for interactions */}
-                {(isHovered || isSelected) && !isCenter && (
-                  <div className="absolute -inset-4 rounded-full border-2 border-blue-400/50 animate-ripple"></div>
+                {(isHovered || isSelected) && (
+                  <>
+                    <div className="absolute -inset-4 rounded-full border-2 border-[#ef4444]/50 animate-ripple"></div>
+                    {/* Subtle glow on hover */}
+                    <div className="absolute -inset-2 rounded-full bg-[#ef4444]/20 animate-pulse"></div>
+                  </>
                 )}
                 
-                {/* TPS indicator */}
-                {!isCenter && tpsIndicatorSize > 0 && (
+                {/* Subtle glow effect for breathing nodes */}
+                {!isHovered && !isSelected && (
+                  <div className="absolute -inset-3 rounded-full bg-[#ef4444]/20 animate-node-glow-pulse" style={{ borderRadius: '50%' }}></div>
+                )}
+                
+                {/* TPS indicator with pulse animation */}
+                {tpsIndicatorSize > 0 && (
                   <div 
-                    className={`absolute -top-1 -right-1 rounded-full ${tpsIndicatorColor} border-2 border-gray-800 shadow-sm`}
+                    className={`absolute -top-1 -right-1 rounded-full ${tpsIndicatorColor} border-2 border-gray-800 shadow-sm animate-pulse`}
                     style={{
                       width: `${tpsIndicatorSize}px`,
                       height: `${tpsIndicatorSize}px`,
+                      animationDuration: '2s',
                     }}
                   ></div>
                 )}
                 
-                {/* Node content */}
-                {isCenter ? (
-                  <div className="absolute inset-3 rounded-full bg-white dark:bg-gray-100 flex items-center justify-center shadow-inner">
-                    {chain.chainLogoUri ? (
-                      <img 
-                        src={chain.chainLogoUri} 
-                        alt={chain.chainName}
-                        className="w-3/4 h-3/4 object-contain rounded-full"
-                      />
-                    ) : (
-                      <Server className="w-1/2 h-1/2 text-blue-600" />
-                    )}
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    {chain.chainLogoUri ? (
-                      <img 
-                        src={chain.chainLogoUri} 
-                        alt={chain.chainName}
-                        className="w-2/3 h-2/3 object-contain rounded-full"
-                      />
-                    ) : (
-                      <Server className="w-1/2 h-1/2 text-gray-300" />
-                    )}
-                  </div>
-                )}
+                {/* Node content - same for all nodes */}
+                <div className="w-full h-full flex items-center justify-center">
+                  {chain.chainLogoUri ? (
+                    <img
+                      src={chain.chainLogoUri}
+                      alt={chain.chainName}
+                      className="w-2/3 h-2/3 object-contain rounded-full"
+                      onError={(e) => {
+                        e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                        e.currentTarget.onerror = null;
+                      }}
+                    />
+                  ) : (
+                    <img
+                      src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                      alt={chain.chainName}
+                      className="w-2/3 h-2/3 object-contain rounded-full"
+                    />
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -599,27 +612,6 @@ export function NetworkTopologyGraph() {
               {/* Tooltip arrow */}
               <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 
                 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Updated legend with network TPS */}
-      <div className="mt-4 flex justify-between items-center">
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-          <Server className="w-4 h-4" />
-          <span>Active chains: <span className="font-semibold">{chains.length}</span></span>
-        </div>
-        
-        {/* Network TPS display */}
-        {networkTPS && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-sm">
-            <Activity className="w-4 h-4 text-white" />
-            <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Network TPS</span>
-              <span className="text-sm font-bold text-white">
-                {formatTPS(networkTPS.totalTps)}
-              </span>
             </div>
           </div>
         )}

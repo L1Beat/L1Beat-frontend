@@ -6,6 +6,8 @@ import ACPs  from './pages/ACPs';
 import ACPDetails  from './pages/ACPDetails';
 import { BlogList } from './pages/BlogList';
 import { BlogPost } from './pages/BlogPost';
+import { Metrics } from './pages/Metrics';
+import { BrandGuidelines } from './pages/BrandGuidelines';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -95,10 +97,12 @@ function App() {
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/chain/:chainId" element={<ChainDetails />} />
+      <Route path="/metrics" element={<Metrics />} />
       <Route path="/acps" element={<ACPs />} />
       <Route path="/acps/:acpNumber" element={<ACPDetails />} />
       <Route path="/blog" element={<BlogList />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
+      <Route path="/brand" element={<BrandGuidelines />} />
       <Route path="/404" element={<NotFound />} />
       <Route path="*" element={<Navigate to="/404" replace />} />
     </Routes>
