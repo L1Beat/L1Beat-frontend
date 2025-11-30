@@ -53,8 +53,9 @@ export function SEO({
             <meta name="twitter:title" content={fullTitle} />
             <meta name="twitter:description" content={description} />
             <meta name="twitter:image" content={ogImage} />
-            {/* Add your Twitter handle if you have one */}
-            {/* <meta name="twitter:site" content="@yourtwitterhandle" /> */}
+            <meta name="twitter:site" content="@l1beat_io" />
+            <meta name="twitter:creator" content="@l1beat_io" />
+            <meta name="twitter:domain" content="l1beat.io" />
 
             {/* Article specific tags */}
             {type === 'article' && (
