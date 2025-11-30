@@ -507,7 +507,6 @@ export function L1MetricsChart({ chainId, chainName, evmChainId, tokenSymbol }: 
         error={error}
         onRetry={() => handleTimeframeChange(timeframe)}
         valueFormatter={formatValue}
-        valueLabel={selectedMetric === 'tps' ? 'TPS' : ''}
         tooltipFormatter={tooltipFormatter}
         color={{
           line: 'rgb(239, 68, 68)', // Brand red #ef4444
