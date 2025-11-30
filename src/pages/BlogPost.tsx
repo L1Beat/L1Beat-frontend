@@ -184,6 +184,10 @@ export function BlogPost() {
             navigate('/blog');
             return;
         }
+        
+        // Reset prerenderReady
+        window.prerenderReady = false;
+        
         fetchPost();
     }, [slug, navigate]);
 
@@ -204,6 +208,8 @@ export function BlogPost() {
             console.error('Error fetching post:', err);
         } finally {
             setLoading(false);
+            // Mark as ready for prerendering
+            window.prerenderReady = true;
         }
     };
 
