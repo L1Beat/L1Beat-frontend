@@ -73,7 +73,7 @@ export default defineConfig(async ({ mode }) => {
           // Replace any localhost references with production URL if necessary
           renderedRoute.html = renderedRoute.html.replace(
             /http:\/\/localhost:\d+/g, 
-            'https://l1beat.com'
+            'https://l1beat.io'
           );
           return renderedRoute;
         },

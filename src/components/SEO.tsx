@@ -24,12 +24,14 @@ export function SEO({
     author,
     tags = [],
 }: SEOProps) {
-    const siteUrl = 'https://l1beat-dev.netlify.app';
-    const fullUrl = url ? `${siteUrl}${url}` : siteUrl;
+    const siteUrl = 'https://l1beat.io';
+    const fullUrl = url ? (url.startsWith('http') ? url : `${siteUrl}${url}`) : siteUrl;
     const fullTitle = `${title} | L1Beat`;
 
     // Use a default image if none provided
-    const ogImage = image || `${siteUrl}/og-default.png`;
+    const ogImage = image 
+        ? (image.startsWith('http') ? image : `${siteUrl}${image}`)
+        : `${siteUrl}/og-default.png`;
 
     return (
         <Helmet>
