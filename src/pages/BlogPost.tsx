@@ -19,7 +19,7 @@ import {
     TrendingUp,
     Sparkles
 } from 'lucide-react';
-import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
+import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost, getAuthorsDisplayString } from '../api/blogApi';
 import { AuthorCard } from '../components/AuthorCard';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
@@ -451,13 +451,16 @@ export function BlogPost() {
                                     </div>
                                 )}
                                 
-                                {post.author && (
+                                {((post.authors && post.authors.length > 0) || post.author) && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-gray-600 dark:text-gray-400">By</span>
-                                        <AuthorCard 
+                                        <AuthorCard
                                             authorName={post.author}
+                                            authorNames={post.authors}
                                             authorProfiles={post.authorProfiles}
                                             className="font-medium"
+                                            displayMode="inline"
+                                            showAvatars={true}
                                         />
                                     </div>
                                 )}

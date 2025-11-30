@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, Tag, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BlogPost, formatBlogDate, calculateReadTime } from '../api/blogApi';
+import { BlogPost, formatBlogDate, calculateReadTime, getAuthorsDisplayString } from '../api/blogApi';
 import { AuthorCard } from './AuthorCard';
 import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
@@ -61,28 +61,47 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                     {post.excerpt}
                                 </p>
 
-                                {/* Avatar circle + author name at bottom */}
-                                {post.author && (
+                                {/* Overlapping avatars + author names at bottom */}
+                                {((post.authors && post.authors.length > 0) || post.author) && (
                                     <div className="flex items-center gap-3 pt-2">
-                                        {post.authorProfiles && post.authorProfiles.length > 0 && post.authorProfiles[0].avatar ? (
-                                            <img
-                                                src={post.authorProfiles[0].avatar}
-                                                alt={post.author}
-                                                className="w-8 h-8 rounded-full object-cover"
-                                                onError={(e) => {
-                                                    e.currentTarget.style.display = 'none';
-                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                }}
-                                            />
-                                        ) : null}
-                                        <div className={`w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center ${
-                                            post.authorProfiles && post.authorProfiles.length > 0 && post.authorProfiles[0].avatar ? 'hidden' : ''
-                                        }`}>
-                                            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                                                {post.author.charAt(0).toUpperCase()}
-                                            </span>
+                                        {/* Overlapping avatars for first 3 authors */}
+                                        <div className="flex -space-x-2">
+                                            {(post.authors || [post.author]).slice(0, 3).map((authorName, index) => {
+                                                const profile = post.authorProfiles?.find(p =>
+                                                    p.name.toLowerCase() === authorName.toLowerCase()
+                                                );
+                                                return profile?.avatar ? (
+                                                    <img
+                                                        key={index}
+                                                        src={profile.avatar}
+                                                        alt={authorName}
+                                                        className="w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 object-cover"
+                                                        onError={(e) => {
+                                                            e.style.display = 'none';
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        key={index}
+                                                        className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center"
+                                                    >
+                                                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                            {authorName.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {(post.authors?.length || 0) > 3 && (
+                                                <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center">
+                                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                        +{(post.authors?.length || 0) - 3}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{post.author}</span>
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                            {getAuthorsDisplayString(post)}
+                                        </span>
                                     </div>
                                 )}
                             </div>
@@ -135,12 +154,14 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                         <span>{formattedDate}</span>
                     </div>
 
-                    {post.author && (
+                    {((post.authors && post.authors.length > 0) || post.author) && (
                         <div className="text-right">
                             <AuthorCard
                                 authorName={post.author}
+                                authorNames={post.authors}
                                 authorProfiles={post.authorProfiles}
                                 className="font-medium text-gray-700 dark:text-gray-300"
+                                displayMode="inline"
                             />
                         </div>
                     )}
