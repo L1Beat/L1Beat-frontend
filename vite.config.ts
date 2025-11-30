@@ -16,14 +16,25 @@ const __dirname = path.dirname(__filename);
 async function getBlogRoutes(apiBaseUrl: string) {
   try {
     // Use fetch (available in Node 18+)
-    const response = await fetch(`${apiBaseUrl}/api/blog/posts?limit=1000`);
-    if (!response.ok) return [];
+    // API has a max limit of 100 per request
+    const response = await fetch(`${apiBaseUrl}/api/blog/posts?limit=100`);
+    if (!response.ok) {
+      console.warn(`Failed to fetch blog routes: ${response.status} ${response.statusText}`);
+      return [];
+    }
     
     const data: any = await response.json();
+    console.log('Blog API response structure:', JSON.stringify(data).slice(0, 200) + '...'); // Log first 200 chars
+
     // Assuming the API returns { data: [{ slug: '...' }] }
     if (data && Array.isArray(data.data)) {
       return data.data.map((post: any) => `/blog/${post.slug}`);
+    } else if (Array.isArray(data)) {
+      // Handle array response directly
+      return data.map((post: any) => `/blog/${post.slug}`);
     }
+    
+    console.warn('Unexpected API response format');
     return [];
   } catch (e) {
     console.warn('Warning: Could not fetch blog routes for prerendering. Blog SEO tags may not work.');
@@ -35,7 +46,7 @@ async function getBlogRoutes(apiBaseUrl: string) {
 export default defineConfig(async ({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
-  const apiBaseUrl = env.VITE_API_BASE_URL || 'https://l1beat-backend.onrender.com'; // Fallback if needed
+  const apiBaseUrl = 'https://l1beat-backend-prod-9ie8i.ondigitalocean.app'; // Hardcoded to ensure it works in build environment
 
   // Define base routes
   let routesToPrerender = ['/', '/blog', '/acps', '/404'];
@@ -49,6 +60,10 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
+    define: {
+      'process.env': {},
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
+    },
     plugins: [
       react(),
       vitePrerender({
@@ -60,12 +75,14 @@ export default defineConfig(async ({ mode }) => {
 
         // The renderer to use (Puppeteer)
         renderer: new Renderer({
-          // Wait for the element with id "root" to be rendered
-          renderAfterDocumentEvent: 'custom-render-trigger',
-          // OR simply wait for a specific amount of time (e.g., 5 seconds) for data to load
+          // Wait for a specific amount of time (e.g., 5 seconds) for data to load
           renderAfterTime: 5000, 
           // Optional: Run headless
           headless: true,
+          // Chrome launch options
+          launchOptions: {
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          },
         }),
         
         // Post-process the HTML to fix any paths or data
