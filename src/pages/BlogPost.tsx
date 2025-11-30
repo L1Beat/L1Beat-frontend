@@ -20,6 +20,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
 import { AuthorCard } from '../components/AuthorCard';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
@@ -363,6 +364,7 @@ export function BlogPost() {
 
     const readTime = post.readTime || calculateReadTime(post.content || '');
     const formattedDate = formatBlogDate(post.publishedAt || '');
+    const seoImage = getBlogPostImageUrl(post);
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
@@ -370,7 +372,7 @@ export function BlogPost() {
             <SEO
                 title={post.title}
                 description={post.excerpt || post.subtitle || ''}
-                image={post.imageUrl}
+                image={seoImage}
                 url={`/blog/${post.slug}`}
                 type="article"
                 publishedTime={post.publishedAt}

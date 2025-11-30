@@ -96,7 +96,7 @@ function cleanImageUrl(url: string): string | null {
  */
 export function getFallbackImageUrl(): string {
     // Return a fallback image
-    return 'https://i.postimg.cc/zvYYZ8Ks/image.png';
+    return '/banner.png';
 }
 
 /**
