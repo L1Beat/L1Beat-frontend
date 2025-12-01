@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { useTheme } from '../hooks/useTheme';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
   CategoryScale,
@@ -72,8 +73,8 @@ export function MetricsChart({
   const isDark = theme === 'dark';
 
   const defaultColors = {
-    line: isDark ? 'rgb(129, 140, 248)' : 'rgb(99, 102, 241)',
-    fill: isDark ? 'rgba(129, 140, 248, 0.2)' : 'rgba(99, 102, 241, 0.1)'
+    line: 'rgb(239, 68, 68)',
+    fill: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)'
   };
 
   const chartColors = color || defaultColors;
@@ -82,8 +83,8 @@ export function MetricsChart({
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6">
         <div className="h-64 flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading data...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading data...</p>
         </div>
       </div>
     );
@@ -113,7 +114,7 @@ export function MetricsChart({
           {onRetry && (
             <button
               onClick={onRetry}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
             >
               <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
               Retry
@@ -265,7 +266,7 @@ export function MetricsChart({
         </div>
       </div>
 
-      <div className="h-64">
+      <div className="h-[300px] sm:h-[400px]">
         <Line data={chartData} options={options} />
       </div>
     </div>

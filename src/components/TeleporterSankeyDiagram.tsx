@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { format } from 'date-fns';
-import { RefreshCw, AlertTriangle, MessageSquare, ArrowUpDown, Activity, Clock } from 'lucide-react';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
+import { LoadingSpinner } from './LoadingSpinner';
 
 // Get API base URL from environment variables
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
@@ -119,35 +120,36 @@ export function TeleporterSankeyDiagram() {
 
   // Generate a consistent color for a chain
   const getChainColor = useCallback((chainName: string) => {
-    // Predefined colors for common chains
-    const colorMap: Record<string, string> = {
-      'Avalanche (C-Chain)': '#E84142', // Avalanche red
-      'C-Chain': '#E84142', // Avalanche red
-      'Dexalot L1': '#2775CA', // Blue
-      'Dexalot': '#2775CA', // Blue
-      'zeroone Mainnet L1': '#8A2BE2', // Purple
-      'ZeroOne': '#8A2BE2', // Purple
-      'Lamina1 L1': '#00BFFF', // Deep sky blue
-      'Lamina1': '#00BFFF', // Deep sky blue
-      'PLYR PHI L1': '#32CD32', // Lime green
-      'PLYR': '#32CD32', // Lime green
-    };
+    // Target strict brand colors
+    // C-Chain: Primary Red (#ef4444)
+    // Others: Neutral/Grayscale to highlight C-Chain's centrality
     
-    // Return predefined color if available
-    if (colorMap[chainName]) {
-      return colorMap[chainName];
+    const name = chainName.toLowerCase();
+    
+    if (name.includes('c-chain') || name.includes('avalanche')) {
+      return '#ef4444'; // Brand Red
     }
-    
-    // Hash the chain name to get a consistent hue
+
+    // Generate consistent neutral/slate colors for other chains
+    // Use a deterministic hash to pick from a slate palette
     const hash = chainName.split('').reduce((acc, char) => {
       return char.charCodeAt(0) + ((acc << 5) - acc);
     }, 0);
     
-    const h = Math.abs(hash) % 360;
-    const s = '80%';
-    const l = '60%';
+    // Palette of neutral colors that look good on dark background
+    // Ranging from Slate-400 to Slate-600 and Zinc-400 to Zinc-600
+    const neutrals = [
+      '#94a3b8', // slate-400
+      '#64748b', // slate-500
+      '#475569', // slate-600
+      '#a1a1aa', // zinc-400
+      '#71717a', // zinc-500
+      '#52525b', // zinc-600
+      '#9ca3af', // gray-400
+      '#6b7280', // gray-500
+    ];
     
-    return `hsl(${h}, ${s}, ${l})`;
+    return neutrals[Math.abs(hash) % neutrals.length];
   }, []);
 
 
@@ -157,25 +159,26 @@ export function TeleporterSankeyDiagram() {
       setError(null);
       
       // Use the appropriate endpoint based on the selected timeframe
-      const endpoint = timeframe === 'daily' 
+      const primaryEndpoint = timeframe === 'daily' 
         ? `${API_BASE_URL}/api/teleporter/messages/daily-count`
         : `${API_BASE_URL}/api/teleporter/messages/weekly-count`;
-      
-      const response = await fetch(endpoint);
+
+      const response = await fetch(primaryEndpoint);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const rawData = await response.json();
+      const dataArray = Array.isArray(rawData) ? rawData : (rawData.data || []);
       
       // Process the API response format
-      if (!rawData || !rawData.data || !Array.isArray(rawData.data)) {
+      if (!Array.isArray(dataArray)) {
         throw new Error('Invalid data format: Missing data array');
       }
       
       // Transform the data to our expected format
-      const messages = rawData.data.map((item: any) => ({
+      const messages = dataArray.map((item: any) => ({
         source: item.sourceChain || 'Unknown',
         target: item.destinationChain || 'Unknown',
         value: Number(item.messageCount) || 0
@@ -626,8 +629,8 @@ export function TeleporterSankeyDiagram() {
     return (
       <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
         <div className="h-[400px] flex flex-col items-center justify-center">
-          <RefreshCw className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600 dark:text-gray-300">Loading message flow data...</p>
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading message flow data...</p>
         </div>
       </div>
     );
@@ -643,7 +646,7 @@ export function TeleporterSankeyDiagram() {
           </p>
           <button 
             onClick={fetchData}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
           >
             <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
             Retry
@@ -669,7 +672,7 @@ export function TeleporterSankeyDiagram() {
               onClick={() => setTimeframe('daily')}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'daily'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-[#ef4444] text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
               }`}
             >
@@ -679,7 +682,7 @@ export function TeleporterSankeyDiagram() {
               onClick={() => setTimeframe('weekly')}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'weekly'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-[#ef4444] text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
               }`}
             >
@@ -758,47 +761,8 @@ export function TeleporterSankeyDiagram() {
         {/* Tooltip for nodes */}
       </div>
       
-      {/* Stats card at the bottom */}
-      <div className="mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        {/* Message stats card */}
-        <div className="flex items-center bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg overflow-hidden shadow-lg">
-          <div className="px-3 py-2 flex items-center gap-2">
-            <div className="bg-white/20 rounded-full p-1.5">
-              <MessageSquare className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Total Messages</span>
-              <span className="text-lg font-bold text-white">{formatNumber(data.metadata.totalMessages)}</span>
-            </div>
-          </div>
-          <div className="h-full w-px bg-white/20"></div>
-          <div className="px-3 py-2 flex items-center gap-2">
-            <div className="bg-white/20 rounded-full p-1.5">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-blue-100 font-medium">Timeframe</span>
-              <span className="text-sm font-bold text-white">{timeframe === 'daily' ? 'Daily' : 'Weekly'}</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Last updated badge - simplified version without time and refresh button */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-dark-700/50 rounded-full shadow-sm border border-gray-100 dark:border-dark-700/50">
-          <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Last updated:</span>
-              <span className="text-xs font-bold text-gray-900 dark:text-white">
-                {format(new Date(data.metadata.updatedAt), 'MMM d, yyyy')}
-              </span>
-            </div>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {getTimeSinceUpdate()}
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* Stats card at the bottom removed - moved to NetworkMetricsBar */}
+      
     </div>
   );
 }

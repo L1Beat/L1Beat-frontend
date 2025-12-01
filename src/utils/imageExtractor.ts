@@ -76,6 +76,11 @@ function cleanImageUrl(url: string): string | null {
         return cleaned;
     }
 
+    // Optimize Substack images for Twitter/Social Media (convert WebP to JPG)
+    if (cleaned.includes('substackcdn.com') && cleaned.includes('f_webp')) {
+        cleaned = cleaned.replace('f_webp', 'f_jpg');
+    }
+
     // Basic URL validation - accept various formats
     if (
         cleaned.startsWith('http://') ||
@@ -96,7 +101,7 @@ function cleanImageUrl(url: string): string | null {
  */
 export function getFallbackImageUrl(): string {
     // Return a fallback image
-    return 'https://i.postimg.cc/zvYYZ8Ks/image.png';
+    return '/banner.png';
 }
 
 /**

@@ -24,12 +24,14 @@ export function SEO({
     author,
     tags = [],
 }: SEOProps) {
-    const siteUrl = 'https://l1beat-dev.netlify.app';
-    const fullUrl = url ? `${siteUrl}${url}` : siteUrl;
+    const siteUrl = 'https://l1beat.io';
+    const fullUrl = url ? (url.startsWith('http') ? url : `${siteUrl}${url}`) : siteUrl;
     const fullTitle = `${title} | L1Beat`;
 
     // Use a default image if none provided
-    const ogImage = image || `${siteUrl}/og-default.png`;
+    const ogImage = image 
+        ? (image.startsWith('http') ? image : `${siteUrl}${image}`)
+        : `${siteUrl}/banner.png`;
 
     return (
         <Helmet>
@@ -51,8 +53,9 @@ export function SEO({
             <meta name="twitter:title" content={fullTitle} />
             <meta name="twitter:description" content={description} />
             <meta name="twitter:image" content={ogImage} />
-            {/* Add your Twitter handle if you have one */}
-            {/* <meta name="twitter:site" content="@yourtwitterhandle" /> */}
+            <meta name="twitter:site" content="@l1beat_io" />
+            <meta name="twitter:creator" content="@l1beat_io" />
+            <meta name="twitter:domain" content="l1beat.io" />
 
             {/* Article specific tags */}
             {type === 'article' && (

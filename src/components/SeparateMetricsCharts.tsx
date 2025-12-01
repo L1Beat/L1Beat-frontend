@@ -126,7 +126,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
             onClick={() => handleTimeframeChange(7)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               timeframe === 7
-                ? 'bg-blue-500 text-white'
+                ? 'bg-[#ef4444] text-white'
                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
             }`}
           >
@@ -136,7 +136,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
             onClick={() => handleTimeframeChange(14)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               timeframe === 14
-                ? 'bg-blue-500 text-white'
+                ? 'bg-[#ef4444] text-white'
                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
             }`}
           >
@@ -146,7 +146,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
             onClick={() => handleTimeframeChange(30)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               timeframe === 30
-                ? 'bg-blue-500 text-white'
+                ? 'bg-[#ef4444] text-white'
                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
             }`}
           >
@@ -160,7 +160,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
         {/* TPS Chart */}
         <MetricsChart
           title="TPS"
-          icon={<Activity className="w-5 h-5 text-blue-500" />}
+          icon={<Activity className="w-5 h-5 text-[#ef4444]" />}
           data={tpsData}
           loading={loading.tps}
           error={error.tps}

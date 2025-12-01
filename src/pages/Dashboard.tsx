@@ -8,10 +8,11 @@ import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
+import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
+import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
 import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
-import { AvalancheNetworkMetrics } from '../components/TeleporterDailyChart';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
@@ -130,20 +131,7 @@ export function Dashboard() {
   );
 
   if (loading) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"
-      >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="rounded-full h-12 w-12 border-b-2 border-blue-500"
-        />
-      </motion.div>
-    );
+    return <LoadingPage />;
   }
 
   if (error) {
@@ -171,7 +159,7 @@ export function Dashboard() {
               disabled={retrying}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {retrying ? (
                 <>
@@ -192,14 +180,16 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background text-foreground">
       <StatusBar health={health} />
       
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        <NetworkMetricsBar />
+        
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Network className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+            <h2 className="text-xl font-semibold">
               Avalanche Interchain Messaging
             </h2>
           </div>
@@ -211,14 +201,10 @@ export function Dashboard() {
         </div>
 
         <div className="mb-8">
-          <AvalancheNetworkMetrics />
-        </div>
-
-        <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <LayoutGrid className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <h2 className="text-xl font-semibold">
                 Active Chains
               </h2>
               <AnimatePresence>
@@ -228,24 +214,25 @@ export function Dashboard() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.2 }}
-                    className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"
-                  />
+                  >
+                    <LoadingSpinner size="sm" />
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
             <div className="flex items-center gap-3">
               {/* Compact Search Bar */}
-              <div className="relative">
+              <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
+                  <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#ef4444] transition-colors" />
                 </div>
                 <input
                   type="text"
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-48 pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
                 />
               </div>
 
@@ -254,10 +241,14 @@ export function Dashboard() {
                 onClick={() => setIsFilterModalOpen(true)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
+                  (selectedCategory || showChainsWithoutValidators)
+                    ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
+                    : 'bg-white dark:bg-dark-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-800 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
               >
                 <Filter className="w-4 h-4" />
-                <span className="text-sm font-medium">Filters</span>
+                <span>Filters</span>
                 <AnimatePresence>
                   {(selectedCategory || showChainsWithoutValidators) && (
                     <motion.span
@@ -265,7 +256,7 @@ export function Dashboard() {
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0, opacity: 0 }}
                       transition={{ duration: 0.2 }}
-                      className="ml-1 px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full"
+                      className="ml-1 px-2 py-0.5 text-xs font-bold bg-[#ef4444] text-white rounded-full"
                     >
                       {[selectedCategory, showChainsWithoutValidators].filter(Boolean).length}
                     </motion.span>

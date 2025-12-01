@@ -37,17 +37,16 @@ export function ChainCard({ chain }: ChainCardProps) {
 
   return (
     <motion.div
-      className="stat-card cursor-pointer"
+      className="bg-card rounded-xl border border-border p-6 cursor-pointer transition-all duration-300 hover:border-[#ef4444]/30"
       onClick={handleNavigate}
       whileHover={{
-        y: -4,
-        scale: 1.02,
-        boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)"
+        y: -2,
+        scale: 1.01,
       }}
       whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="p-6">
+      <div>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {chain.chainLogoUri ? (
@@ -113,7 +112,7 @@ export function ChainCard({ chain }: ChainCardProps) {
             transition={{ duration: 0.2 }}
           >
             <div className="flex items-center gap-2 mb-1">
-              <Server className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+              <Server className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444]" />
               <span className="text-sm text-gray-600 dark:text-gray-300">Validators</span>
             </div>
             <AnimatePresence mode="popLayout">
@@ -126,7 +125,7 @@ export function ChainCard({ chain }: ChainCardProps) {
                   duration: 0.4,
                   ease: [0.4, 0.0, 0.2, 1]
                 }}
-                className="text-lg font-bold text-blue-600 dark:text-blue-400 inline-block"
+                className="text-lg font-bold text-[#ef4444] dark:text-[#ef4444] inline-block"
               >
                 {chain.validators?.length || 0}
               </motion.span>
@@ -141,7 +140,7 @@ export function ChainCard({ chain }: ChainCardProps) {
               {chain.categories.slice(0, 3).map(category => (
                 <span
                   key={category}
-                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]"
                 >
                   {category}
                 </span>

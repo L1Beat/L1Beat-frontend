@@ -34,7 +34,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                 {/* Pill-shaped tag at the top */}
                                 {post.tags && post.tags.length > 0 && (
                                     <div className="inline-flex">
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full">
                                             <Tag className="w-3 h-3" />
                                             {post.tags[0]}
                                         </span>
@@ -50,7 +50,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                 {/* Large multi-line headline */}
                                 <motion.h2
                                     className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900 dark:text-white leading-tight"
-                                    whileHover={{ color: "#2563eb" }}
+                                    whileHover={{ color: "#ef4444" }}
                                     transition={{ duration: 0.3, ease: "easeOut" }}
                                 >
                                     {post.title}
@@ -128,7 +128,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
     return (
         <Link
             to={`/blog/${post.slug}`}
-            className="group flex flex-col bg-white dark:bg-dark-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-blue-300 dark:hover:border-blue-600 transform hover:-translate-y-2 hover:scale-[1.02]"
+            className="group flex flex-col bg-white dark:bg-dark-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-200 dark:border-dark-700 hover:border-[#ef4444]/50 dark:hover:border-[#ef4444]/50 transform hover:-translate-y-2 hover:scale-[1.02]"
         >
             {/* Banner Image */}
             <div className="relative h-48 overflow-hidden">
@@ -143,7 +143,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
             {/* Content */}
             <div className="p-6 flex-grow flex flex-col">
                 {/* Title */}
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3 line-clamp-2 h-[3.5rem]">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white group-hover:text-[#ef4444] dark:group-hover:text-[#ef4444] transition-colors mb-3 line-clamp-2 h-[3.5rem]">
                     {post.title}
                 </h3>
 

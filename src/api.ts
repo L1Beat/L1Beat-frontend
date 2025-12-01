@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -462,36 +462,592 @@ export async function getNetworkTPS(): Promise<NetworkTPS> {
   });
 }
 
-export async function getDailyActiveAddresses(evmChainId: string, days: number = 30): Promise<DailyActiveAddresses[]> {
-  return fetchWithCache(`daily-active-addresses-${evmChainId}-${days}`, async () => {
+export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPSHistory[]> {
+  return fetchWithCache(`network-max-tps-history-${days}`, async () => {
     try {
-      console.log(`Fetching daily active addresses for evmChainId: ${evmChainId}, days: ${days}`);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/max-tps/network/history?days=${days}&t=${timestamp}`;
 
-      // API returns raw array, not { data: [...] }
-      const response = await fetchWithRetry<DailyActiveAddresses[]>(
-        `https://idx6.solokhin.com/api/${evmChainId}/stats/daily-active-addresses`
-      );
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network max TPS history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainMaxTPSHistory(chainId: string, days: number = 30): Promise<MaxTPSHistory[]> {
+  return fetchWithCache(`chain-max-tps-history-${chainId}-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/max-tps/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
       
-      console.log('Daily active addresses response:', response);
-      console.log('Response type:', typeof response);
-      console.log('Is array:', Array.isArray(response));
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error('Invalid chain max TPS history data format');
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Chain max TPS history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
+  // Use 365 days as default if user asks for more data, but respect the 'days' parameter if it's smaller
+  // The external API supports 'days' parameter
+  return fetchWithCache(`daily-message-volume-external-${days}`, async () => {
+    try {
+      const url = `https://idx6.solokhin.com/api/global/metrics/dailyMessageVolume?days=${days}`;
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      // The external API returns an array directly or inside data property
+      const dataArray = Array.isArray(response) ? response : (response.data || []);
+
+      if (!Array.isArray(dataArray)) {
+        return [];
+      }
+
+      return dataArray
+        .map(item => ({
+          timestamp: Math.floor(new Date(item.date).getTime() / 1000),
+          value: Number(item.messageCount || item.count || item.value || 0)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Daily message volume fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000); // Cache for 5 minutes
+}
+
+export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
+  return fetchWithCache('network-max-tps-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: MaxTPSLatest;
+      }>(`${API_URL}/max-tps/network/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid network max TPS latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount)
+      };
+    } catch (error) {
+      console.error('Network max TPS latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkTxCountLatest(): Promise<DailyTxCountLatest | null> {
+  return fetchWithCache('network-tx-count-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: DailyTxCountLatest;
+      }>(`${API_URL}/tx-count/network/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid network tx count latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount)
+      };
+    } catch (error) {
+      console.error('Network tx count latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkTxCountHistory(days: number = 30): Promise<DailyTxCount[]> {
+  return fetchWithCache(`network-tx-count-history-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/tx-count/network/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network tx count history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainTxCountHistory(chainId: string, days: number = 30): Promise<DailyTxCount[]> {
+  return fetchWithCache(`chain-tx-count-history-${chainId}-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/tx-count/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
       
-      if (!response || !Array.isArray(response)) {
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error('Invalid chain tx count history data format');
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Chain tx count history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getNetworkGasUsedHistory(days: number = 30): Promise<GasUsedHistory[]> {
+  return fetchWithCache(`network-gas-used-history-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/gas-used/network/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network gas used history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainGasUsedHistory(chainId: string, days: number = 30): Promise<GasUsedHistory[]> {
+  return fetchWithCache(`chain-gas-used-history-${chainId}-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/gas-used/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+      
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error('Invalid chain gas used history data format');
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Chain gas used history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getNetworkGasUsedLatest(): Promise<GasUsedLatest | null> {
+  return fetchWithCache('network-gas-used-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: GasUsedLatest;
+      }>(`${API_URL}/gas-used/network/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid network gas used latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount)
+      };
+    } catch (error) {
+      console.error('Network gas used latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getChainGasUsedLatest(chainId: string): Promise<GasUsedLatest | null> {
+  return fetchWithCache(`chain-gas-used-latest-${chainId}`, async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: GasUsedLatest;
+      }>(`${API_URL}/chains/${chainId}/gas-used/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid chain gas used latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: undefined // Chain specific data doesn't have chainCount
+      };
+    } catch (error) {
+      console.error('Chain gas used latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkAvgGasPriceHistory(days: number = 30): Promise<AvgGasPriceHistory[]> {
+  return fetchWithCache(`network-avg-gas-price-history-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/avg-gas-price/network/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network avg gas price history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainAvgGasPriceHistory(chainId: string, days: number = 30): Promise<AvgGasPriceHistory[]> {
+  return fetchWithCache(`chain-avg-gas-price-history-${chainId}-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/avg-gas-price/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+      
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error('Invalid chain avg gas price history data format');
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => {
+          let value = Number(item.value);
+          
+          // Special handling for C-Chain (43114): scale down by factor of 10 based on user report
+          // The API returns ~2.44 but user expects ~0.24 for 2.44, and ~0.11 for 1.19
+          if (chainId === '43114') {
+            value = value / 10;
+          }
+          
+          return {
+            timestamp: Number(item.timestamp),
+            value: value
+          };
+        })
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Chain avg gas price history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getNetworkAvgGasPriceLatest(): Promise<AvgGasPriceLatest | null> {
+  return fetchWithCache('network-avg-gas-price-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: AvgGasPriceLatest;
+      }>(`${API_URL}/avg-gas-price/network/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid network avg gas price latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount)
+      };
+    } catch (error) {
+      console.error('Network avg gas price latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getChainAvgGasPriceLatest(chainId: string): Promise<AvgGasPriceLatest | null> {
+  return fetchWithCache(`chain-avg-gas-price-latest-${chainId}`, async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: AvgGasPriceLatest;
+      }>(`${API_URL}/chains/${chainId}/avg-gas-price/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid chain avg gas price latest response format');
+      }
+
+      let value = Number(response.data.value);
+      
+      // Special handling for C-Chain (43114): scale down by factor of 10
+      if (chainId === '43114') {
+        value = value / 10;
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: value,
+        chainCount: undefined
+      };
+    } catch (error) {
+      console.error('Chain avg gas price latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getChainFeesPaidHistory(chainId: string, days: number = 30): Promise<FeesPaidHistory[]> {
+  return fetchWithCache(`chain-fees-paid-history-${chainId}-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/fees-paid/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+      
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error('Invalid chain fees paid history data format');
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Chain fees paid history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainFeesPaidLatest(chainId: string): Promise<FeesPaidLatest | null> {
+  return fetchWithCache(`chain-fees-paid-latest-${chainId}`, async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: FeesPaidLatest;
+      }>(`${API_URL}/chains/${chainId}/fees-paid/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid chain fees paid latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: undefined
+      };
+    } catch (error) {
+      console.error('Chain fees paid latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkFeesPaidHistory(days: number = 30): Promise<FeesPaidHistory[]> {
+  return fetchWithCache(`network-fees-paid-history-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/fees-paid/network/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          value: Number(item.value)
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network fees paid history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getNetworkFeesPaidLatest(): Promise<FeesPaidLatest | null> {
+  return fetchWithCache('network-fees-paid-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: FeesPaidLatest;
+      }>(`${API_URL}/fees-paid/network/latest`);
+
+      if (!response.success || !response.data) {
+        throw new Error('Invalid network fees paid latest response format');
+      }
+
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount)
+      };
+    } catch (error) {
+      console.error('Network fees paid latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkActiveAddressesHistory(days: number = 30): Promise<DailyActiveAddresses[]> {
+  return fetchWithCache(`network-active-addresses-history-${days}`, async () => {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/active-addresses/network/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+
+      if (!response.success || !Array.isArray(response.data)) {
+        return [];
+      }
+
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          activeAddresses: Number(item.value),
+          transactions: 0 // API doesn't provide transactions count yet
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
+    } catch (error) {
+      console.error('Network active addresses history fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getDailyActiveAddresses(chainId: string, days: number = 30): Promise<DailyActiveAddresses[]> {
+  return fetchWithCache(`daily-active-addresses-${chainId}-${days}`, async () => {
+    try {
+      console.log(`Fetching daily active addresses for chainId: ${chainId}, days: ${days}`);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const url = `${API_URL}/chains/${chainId}/active-addresses/history?days=${days}&t=${timestamp}`;
+
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: Array<any>;
+      }>(url);
+      
+      if (!response.success || !Array.isArray(response.data)) {
         throw new Error('Invalid daily active addresses data format');
       }
 
-      return response
-        .filter(item => item && typeof item.timestamp === 'number' && typeof item.activeAddresses === 'number')
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .slice(-days); // Take only the last N days
+      return response.data
+        .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+        .map(item => ({
+          timestamp: Number(item.timestamp),
+          activeAddresses: Number(item.value),
+          transactions: 0 // API doesn't provide transactions count yet
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
     } catch (error) {
       console.error('Daily active addresses fetch error:', error);
-      console.error('Error details:', {
-        evmChainId,
-        days,
-        errorMessage: error.message,
-        errorStack: error.stack
-      });
       return [];
     }
   });
@@ -530,22 +1086,31 @@ export async function getTeleporterMessages(): Promise<TeleporterMessageData> {
     try {
       const response = await fetchWithRetry<any>(`${API_URL}/teleporter/messages/daily-count`);
       
-      if (!response || !Array.isArray(response.messages)) {
+      // Handle both raw array and { data: [...] } formats
+      const dataArray = Array.isArray(response) ? response : (response?.data || []);
+      
+      if (!Array.isArray(dataArray)) {
         throw new Error('Invalid Teleporter message data format');
       }
       
+      // Map the API response to our internal format
+      const messages = dataArray.map((msg: any) => ({
+        source: msg.sourceChain || msg.source || 'Unknown',
+        target: msg.destinationChain || msg.target || 'Unknown',
+        value: Number(msg.messageCount || msg.count || msg.value || 0)
+      }));
+      
+      // Calculate total messages if metadata is missing
+      const totalMessages = response?.metadata?.totalMessages || 
+        messages.reduce((sum: number, msg: any) => sum + msg.value, 0);
+      
       return {
-        messages: response.messages.map((msg: any) => ({
-          source: msg.source,
-          target: msg.target,
-          count: Number(msg.count)
-        })),
+        messages,
         metadata: {
-          totalMessages: response.metadata?.totalMessages || 
-            response.messages.reduce((sum: number, msg: any) => sum + Number(msg.count), 0),
-          startDate: response.metadata?.startDate || new Date().toISOString(),
-          endDate: response.metadata?.endDate || new Date().toISOString(),
-          updatedAt: response.metadata?.updatedAt || new Date().toISOString()
+          totalMessages,
+          startDate: response?.metadata?.startDate || new Date().toISOString(),
+          endDate: response?.metadata?.endDate || new Date().toISOString(),
+          updatedAt: response?.metadata?.updatedAt || new Date().toISOString()
         }
       };
     } catch (error) {

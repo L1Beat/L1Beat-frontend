@@ -1,26 +1,43 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-export default defineConfig({
-  plugins: [react()],
-  publicDir: 'public',
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'chart-vendor': ['chart.js', 'react-chartjs-2'],
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig(async ({ mode }) => {
+  // Load env file based on `mode` in the current working directory.
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiBaseUrl = env.VITE_API_BASE_URL;
+
+  return {
+    define: {
+      'process.env': {},
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
+    },
+    plugins: [
+      react(),
+    ],
+    publicDir: 'public',
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'chart-vendor': ['chart.js', 'react-chartjs-2'],
+          },
         },
       },
+      target: 'esnext',
+      minify: 'esbuild',
     },
-    target: 'esnext',
-    minify: 'esbuild',
-  },
-  server: {
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
+    server: {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
     },
-  },
+  };
 });

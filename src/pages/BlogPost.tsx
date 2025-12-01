@@ -19,10 +19,12 @@ import {
     TrendingUp,
     Sparkles
 } from 'lucide-react';
-import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost, getAuthorsDisplayString } from '../api/blogApi';
+import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
 import { AuthorCard } from '../components/AuthorCard';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { HealthStatus } from '../types';
 import { RelatedArticles } from '../components/RelatedArticles';
 import { SEO } from '../components/SEO';
@@ -66,7 +68,7 @@ const NewsletterSubscription = () => {
     }
 
     return (
-        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 rounded-2xl p-8 lg:p-12">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#b91c1c] rounded-2xl p-8 lg:p-12">
             {/* Background Pattern */}
             <div className="absolute inset-0 opacity-10">
                 <div className="absolute inset-0" style={{
@@ -182,8 +184,23 @@ export function BlogPost() {
             navigate('/blog');
             return;
         }
+        
+        // Reset prerenderReady
+        window.prerenderReady = false;
+        
         fetchPost();
     }, [slug, navigate]);
+
+    // Set prerenderReady when loading is done and content is ready
+    useEffect(() => {
+        if (!loading && (post || error)) {
+            // Give React a moment to render the SEO component
+            const timer = setTimeout(() => {
+                window.prerenderReady = true;
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, post, error]);
 
     const fetchPost = async () => {
         if (!slug) return;
@@ -302,8 +319,8 @@ export function BlogPost() {
                 <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                        <p className="text-gray-600 dark:text-gray-300">Loading article...</p>
+                        <LoadingSpinner size="lg" />
+                        <p className="mt-4 text-gray-600 dark:text-gray-300">Loading article...</p>
                     </div>
                 </div>
             </div>
@@ -337,7 +354,7 @@ export function BlogPost() {
                         <div className="flex gap-4 justify-center">
                             <button
                                 onClick={() => navigate('/blog')}
-                                className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                                className="px-8 py-3 bg-[#ef4444] text-white rounded-xl hover:bg-[#dc2626] transition-colors font-semibold"
                             >
                                 Back to Blog
                             </button>
@@ -362,6 +379,7 @@ export function BlogPost() {
 
     const readTime = post.readTime || calculateReadTime(post.content || '');
     const formattedDate = formatBlogDate(post.publishedAt || '');
+    const seoImage = getBlogPostImageUrl(post);
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
@@ -369,7 +387,7 @@ export function BlogPost() {
             <SEO
                 title={post.title}
                 description={post.excerpt || post.subtitle || ''}
-                image={post.imageUrl}
+                image={seoImage}
                 url={`/blog/${post.slug}`}
                 type="article"
                 publishedTime={post.publishedAt}
@@ -386,7 +404,7 @@ export function BlogPost() {
                 <div className="mb-8">
                     <Link
                         to="/blog"
-                        className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group"
+                        className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors group"
                     >
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" />
                         Back to Blog
@@ -402,7 +420,7 @@ export function BlogPost() {
                                 <Link
                                     key={tag}
                                     to={`/blog?tag=${encodeURIComponent(tag)}`}
-                                    className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-500/20 dark:to-indigo-500/20 text-blue-800 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-500/30 hover:from-blue-200 hover:to-indigo-200 dark:hover:from-blue-500/30 dark:hover:to-indigo-500/30 transition-all duration-200 transform hover:scale-105"
+                                    className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full border border-[#ef4444]/20 dark:border-[#ef4444]/30 hover:from-[#ef4444]/20 hover:to-[#dc2626]/20 dark:hover:from-[#ef4444]/30 dark:hover:to-[#dc2626]/30 transition-all duration-200 transform hover:scale-105"
                                 >
                                     <Tag className="w-3 h-3" />
                                     {tag}
@@ -424,28 +442,28 @@ export function BlogPost() {
                     )}
 
                     {/* Meta Info Card */}
-                    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+                    <div className="bg-card border border-border rounded-2xl p-6 mb-8">
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                             {/* Left side - Meta info */}
-                            <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-500/20 rounded-lg flex items-center justify-center">
-                                        <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                        <Calendar className="w-4 h-4 text-[#ef4444]" />
                                     </div>
                                     <span className="font-medium">{formattedDate}</span>
                                 </div>
                                 
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-green-100 dark:bg-green-500/20 rounded-lg flex items-center justify-center">
-                                        <Clock className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                        <Clock className="w-4 h-4 text-[#ef4444]" />
                                     </div>
                                     <span className="font-medium">{readTime} min read</span>
                                 </div>
                                 
                                 {post.views && (
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                            <Eye className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                        <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
+                                            <Eye className="w-4 h-4 text-[#ef4444]" />
                                         </div>
                                         <span className="font-medium">{post.views.toLocaleString()} views</span>
                                     </div>
@@ -453,12 +471,12 @@ export function BlogPost() {
                                 
                                 {((post.authors && post.authors.length > 0) || post.author) && (
                                     <div className="flex items-center gap-2">
-                                        <span className="text-gray-600 dark:text-gray-400">By</span>
+                                        <span className="text-muted-foreground">By</span>
                                         <AuthorCard
                                             authorName={post.author}
                                             authorNames={post.authors}
                                             authorProfiles={post.authorProfiles}
-                                            className="font-medium"
+                                            className="font-medium hover:text-[#ef4444] transition-colors"
                                             displayMode="inline"
                                             showAvatars={true}
                                         />
@@ -470,7 +488,7 @@ export function BlogPost() {
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => sharePost('twitter')}
-                                    className="group flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-200 transform hover:scale-105"
+                                    className="group flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ef4444] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 border border-[#ef4444]/20 rounded-lg transition-all duration-200 transform hover:scale-105"
                                 >
                                     <XIcon className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200" />
                                     Share
@@ -510,20 +528,20 @@ export function BlogPost() {
 
                 {/* Original Source Link */}
                 {post.sourceUrl && (
-                    <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-500/20 rounded-2xl">
+                    <div className="mt-8 p-6 bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-2xl">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
                                 <ExternalLink className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                                <p className="text-sm font-semibold text-[#ef4444] dark:text-[#ef4444] mb-1">
                                     Originally Published
                                 </p>
                                 <a
                                     href={post.sourceUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 font-medium transition-colors group"
+                                    className="inline-flex items-center gap-2 text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] font-medium transition-colors group"
                                 >
                                     View on Substack
                                     <ExternalLink className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-200" />
