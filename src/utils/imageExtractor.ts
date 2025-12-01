@@ -76,9 +76,13 @@ function cleanImageUrl(url: string): string | null {
         return cleaned;
     }
 
-    // Optimize Substack images for Twitter/Social Media (convert WebP to JPG)
-    if (cleaned.includes('substackcdn.com') && cleaned.includes('f_webp')) {
-        cleaned = cleaned.replace('f_webp', 'f_jpg');
+    // Optimize Substack images for Twitter/Social Media (convert WebP/Auto to JPG)
+    if (cleaned.includes('substackcdn.com')) {
+        if (cleaned.includes('f_webp')) {
+            cleaned = cleaned.replace('f_webp', 'f_jpg');
+        } else if (cleaned.includes('f_auto')) {
+            cleaned = cleaned.replace('f_auto', 'f_jpg');
+        }
     }
 
     // Basic URL validation - accept various formats
