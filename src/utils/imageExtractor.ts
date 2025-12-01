@@ -76,12 +76,20 @@ function cleanImageUrl(url: string): string | null {
         return cleaned;
     }
 
-    // Optimize Substack images for Twitter/Social Media (convert WebP/Auto to JPG)
+    // Optimize Substack images for Twitter/Social Media
+    // 1. Convert WebP/Auto to JPG (Twitter hates WebP)
+    // 2. Resize to 1200px width (Twitter max file size is 5MB, 1456px might be too big)
     if (cleaned.includes('substackcdn.com')) {
+        // Fix format
         if (cleaned.includes('f_webp')) {
             cleaned = cleaned.replace('f_webp', 'f_jpg');
         } else if (cleaned.includes('f_auto')) {
             cleaned = cleaned.replace('f_auto', 'f_jpg');
+        }
+
+        // Fix dimensions (replace any w_XXXX with w_1200)
+        if (cleaned.match(/w_\d+/)) {
+            cleaned = cleaned.replace(/w_\d+/, 'w_1200');
         }
     }
 
