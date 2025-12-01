@@ -78,7 +78,7 @@ function cleanImageUrl(url: string): string | null {
 
     // Optimize Substack images for Twitter/Social Media
     // 1. Convert WebP/Auto to JPG (Twitter hates WebP)
-    // 2. Resize to 1200px width (Twitter max file size is 5MB, 1456px might be too big)
+    // 2. Do NOT force resize (w_1200 broke 1183px images). Let Substack serve the original size, but ensure JPG.
     if (cleaned.includes('substackcdn.com')) {
         // Fix format
         if (cleaned.includes('f_webp')) {
@@ -87,10 +87,10 @@ function cleanImageUrl(url: string): string | null {
             cleaned = cleaned.replace('f_auto', 'f_jpg');
         }
 
-        // Fix dimensions (replace any w_XXXX with w_1200)
-        if (cleaned.match(/w_\d+/)) {
-            cleaned = cleaned.replace(/w_\d+/, 'w_1200');
-        }
+        // Remove resizing (let original size prevail to avoid upscale errors)
+        // if (cleaned.match(/w_\d+/)) {
+        //     cleaned = cleaned.replace(/w_\d+/, 'w_1200');
+        // }
     }
 
     // Basic URL validation - accept various formats
