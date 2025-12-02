@@ -5,15 +5,35 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && react-snap",
     "build:ssg": "tsc && node scripts/ssg.js",
     "build:spa": "tsc && vite build",
+    "build:no-snap": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "build-acps": "node scripts/build-acps.js",
     "update-acps": "git submodule foreach 'git reset --hard && git clean -fd' && npm run build-acps",
     "prebuild": "npm run build-acps",
     "predev": "npm run update-acps"
+  },
+  "reactSnap": {
+    "source": "dist",
+    "minifyHtml": {
+      "collapseWhitespace": false,
+      "removeComments": false
+    },
+    "puppeteerArgs": [
+      "--no-sandbox",
+      "--disable-setuid-sandbox"
+    ],
+    "include": [
+      "/",
+      "/blog",
+      "/acps"
+    ],
+    "skipThirdPartyRequests": true,
+    "cacheAjaxRequests": false,
+    "headless": true
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
@@ -74,6 +94,7 @@
     "node": "^18.0.0",
     "postcss": "^8.4.35",
     "react-helmet-async": "^2.0.5",
+    "react-snap": "^1.23.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
