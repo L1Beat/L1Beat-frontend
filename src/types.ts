@@ -221,6 +221,7 @@ export interface Author {
   github: string;
   email?: string;
   organization?: string;
+  url?: string;
 }
 
 // Base ACP interface - keep for backward compatibility

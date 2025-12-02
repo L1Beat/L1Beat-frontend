@@ -63,6 +63,16 @@ class EnhancedACPBuilder {
     } else if (field.includes("status")) {
       // Apply status cleaning here
       metadata.status = this.getCleanStatus(value);
+      
+      // Check for discussion link in Status field (e.g. "Proposed ([Discussion](...))")
+      const discussionUrl = this.extractDiscussionUrl(value);
+      if (discussionUrl) {
+        metadata.discussions.push({
+          url: discussionUrl,
+          platform: this.detectPlatform(discussionUrl),
+          title: "Primary Discussion",
+        });
+      }
     } else if (field.includes("track")) {
       metadata.track = value;
     } else if (field.includes("discussion")) {
@@ -493,6 +503,8 @@ class EnhancedACPBuilder {
       if (metadata.discussions.length > 0) {
         metadata.primaryDiscussion = metadata.discussions[0].url;
       }
+      // Ensure backwards compatibility for frontend
+      metadata.discussion = metadata.primaryDiscussion;
 
       return metadata;
     } catch (error) {
@@ -513,16 +525,35 @@ class EnhancedACPBuilder {
       const linkMatch = authorPart.match(/\[(.+?)\]\((.+?)\)/);
       const emailMatch = authorPart.match(/(.+?)\s*\(([^@]+@[^)]+)\)/);
 
-      let author = { name: "", github: "", email: "", organization: "" };
+      let author = { name: "", github: "", email: "", organization: "", url: "" };
 
       if (githubMatch) {
         author.name = githubMatch[1].trim();
         author.github = githubMatch[2].trim();
+        author.url = `https://github.com/${author.github}`;
       } else if (linkMatch) {
-        author.name = linkMatch[1].trim();
-        const link = linkMatch[2].trim();
-        if (link.includes("github.com")) {
-          author.github = link.split("/").pop() || "";
+        // Enhanced link handling to capture name before the link
+        // Format: "Name ([@handle](url))" or "Name [@handle](url)"
+        const linkText = linkMatch[1].trim();
+        const linkUrl = linkMatch[2].trim();
+        
+        // Extract text before the link
+        const preLinkText = authorPart.substring(0, linkMatch.index).trim();
+        // Clean up trailing open parenthesis if present (from "Name (" pattern)
+        const name = preLinkText.replace(/\($/, '').trim();
+        
+        author.name = name || linkText;
+        author.url = linkUrl;
+        
+        if (linkUrl.includes("github.com")) {
+          author.github = linkUrl.split("/").pop() || "";
+        } else {
+          // Try to extract handle from link text if it looks like a handle
+          if (linkText.startsWith('@')) {
+            author.github = linkText.substring(1);
+          } else {
+            author.github = linkText;
+          }
         }
       } else if (emailMatch) {
         author.name = emailMatch[1].trim();
@@ -582,8 +613,34 @@ class EnhancedACPBuilder {
   extractDiscussionUrl(discussionStr) {
     if (!discussionStr) return "";
 
+    // Try to find a markdown link pattern [Title](URL) first
+    const markdownLinkMatch = discussionStr.match(/\[.*?\]\(([^)]+)\)/);
+    if (markdownLinkMatch) {
+      let url = markdownLinkMatch[1].trim();
+      return url;
+    }
+
+    // Fallback to simple parentheses extraction if not a standard markdown link
     const urlMatch = discussionStr.match(/\(([^)]+)\)/);
-    if (urlMatch) return urlMatch[1];
+    if (urlMatch) {
+      let url = urlMatch[1].trim();
+      
+      // Cleanup logic as before
+      if (url.endsWith(')') && !url.includes('(')) {
+        url = url.slice(0, -1);
+      }
+      
+      // If the extracted "url" is actually just a part of a markdown link syntax that got malformed
+      // e.g. if discussionStr was "[Link](url"
+      if (url.includes('](')) {
+        const parts = url.split('](');
+        if (parts.length > 1) {
+          return parts[1];
+        }
+      }
+      
+      return url;
+    }
 
     if (discussionStr.startsWith("http")) return discussionStr;
 

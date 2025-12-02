@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { getChains } from '../api';
 import { Chain } from '../types';
-import { Server, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -30,9 +30,8 @@ export function NetworkTopologyGraph() {
   const [error, setError] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, NodePosition>>(new Map());
   const [hoveredChain, setHoveredChain] = useState<Chain | null>(null);
-  const [selectedChain, setSelectedChain] = useState<Chain | null>(null);
+  const [selectedChain] = useState<Chain | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [bullets, setBullets] = useState<Bullet[]>([]);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
@@ -117,14 +116,6 @@ export function NetworkTopologyGraph() {
     return Math.round(tpsValue).toString();
   };
 
-  // Format large numbers
-  const formatNumber = (num: number): string => {
-    if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
-    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
-    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-    return num.toLocaleString();
-  };
-
   // Calculate radial positions around center
   const calculatePositions = () => {
     if (!containerRef.current || chains.length === 0) return;
@@ -133,8 +124,6 @@ export function NetworkTopologyGraph() {
     const rect = container.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
-    
-    setDimensions({ width, height });
     
     const centerChain = cChain || chains[0];
     const centerX = width / 2;
@@ -316,7 +305,7 @@ export function NetworkTopologyGraph() {
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Network Topology
+            Avalanche Universe
           </h3>
           {chains.length > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
