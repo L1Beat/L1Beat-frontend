@@ -33,6 +33,7 @@ async function generate() {
         rollupOptions: {
           output: {
             format: 'esm',
+            manualChunks: undefined,
           },
         },
       },
