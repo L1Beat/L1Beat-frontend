@@ -30,10 +30,11 @@ export default defineConfig(async ({ mode }) => {
         },
       },
       target: 'esnext',
-      minify: 'esbuild',
+      minify: process.env.SSR_BUILD ? false : 'esbuild',
     },
     ssr: {
-      noExternal: ['react-syntax-highlighter'],
+      target: 'node',
+      noExternal: true,
     },
     server: {
       headers: {

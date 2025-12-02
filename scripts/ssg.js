@@ -6,6 +6,25 @@ import { build } from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
+// Extract first image URL from HTML content
+function extractImageFromContent(content) {
+    if (!content) return null;
+
+    const patterns = [
+        /<img[^>]*\ssrc=["'](https:\/\/substackcdn\.com\/[^"']+)["'][^>]*>/i,
+        /<img[^>]*\ssrc=["']([^"']+)["'][^>]*>/i,
+        /!\[[^\]]*\]\(([^)]+)\)/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+            return match[1].replace(/["']/g, '').trim();
+        }
+    }
+    return null;
+}
+
 async function generate() {
   try {
     // 1. Build Client
@@ -66,11 +85,18 @@ async function generate() {
     const routes = ['/', '/blog', '/acps', '/404'];
 
     // Fetch blog posts
+    const blogPosts = new Map(); // Store blog posts by slug
     try {
-        const res = await fetch(`${apiBaseUrl}/api/blog/posts?limit=1000`);
+        console.log(`Fetching blog posts from ${apiBaseUrl}/api/blog/posts?limit=100`);
+        const res = await fetch(`${apiBaseUrl}/api/blog/posts?limit=100`);
         const data = await res.json();
-        if (data.data) {
-            data.data.forEach(post => routes.push(`/blog/${post.slug}`));
+        console.log(`Fetched ${data.data?.length || 0} blog posts`);
+        if (data.data && Array.isArray(data.data)) {
+            data.data.forEach(post => {
+                routes.push(`/blog/${post.slug}`);
+                blogPosts.set(post.slug, post);
+            });
+            console.log(`Added ${data.data.length} blog post routes`);
         }
     } catch (e) {
         console.error('Failed to fetch blog routes', e);
@@ -87,16 +113,48 @@ async function generate() {
     for (const url of routes) {
       try {
           const { html: appHtml, helmet } = render(url, {});
-          
+
           let html = template.replace('<!--app-html-->', appHtml);
-          
-          // Inject Helmet head tags
-          const helmetHead = `
-              ${helmet.title?.toString() || ''}
-              ${helmet.meta?.toString() || ''}
-              ${helmet.link?.toString() || ''}
-              ${helmet.script?.toString() || ''}
-          `;
+
+          // Check if this is a blog post route
+          const blogSlug = url.match(/^\/blog\/(.+)$/)?.[1];
+          const post = blogSlug ? blogPosts.get(blogSlug) : null;
+
+          let helmetHead = '';
+          if (post) {
+              // For blog posts, generate custom meta tags with extracted image
+              const imageUrl = post.imageUrl || extractImageFromContent(post.mainContent || post.content) || 'https://l1beat.io/banner.png';
+              const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `https://l1beat.io${imageUrl}`;
+              const description = post.excerpt || post.subtitle || '';
+              const title = post.title || 'L1Beat - Avalanche L1 Analytics Platform';
+
+              helmetHead = `
+                  <title>${title} | L1Beat</title>
+                  <meta name="description" content="${description}" />
+                  <meta property="og:type" content="article" />
+                  <meta property="og:url" content="https://l1beat.io${url}" />
+                  <meta property="og:title" content="${title}" />
+                  <meta property="og:description" content="${description}" />
+                  <meta property="og:image" content="${fullImageUrl}" />
+                  <meta property="og:site_name" content="L1Beat" />
+                  <meta name="twitter:card" content="summary_large_image" />
+                  <meta name="twitter:url" content="https://l1beat.io${url}" />
+                  <meta name="twitter:title" content="${title}" />
+                  <meta name="twitter:description" content="${description}" />
+                  <meta name="twitter:image" content="${fullImageUrl}" />
+                  <meta property="tg:image" content="${fullImageUrl}" />
+                  <link rel="canonical" href="https://l1beat.io${url}" />
+              `;
+          } else {
+              // Use Helmet tags for non-blog routes
+              helmetHead = `
+                  ${helmet.title?.toString() || ''}
+                  ${helmet.meta?.toString() || ''}
+                  ${helmet.link?.toString() || ''}
+                  ${helmet.script?.toString() || ''}
+              `;
+          }
+
           html = html.replace('<!--head-meta-->', helmetHead);
 
           const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}/index.html`);
