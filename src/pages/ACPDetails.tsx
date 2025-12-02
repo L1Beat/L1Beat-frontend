@@ -7,8 +7,6 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
@@ -59,6 +57,26 @@ export default function ACPDetails() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
+
+  // Dynamically load syntax highlighter only on client side
+  const [SyntaxHighlighter, setSyntaxHighlighter] = useState<any>(null);
+  const [syntaxStyles, setSyntaxStyles] = useState<any>({ vscDarkPlus: {}, oneLight: {} });
+
+  useEffect(() => {
+    // Only load on client side
+    if (typeof window !== 'undefined') {
+      Promise.all([
+        import('react-syntax-highlighter').then(mod => mod.Prism),
+        import('react-syntax-highlighter/dist/esm/styles/prism').then(styles => ({
+          vscDarkPlus: styles.vscDarkPlus,
+          oneLight: styles.oneLight
+        }))
+      ]).then(([Highlighter, styles]) => {
+        setSyntaxHighlighter(() => Highlighter);
+        setSyntaxStyles(styles);
+      }).catch(err => console.error('Failed to load syntax highlighter:', err));
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -369,23 +387,29 @@ export default function ACPDetails() {
             </button>
           </div>
           <div className="relative group">
-            <SyntaxHighlighter
-              style={isDark ? vscDarkPlus : oneLight}
-              language={match[1]}
-              PreTag="div"
-              customStyle={{
-                margin: 0,
-                padding: '1.5rem',
-                background: 'transparent',
-                fontSize: '0.875rem',
-                lineHeight: '1.6',
-              }}
-              codeTagProps={{
-                style: { fontFamily: 'JetBrains Mono, monospace' }
-              }}
-            >
-              {content}
-            </SyntaxHighlighter>
+            {SyntaxHighlighter ? (
+              <SyntaxHighlighter
+                style={isDark ? syntaxStyles.vscDarkPlus : syntaxStyles.oneLight}
+                language={match[1]}
+                PreTag="div"
+                customStyle={{
+                  margin: 0,
+                  padding: '1.5rem',
+                  background: 'transparent',
+                  fontSize: '0.875rem',
+                  lineHeight: '1.6',
+                }}
+                codeTagProps={{
+                  style: { fontFamily: 'JetBrains Mono, monospace' }
+                }}
+              >
+                {content}
+              </SyntaxHighlighter>
+            ) : (
+              <pre className="p-6 overflow-x-auto bg-gray-900 dark:bg-gray-800 rounded-b-lg">
+                <code className="text-gray-300 text-sm font-mono">{content}</code>
+              </pre>
+            )}
           </div>
         </div>
       );
