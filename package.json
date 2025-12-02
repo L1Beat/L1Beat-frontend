@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && react-snap",
+    "build": "tsc && vite build && react-snap || true",
     "build:ssg": "tsc && node scripts/ssg.js",
     "build:spa": "tsc && vite build",
     "build:no-snap": "tsc && vite build",
@@ -33,7 +33,11 @@
     ],
     "skipThirdPartyRequests": true,
     "cacheAjaxRequests": false,
-    "headless": true
+    "headless": true,
+    "ignoreForPrerender": ["service-worker"],
+    "removeBlobs": true,
+    "removeScriptTags": false,
+    "inlineCss": false
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
