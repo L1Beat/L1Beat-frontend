@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && react-snap || true",
-    "build:ssg": "tsc && node scripts/ssg.js",
+    "build": "tsc && node scripts/ssg.js",
+    "build:snap": "tsc && vite build && react-snap || true",
     "build:spa": "tsc && vite build",
-    "build:no-snap": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "build-acps": "node scripts/build-acps.js",
@@ -31,13 +30,16 @@
       "/blog",
       "/acps"
     ],
-    "skipThirdPartyRequests": true,
-    "cacheAjaxRequests": false,
+    "skipThirdPartyRequests": false,
+    "cacheAjaxRequests": true,
+    "crawl": true,
     "headless": true,
     "ignoreForPrerender": ["service-worker"],
     "removeBlobs": true,
     "removeScriptTags": false,
-    "inlineCss": false
+    "inlineCss": false,
+    "waitFor": 2000,
+    "minInlineJavascriptLength": 0
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",

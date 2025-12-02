@@ -52,7 +52,7 @@ const EXPLORER_URL = 'https://subnets.avax.network';
 const DEFAULT_HEADERS = {
   'Accept': 'application/json',
   'Content-Type': 'application/json',
-  'Origin': window.location.origin,
+  'Origin': typeof window !== 'undefined' ? window.location.origin : '',
 };
 
 // Define constants for rate limiting
