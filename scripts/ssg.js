@@ -64,7 +64,7 @@ async function generate() {
     console.log('Fetching routes from', apiBaseUrl);
     
     const routes = ['/', '/blog', '/acps', '/404'];
-    
+
     // Fetch blog posts
     try {
         const res = await fetch(`${apiBaseUrl}/api/blog/posts?limit=1000`);
@@ -75,6 +75,11 @@ async function generate() {
     } catch (e) {
         console.error('Failed to fetch blog routes', e);
     }
+
+    // Skip ACP pages for now due to syntax highlighter SSR issues
+    // They're technical content viewed by developers who can wait for client-side render
+    // We can re-enable once we replace react-syntax-highlighter with a simpler solution
+    console.log('Skipping ACP pages pre-rendering (technical content, less SEO critical)');
 
     // 5. Render
     console.log(`Prerendering ${routes.length} routes...`);
