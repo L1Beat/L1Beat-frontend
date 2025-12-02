@@ -24,6 +24,7 @@ async function generate() {
 
     // 2. Build Server
     console.log('Building server...');
+    process.env.SSR_BUILD = 'true';
     await build({
       root,
       build: {
@@ -33,7 +34,6 @@ async function generate() {
         rollupOptions: {
           output: {
             format: 'esm',
-            manualChunks: undefined,
           },
         },
       },
@@ -45,11 +45,18 @@ async function generate() {
 
     // 4. Get API URL
     const getApiUrl = async () => {
+      // Priority 1: Environment variable (Netlify/CI)
+      if (process.env.VITE_API_BASE_URL) {
+        return process.env.VITE_API_BASE_URL;
+      }
+      
+      // Priority 2: Local .env file
       try {
         const envContent = await fs.readFile(path.resolve(root, '.env'), 'utf-8');
         const match = envContent.match(/VITE_API_BASE_URL=(.*)/);
         if (match) return match[1].trim();
       } catch (e) {}
+      
       return 'https://api.l1beat.io'; // Default fallback
     };
     

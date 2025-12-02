@@ -23,7 +23,7 @@ export default defineConfig(async ({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
+          manualChunks: process.env.SSR_BUILD ? undefined : {
             'react-vendor': ['react', 'react-dom', 'react-router-dom'],
             'chart-vendor': ['chart.js', 'react-chartjs-2'],
           },
