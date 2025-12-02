@@ -77,21 +77,8 @@ function cleanImageUrl(url: string): string | null {
     }
 
     // Optimize Substack images for Twitter/Social Media
-    // 1. Convert WebP/Auto to JPG (Twitter hates WebP)
-    // 2. Do NOT force resize (w_1200 broke 1183px images). Let Substack serve the original size, but ensure JPG.
-    if (cleaned.includes('substackcdn.com')) {
-        // Fix format
-        if (cleaned.includes('f_webp')) {
-            cleaned = cleaned.replace('f_webp', 'f_jpg');
-        } else if (cleaned.includes('f_auto')) {
-            cleaned = cleaned.replace('f_auto', 'f_jpg');
-        }
-
-        // Remove resizing (let original size prevail to avoid upscale errors)
-        // if (cleaned.match(/w_\d+/)) {
-        //     cleaned = cleaned.replace(/w_\d+/, 'w_1200');
-        // }
-    }
+    // Removed: Converting f_webp/f_auto to f_jpg can break the CDN signature ($s_!...)
+    // Twitter and modern platforms support f_auto/WebP correctly now.
 
     // Basic URL validation - accept various formats
     if (
