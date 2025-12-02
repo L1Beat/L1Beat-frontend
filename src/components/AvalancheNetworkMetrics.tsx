@@ -15,8 +15,8 @@ import {
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users, Activity, Fuel, Coins } from 'lucide-react';
-import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getNetworkFeesPaidHistory } from '../api';
+import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users, Activity, Fuel } from 'lucide-react';
+import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
@@ -44,7 +44,7 @@ interface MetricData {
   };
 }
 
-type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'feesPaid';
+type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed';
 
 const METRICS = [
   { 
@@ -156,33 +156,6 @@ const METRICS = [
       return value.toLocaleString();
     },
     unit: 'gas'
-  },
-  {
-    id: 'feesPaid' as const,
-    name: 'Fees Paid',
-    description: 'Total fees paid for transactions across the network',
-    icon: Coins,
-    color: {
-      light: 'rgb(239, 68, 68)',
-      dark: 'rgb(239, 68, 68)',
-      fill: {
-        light: 'rgba(239, 68, 68, 0.1)',
-        dark: 'rgba(239, 68, 68, 0.2)'
-      }
-    },
-    valueFormatter: (value: number) => {
-      if (value >= 1_000_000_000) {
-        return `${(value / 1_000_000_000).toFixed(2)}B`;
-      }
-      if (value >= 1_000_000) {
-        return `${(value / 1_000_000).toFixed(2)}M`;
-      }
-      if (value >= 1_000) {
-        return `${(value / 1_000).toFixed(2)}K`;
-      }
-      return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    },
-    unit: 'AVAX'
   },
   { 
     id: 'dailyMessageVolume' as const, 
@@ -380,20 +353,6 @@ export function AvalancheNetworkMetrics() {
           const gasUsedData = await getNetworkGasUsedHistory(daysToFetch);
           
           processedData = gasUsedData
-            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
-            .map(item => ({
-              timestamp: item.timestamp,
-              date: new Date(item.timestamp * 1000).toISOString(),
-              value: item.value,
-              metadata: {}
-            }))
-            .sort((a, b) => a.timestamp - b.timestamp);
-          break;
-
-        case 'feesPaid':
-          const feesPaidData = await getNetworkFeesPaidHistory(daysToFetch);
-          
-          processedData = feesPaidData
             .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
             .map(item => ({
               timestamp: item.timestamp,
