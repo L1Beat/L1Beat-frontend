@@ -32,6 +32,9 @@ export default defineConfig(async ({ mode }) => {
       target: 'esnext',
       minify: 'esbuild',
     },
+    ssr: {
+      noExternal: ['react-syntax-highlighter'],
+    },
     server: {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
