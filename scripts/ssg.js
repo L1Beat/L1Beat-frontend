@@ -11,14 +11,24 @@ function extractImageFromContent(content) {
     if (!content) return null;
 
     const patterns = [
+        // Priority 1: Direct S3 URLs (clean, no CDN processing)
+        /https:\/\/substack-post-media\.s3\.amazonaws\.com\/public\/images\/[a-f0-9-]+_\d+x\d+\.(jpeg|jpg|png|webp)/i,
+        // Priority 2: Substack CDN URLs
         /<img[^>]*\ssrc=["'](https:\/\/substackcdn\.com\/[^"']+)["'][^>]*>/i,
+        // Priority 3: Any other img src
         /<img[^>]*\ssrc=["']([^"']+)["'][^>]*>/i,
+        // Priority 4: Markdown images
         /!\[[^\]]*\]\(([^)]+)\)/,
     ];
 
     for (const pattern of patterns) {
         const match = content.match(pattern);
-        if (match && match[1]) {
+        if (match && match[0]) {
+            // For S3 pattern, extract just the URL
+            if (pattern === patterns[0]) {
+                return match[0];
+            }
+            // For other patterns, use captured group
             return match[1].replace(/["']/g, '').trim();
         }
     }

@@ -12,7 +12,10 @@ export function extractFirstImageFromContent(content: string): string | null {
 
     // Multiple regex patterns for better image detection
     const patterns = [
-        // Substack CDN images in img tags (priority - these are the main ones)
+        // PRIORITY 1: Direct S3 URLs (clean, no CDN processing - best for social media)
+        /https:\/\/substack-post-media\.s3\.amazonaws\.com\/public\/images\/[a-f0-9-]+_\d+x\d+\.(jpeg|jpg|png|webp)/i,
+
+        // PRIORITY 2: Substack CDN images in img tags
         /<img[^>]*\ssrc=["'](https:\/\/substackcdn\.com\/[^"']+)["'][^>]*>/i,
 
         // Standard HTML img tags - various formats and attribute orders
@@ -42,9 +45,15 @@ export function extractFirstImageFromContent(content: string): string | null {
         /["'](https:\/\/[^"'\s]+\.(?:jpg|jpeg|png|gif|webp))["']/i,
     ];
 
-    for (const pattern of patterns) {
+    for (let i = 0; i < patterns.length; i++) {
+        const pattern = patterns[i];
         const match = content.match(pattern);
-        if (match && match[1]) {
+        if (match && match[0]) {
+            // For S3 pattern (first pattern), return the full match
+            if (i === 0 && match[0].startsWith('https://substack-post-media')) {
+                return match[0];
+            }
+            // For other patterns, use captured group
             const cleanedUrl = cleanImageUrl(match[1]);
             if (cleanedUrl) {
                 return cleanedUrl;
