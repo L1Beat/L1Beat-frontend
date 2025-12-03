@@ -44,21 +44,12 @@ export function AuthorCard({
 
   // Determine which authors to display
   const displayAuthors = React.useMemo(() => {
-    console.log('[AuthorCard] Props received:', {
-      authorName,
-      authorNames,
-      authorProfilesCount: authorProfiles?.length
-    });
-
     if (authorNames && authorNames.length > 0) {
-      console.log('[AuthorCard] Using authorNames:', authorNames);
       return authorNames;
     }
     if (authorName) {
-      console.log('[AuthorCard] Using single authorName:', authorName);
       return [authorName];
     }
-    console.log('[AuthorCard] Falling back to default: L1Beat');
     return ['L1Beat'];
   }, [authorName, authorNames]);
 
