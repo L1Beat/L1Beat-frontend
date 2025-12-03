@@ -160,23 +160,23 @@ export function AuthorCard({
       <div
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-6 transform transition-all duration-300 ease-out animate-float ${
+        className={`relative w-full max-w-2xl bg-gradient-to-br from-white to-[#fef2f2] dark:from-gray-900 dark:to-[#1a0f0f] border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-2xl shadow-2xl p-8 transform transition-all duration-300 ease-out animate-float ${
           isModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'
         }`}
       >
         {/* Close Button */}
         <button
           onClick={closeModal}
-          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+          className="absolute top-6 right-6 p-2 text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 rounded-lg transition-all duration-200"
         >
-          <X className="w-4 h-4" />
+          <X className="w-5 h-5" />
         </button>
       {/* Modal Content - Support for single or multiple authors */}
-      <div className="max-h-[600px] overflow-y-auto space-y-6">
+      <div className="space-y-8">
         {displayAuthors.map((authorName, index) => {
           const profile = getAuthorProfile(authorName);
           return (
-            <div key={index} className={index > 0 ? 'border-t border-gray-200 dark:border-gray-700 pt-6' : ''}>
+            <div key={index} className={index > 0 ? 'border-t border-[#ef4444]/20 dark:border-[#ef4444]/20 pt-8' : ''}>
               {/* Header */}
               <div className="flex items-start gap-4 mb-4">
                 <div className="flex-shrink-0 group">
@@ -184,20 +184,20 @@ export function AuthorCard({
                     <img
                       src={profile.avatar}
                       alt={profile.name}
-                      className="w-12 h-12 rounded-full border-2 border-gray-100 dark:border-gray-700 transition-all duration-300 group-hover:scale-110 group-hover:border-blue-300 dark:group-hover:border-blue-500"
+                      className="w-16 h-16 rounded-full border-2 border-[#ef4444]/30 dark:border-[#ef4444]/40 transition-all duration-300 group-hover:scale-110 group-hover:border-[#ef4444] dark:group-hover:border-[#ef4444] group-hover:shadow-lg group-hover:shadow-[#ef4444]/20"
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:from-blue-600 group-hover:to-purple-700">
-                      <User className="w-6 h-6 text-white transition-all duration-300 group-hover:scale-110" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-[#ef4444]/30 group-hover:from-[#dc2626] group-hover:to-[#b91c1c]">
+                      <User className="w-8 h-8 text-white transition-all duration-300 group-hover:scale-110" />
                     </div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white text-lg truncate transition-all duration-300 hover:text-blue-600 dark:hover:text-blue-400">
+                  <h3 className="font-semibold text-gray-900 dark:text-white text-xl truncate transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
                     {profile.name}
                   </h3>
                   {profile.role && (
-                    <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-all duration-300 hover:scale-105 hover:text-blue-700 dark:hover:text-blue-300">
+                    <p className="text-sm text-[#ef4444] dark:text-[#ef4444] font-medium transition-all duration-300 hover:scale-105 hover:text-[#dc2626] dark:hover:text-[#dc2626]">
                       {profile.role}
                     </p>
                   )}
@@ -229,16 +229,16 @@ export function AuthorCard({
 
               {/* Social Links */}
               {profile.socialLinks && (
-                <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-300 hover:border-blue-200 dark:hover:border-blue-700">
+                <div className="flex items-center gap-3 pt-6 border-t border-[#ef4444]/10 dark:border-[#ef4444]/20 transition-colors duration-300 hover:border-[#ef4444]/30 dark:hover:border-[#ef4444]/30">
                   {profile.socialLinks.website && (
                     <a
                       href={profile.socialLinks.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                      className="p-3 rounded-lg text-gray-600 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                       title="Website"
                     >
-                      <Globe className="w-4 h-4" />
+                      <Globe className="w-5 h-5" />
                     </a>
                   )}
                   {profile.socialLinks.twitter && (
@@ -246,10 +246,10 @@ export function AuthorCard({
                       href={profile.socialLinks.twitter}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                      className="p-3 rounded-lg text-gray-600 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                       title="Twitter"
                     >
-                      <Twitter className="w-4 h-4" />
+                      <Twitter className="w-5 h-5" />
                     </a>
                   )}
                   {profile.socialLinks.linkedin && (
@@ -257,10 +257,10 @@ export function AuthorCard({
                       href={profile.socialLinks.linkedin}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                      className="p-3 rounded-lg text-gray-600 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                       title="LinkedIn"
                     >
-                      <Linkedin className="w-4 h-4" />
+                      <Linkedin className="w-5 h-5" />
                     </a>
                   )}
                   {profile.socialLinks.github && (
@@ -268,10 +268,10 @@ export function AuthorCard({
                       href={profile.socialLinks.github}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                      className="p-3 rounded-lg text-gray-600 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                       title="GitHub"
                     >
-                      <Github className="w-4 h-4" />
+                      <Github className="w-5 h-5" />
                     </a>
                   )}
                   {profile.socialLinks.substack && (
@@ -279,10 +279,10 @@ export function AuthorCard({
                       href={profile.socialLinks.substack}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                      className="p-3 rounded-lg text-gray-600 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                       title="Substack"
                     >
-                      <Mail className="w-4 h-4" />
+                      <Mail className="w-5 h-5" />
                     </a>
                   )}
                 </div>
