@@ -15,16 +15,16 @@ const hasElementContent = Array.from(container.childNodes).some(
 );
 
 const AppWrapper = () => (
-  <StrictMode>
-    <ThemeProvider>
-      <HelmetProvider>
+    <StrictMode>
+      <ThemeProvider>
+        <HelmetProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <App />
-        </BrowserRouter>
-      </HelmetProvider>
-    </ThemeProvider>
-  </StrictMode>
-);
+            <App />
+          </BrowserRouter>
+        </HelmetProvider>
+      </ThemeProvider>
+    </StrictMode>
+  );
 
 if (hasElementContent) {
   hydrateRoot(container, <AppWrapper />);
