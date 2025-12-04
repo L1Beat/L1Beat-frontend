@@ -7,8 +7,6 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
@@ -35,6 +33,9 @@ import { HealthStatus } from '../types';
 import { acpService, LocalACP } from '../services/acpService';
 const preprocessContent = (content: string) => {
   return content
+    // Remove metadata table at the start of the document
+    // Matches lines starting with | at the very beginning (ignoring leading whitespace) until a line that doesn't start with |
+    .replace(/^\s*\| ACP \|[\s\S]*?(?:\n\n|\n(?![|]))/g, '')
     // Only escape very specific, obvious currency tokens - be extremely conservative
     .replace(/\$AVAX(?!\s*[+\-*/=<>≥≤\\{}()^_])/g, '&#36;AVAX')
     .replace(/\$AVAX-([A-Za-z][A-Za-z\-]*)/g, '&#36;AVAX-$1')
@@ -59,6 +60,26 @@ export default function ACPDetails() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
+
+  // Dynamically load syntax highlighter only on client side
+  const [SyntaxHighlighter, setSyntaxHighlighter] = useState<any>(null);
+  const [syntaxStyles, setSyntaxStyles] = useState<any>({ vscDarkPlus: {}, oneLight: {} });
+
+  useEffect(() => {
+    // Only load on client side
+    if (typeof window !== 'undefined') {
+      Promise.all([
+        import('react-syntax-highlighter').then(mod => mod.Prism),
+        import('react-syntax-highlighter/dist/esm/styles/prism').then(styles => ({
+          vscDarkPlus: styles.vscDarkPlus,
+          oneLight: styles.oneLight
+        }))
+      ]).then(([Highlighter, styles]) => {
+        setSyntaxHighlighter(() => Highlighter);
+        setSyntaxStyles(styles);
+      }).catch(err => console.error('Failed to load syntax highlighter:', err));
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -369,23 +390,29 @@ export default function ACPDetails() {
             </button>
           </div>
           <div className="relative group">
-            <SyntaxHighlighter
-              style={isDark ? vscDarkPlus : oneLight}
-              language={match[1]}
-              PreTag="div"
-              customStyle={{
-                margin: 0,
-                padding: '1.5rem',
-                background: 'transparent',
-                fontSize: '0.875rem',
-                lineHeight: '1.6',
-              }}
-              codeTagProps={{
-                style: { fontFamily: 'JetBrains Mono, monospace' }
-              }}
-            >
-              {content}
-            </SyntaxHighlighter>
+            {SyntaxHighlighter ? (
+              <SyntaxHighlighter
+                style={isDark ? syntaxStyles.vscDarkPlus : syntaxStyles.oneLight}
+                language={match[1]}
+                PreTag="div"
+                customStyle={{
+                  margin: 0,
+                  padding: '1.5rem',
+                  background: 'transparent',
+                  fontSize: '0.875rem',
+                  lineHeight: '1.6',
+                }}
+                codeTagProps={{
+                  style: { fontFamily: 'JetBrains Mono, monospace' }
+                }}
+              >
+                {content}
+              </SyntaxHighlighter>
+            ) : (
+              <pre className="p-6 overflow-x-auto bg-gray-900 dark:bg-gray-800 rounded-b-lg">
+                <code className="text-gray-300 text-sm font-mono">{content}</code>
+              </pre>
+            )}
           </div>
         </div>
       );
@@ -556,27 +583,29 @@ export default function ACPDetails() {
                 <div className="flex flex-wrap items-center gap-6 text-sm border-y border-gray-100 dark:border-gray-700 py-6">
                   <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-gray-400" />
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {acp.authors?.map((author, index) => (
-                        <a
-                          key={index}
-                          href={`https://github.com/${author.github}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-gray-900 dark:text-white hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors"
-                        >
-                          @{author.name}
-                        </a>
+                        <React.Fragment key={index}>
+                          {index > 0 && <span className="text-gray-400 dark:text-gray-600">|</span>}
+                          <a
+                            href={author.url || `https://github.com/${author.github}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-gray-900 dark:text-white hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors"
+                          >
+                            {author.name}
+                          </a>
+                        </React.Fragment>
                       )) || <span className="text-gray-500">Unknown</span>}
                     </div>
                   </div>
 
-                  <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 hidden sm:block" />
-
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <Clock className="w-4 h-4" />
-                    <span>Created {new Date(acp.created).toLocaleDateString()}</span>
-                  </div>
+                  {acp.created && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <Clock className="w-4 h-4" />
+                      <span>Created {new Date(acp.created).toLocaleDateString()}</span>
+                    </div>
+                  )}
 
                   {acp.updated && (
                     <>
@@ -600,16 +629,13 @@ export default function ACPDetails() {
                   </button>
 
                   {acp.discussion && (
-                    <a
-                      href={acp.discussion}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => handleLinkClick(e, acp.discussion!)}
-                      className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all"
+                    <button
+                      onClick={() => window.open(acp.discussion, '_blank', 'noopener,noreferrer')}
+                      className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all cursor-pointer"
                     >
                       <LinkIcon className="w-4 h-4 mr-2" />
-                      Discussion
-                    </a>
+                      View Discussion
+                    </button>
                   )}
 
                   <button

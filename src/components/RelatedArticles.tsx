@@ -90,7 +90,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {Array.from({ length: limit }).map((_, i) => (
-                        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+                        <div key={i} className="bg-white dark:bg-dark-800 rounded-xl p-6 border border-gray-200 dark:border-dark-700">
                             <div className="animate-pulse">
                                 <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-4"></div>
                                 <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
@@ -147,7 +147,7 @@ export function RelatedArticles({ currentPostSlug, limit = 4 }: RelatedArticlesP
                     <Link
                         key={post._id}
                         to={`/blog/${post.slug}`}
-                        className="group block bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-[#ef4444]/50 dark:hover:border-[#ef4444]/50 transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-1"
+                        className="group block bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-700 hover:border-[#ef4444]/50 dark:hover:border-[#ef4444]/50 transition-all duration-300 overflow-hidden hover:shadow-xl hover:-translate-y-1"
                     >
                         {/* Image */}
                         {post.imageUrl && (

@@ -279,7 +279,7 @@ export function BlogList() {
                             <div className="flex-1">
                                 <div className="relative overflow-hidden">
                                     {/* Search Container */}
-                                    <div className="h-10 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 focus-within:border-[#ef4444] dark:focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
+                                    <div className="h-10 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-700 focus-within:border-[#ef4444] dark:focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
 
                                         {/* Animated Gradient Background */}
                                         {searchTerm && (

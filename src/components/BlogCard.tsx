@@ -24,7 +24,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                     boxShadow: "0 20px 40px -12px rgb(0 0 0 / 0.15)"
                 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                className="group block bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+                className="group block bg-white dark:bg-dark-800 rounded-2xl shadow-lg border border-gray-200 dark:border-dark-700 overflow-hidden"
             >
                 <Link to={`/blog/${post.slug}`} className="block">
                     <div className="flex flex-col lg:flex-row">
@@ -48,13 +48,9 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                 </div>
 
                                 {/* Large multi-line headline */}
-                                <motion.h2
-                                    className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900 dark:text-white leading-tight"
-                                    whileHover={{ color: "#ef4444" }}
-                                    transition={{ duration: 0.3, ease: "easeOut" }}
-                                >
+                                <h2 className="text-xl lg:text-2xl xl:text-3xl font-bold text-gray-900 dark:text-white leading-tight break-words group-hover:text-[#ef4444] transition-colors duration-300">
                                     {post.title}
-                                </motion.h2>
+                                </h2>
 
                                 {/* Rectangular paragraph */}
                                 <p className="text-sm lg:text-base text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-4">
