@@ -77,22 +77,22 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                                     p.name.toLowerCase() === authorName.toLowerCase()
                                                 );
                                                 return profile?.avatar ? (
-                                                    <img
+                                            <img
                                                         key={authorName}
                                                         src={profile.avatar}
                                                         alt={authorName}
                                                         className="w-8 h-8 rounded-full object-cover border-2 border-white dark:border-dark-800"
                                                         style={{ zIndex: authorsList.length - index }}
-                                                    />
+                                            />
                                                 ) : (
                                                     <div
                                                         key={authorName}
                                                         className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center border-2 border-white dark:border-dark-800"
                                                         style={{ zIndex: authorsList.length - index }}
                                                     >
-                                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                                            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                                                             {authorName.charAt(0).toUpperCase()}
-                                                        </span>
+                                            </span>
                                                     </div>
                                                 );
                                             })}
@@ -166,11 +166,11 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                     p.name.toLowerCase() === firstAuthor.toLowerCase()
                                 );
                                 return (
-                                    <AuthorCard
+                            <AuthorCard
                                         authorName={firstAuthor}
                                         authorProfiles={profile ? [profile] : []}
-                                        className="font-medium text-gray-700 dark:text-gray-300"
-                                    />
+                                className="font-medium text-gray-700 dark:text-gray-300"
+                            />
                                 );
                             })()}
                             {/* Show "+N more" for additional authors */}

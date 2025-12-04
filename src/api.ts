@@ -278,8 +278,29 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
       const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const data = await fetchWithRetry<any[]>(url);
       const chains = data.map((chain) => {
+        // Handle potential backend property name changes
+        // Prioritize using the chain name as the primary ID for URLs, but keep numeric IDs for other purposes if needed
+        // We sanitize the chain name to be URL-friendly (lowercase, replace spaces with dashes)
+        const rawChainId = chain.evmChainId || chain.chainId || chain.id || chain._id;
+        
+        // Generate a slug from the chain name if available
+        let chainSlug = rawChainId;
+        if (chain.chainName) {
+          chainSlug = chain.chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        }
+        
+        if (!chainSlug) {
+          console.warn('Chain missing ID and Name:', chain);
+          // Fallback to a random string if absolutely nothing is available (should shouldn't happen)
+           chainSlug = Math.random().toString(36).substring(7);
+        }
+
         return {
           ...chain,
+          // We use the slug as the main chainId for routing purposes
+          chainId: String(chainSlug), 
+          // We store the original numeric ID if we need it for API calls
+          originalChainId: String(rawChainId),
           tps: chain.tps ? {
             value: Number(chain.tps.value),
             timestamp: chain.tps.timestamp

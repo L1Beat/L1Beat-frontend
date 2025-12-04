@@ -514,11 +514,11 @@ export function BlogPost() {
                                                 return (
                                                     <React.Fragment key={authorName}>
                                                         {index > 0 && <span className="text-muted-foreground">&</span>}
-                                                        <AuthorCard 
+                                        <AuthorCard 
                                                             authorName={authorName}
                                                             authorProfiles={profile ? [profile] : []}
-                                                            className="font-medium hover:text-[#ef4444] transition-colors"
-                                                        />
+                                            className="font-medium hover:text-[#ef4444] transition-colors"
+                                        />
                                                     </React.Fragment>
                                                 );
                                             })}

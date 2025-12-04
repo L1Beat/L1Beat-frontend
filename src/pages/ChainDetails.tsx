@@ -54,9 +54,8 @@ export function ChainDetails() {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chains, history, healthData] = await Promise.all([
+        const [chains, healthData] = await Promise.all([
           getChains(),
-          chainId ? getTPSHistory(7, chainId) : Promise.resolve([]),
           getHealth()
         ]);
         
@@ -64,6 +63,10 @@ export function ChainDetails() {
         
         if (foundChain) {
           setChain(foundChain);
+          // Use originalChainId if available for API calls that might require the numeric ID
+          // Fallback to chainId if originalChainId is not present (though it should be based on api.ts changes)
+          const apiChainId = (foundChain as any).originalChainId || foundChain.chainId;
+          const history = await getTPSHistory(7, apiChainId);
           setTPSHistory(history);
           setHealth(healthData);
           setError(null);
@@ -428,9 +431,9 @@ export function ChainDetails() {
                 <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chain ID</span>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{chain.chainId}</code>
+                    <code className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{(chain as any).originalChainId || chain.chainId}</code>
                     <button
-                      onClick={() => handleCopy('chainId', chain.chainId)}
+                      onClick={() => handleCopy('chainId', (chain as any).originalChainId || chain.chainId)}
                       className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700"
                     >
                       {copied === 'chainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -744,9 +747,9 @@ export function ChainDetails() {
               {activeTab === 'metrics' && (
                 <div className="space-y-6">
                   <L1MetricsChart 
-  chainId={chain.chainId} 
+  chainId={(chain as any).originalChainId || chain.chainId} 
   chainName={chain.chainName} 
-  evmChainId={chain.evmChainId} 
+  evmChainId={chain.evmChainId ? String(chain.evmChainId) : undefined} 
   tokenSymbol={chain.networkToken?.symbol}
 />
                 </div>
