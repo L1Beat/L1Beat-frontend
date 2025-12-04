@@ -469,13 +469,16 @@ export function BlogPost() {
                                     </div>
                                 )}
                                 
-                                {post.author && (
+                                {((post.authors && post.authors.length > 0) || post.author) && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">By</span>
-                                        <AuthorCard 
+                                        <AuthorCard
                                             authorName={post.author}
+                                            authorNames={post.authors}
                                             authorProfiles={post.authorProfiles}
                                             className="font-medium hover:text-[#ef4444] transition-colors"
+                                            displayMode="inline"
+                                            showAvatars={true}
                                         />
                                     </div>
                                 )}
