@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock, Tag, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BlogPost, formatBlogDate, calculateReadTime, getAuthorsDisplayString } from '../api/blogApi';
+import { BlogPost, formatBlogDate, calculateReadTime } from '../api/blogApi';
 import { AuthorCard } from './AuthorCard';
 import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
@@ -15,6 +15,16 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
     const readTime = post.readTime || calculateReadTime(post.content || '');
     const formattedDate = formatBlogDate(post.publishedAt || '');
     const imageUrl = getBlogPostImageUrl(post);
+
+    // Determine the list of authors to display
+    let authorsList: string[] = [];
+    if (post.authors && post.authors.length > 0) {
+        authorsList = post.authors;
+    } else if (post.authorProfiles && post.authorProfiles.length > 0) {
+        authorsList = post.authorProfiles.map(p => p.name);
+    } else if (post.author) {
+        authorsList = [post.author];
+    }
 
     if (featured) {
         return (
@@ -57,46 +67,43 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                     {post.excerpt}
                                 </p>
 
-                                {/* Overlapping avatars + author names at bottom */}
-                                {((post.authors && post.authors.length > 0) || post.author) && (
+                                {/* Avatar circle + author names at bottom */}
+                                {authorsList.length > 0 && (
                                     <div className="flex items-center gap-3 pt-2">
-                                        {/* Overlapping avatars for first 3 authors */}
+                                        {/* Show stacked avatars for multiple authors */}
                                         <div className="flex -space-x-2">
-                                            {(post.authors || [post.author]).slice(0, 3).map((authorName, index) => {
-                                                const profile = post.authorProfiles?.find(p =>
+                                            {authorsList.slice(0, 3).map((authorName, index) => {
+                                                const profile = post.authorProfiles?.find(p => 
                                                     p.name.toLowerCase() === authorName.toLowerCase()
                                                 );
                                                 return profile?.avatar ? (
                                                     <img
-                                                        key={index}
+                                                        key={authorName}
                                                         src={profile.avatar}
                                                         alt={authorName}
-                                                        className="w-8 h-8 rounded-full border-2 border-white dark:border-gray-900 object-cover"
-                                                        onError={(e) => {
-                                                            e.style.display = 'none';
-                                                        }}
+                                                        className="w-8 h-8 rounded-full object-cover border-2 border-white dark:border-dark-800"
+                                                        style={{ zIndex: authorsList.length - index }}
                                                     />
                                                 ) : (
                                                     <div
-                                                        key={index}
-                                                        className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center"
+                                                        key={authorName}
+                                                        className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center border-2 border-white dark:border-dark-800"
+                                                        style={{ zIndex: authorsList.length - index }}
                                                     >
-                                                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
                                                             {authorName.charAt(0).toUpperCase()}
                                                         </span>
                                                     </div>
                                                 );
                                             })}
-                                            {(post.authors?.length || 0) > 3 && (
-                                                <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center">
-                                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                                                        +{(post.authors?.length || 0) - 3}
-                                                    </span>
-                                                </div>
-                                            )}
                                         </div>
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                            {getAuthorsDisplayString(post)}
+                                            {authorsList.length === 1 
+                                                ? authorsList[0] 
+                                                : authorsList.length === 2 
+                                                    ? `${authorsList[0]} & ${authorsList[1]}`
+                                                    : `${authorsList[0]} & ${authorsList.length - 1} more`
+                                            }
                                         </span>
                                     </div>
                                 )}
@@ -150,15 +157,28 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                         <span>{formattedDate}</span>
                     </div>
 
-                    {((post.authors && post.authors.length > 0) || post.author) && (
-                        <div className="text-right">
-                            <AuthorCard
-                                authorName={post.author}
-                                authorNames={post.authors}
-                                authorProfiles={post.authorProfiles}
-                                className="font-medium text-gray-700 dark:text-gray-300"
-                                displayMode="inline"
-                            />
+                    {authorsList.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                            {/* Show first author with profile */}
+                            {(() => {
+                                const firstAuthor = authorsList[0];
+                                const profile = post.authorProfiles?.find(p => 
+                                    p.name.toLowerCase() === firstAuthor.toLowerCase()
+                                );
+                                return (
+                                    <AuthorCard
+                                        authorName={firstAuthor}
+                                        authorProfiles={profile ? [profile] : []}
+                                        className="font-medium text-gray-700 dark:text-gray-300"
+                                    />
+                                );
+                            })()}
+                            {/* Show "+N more" for additional authors */}
+                            {authorsList.length > 1 && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    +{authorsList.length - 1} more
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

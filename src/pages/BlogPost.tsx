@@ -250,13 +250,31 @@ export function BlogPost() {
             const blocks = JSON.parse(content);
             return <ContentRenderer blocks={blocks} />;
         } catch (error) {
-            const cleanContent = content.trim();
+            let cleanContent = content.trim();
             if (!cleanContent) return null;
+
+            // FIX: Remove DOCTYPE and extract content from <body> or <html> if present
+            cleanContent = cleanContent.replace(/<!DOCTYPE[^>]*>/i, '');
+            
+            const bodyMatch = cleanContent.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch && bodyMatch[1]) {
+                cleanContent = bodyMatch[1];
+            } else {
+                 const htmlMatch = cleanContent.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+                 if (htmlMatch && htmlMatch[1]) {
+                     cleanContent = htmlMatch[1];
+                 }
+            }
 
             return (
                 <div className="prose-content">
                     {parse(cleanContent, {
                         replace: (domNode) => {
+                            // Skip <head> tags if they remain in the content
+                            if (domNode instanceof Element && domNode.tagName === 'head') {
+                                return <></>;
+                            }
+
                             if (domNode instanceof Element) {
                                 if (domNode.tagName === 'div') {
                                     const classNames = domNode.attribs?.class || '';
@@ -381,6 +399,19 @@ export function BlogPost() {
     const formattedDate = formatBlogDate(post.publishedAt || '');
     const seoImage = getBlogPostImageUrl(post);
 
+    // FIX: Determine the list of authors to display
+    // Priority: 1. post.authors (array of names)
+    //           2. post.authorProfiles (array of objects)
+    //           3. post.author (single string fallback)
+    let authorsList: string[] = [];
+    if (post.authors && post.authors.length > 0) {
+        authorsList = post.authors;
+    } else if (post.authorProfiles && post.authorProfiles.length > 0) {
+        authorsList = post.authorProfiles.map(p => p.name);
+    } else if (post.author) {
+        authorsList = [post.author];
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
             {/* SEO Meta Tags */}
@@ -469,17 +500,29 @@ export function BlogPost() {
                                     </div>
                                 )}
                                 
-                                {((post.authors && post.authors.length > 0) || post.author) && (
+                                {authorsList.length > 0 && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">By</span>
-                                        <AuthorCard
-                                            authorName={post.author}
-                                            authorNames={post.authors}
-                                            authorProfiles={post.authorProfiles}
-                                            className="font-medium hover:text-[#ef4444] transition-colors"
-                                            displayMode="inline"
-                                            showAvatars={true}
-                                        />
+                                        <div className="flex items-center flex-wrap gap-2">
+                                            {authorsList.map((authorName, index) => {
+                                                // Find profile for this specific author name
+                                                const profile = post.authorProfiles?.find(p => 
+                                                    p.name.toLowerCase() === authorName.toLowerCase() ||
+                                                    p.name.toLowerCase().includes(authorName.toLowerCase())
+                                                );
+                                                
+                                                return (
+                                                    <React.Fragment key={authorName}>
+                                                        {index > 0 && <span className="text-muted-foreground">&</span>}
+                                                        <AuthorCard 
+                                                            authorName={authorName}
+                                                            authorProfiles={profile ? [profile] : []}
+                                                            className="font-medium hover:text-[#ef4444] transition-colors"
+                                                        />
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
                             </div>
