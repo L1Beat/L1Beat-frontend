@@ -174,6 +174,13 @@ export interface FeesPaidLatest {
   chainCount?: number; // For network-wide stats
 }
 
+// Network Validator types
+export interface NetworkValidatorTotal {
+  totalValidators: number;
+  chainsWithValidators: number;
+  timestamp: string;
+}
+
 // Health related types
 export interface HealthStatus {
   status: string;

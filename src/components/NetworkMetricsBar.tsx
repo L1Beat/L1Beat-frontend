@@ -1,32 +1,95 @@
 import React, { useEffect, useState } from 'react';
-import { getNetworkTPS, getNetworkMaxTPSLatest, getNetworkTxCountLatest, getTeleporterMessages, getNetworkGasUsedLatest } from '../api';
-import { NetworkTPS, MaxTPSLatest, DailyTxCountLatest, TeleporterMessageData, GasUsedLatest } from '../types';
-import { Activity, BarChart3, TrendingUp, MessageSquare, Fuel } from 'lucide-react';
+import { getTPSHistory, getNetworkMaxTPSHistory, getNetworkTxCountHistory, getTeleporterMessages, getNetworkValidatorTotal } from '../api';
+import { NetworkTPS, MaxTPSLatest, DailyTxCountLatest, TeleporterMessageData, NetworkValidatorTotal } from '../types';
+import { Activity, BarChart3, TrendingUp, MessageSquare, Users } from 'lucide-react';
 
 export function NetworkMetricsBar() {
   const [networkTPS, setNetworkTPS] = useState<NetworkTPS | null>(null);
   const [maxTPS, setMaxTPS] = useState<MaxTPSLatest | null>(null);
   const [dailyTxCount, setDailyTxCount] = useState<DailyTxCountLatest | null>(null);
   const [teleporterData, setTeleporterData] = useState<TeleporterMessageData | null>(null);
-  const [gasUsed, setGasUsed] = useState<GasUsedLatest | null>(null);
+  const [validatorTotal, setValidatorTotal] = useState<NetworkValidatorTotal | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [networkTPSData, maxTPSData, dailyTxCountData, teleporterMessagesData, gasUsedData] = await Promise.all([
-          getNetworkTPS(),
-          getNetworkMaxTPSLatest(),
-          getNetworkTxCountLatest(),
+        // Fetch last 2 days of history to compare today vs yesterday
+        const [tpsHistory, maxTPSHistory, txCountHistory, teleporterMessagesData, validatorTotalData] = await Promise.all([
+          getTPSHistory(2),
+          getNetworkMaxTPSHistory(2),
+          getNetworkTxCountHistory(2),
           getTeleporterMessages(),
-          getNetworkGasUsedLatest()
+          getNetworkValidatorTotal()
         ]);
-        
-        setNetworkTPS(networkTPSData);
-        setMaxTPS(maxTPSData);
-        setDailyTxCount(dailyTxCountData);
+
+        // Get most recent complete day's data (use yesterday if today's data is low/incomplete)
+        const getMostRecentCompleteData = <T extends { timestamp: number; value?: number; totalTps?: number }>(
+          history: T[]
+        ): T | null => {
+          if (!history || history.length === 0) return null;
+
+          // Sort by timestamp descending (most recent first)
+          const sorted = [...history].sort((a, b) => b.timestamp - a.timestamp);
+
+          // Check if we're early in the day (less than 6 hours since midnight UTC)
+          const now = new Date();
+          const hoursSinceMidnight = now.getUTCHours() + now.getUTCMinutes() / 60;
+          const isEarlyInDay = hoursSinceMidnight < 6;
+
+          // If early in the day or today's data is very low, use yesterday's data
+          const todayData = sorted[0];
+          const yesterdayData = sorted[1];
+          const todayValue = todayData?.value ?? todayData?.totalTps ?? 0;
+
+          if (isEarlyInDay && yesterdayData) {
+            return yesterdayData;
+          }
+
+          // If today's data is suspiciously low compared to yesterday (< 20% of yesterday), use yesterday
+          if (yesterdayData) {
+            const yesterdayValue = yesterdayData.value ?? yesterdayData.totalTps ?? 0;
+            if (yesterdayValue > 0 && todayValue < yesterdayValue * 0.2) {
+              return yesterdayData;
+            }
+          }
+
+          return todayData;
+        };
+
+        // Convert TPS history to NetworkTPS format
+        const tpsData = getMostRecentCompleteData(tpsHistory);
+        if (tpsData) {
+          setNetworkTPS({
+            totalTps: tpsData.totalTps ?? 0,
+            chainCount: tpsData.chainCount ?? 0,
+            timestamp: tpsData.timestamp,
+            lastUpdate: new Date(tpsData.timestamp * 1000).toISOString(),
+            dataAge: 0,
+            dataAgeUnit: 'minutes',
+            updatedAt: new Date().toISOString()
+          });
+        }
+
+        // Convert other metrics
+        const maxTPSData = getMostRecentCompleteData(maxTPSHistory);
+        if (maxTPSData) {
+          setMaxTPS({
+            value: maxTPSData.value ?? 0,
+            timestamp: maxTPSData.timestamp
+          });
+        }
+
+        const txCountData = getMostRecentCompleteData(txCountHistory);
+        if (txCountData) {
+          setDailyTxCount({
+            value: txCountData.value ?? 0,
+            timestamp: txCountData.timestamp
+          });
+        }
+
+        setValidatorTotal(validatorTotalData);
         setTeleporterData(teleporterMessagesData);
-        setGasUsed(gasUsedData);
       } catch (err) {
         console.error('Failed to fetch network metrics:', err);
       } finally {
@@ -99,16 +162,16 @@ export function NetworkMetricsBar() {
         </div>
       )}
 
-      {/* Daily Gas Used */}
-      {gasUsed && (
+      {/* Total Validators */}
+      {validatorTotal && (
         <div className="bg-white dark:bg-dark-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
-              <Fuel className="w-5 h-5 text-[#ef4444]" />
+              <Users className="w-5 h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Gas Used</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{formatNumber(gasUsed.value)}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Total Validators</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">{validatorTotal.totalValidators.toLocaleString()}</p>
             </div>
           </div>
         </div>

@@ -16,7 +16,7 @@ import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
 import { RefreshCw, MessageSquare, Clock, ChevronDown, BarChart3, Users, Activity, Fuel } from 'lucide-react';
-import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory } from '../api';
+import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 
 ChartJS.register(
@@ -271,31 +271,18 @@ export function AvalancheNetworkMetrics() {
       setRetrying(true);
 
       let processedData: MetricData[] = [];
-      
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
       // Route to different endpoints based on selected metric
       switch (metricToFetch) {
         case 'networkTPS':
-          const tpsResponse = await fetch(`${API_BASE_URL}/api/tps/network/history?days=${daysToFetch}`);
-          if (!tpsResponse.ok) {
-            throw new Error(`HTTP error! status: ${tpsResponse.status}`);
-          }
-          const tpsJson = await tpsResponse.json();
-          
-          // Handle { success: boolean, data: [...] } format
-          const tpsData = Array.isArray(tpsJson) ? tpsJson : (tpsJson.data || []);
-          
-          if (!Array.isArray(tpsData)) {
-            throw new Error('Expected array response from network TPS API');
-          }
-          
+          const tpsData = await getTPSHistory(daysToFetch);
+
           processedData = tpsData
-            .filter(item => item && typeof item.timestamp === 'number' && (typeof item.totalTps === 'number' || typeof item.value === 'number'))
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.totalTps === 'number')
             .map(item => ({
               timestamp: item.timestamp,
               date: new Date(item.timestamp * 1000).toISOString(),
-              value: item.totalTps || item.value || 0,
+              value: item.totalTps,
               metadata: {
                 chainCount: item.chainCount
               }
@@ -390,13 +377,16 @@ export function AvalancheNetworkMetrics() {
       if (processedData.length > 0) {
         setData(processedData);
       } else {
-        throw new Error('No data available for selected metric');
+        // Backend has no data yet - show friendly message instead of error
+        setError(`${currentMetric.name} data is not available yet. The backend is still collecting historical data.`);
       }
     } catch (err: any) {
       console.error(`Failed to fetch ${metricToFetch} data:`, err);
       // Handle 404 specifically
       if (err.message && err.message.includes('404')) {
         setError(`${currentMetric.name} data is coming soon`);
+      } else if (err.message && err.message.includes('No data available')) {
+        setError(`${currentMetric.name} data is not available yet. The backend is still collecting historical data.`);
       } else {
         setError(`Failed to load ${currentMetric.name.toLowerCase()} data`);
       }
@@ -445,42 +435,7 @@ export function AvalancheNetworkMetrics() {
     );
   }
 
-  if (!data.length) {
-    return (
-      <div className="bg-card rounded-xl border border-border p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <BarChart3 className="w-5 h-5 text-[#ef4444]" />
-          <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
-        </div>
-        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
-          <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
-            {error || 'No network metrics data available'}
-          </p>
-          {!error?.includes('coming soon') && (
-            <button 
-              onClick={() => fetchData()}
-              disabled={retrying}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {retrying ? (
-                <>
-                  <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                  Retrying...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
-                  Retry
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  const chartData = {
+  const chartData = !data.length ? null : {
     labels: data.map(item => {
       const [year, month, day] = item.date.split('-');
       return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), isMobile ? 'd MMM' : 'MMM d');
@@ -701,37 +656,66 @@ export function AvalancheNetworkMetrics() {
         </div>
 
         {/* Current Value Display */}
-        <div className="bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
-                <currentMetric.icon className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">
-                  Current {currentMetric.name}
-                </p>
-                <p className="text-2xl font-bold text-[#ef4444] dark:text-[#ef4444]">
-                  {latestData ? currentMetric.valueFormatter(latestData.value) : '0'} {currentMetric.unit}
-                </p>
-              </div>
-            </div>
-            {latestData && (
-              <div className="text-right">
-                <div className="flex items-center gap-1 text-[#ef4444] dark:text-[#ef4444] text-sm">
-                  <Clock className="w-4 h-4" />
-                  <span>
-                    {format(parseISO(latestData.date), 'MMM d, yyyy')}
-                  </span>
+        {data.length > 0 && (
+          <div className="bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
+                  <currentMetric.icon className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">
+                    Current {currentMetric.name}
+                  </p>
+                  <p className="text-2xl font-bold text-[#ef4444] dark:text-[#ef4444]">
+                    {latestData ? currentMetric.valueFormatter(latestData.value) : '0'} {currentMetric.unit}
+                  </p>
                 </div>
               </div>
-            )}
+              {latestData && (
+                <div className="text-right">
+                  <div className="flex items-center gap-1 text-[#ef4444] dark:text-[#ef4444] text-sm">
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      {format(parseISO(latestData.date), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="h-[300px] sm:h-[400px]">
-        <Line data={chartData} options={options} />
+        {chartData ? (
+          <Line data={chartData} options={options} />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
+              {error || 'No data available for this metric'}
+            </p>
+            {!error?.includes('coming soon') && !error?.includes('not available yet') && (
+              <button
+                onClick={() => fetchData()}
+                disabled={retrying}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {retrying ? (
+                  <>
+                    <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
+                    Retry
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
