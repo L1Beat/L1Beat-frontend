@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -780,6 +780,36 @@ export async function getChainGasUsedLatest(chainId: string): Promise<GasUsedLat
     } catch (error) {
       console.error('Chain gas used latest fetch error:', error);
       return null;
+    }
+  });
+}
+
+export async function getNetworkValidatorTotal(): Promise<NetworkValidatorTotal> {
+  return fetchWithCache('network-validator-total', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        totalValidators: number;
+        chainsWithValidators: number;
+        timestamp: string;
+      }>(`${API_URL}/validators/network/total`);
+
+      if (!response.success) {
+        throw new Error('Invalid network validator total response format');
+      }
+
+      return {
+        totalValidators: response.totalValidators || 0,
+        chainsWithValidators: response.chainsWithValidators || 0,
+        timestamp: response.timestamp || new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Network validator total fetch error:', error);
+      return {
+        totalValidators: 0,
+        chainsWithValidators: 0,
+        timestamp: new Date().toISOString()
+      };
     }
   });
 }
