@@ -288,7 +288,7 @@ export function ChainDetails() {
                           alt={`${chain.chainName} logo`}
                           className="w-20 h-20 rounded-2xl shadow-md bg-transparent p-2"
                           onError={(e) => {
-                            e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                            e.currentTarget.src = "/icon-dark-animated.svg";
                             e.currentTarget.onerror = null;
                           }}
                         />
@@ -299,7 +299,7 @@ export function ChainDetails() {
                     ) : (
                       <div className="relative flex-shrink-0">
                         <img
-                          src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                          src="/icon-dark-animated.svg"
                           alt={`${chain.chainName} logo`}
                           className="w-20 h-20 rounded-2xl shadow-md bg-transparent p-2"
                         />

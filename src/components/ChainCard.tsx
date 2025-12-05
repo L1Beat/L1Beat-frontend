@@ -57,13 +57,13 @@ export function ChainCard({ chain }: ChainCardProps) {
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
                 onError={(e) => {
-                  e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                  e.currentTarget.src = "/icon-dark-animated.svg";
                   e.currentTarget.onerror = null;
                 }}
               />
             ) : (
               <motion.img
-                src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                src="/icon-dark-animated.svg"
                 alt={`${chain.chainName} logo`}
                 className="w-10 h-10 rounded-lg shadow-sm"
                 whileHover={{ scale: 1.1, rotate: 5 }}
@@ -176,7 +176,7 @@ export function ChainCard({ chain }: ChainCardProps) {
                   alt={`${chain.networkToken.name} logo`}
                   className="w-5 h-5 rounded-full"
                   onError={(e) => {
-                    e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                    e.currentTarget.src = "/icon-dark-animated.svg";
                     e.currentTarget.onerror = null;
                   }}
                 />

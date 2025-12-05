@@ -559,13 +559,13 @@ export function NetworkTopologyGraph() {
                       alt={chain.chainName}
                       className="w-2/3 h-2/3 object-contain rounded-full"
                       onError={(e) => {
-                        e.currentTarget.src = "https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg";
+                        e.currentTarget.src = "/icon-dark-animated.svg";
                         e.currentTarget.onerror = null;
                       }}
                     />
                   ) : (
                     <img
-                      src="https://i.postimg.cc/gcq3RxBm/SAVE-20251114-181539.jpg"
+                      src="/icon-dark-animated.svg"
                       alt={chain.chainName}
                       className="w-2/3 h-2/3 object-contain rounded-full"
                     />
