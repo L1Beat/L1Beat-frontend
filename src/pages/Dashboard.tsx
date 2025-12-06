@@ -61,7 +61,7 @@ export function Dashboard() {
       if (!showChainsWithoutValidators) {
         // Default behavior: only show chains with validators or Avalanche primary chains
         filteredChains = filteredChains.filter(chain =>
-          (chain.validators && chain.validators.length >= 1) ||
+          (chain.validatorCount && chain.validatorCount >= 1) ||
           chain.chainName.toLowerCase().includes('avalanche') ||
           chain.chainName.toLowerCase().includes('c-chain')
         );

@@ -51,7 +51,7 @@ export function NetworkTopologyGraph() {
         if (chainsData && chainsData.length > 0) {
           // Filter chains to include those with validators OR Avalanche chains
           const validChains = chainsData.filter(chain => 
-            (chain.validators && chain.validators.length > 0) ||
+            (chain.validatorCount && chain.validatorCount > 0) ||
             chain.chainName.toLowerCase().includes('avalanche') ||
             chain.chainName.toLowerCase().includes('c-chain')
           );
@@ -595,7 +595,7 @@ export function NetworkTopologyGraph() {
                   </span>
                 )}
                 <span className="text-xs text-gray-400">
-                  {hoveredChain.validators?.length || 0} validators
+                  {hoveredChain.validatorCount || hoveredChain.validators?.length || 0} validators
                 </span>
               </div>
               {/* Tooltip arrow */}
