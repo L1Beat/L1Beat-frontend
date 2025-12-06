@@ -117,7 +117,7 @@ export function ChainCard({ chain }: ChainCardProps) {
             </div>
             <AnimatePresence mode="popLayout">
               <motion.span
-                key={chain.validators?.length || 0}
+                key={chain.validatorCount}
                 initial={{ opacity: 0, y: 5, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -5, scale: 0.95 }}
@@ -127,7 +127,7 @@ export function ChainCard({ chain }: ChainCardProps) {
                 }}
                 className="text-lg font-bold text-[#ef4444] dark:text-[#ef4444] inline-block"
               >
-                {chain.validators?.length || 0}
+                {chain.validatorCount || 0}
               </motion.span>
             </AnimatePresence>
           </motion.div>

@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -44,6 +44,19 @@ function sanitizeResponse(data: any): any {
 // Add caching layer for API responses
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+// Export function to clear cache (for debugging/forcing refresh)
+export function clearChainsCache() {
+  // Clear all chains-related cache entries
+  for (const key of cache.keys()) {
+    if (key.startsWith('chains')) {
+      cache.delete(key);
+    }
+  }
+}
+
+// Clear chains cache on module load to ensure fresh data after code changes
+clearChainsCache();
 
 const BASE_URL = config.apiBaseUrl;
 const API_URL = `${BASE_URL}/api`;
@@ -277,6 +290,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
     try {
       const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const data = await fetchWithRetry<any[]>(url);
+
       const chains = data.map((chain) => {
         // Handle potential backend property name changes
         // Prioritize using the chain name as the primary ID for URLs, but keep numeric IDs for other purposes if needed
@@ -295,6 +309,9 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
            chainSlug = Math.random().toString(36).substring(7);
         }
 
+        const validatorCountRaw = chain.validatorCount || chain.validatorsCount || chain.validator_count || chain.nodeCount || 0;
+        const validatorCount = Number(validatorCountRaw);
+
         return {
           ...chain,
           // We use the slug as the main chainId for routing purposes
@@ -310,18 +327,44 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             value: chain.cumulativeTxCount.value,
             timestamp: chain.cumulativeTxCount.timestamp
           } : null,
-          validators: chain.validators.map((validator: any) => ({
+          // Handle various potential field names for validator count and ensure it's a number
+          validatorCount: validatorCount,
+          validators: chain.validators ? chain.validators.map((validator: any) => ({
             address: validator.nodeId,
             active: validator.validationStatus === 'active',
             uptime: validator.uptimePerformance,
             weight: Number(validator.amountStaked),
             explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
-          }))
+          })) : []
         };
       });
+
       return chains;
     } catch (error) {
       console.error('Chains fetch error:', error);
+      return [];
+    }
+  });
+}
+
+export async function getChainValidators(chainId: string): Promise<Validator[]> {
+  return fetchWithCache(`chain-validators-${chainId}`, async () => {
+    try {
+      const data = await fetchWithRetry<any[]>(`${API_URL}/chains/${chainId}/validators`);
+      
+      if (!data || !Array.isArray(data)) {
+        return [];
+      }
+
+      return data.map((validator: any) => ({
+        address: validator.nodeId,
+        active: validator.validationStatus === 'active',
+        uptime: validator.uptimePerformance,
+        weight: Number(validator.amountStaked),
+        explorerUrl: `${EXPLORER_URL}/validators/${validator.nodeId}`
+      }));
+    } catch (error) {
+      console.error('Chain validators fetch error:', error);
       return [];
     }
   });

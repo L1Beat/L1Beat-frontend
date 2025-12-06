@@ -93,7 +93,7 @@ export function ChainListView({ chains }: ChainListViewProps) {
                   <div className="flex items-center gap-1 min-w-[30px]">
                     <Server className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                     <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                      {chain.validators?.length || 0}
+                      {chain.validatorCount || 0}
                     </span>
                   </div>
                   <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>

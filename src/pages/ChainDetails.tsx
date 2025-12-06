@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory } from '../api';
+import { getChains, getTPSHistory, getChainValidators } from '../api';
 import { Chain, TPSHistory } from '../types';
 import { 
   Activity, 
@@ -62,10 +62,17 @@ export function ChainDetails() {
         const foundChain = chains.find(c => c.chainId === chainId);
         
         if (foundChain) {
-          setChain(foundChain);
+          // Fetch validators specifically for this chain
+          const validators = await getChainValidators(foundChain.originalChainId || foundChain.chainId);
+          const chainWithValidators = {
+            ...foundChain,
+            validators: validators.length > 0 ? validators : foundChain.validators // Use fetched validators if available
+          };
+          
+          setChain(chainWithValidators);
           // Use originalChainId if available for API calls that might require the numeric ID
-          // Fallback to chainId if originalChainId is not present (though it should be based on api.ts changes)
-          const apiChainId = (foundChain as any).originalChainId || foundChain.chainId;
+          // Fallback to chainId if originalChainId is not present
+          const apiChainId = foundChain.originalChainId || foundChain.chainId;
           const history = await getTPSHistory(7, apiChainId);
           setTPSHistory(history);
           setHealth(healthData);
@@ -141,7 +148,6 @@ export function ChainDetails() {
     : filteredValidators.slice(0, 10);
 
   const totalStake = chain?.validators.reduce((sum, v) => sum + v.weight, 0) || 0;
-  const activeValidators = chain?.validators.filter(v => v.active).length || 0;
   const averageUptime = chain?.validators.length 
     ? chain.validators.reduce((sum, v) => sum + (v.uptime || 0), 0) / chain.validators.length 
     : 0;
@@ -431,9 +437,9 @@ export function ChainDetails() {
                 <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chain ID</span>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{(chain as any).originalChainId || chain.chainId}</code>
+                    <code className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{chain.originalChainId || chain.chainId}</code>
                     <button
-                      onClick={() => handleCopy('chainId', (chain as any).originalChainId || chain.chainId)}
+                      onClick={() => handleCopy('chainId', chain.originalChainId || chain.chainId)}
                       className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700"
                     >
                       {copied === 'chainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -747,7 +753,7 @@ export function ChainDetails() {
               {activeTab === 'metrics' && (
                 <div className="space-y-6">
                   <L1MetricsChart 
-  chainId={(chain as any).originalChainId || chain.chainId} 
+  chainId={chain.originalChainId || chain.chainId} 
   chainName={chain.chainName} 
   evmChainId={chain.evmChainId ? String(chain.evmChainId) : undefined} 
   tokenSymbol={chain.networkToken?.symbol}

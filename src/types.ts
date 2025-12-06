@@ -7,6 +7,7 @@ declare global {
 // Chain related types
 export interface Chain {
   chainId: string;
+  originalChainId?: string;
   chainName: string;
   chainLogoUri?: string;
   description?: string;
@@ -16,6 +17,7 @@ export interface Chain {
     value: number;
     timestamp: number;
   } | null;
+  validatorCount?: number;
   cumulativeTxCount?: {
     value: number;
     timestamp: number;
