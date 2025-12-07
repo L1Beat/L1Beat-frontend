@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && node scripts/ssg.js",
-    "build:snap": "tsc && vite build && react-snap || true",
     "build:spa": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -15,37 +14,11 @@
     "prebuild": "npm run build-acps",
     "predev": "npm run update-acps"
   },
-  "reactSnap": {
-    "source": "dist",
-    "minifyHtml": {
-      "collapseWhitespace": false,
-      "removeComments": false
-    },
-    "puppeteerArgs": [
-      "--no-sandbox",
-      "--disable-setuid-sandbox"
-    ],
-    "include": [
-      "/",
-      "/blog",
-      "/acps"
-    ],
-    "skipThirdPartyRequests": false,
-    "cacheAjaxRequests": true,
-    "crawl": true,
-    "headless": true,
-    "ignoreForPrerender": ["service-worker"],
-    "removeBlobs": true,
-    "removeScriptTags": false,
-    "inlineCss": false,
-    "waitFor": 2000,
-    "minInlineJavascriptLength": 0
-  },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/react-virtual": "^3.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "axios": "^1.11.0",
+    "axios": "^1.12.0",
     "chart.js": "^4.4.2",
     "cjs": "^0.0.11",
     "class-variance-authority": "^0.7.1",
@@ -100,11 +73,10 @@
     "node": "^18.0.0",
     "postcss": "^8.4.35",
     "react-helmet-async": "^2.0.5",
-    "react-snap": "^1.23.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2",
+    "vite": "^5.4.21",
     "vite-ssg": "^28.2.2",
     "vite-ssg-sitemap": "^0.10.0"
   }
