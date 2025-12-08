@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Chain } from '../types';
 import { Activity, Server, Clock } from 'lucide-react';
 import { format } from 'date-fns';
@@ -8,7 +9,8 @@ interface ChainCardProps {
   chain: Chain;
 }
 
-export function ChainCard({ chain }: ChainCardProps) {
+// Memoized component to prevent unnecessary re-renders during animations
+export const ChainCard = memo(function ChainCard({ chain }: ChainCardProps) {
   const navigate = useNavigate();
 
   const handleNavigate = () => {
@@ -197,4 +199,12 @@ export function ChainCard({ chain }: ChainCardProps) {
       </div>
     </motion.div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if important data changes
+  return (
+    prevProps.chain.chainId === nextProps.chain.chainId &&
+    prevProps.chain.tps?.value === nextProps.chain.tps?.value &&
+    prevProps.chain.validatorCount === nextProps.chain.validatorCount &&
+    prevProps.chain.chainName === nextProps.chain.chainName
+  );
+});

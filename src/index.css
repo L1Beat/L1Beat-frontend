@@ -603,3 +603,43 @@
   background: transparent !important;
   background-color: transparent !important;
 }
+
+/* GPU acceleration hints for animated elements */
+.animate-pulse-slow,
+.animate-node-breathe,
+.animate-node-pulse,
+.animate-node-glow-pulse,
+.animate-ripple,
+.animate-shimmer,
+.animate-float-subtle,
+.animate-heartbeat,
+.animate-heartbeat-glow {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Reduced motion support for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-heartbeat,
+  .animate-heartbeat-glow,
+  .animate-pulse-slow,
+  .animate-node-pulse,
+  .animate-node-breathe,
+  .animate-node-glow-pulse,
+  .animate-ripple,
+  .animate-shimmer,
+  .animate-float-subtle,
+  .animate-fade-in {
+    animation: none !important;
+  }
+}

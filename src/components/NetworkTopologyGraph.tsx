@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { getChains } from '../api';
 import { Chain } from '../types';
 import { AlertTriangle, RefreshCw, Zap } from 'lucide-react';
@@ -32,10 +32,15 @@ export function NetworkTopologyGraph() {
   const [hoveredChain, setHoveredChain] = useState<Chain | null>(null);
   const [selectedChain] = useState<Chain | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [bullets, setBullets] = useState<Bullet[]>([]);
+  
+  // Performance optimization: Use refs for bullet animation to avoid re-renders on every frame
+  const bulletsRef = useRef<Bullet[]>([]);
+  const [renderTrigger, setRenderTrigger] = useState(0);
+  const frameCountRef = useRef(0);
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const bulletIdCounter = useRef(0);
+  const isVisibleRef = useRef(true);
 
   // Bullet animation settings
   const BULLET_BASE_SPEED = 0.05;
@@ -194,54 +199,89 @@ export function NetworkTopologyGraph() {
     };
   }, [chains, cChain]);
 
-  // Bullet animation loop
+  // Memoized function to get random bullet color
+  const getRandomBulletColor = useCallback(() => {
+    const colors = [
+      '#ef4444', '#dc2626', '#f87171',
+      '#ef4444', '#dc2626', '#b91c1c',
+      '#fca5a5', '#ef4444', '#dc2626'
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }, []);
+
+  // Visibility detection - pause animations when tab is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        // Reset timing when becoming visible to avoid large deltaTime
+        lastTimeRef.current = 0;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Bullet animation loop - optimized to use refs instead of state
   useEffect(() => {
     if (chains.length === 0 || positions.size === 0) return;
 
     const centerChainId = cChain?.chainId || chains[0].chainId;
     
     const animate = (timestamp: number) => {
+      // Skip animation if tab is not visible
+      if (!isVisibleRef.current) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (!lastTimeRef.current) lastTimeRef.current = timestamp;
       const deltaTime = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
+      // Skip frame if too much time has passed (tab was inactive)
       if (deltaTime > 100) {
         animationRef.current = requestAnimationFrame(animate);
         return;
       }
 
-      setBullets(prevBullets => {
-        const updatedBullets = prevBullets
-          .map(bullet => {
-            const newProgress = bullet.progress + (bullet.speed * deltaTime * 0.001);
-            return { ...bullet, progress: newProgress };
-          })
-          .filter(bullet => bullet.progress < 1);
+      // Update bullets directly in ref (no re-render)
+      bulletsRef.current = bulletsRef.current
+        .map(bullet => ({
+          ...bullet,
+          progress: bullet.progress + (bullet.speed * deltaTime * 0.001)
+        }))
+        .filter(bullet => bullet.progress < 1);
+      
+      // Spawn new bullets
+      if (bulletsRef.current.length < MAX_BULLETS && Math.random() < BULLET_SPAWN_RATE) {
+        const otherChains = chains.filter(chain => chain.chainId !== centerChainId);
         
-        if (updatedBullets.length < MAX_BULLETS && Math.random() < BULLET_SPAWN_RATE) {
-          const otherChains = chains.filter(chain => chain.chainId !== centerChainId);
+        if (otherChains.length > 0) {
+          const randomChain = otherChains[Math.floor(Math.random() * otherChains.length)];
+          const direction = Math.random() > 0.5 ? 'outgoing' : 'incoming';
           
-          if (otherChains.length > 0) {
-            const randomChain = otherChains[Math.floor(Math.random() * otherChains.length)];
-            const direction = Math.random() > 0.5 ? 'outgoing' : 'incoming';
-            
-            const newBullet: Bullet = {
-              id: `bullet-${bulletIdCounter.current++}`,
-              fromChainId: direction === 'outgoing' ? centerChainId : randomChain.chainId,
-              toChainId: direction === 'outgoing' ? randomChain.chainId : centerChainId,
-              progress: 0,
-              speed: BULLET_BASE_SPEED * (0.8 + Math.random() * 0.4),
-              size: 2 + Math.random() * 2,
-              color: getRandomBulletColor(),
-              direction
-            };
-            
-            return [...updatedBullets, newBullet];
-          }
+          const newBullet: Bullet = {
+            id: `bullet-${bulletIdCounter.current++}`,
+            fromChainId: direction === 'outgoing' ? centerChainId : randomChain.chainId,
+            toChainId: direction === 'outgoing' ? randomChain.chainId : centerChainId,
+            progress: 0,
+            speed: BULLET_BASE_SPEED * (0.8 + Math.random() * 0.4),
+            size: 2 + Math.random() * 2,
+            color: getRandomBulletColor(),
+            direction
+          };
+          
+          bulletsRef.current = [...bulletsRef.current, newBullet];
         }
-        
-        return updatedBullets;
-      });
+      }
+
+      // Only trigger React re-render every 3rd frame (~20fps for DOM updates)
+      frameCountRef.current++;
+      if (frameCountRef.current % 3 === 0) {
+        setRenderTrigger(n => n + 1);
+      }
 
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -253,17 +293,8 @@ export function NetworkTopologyGraph() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [chains, positions, cChain]);
+  }, [chains, positions, cChain, getRandomBulletColor]);
 
-  const getRandomBulletColor = () => {
-    // Use brand red variations for bullets
-    const colors = [
-      '#ef4444', '#dc2626', '#f87171', // Brand red variations
-      '#ef4444', '#dc2626', '#b91c1c', // More brand red
-      '#fca5a5', '#ef4444', '#dc2626'  // Lighter and darker reds
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
 
   const handleChainClick = (chain: Chain) => {
     navigate(`/chain/${chain.chainId}`);
@@ -339,7 +370,8 @@ export function NetworkTopologyGraph() {
                 });
               });
               
-              setBullets(newBullets);
+              bulletsRef.current = newBullets;
+              setRenderTrigger(n => n + 1);
             }}
             className="p-1.5 rounded-full bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
             title="Animate network"
@@ -353,9 +385,9 @@ export function NetworkTopologyGraph() {
         ref={containerRef} 
         className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[400px] w-full overflow-hidden"
       >
-        {/* Dark space background with subtle, slow twinkling stars */}
+        {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
         <div className="absolute inset-0 overflow-hidden">
-          {Array.from({ length: 80 }).map((_, i) => (
+          {Array.from({ length: 25 }).map((_, i) => (
             <div 
               key={`star-${i}`}
               className="absolute rounded-full bg-white"
@@ -364,6 +396,7 @@ export function NetworkTopologyGraph() {
                 height: `${Math.random() * 1.5 + 0.5}px`,
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
+                willChange: 'opacity',
                 animation: `twinkle ${Math.random() * 8 + 6}s ease-in-out infinite`,
                 animationDelay: `-${Math.random() * 8}s`,
               }}
@@ -445,7 +478,7 @@ export function NetworkTopologyGraph() {
           })}
           
           {/* Animated bullets */}
-          {bullets.map(bullet => {
+          {bulletsRef.current.map(bullet => {
             const fromPosition = positions.get(bullet.fromChainId);
             const toPosition = positions.get(bullet.toChainId);
             
