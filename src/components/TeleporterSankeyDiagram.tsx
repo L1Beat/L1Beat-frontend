@@ -77,6 +77,9 @@ const findChainId = (chainName: string) => {
   return chainMap[chainName] || null;
 };
 
+// Maximum animation cycles per particle to prevent infinite loops
+const MAX_PARTICLE_CYCLES = 30;
+
 export function TeleporterSankeyDiagram() {
   const navigate = useNavigate();
   const [data, setData] = useState<TeleporterData | null>(null);
@@ -90,6 +93,11 @@ export function TeleporterSankeyDiagram() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  
+  // Refs for animation control and cleanup
+  const isMountedRef = useRef(true);
+  const isVisibleRef = useRef(true);
+  const activeParticlesRef = useRef<d3.Selection<SVGCircleElement, unknown, null, undefined>[]>([]);
   
   // Force text colors to always be white for dark background
   const forceTextColors = useCallback(() => {
@@ -115,6 +123,36 @@ export function TeleporterSankeyDiagram() {
       return () => clearTimeout(timer);
     }
   }, [data, forceTextColors, selectedChain]);
+
+  // Track component mount state for cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Clean up all active particle transitions on unmount
+      activeParticlesRef.current.forEach(particle => {
+        particle.interrupt();
+        particle.remove();
+      });
+      activeParticlesRef.current = [];
+    };
+  }, []);
+
+  // Visibility detection - pause animations when tab is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = !document.hidden;
+      if (document.hidden) {
+        // Interrupt all active transitions when tab is hidden
+        activeParticlesRef.current.forEach(particle => {
+          particle.interrupt();
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
   
   
 
@@ -424,13 +462,28 @@ export function TeleporterSankeyDiagram() {
         .style('transition', 'opacity 0.3s ease, stroke-width 0.3s ease')
         .style('cursor', 'pointer');
       
-      // Particle animation logic...
-      function animateParticle(particle, pathNode) {
+      // Particle animation logic with cycle limits to prevent infinite loops
+      function animateParticle(particle: d3.Selection<SVGCircleElement, unknown, null, undefined>, pathNode: SVGPathElement) {
         const pathLength = pathNode.getTotalLength();
         const duration = Math.random() * 3000 + 2000;
         const delay = Math.random() * 2000;
+        let cycleCount = 0;
         
         function startAnimation() {
+          // Stop if component unmounted, max cycles reached, or tab hidden
+          if (!isMountedRef.current || cycleCount >= MAX_PARTICLE_CYCLES) {
+            particle.remove();
+            return;
+          }
+          
+          // Skip animation if tab is hidden, but don't remove particle
+          if (!isVisibleRef.current) {
+            setTimeout(startAnimation, 1000);
+            return;
+          }
+          
+          cycleCount++;
+          
           particle
             .attr('opacity', 0)
             .transition()
@@ -438,25 +491,34 @@ export function TeleporterSankeyDiagram() {
             .duration(duration)
             .ease(d3.easeLinear)
             .attrTween('transform', function() {
-              return function(t) {
+              return function(t: number) {
                 const point = pathNode.getPointAtLength(t * pathLength);
                 return `translate(${point.x},${point.y})`;
               };
             })
-            .attr('opacity', t => t < 0.9 ? 0.7 : 0.7 * (1 - (t - 0.9) * 10))
+            .attr('opacity', 0.85)
             .on('end', startAnimation);
         }
         startAnimation();
       }
 
+      // Clear previous particles before creating new ones
+      activeParticlesRef.current.forEach(p => {
+        p.interrupt();
+        p.remove();
+      });
+      activeParticlesRef.current = [];
+
       linkPaths.each(function(d) {
         if (d.value > 50) {
-          const numParticles = Math.min(5, Math.max(2, Math.floor(d.value / 100)));
+          // Reduce number of particles for better performance
+          const numParticles = Math.min(3, Math.max(1, Math.floor(d.value / 150)));
           for (let j = 0; j < numParticles; j++) {
             const particle = svg.append('circle')
-              .attr('r', 2)
+              .attr('r', 3)
               .attr('fill', d.source.color)
-              .style('mix-blend-mode', 'screen');
+              .style('mix-blend-mode', 'screen') as d3.Selection<SVGCircleElement, unknown, null, undefined>;
+            activeParticlesRef.current.push(particle);
             animateParticle(particle, this);
           }
         }
@@ -715,9 +777,9 @@ export function TeleporterSankeyDiagram() {
         ref={containerRef} 
         className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[400px] overflow-hidden"
       >
-        {/* Dark space background with subtle, slow twinkling stars - matching network topology */}
+        {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 60 }).map((_, i) => (
+          {Array.from({ length: 25 }).map((_, i) => (
             <div 
               key={`star-${i}`}
               className="absolute rounded-full bg-white"
@@ -726,6 +788,7 @@ export function TeleporterSankeyDiagram() {
                 height: `${Math.random() * 1.5 + 0.5}px`,
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
+                willChange: 'opacity',
                 animation: `twinkle ${Math.random() * 8 + 6}s ease-in-out infinite`,
                 animationDelay: `-${Math.random() * 8}s`,
               }}
