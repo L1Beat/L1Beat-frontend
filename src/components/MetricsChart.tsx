@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
 import { format } from 'date-fns';
 import {
@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../hooks/useTheme';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
+import { watermarkPlugin, lineShadowPlugin, crosshairPlugin } from '../utils/chartConfig';
 
 ChartJS.register(
   CategoryScale,
@@ -163,7 +164,7 @@ export function MetricsChart({
     }
   };
 
-  const chartData = {
+  const chartData = useMemo(() => ({
     labels: data.map(item => formatDate(item.timestamp)),
     datasets: [
       {
@@ -171,38 +172,87 @@ export function MetricsChart({
         data: data.map(item => item.value),
         fill: true,
         borderColor: chartColors.line,
-        backgroundColor: chartColors.fill,
-        borderWidth: isDark ? 2 : 1.5,
-        tension: 0.4,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        pointBackgroundColor: isDark ? '#1e293b' : '#ffffff',
+        backgroundColor: (context: any) => {
+          const chart = context.chart;
+          const { ctx, chartArea } = chart;
+          if (!chartArea) return 'transparent';
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          // Match AvalancheNetworkMetrics gradient
+          gradient.addColorStop(0, 'rgba(239, 68, 68, 0.35)');
+          gradient.addColorStop(0.4, 'rgba(239, 68, 68, 0.15)');
+          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.02)');
+          return gradient;
+        },
+        borderWidth: isDark ? 2.5 : 2,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 7,
+        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
+        pointHoverBorderColor: chartColors.line,
+        pointHoverBorderWidth: 2.5,
       },
     ],
-  };
+  }), [data, title, chartColors, isDark]);
 
-  const options = {
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         display: false,
       },
       tooltip: {
-        backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        titleColor: isDark ? '#e2e8f0' : '#1e293b',
-        bodyColor: isDark ? '#e2e8f0' : '#1e293b',
-        borderColor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+        titleColor: isDark ? '#f1f5f9' : '#0f172a',
+        bodyColor: isDark ? '#e2e8f0' : '#334155',
+        borderColor: isDark ? `${chartColors.line}40` : `${chartColors.line}30`,
         borderWidth: 1,
-        padding: 12,
-        boxPadding: 4,
+        padding: 16,
+        boxPadding: 8,
+        cornerRadius: 12,
+        titleFont: {
+          size: 15,
+          weight: 'bold' as const,
+        },
+        bodyFont: {
+          size: 14,
+        },
+        bodySpacing: 6,
+        titleMarginBottom: 10,
+        displayColors: true,
+        usePointStyle: true,
+        caretSize: 8,
+        caretPadding: 12,
         callbacks: {
+          title: (items: any[]) => {
+            if (items.length === 0) return '';
+            const dataPoint = data[items[0].dataIndex];
+            if (!dataPoint) return '';
+            try {
+              return format(new Date(dataPoint.timestamp * 1000), 'MMMM d, yyyy');
+            } catch {
+              return '';
+            }
+          },
           label: (context: any) => {
             const dataPoint = data[context.dataIndex];
             if (tooltipFormatter) {
               return tooltipFormatter(dataPoint);
             }
             return [`${valueLabel}: ${valueFormatter(context.parsed.y)}`];
+          },
+          // Use chart color for tooltip color box
+          labelColor: () => {
+            return {
+              borderColor: chartColors.line,
+              backgroundColor: chartColors.line,
+              borderWidth: 2,
+              borderRadius: 2,
+            };
           },
         },
       },
@@ -212,17 +262,24 @@ export function MetricsChart({
         grid: {
           display: false,
         },
+        border: {
+          display: false,
+        },
         ticks: {
           color: isDark ? '#94a3b8' : '#64748b',
           font: {
             size: 11,
           },
+          maxRotation: 0,
         },
       },
       y: {
         beginAtZero: true,
+        border: {
+          display: false,
+        },
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.04)',
           drawBorder: false,
         },
         ticks: {
@@ -230,11 +287,12 @@ export function MetricsChart({
           font: {
             size: 11,
           },
-          callback: valueFormatter,
+          callback: (value: any) => valueFormatter(Number(value)),
+          padding: 8,
         },
       },
     },
-  };
+  }), [isDark, chartColors, data, tooltipFormatter, valueLabel, valueFormatter]);
 
   const latestValue = data[data.length - 1]?.value;
 
@@ -267,7 +325,11 @@ export function MetricsChart({
       </div>
 
       <div className="h-[300px] sm:h-[400px]">
-        <Line data={chartData} options={options} />
+        <Line 
+          data={chartData} 
+          options={options} 
+          plugins={[lineShadowPlugin, crosshairPlugin, watermarkPlugin]}
+        />
       </div>
     </div>
   );
