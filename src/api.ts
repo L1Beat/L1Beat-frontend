@@ -292,6 +292,11 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
       const data = await fetchWithRetry<any[]>(url);
 
       const chains = data.map((chain) => {
+        // Debug: Log chain data to see networkToken field
+        if (!chain.networkToken && !chain.token && !chain.nativeToken) {
+          console.log(`Chain ${chain.chainName} missing networkToken field. Available fields:`, Object.keys(chain));
+        }
+
         // Handle potential backend property name changes
         // Prioritize using the chain name as the primary ID for URLs, but keep numeric IDs for other purposes if needed
         // We sanitize the chain name to be URL-friendly (lowercase, replace spaces with dashes)
@@ -315,7 +320,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
         return {
           ...chain,
           // We use the slug as the main chainId for routing purposes
-          chainId: String(chainSlug), 
+          chainId: String(chainSlug),
           // We store the original numeric ID if we need it for API calls
           originalChainId: String(rawChainId),
           tps: chain.tps ? {
@@ -335,7 +340,13 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             uptime: validator.uptimePerformance,
             weight: Number(validator.amountStaked),
             explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
-          })) : []
+          })) : [],
+          // Explicitly handle networkToken to ensure it's available
+          networkToken: chain.networkToken || chain.token || chain.nativeToken || {
+            name: 'AVAX',
+            symbol: 'AVAX',
+            decimals: 18
+          }
         };
       });
 

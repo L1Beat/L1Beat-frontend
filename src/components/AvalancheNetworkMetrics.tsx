@@ -216,15 +216,54 @@ export function AvalancheNetworkMetrics() {
   }, [selectedMetrics]);
 
   // Export chart as PNG
-  const handleExport = useCallback(() => {
+  // Export dropdown state
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  const handleExportPNG = useCallback(() => {
     if (chartRef.current) {
       const link = document.createElement('a');
       const metricNames = selectedMetrics.join('-');
       link.download = `l1beat-${metricNames}-${timeframe}d.png`;
       link.href = chartRef.current.toBase64Image('image/png', 1);
       link.click();
+      setIsExportDropdownOpen(false);
     }
   }, [selectedMetrics, timeframe]);
+
+  const handleExportCSV = useCallback(() => {
+    if (!filteredPrimaryData.length) return;
+
+    const headers = ['Date', ...selectedMetrics.map(id => {
+      const metric = METRICS.find(m => m.id === id);
+      return metric?.name || id;
+    })];
+
+    const rows = filteredPrimaryData.map((item, index) => {
+      const values = selectedMetrics.map(metricId => {
+        const metricData = metricsData[metricId] || [];
+        const start = Math.max(0, rangeStart);
+        const filteredMetricData = metricData.slice(start, rangeEnd + 1);
+        const dataPoint = filteredMetricData[index];
+        if (!dataPoint) return '';
+        // Return raw value instead of formatted to avoid comma/space issues
+        return dataPoint.value;
+      });
+      return [item.date, ...values];
+    });
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const metricNames = selectedMetrics.join('-');
+    a.download = `l1beat-${metricNames}-${timeframe}d.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setIsExportDropdownOpen(false);
+  }, [selectedMetrics, timeframe, filteredPrimaryData, metricsData, rangeStart, rangeEnd]);
 
   // Fetch data for a single metric
   const fetchSingleMetric = async (metricId: MetricType, daysToFetch: number): Promise<MetricData[]> => {
@@ -691,15 +730,35 @@ export function AvalancheNetworkMetrics() {
               </button>
             </div>
 
-            {/* Export Button */}
-            <button
-              onClick={handleExport}
-              disabled={!chartData}
-              className="p-2 rounded-lg bg-muted hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Export as PNG"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+            {/* Export Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                disabled={!chartData}
+                className="p-2 rounded-lg bg-muted hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Export chart"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+              {isExportDropdownOpen && chartData && (
+                <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-lg shadow-lg z-10">
+                  <button
+                    onClick={handleExportPNG}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-t-lg flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export as PNG
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-b-lg flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export as CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

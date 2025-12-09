@@ -25,7 +25,6 @@ import {
   Github
 } from 'lucide-react';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
-import { L1MetricsChart } from '../components/L1MetricsChart';
 import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
@@ -48,7 +47,8 @@ export function ChainDetails() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'validators' | 'metrics'>('validators');
+  const [activeTab, setActiveTab] = useState<'validators'>('validators');
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -515,29 +515,48 @@ export function ChainDetails() {
               <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex space-x-8" aria-label="Tabs">
                   {[
-                    { id: 'validators', name: 'Validators', icon: Users },
-                    { id: 'metrics', name: 'Metrics', icon: Activity }
+                    { id: 'validators', name: 'Validators', icon: Users, disabled: false },
+                    { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: true },
+                    { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
+                    { id: 'social', name: 'Social', icon: MessageCircle, disabled: true }
                   ].map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
                     return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as 'validators' | 'metrics')}
-                        className={`
-                          group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-all
-                          ${isActive 
-                            ? 'border-[#ef4444] text-[#ef4444]' 
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                          }
-                        `}
-                      >
-                        <Icon className={`
-                          -ml-0.5 mr-2 h-5 w-5
-                          ${isActive ? 'text-[#ef4444]' : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-400'}
-                        `} />
-                        {tab.name}
-                      </button>
+                      <div key={tab.id} className="relative">
+                        <button
+                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators')}
+                          onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
+                          onMouseLeave={() => setHoveredTab(null)}
+                          disabled={tab.disabled}
+                          className={`
+                            group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-all
+                            ${isActive
+                              ? 'border-[#ef4444] text-[#ef4444]'
+                              : tab.disabled
+                                ? 'border-transparent text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 cursor-pointer'
+                            }
+                          `}
+                        >
+                          <Icon className={`
+                            -ml-0.5 mr-2 h-5 w-5
+                            ${isActive
+                              ? 'text-[#ef4444]'
+                              : tab.disabled
+                                ? 'text-gray-400 dark:text-gray-600'
+                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-400'
+                            }
+                          `} />
+                          {tab.name}
+                        </button>
+                        {tab.disabled && hoveredTab === tab.id && (
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg whitespace-nowrap z-10">
+                            Coming soon
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900 dark:border-b-gray-700"></div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </nav>
@@ -746,18 +765,6 @@ export function ChainDetails() {
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              {/* Metrics Tab */}
-              {activeTab === 'metrics' && (
-                <div className="space-y-6">
-                  <L1MetricsChart 
-  chainId={chain.originalChainId || chain.chainId} 
-  chainName={chain.chainName} 
-  evmChainId={chain.evmChainId ? String(chain.evmChainId) : undefined} 
-  tokenSymbol={chain.networkToken?.symbol}
-/>
                 </div>
               )}
             </div>
