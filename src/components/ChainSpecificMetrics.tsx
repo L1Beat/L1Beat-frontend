@@ -132,7 +132,13 @@ export function ChainSpecificMetrics() {
     async function fetchChains() {
       try {
         const chainsData = await getChains();
-        const sortedChains = [...chainsData].sort((a, b) => {
+        // Filter chains with validators and sort by cumulative transactions
+        const chainsWithValidators = chainsData.filter(chain => {
+          const hasValidators = (chain.validators && chain.validators.length > 0) ||
+                               (chain.validatorCount && chain.validatorCount > 0);
+          return hasValidators;
+        });
+        const sortedChains = [...chainsWithValidators].sort((a, b) => {
           const aTxCount = a.cumulativeTxCount?.value || 0;
           const bTxCount = b.cumulativeTxCount?.value || 0;
           return bTxCount - aTxCount;
@@ -546,7 +552,7 @@ export function ChainSpecificMetrics() {
 
         {/* Timeframe Selector */}
         <div className="mt-6 flex flex-wrap gap-2">
-          {[7, 14, 30, 90, 360].map((days) => (
+          {[7, 30, 90, 360].map((days) => (
             <button
               key={days}
               onClick={() => setTimeframe(days as TimeframeOption)}

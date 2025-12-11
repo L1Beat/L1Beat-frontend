@@ -14,6 +14,15 @@
   bundle = true
   minify = true
 
+# Serve pre-rendered blog post HTML files (SSG)
+# Don't redirect these - let Netlify serve the static HTML with proper meta tags
+[[redirects]]
+  from = "/blog/*"
+  to = "/blog/:splat/index.html"
+  status = 200
+  force = false
+
+# SPA fallback for all other routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
