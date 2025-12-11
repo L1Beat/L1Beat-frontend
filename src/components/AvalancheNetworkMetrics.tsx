@@ -687,47 +687,20 @@ export function AvalancheNetworkMetrics() {
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             {/* Timeframe Selector */}
-            <div className="bg-gray-100 dark:bg-dark-700 rounded-full p-1 flex">
-              <button
-                onClick={() => handleTimeframeChange(7)}
-                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  timeframe === 7
-                    ? 'bg-[#ef4444] text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
-                }`}
-              >
-                7D
-              </button>
-              <button
-                onClick={() => handleTimeframeChange(30)}
-                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  timeframe === 30
-                    ? 'bg-[#ef4444] text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
-                }`}
-              >
-                30D
-              </button>
-              <button
-                onClick={() => handleTimeframeChange(90)}
-                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  timeframe === 90
-                    ? 'bg-[#ef4444] text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
-                }`}
-              >
-                90D
-              </button>
-              <button
-                onClick={() => handleTimeframeChange(360)}
-                className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  timeframe === 360
-                    ? 'bg-[#ef4444] text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
-                }`}
-              >
-                1Y
-              </button>
+            <div className="flex flex-wrap gap-2">
+              {[7, 30, 90, 360].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => handleTimeframeChange(days)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    timeframe === days
+                      ? 'bg-[#ef4444] text-white shadow-sm'
+                      : 'bg-accent text-foreground hover:bg-accent/80'
+                  }`}
+                >
+                  {days === 360 ? '1Y' : `${days}D`}
+                </button>
+              ))}
             </div>
 
             {/* Export Dropdown */}
