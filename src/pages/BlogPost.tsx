@@ -226,7 +226,8 @@ export function BlogPost() {
         if (!post) return;
 
         const url = window.location.href;
-        const text = `${post.title} - ${post.excerpt}`;
+        // Keep share text short for X/Twitter cards; the URL carries context.
+        const text = post.title;
 
         switch (platform) {
             case 'twitter':

@@ -64,7 +64,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
     <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
       }`}>
       {/* Alpha Warning Banner */}
-      <div className="bg-[#ef4444]/10 border-b border-[#ef4444]/20 px-6 py-2 flex items-center justify-center gap-2">
+      <div className="bg-[#ef4444]/15 supports-[backdrop-filter]:bg-[#ef4444]/10 supports-[backdrop-filter]:backdrop-blur-md border-b border-[#ef4444]/20 px-6 py-2 flex items-center justify-center gap-2">
         <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
         <p className="text-sm font-medium text-[#ef4444]">
               L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
@@ -72,7 +72,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
       </div>
 
       {/* Main Navigation */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-sm">
+      <header className="border-b border-border bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Health Status */}
@@ -139,7 +139,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
 
       {/* Tabbed Navigation */}
       {showTabs && (
-        <nav className="border-b border-border bg-muted/30">
+        <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-6">
             <div className="flex gap-1 overflow-x-auto md:overflow-visible">
               {navTabs.map(({ id, label, path, icon: Icon, comingSoon }) => {

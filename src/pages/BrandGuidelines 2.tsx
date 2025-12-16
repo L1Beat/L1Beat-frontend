@@ -31,7 +31,7 @@ export function BrandGuidelines() {
       <StatusBar showTabs={false} />
 
       {/* Navigation */}
-      <nav className="border-b border-border bg-muted/30 sticky top-[107px] z-40 backdrop-blur-sm">
+      <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md sticky top-[107px] z-40">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-1 overflow-x-auto no-scrollbar">
             {sections.map(({ id, label, icon: Icon }) => (
