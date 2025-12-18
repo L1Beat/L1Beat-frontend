@@ -30,7 +30,8 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
       case 'stale':
         return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300';
+        // Avoid bg-muted/xx opacity: CSS vars are not RGB, can break in dark mode.
+        return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
@@ -45,13 +46,13 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
 
     return (
       <div className="flex items-center gap-1" title={`Complexity: ${complexity}`}>
-        <span className="text-xs text-gray-500 dark:text-gray-400">Complexity:</span>
+        <span className="text-xs text-muted-foreground">Complexity:</span>
         <div className="flex gap-0.5 items-center">
           {[...Array(4)].map((_, i) => (
             <div
               key={i}
               className={`h-2 w-1.5 rounded-full ${
-                i < config.bars ? config.color : 'bg-gray-300 dark:bg-gray-600'
+                i < config.bars ? config.color : 'bg-muted'
               }`}
             />
           ))}
@@ -61,10 +62,10 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
   };
 
   const MetadataItem = ({ icon: Icon, label, value, colorClass = '' }) => (
-    <div className={`flex items-center gap-1.5 text-gray-500 dark:text-gray-400 ${colorClass}`}>
+    <div className={`flex items-center gap-1.5 text-muted-foreground ${colorClass}`}>
       <Icon className="w-4 h-4" />
       <span className="text-xs font-medium">{label}</span>
-      {value && <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{value}</span>}
+      {value && <span className="text-xs font-semibold text-foreground">{value}</span>}
     </div>
   );
 
@@ -73,7 +74,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
     return (
       <motion.div
         onClick={() => onClick(acp)}
-        className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 cursor-pointer group"
+        className="bg-card rounded-xl border border-border p-4 cursor-pointer group"
         whileHover={{
           boxShadow: "0 10px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
           borderColor: "rgb(239, 68, 68)",
@@ -88,14 +89,14 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
                 ACP-{acp.number}
               </span>
               <motion.h3
-                className="text-base font-semibold text-gray-900 dark:text-white"
+                className="text-base font-semibold text-foreground"
                 whileHover={{ color: "#ef4444" }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               >
                 <ReactMarkdown>{acp.title}</ReactMarkdown>
               </motion.h3>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+            <div className="text-sm text-muted-foreground line-clamp-2">
               <ReactMarkdown>{acp.abstract}</ReactMarkdown>
             </div>
           </div>
@@ -117,7 +118,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
               whileHover={{ x: 4, color: "#ef4444" }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <ArrowRight className="w-6 h-6 text-gray-400" />
+              <ArrowRight className="w-6 h-6 text-muted-foreground" />
             </motion.div>
           </div>
         </div>
@@ -128,7 +129,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
   return (
     <motion.div
       onClick={() => onClick(acp)}
-      className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer group h-full flex flex-col"
+      className="bg-card rounded-xl border border-border p-5 cursor-pointer group h-full flex flex-col"
       whileHover={{
         boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
         borderColor: "#ef4444",
@@ -149,25 +150,25 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
         </div>
 
         <motion.h3
-          className="text-lg font-semibold text-gray-900 dark:text-white mb-2 leading-tight"
+          className="text-lg font-semibold text-foreground mb-2 leading-tight"
           whileHover={{ color: "#ef4444" }}
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <ReactMarkdown>{acp.title}</ReactMarkdown>
         </motion.h3>
 
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-4 leading-relaxed">
+        <div className="text-sm text-muted-foreground mb-4 line-clamp-4 leading-relaxed">
           <ReactMarkdown>{acp.abstract}</ReactMarkdown>
         </div>
       </div>
 
-      <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+      <div className="pt-4 border-t border-border">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <Users className="w-4 h-4" />
             <span className="text-xs font-medium">{acp.authors?.length || 0} authors</span>
           </div>
-          <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <BookOpen className="w-4 h-4" />
             <span className="text-xs font-medium">{acp.readingTime} min read</span>
           </div>
@@ -175,10 +176,10 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300`}>
+            <span className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
               {acp.track}
             </span>
-            <span className={`px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300`}>
+            <span className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
               {acp.category}
             </span>
           </div>

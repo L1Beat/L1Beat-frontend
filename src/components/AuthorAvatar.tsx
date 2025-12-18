@@ -26,7 +26,7 @@ export function AuthorAvatar({
   name,
   size = 'small',
   className = '',
-  borderClassName = 'border-2 border-white dark:border-gray-900',
+  borderClassName = 'border-2 border-card',
 }: AuthorAvatarProps) {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -47,7 +47,7 @@ export function AuthorAvatar({
       {shouldShowImage ? (
         <div className={`relative ${sizeClasses[size]} ${className}`}>
           {imageLoading && (
-            <div className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 rounded-full ${borderClassName} animate-pulse`} />
+            <div className={`absolute inset-0 bg-muted rounded-full ${borderClassName} animate-pulse`} />
           )}
           <img
             src={avatarUrl}
@@ -64,7 +64,7 @@ export function AuthorAvatar({
         </div>
       ) : (
         <div
-          className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full ${borderClassName} flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:from-blue-600 hover:to-purple-700 ${className}`}
+          className={`${sizeClasses[size]} bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full ${borderClassName} flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:from-[#dc2626] hover:to-[#b91c1c] ${className}`}
         >
           {initials.length <= 2 ? (
             <span className={`${sizeClasses[size].split(' ')[2]} font-semibold text-white select-none`}>

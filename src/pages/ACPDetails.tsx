@@ -297,7 +297,7 @@ export default function ACPDetails() {
           try {
             const element = document.getElementById(chartId);
             if (element) {
-              element.innerHTML = `<div class="flex justify-center items-center min-h-[200px] ${isDark ? 'text-gray-400' : 'text-gray-500'}">
+              element.innerHTML = `<div class="flex justify-center items-center min-h-[200px] ${isDark ? 'text-muted-foreground' : 'text-muted-foreground'}">
                 <div class="flex items-center space-x-2">
                   <div class="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent"></div>
                   <span>Rendering diagram...</span>
@@ -313,9 +313,9 @@ export default function ACPDetails() {
               } catch (renderError) {
                 console.error('Mermaid render failed:', renderError);
                 element.innerHTML = `
-                  <div class="border-2 border-dashed border-red-300 bg-red-50 text-red-600 rounded-lg p-4">
+                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded-lg p-4">
                     <p class="font-medium mb-2">Failed to render diagram</p>
-                    <pre class="text-xs bg-white p-2 rounded overflow-auto border border-red-100">${cleanContent}</pre>
+                    <pre class="text-xs bg-card p-2 rounded overflow-auto border border-border">${cleanContent}</pre>
                   </div>
                 `;
               }
@@ -330,11 +330,7 @@ export default function ACPDetails() {
       }, [chartId, content, isDark]); // Re-render on theme change
 
       return (
-        <div className={`my-8 p-4 rounded-xl border shadow-sm overflow-hidden transition-colors duration-200 ${
-          isDark 
-            ? 'bg-dark-800 border-dark-700' 
-            : 'bg-white border-gray-200'
-        }`}>
+        <div className="my-8 p-4 rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-colors duration-200">
           <div id={chartId} className="flex justify-center min-h-[150px] items-center w-full overflow-x-auto" />
         </div>
       );
@@ -351,35 +347,21 @@ export default function ACPDetails() {
       };
 
       return (
-        <div className={`my-6 rounded-xl overflow-hidden border transition-colors duration-200 ${
-          isDark 
-            ? 'bg-[#1e1e1e] border-dark-700 shadow-lg' 
-            : 'bg-white border-gray-200 shadow-md'
-        }`}>
-          <div className={`flex items-center justify-between px-4 py-3 border-b ${
-            isDark 
-              ? 'bg-dark-800 border-dark-700' 
-              : 'bg-gray-50 border-gray-200'
-          }`}>
+        <div className="my-6 rounded-xl overflow-hidden border border-border bg-card shadow-sm transition-colors duration-200">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]" />
                 <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]" />
                 <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]" />
               </div>
-              <span className={`ml-2 text-xs font-medium font-mono ${
-                isDark ? 'text-gray-400' : 'text-gray-500'
-              }`}>
+              <span className="ml-2 text-xs font-medium font-mono text-muted-foreground">
                 {match[1]}
               </span>
             </div>
             <button
               onClick={handleCopy}
-              className={`p-1.5 rounded-md transition-all duration-200 ${
-                isDark 
-                  ? 'text-gray-400 hover:bg-dark-700 hover:text-white' 
-                  : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
-              }`}
+              className="p-1.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]"
               title="Copy code"
             >
               {isCopied ? (
@@ -409,8 +391,8 @@ export default function ACPDetails() {
                 {content}
               </SyntaxHighlighter>
             ) : (
-              <pre className="p-6 overflow-x-auto bg-gray-900 dark:bg-gray-800 rounded-b-lg">
-                <code className="text-gray-300 text-sm font-mono">{content}</code>
+              <pre className="p-6 overflow-x-auto bg-muted rounded-b-lg">
+                <code className="text-foreground text-sm font-mono">{content}</code>
               </pre>
             )}
           </div>
@@ -419,11 +401,7 @@ export default function ACPDetails() {
     }
 
     return (
-      <code className={`px-1.5 py-0.5 rounded text-sm font-mono ${
-        isDark 
-          ? 'bg-dark-700/50 text-gray-300' 
-          : 'bg-gray-100 text-gray-800'
-      }`} {...props}>
+      <code className="px-1.5 py-0.5 rounded text-sm font-mono bg-muted text-foreground" {...props}>
         {children}
       </code>
     );
@@ -448,7 +426,7 @@ export default function ACPDetails() {
       case 'withdrawn':
         return <XCircle className="w-5 h-5 text-red-500" />;
       default:
-        return <AlertTriangle className="w-5 h-5 text-gray-500" />;
+        return <AlertTriangle className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -466,21 +444,21 @@ export default function ACPDetails() {
       case 'withdrawn':
         return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-500/20 dark:text-gray-400 dark:border-gray-500/30';
+        return 'bg-muted text-muted-foreground border-border border';
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+            <h2 className="text-lg font-semibold text-foreground mt-4 mb-2">
               Loading ACP-{acpNumber}...
             </h2>
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-muted-foreground">
               Fetching proposal details from local data.
             </p>
           </div>
@@ -491,21 +469,21 @@ export default function ACPDetails() {
 
   if (error || !acp) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-lg font-semibold text-foreground mb-2">
               ACP Not Found
             </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+            <p className="text-muted-foreground mb-4">
               {error || `ACP-${acpNumber} could not be found.`}
             </p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => navigate('/acps')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700"
+                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to ACPs
@@ -531,16 +509,16 @@ export default function ACPDetails() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <StatusBar health={health} />
 
       <div className="flex-1">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <button
               onClick={() => navigate('/acps')}
-              className="inline-flex items-center text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              className="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to ACPs
@@ -548,8 +526,14 @@ export default function ACPDetails() {
           </div>
 
           {/* ACP Header */}
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8 overflow-hidden">
-            <div className="p-8">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.35)] mb-8">
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#ef4444]/15 blur-3xl" />
+              <div className="absolute -bottom-28 -left-28 h-72 w-72 rounded-full bg-[#ef4444]/10 blur-3xl" />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/5 dark:to-white/5" />
+            </div>
+
+            <div className="relative p-8">
               <div className="flex flex-col gap-6">
                 {/* Top Row: ID and Status */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
@@ -564,44 +548,44 @@ export default function ACPDetails() {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300`}>
+                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
                       {acp.track} Track
                     </span>
                     {acp.complexity && (
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300`}>
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
                         {acp.complexity} Complexity
                       </span>
                     )}
                   </div>
                 </div>
 
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-white leading-tight">
+                <h1 className="text-4xl font-semibold tracking-tight text-foreground leading-tight">
                   <ReactMarkdown>{acp.title}</ReactMarkdown>
                 </h1>
 
                 {/* Author and Meta */}
-                <div className="flex flex-wrap items-center gap-6 text-sm border-y border-gray-100 dark:border-gray-700 py-6">
+                <div className="flex flex-wrap items-center gap-6 text-sm border-y border-border py-6">
                   <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-gray-400" />
+                    <Users className="w-5 h-5 text-muted-foreground" />
                     <div className="flex flex-wrap items-center gap-2">
                       {acp.authors?.map((author, index) => (
                         <React.Fragment key={index}>
-                          {index > 0 && <span className="text-gray-400 dark:text-gray-600">|</span>}
+                          {index > 0 && <span className="text-muted-foreground">|</span>}
                           <a
                             href={author.url || `https://github.com/${author.github}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-gray-900 dark:text-white hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors"
+                            className="font-medium text-foreground hover:text-[#ef4444] transition-colors"
                           >
                             {author.name}
                           </a>
                         </React.Fragment>
-                      )) || <span className="text-gray-500">Unknown</span>}
+                      )) || <span className="text-muted-foreground">Unknown</span>}
                     </div>
                   </div>
 
                   {acp.created && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="w-4 h-4" />
                       <span>Created {new Date(acp.created).toLocaleDateString()}</span>
                     </div>
@@ -609,8 +593,8 @@ export default function ACPDetails() {
 
                   {acp.updated && (
                     <>
-                      <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 hidden sm:block" />
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <div className="w-px h-4 bg-border hidden sm:block" />
+                      <div className="flex items-center gap-2 text-muted-foreground">
                         <RefreshCw className="w-4 h-4" />
                         <span>Last updated {new Date(acp.updated).toLocaleDateString()}</span>
                       </div>
@@ -631,7 +615,7 @@ export default function ACPDetails() {
                   {acp.discussion && (
                     <button
                       onClick={() => window.open(acp.discussion, '_blank', 'noopener,noreferrer')}
-                      className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all cursor-pointer"
+                      className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all cursor-pointer"
                     >
                       <LinkIcon className="w-4 h-4 mr-2" />
                       View Discussion
@@ -640,7 +624,7 @@ export default function ACPDetails() {
 
                   <button
                     onClick={copyToClipboard}
-                    className="inline-flex items-center px-5 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700 transition-all ml-auto"
+                    className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all ml-auto"
                   >
                     {copied ? (
                       <>
@@ -660,13 +644,78 @@ export default function ACPDetails() {
           </div>
 
           {/* Content with ReactMarkdown */}
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 overflow-hidden">
-            <div className="prose prose-gray dark:prose-invert max-w-none break-words prose-table:table-auto prose-table:border-collapse prose-th:border prose-th:border-gray-300 prose-th:px-4 prose-th:py-2 prose-th:bg-gray-50 prose-td:border prose-td:border-gray-300 prose-td:px-4 prose-td:py-2">
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-8 overflow-hidden">
+            <div className="max-w-none break-words">
             <ReactMarkdown 
   remarkPlugins={[remarkGfm, remarkMath]}
   rehypePlugins={[rehypeKatex]}
   components={{
     code: CodeBlock,
+    a: ({ children, ...props }) => (
+      <a
+        {...props}
+        className="text-[#ef4444] hover:text-[#dc2626] underline underline-offset-4 decoration-[#ef4444]/30"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    ),
+    h1: ({ children, ...props }) => (
+      <h1 {...props} className="mt-10 mb-4 text-3xl font-semibold tracking-tight text-foreground">
+        {children}
+      </h1>
+    ),
+    h2: ({ children, ...props }) => (
+      <h2 {...props} className="mt-10 mb-4 text-2xl font-semibold tracking-tight text-foreground">
+        {children}
+      </h2>
+    ),
+    h3: ({ children, ...props }) => (
+      <h3 {...props} className="mt-8 mb-3 text-xl font-semibold text-foreground">
+        {children}
+      </h3>
+    ),
+    h4: ({ children, ...props }) => (
+      <h4 {...props} className="mt-6 mb-3 text-lg font-semibold text-foreground">
+        {children}
+      </h4>
+    ),
+    ul: ({ children, ...props }) => (
+      <ul {...props} className="my-4 ml-6 list-disc space-y-2 text-muted-foreground">
+        {children}
+      </ul>
+    ),
+    ol: ({ children, ...props }) => (
+      <ol {...props} className="my-4 ml-6 list-decimal space-y-2 text-muted-foreground">
+        {children}
+      </ol>
+    ),
+    blockquote: ({ children, ...props }) => (
+      <blockquote
+        {...props}
+        className="my-6 rounded-r-lg border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 px-4 py-3 text-muted-foreground"
+      >
+        {children}
+      </blockquote>
+    ),
+    table: ({ children, ...props }) => (
+      <div className="my-6 overflow-x-auto">
+        <table {...props} className="min-w-full border-collapse text-sm">
+          {children}
+        </table>
+      </div>
+    ),
+    th: ({ children, ...props }) => (
+      <th {...props} className="border border-border bg-muted px-4 py-2 text-left font-semibold text-foreground">
+        {children}
+      </th>
+    ),
+    td: ({ children, ...props }) => (
+      <td {...props} className="border border-border px-4 py-2 text-muted-foreground">
+        {children}
+      </td>
+    ),
     // Custom image handler to fix relative paths
     img: ({ node, ...props }) => {
       let src = props.src || '';
@@ -680,7 +729,7 @@ export default function ACPDetails() {
         <img
           {...props}
           src={src}
-          className="max-w-full h-auto rounded-lg shadow-md my-8 border border-gray-200 dark:border-gray-700 block mx-auto dark:bg-white dark:p-2"
+          className="max-w-full h-auto rounded-lg shadow-md my-8 border border-border block mx-auto bg-card"
           loading="lazy"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -707,8 +756,8 @@ export default function ACPDetails() {
                 <div className="flex-shrink-0 w-5 h-5 text-[#ef4444] mt-0.5">
                   <Info className="w-5 h-5" />
                 </div>
-                <div className="flex-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                  <span className="font-bold text-gray-900 dark:text-white block mb-1">Note</span>
+                <div className="flex-1 text-sm leading-relaxed text-muted-foreground">
+                  <span className="font-bold text-foreground block mb-1">Note</span>
                   {noteContent}
                 </div>
               </div>
@@ -726,8 +775,8 @@ export default function ACPDetails() {
                 <div className="flex-shrink-0 w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
-                <div className="flex-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                  <span className="font-bold text-gray-900 dark:text-white block mb-1">Warning</span>
+                <div className="flex-1 text-sm leading-relaxed text-muted-foreground">
+                  <span className="font-bold text-foreground block mb-1">Warning</span>
                   {warningContent}
                 </div>
               </div>
@@ -737,7 +786,7 @@ export default function ACPDetails() {
       }
       
       // Regular paragraph
-      return <p {...props} className="mb-4 leading-relaxed text-gray-800 dark:text-gray-300">{children}</p>;
+      return <p {...props} className="mb-4 leading-relaxed text-muted-foreground">{children}</p>;
     }
   }}
 >

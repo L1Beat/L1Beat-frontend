@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { getChains } from '../api';
+import { getAllChainsTPSLatest, getChains } from '../api';
 import { Chain } from '../types';
 import { AlertTriangle, RefreshCw, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -51,11 +51,32 @@ export function NetworkTopologyGraph() {
     async function fetchData() {
       try {
         setLoading(true);
-        const chainsData = await getChains();
+        const [chainsData, tpsMap] = await Promise.all([
+          getChains(),
+          getAllChainsTPSLatest()
+        ]);
+
+        const chainsWithLatestTps = chainsData.map((chain) => {
+          const lookupId =
+            (chain.evmChainId ? String(chain.evmChainId) : undefined) ||
+            chain.originalChainId ||
+            chain.chainId;
+
+          const latest = lookupId ? tpsMap[lookupId] : undefined;
+          if (!latest) return chain;
+
+          return {
+            ...chain,
+            tps: {
+              value: Number(latest.value),
+              timestamp: Number(latest.timestamp)
+            }
+          };
+        });
         
-        if (chainsData && chainsData.length > 0) {
+        if (chainsWithLatestTps && chainsWithLatestTps.length > 0) {
           // Filter chains to include those with validators OR Avalanche chains
-          const validChains = chainsData.filter(chain => 
+          const validChains = chainsWithLatestTps.filter(chain => 
             (chain.validatorCount && chain.validatorCount > 0) ||
             chain.chainName.toLowerCase().includes('avalanche') ||
             chain.chainName.toLowerCase().includes('c-chain')
@@ -116,8 +137,11 @@ export function NetworkTopologyGraph() {
     return baseSize;
   };
 
-  // Format TPS value as whole number without decimals or thousands separators
+  // Format TPS value for UI (avoid rounding <1 to 0)
   const formatTPS = (tpsValue: number): string => {
+    if (!Number.isFinite(tpsValue)) return 'N/A';
+    if (tpsValue < 1) return '< 1.0';
+    // whole numbers for readability in dense UI
     return Math.round(tpsValue).toString();
   };
 
@@ -521,12 +545,9 @@ export function NetworkTopologyGraph() {
             if (tpsValue >= 1) {
               tpsIndicatorSize = 8;
               tpsIndicatorColor = 'bg-green-400';
-            } else if (tpsValue >= 0.1) {
+            } else if (tpsValue >= 0) {
               tpsIndicatorSize = 6;
               tpsIndicatorColor = 'bg-yellow-400';
-            } else if (tpsValue > 0) {
-              tpsIndicatorSize = 4;
-              tpsIndicatorColor = 'bg-red-400';
             }
           }
           
@@ -622,7 +643,7 @@ export function NetworkTopologyGraph() {
                 {hoveredChain.tps && (
                   <span className={`text-xs ${
                     hoveredChain.tps.value >= 1 ? 'text-green-400' : 
-                    hoveredChain.tps.value >= 0.1 ? 'text-yellow-400' : 'text-red-400'
+                    hoveredChain.tps.value >= 0 ? 'text-yellow-400' : 'text-red-400'
                   }`}>
                     {formatTPS(hoveredChain.tps.value)} TPS
                   </span>

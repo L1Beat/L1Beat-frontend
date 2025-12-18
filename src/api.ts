@@ -500,6 +500,51 @@ export async function getCumulativeTxCount(chainId: string, days: number = 7): P
   });
 }
 
+// Fetch latest cumulative tx count for all chains in one request.
+// Returns a normalized map keyed by chain id (typically evmChainId or chainId as string).
+export async function getAllChainsCumulativeTxCountLatest(): Promise<Record<string, { value: number; timestamp: number }>> {
+  return fetchWithCache('cumulative-tx-all-latest', async () => {
+    try {
+      const response = await fetchWithRetry<any>(`${API_URL}/cumulativeTxCount/all/latest`);
+
+      // Accept multiple backend response shapes and normalize:
+      // 1) { success: true, data: { [chainId]: { value, timestamp } } }
+      // 2) { success: true, data: Array<{ chainId|evmChainId, cumulativeTxCount: { value, timestamp } }> }
+      // 3) Array<{ chainId|evmChainId, cumulativeTxCount: { value, timestamp } }>
+      const payload = (response && typeof response === 'object' && 'data' in response) ? (response as any).data : response;
+      const map: Record<string, { value: number; timestamp: number }> = {};
+
+      if (Array.isArray(payload)) {
+        for (const item of payload) {
+          const key = String(item?.chainId ?? item?.evmChainId ?? item?.id ?? '');
+          if (!key) continue;
+          const value = Number(item?.cumulativeTxCount?.value ?? item?.value ?? item?.count);
+          const ts = Number(item?.cumulativeTxCount?.timestamp ?? item?.timestamp ?? item?.time ?? 0);
+          if (!Number.isFinite(value)) continue;
+          map[key] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+        }
+        return map;
+      }
+
+      if (payload && typeof payload === 'object') {
+        for (const [key, val] of Object.entries(payload)) {
+          if (!val || typeof val !== 'object') continue;
+          const value = Number((val as any).value ?? (val as any).count);
+          const ts = Number((val as any).timestamp ?? (val as any).time ?? 0);
+          if (!Number.isFinite(value)) continue;
+          map[String(key)] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+        }
+        return map;
+      }
+
+      return {};
+    } catch (error) {
+      console.error('All chains cumulative tx latest fetch error:', error);
+      return {};
+    }
+  }, 60 * 1000); // Cache for 1 minute
+}
+
 export async function getNetworkTPS(): Promise<NetworkTPS> {
   return fetchWithCache('network-tps', async () => {
     try {
@@ -535,6 +580,51 @@ export async function getNetworkTPS(): Promise<NetworkTPS> {
       };
     }
   });
+}
+
+// Fetch latest TPS for all chains in one request (preferred for dashboards/lists).
+// Returns a normalized map keyed by chain id (usually numeric id as string).
+export async function getAllChainsTPSLatest(): Promise<Record<string, { value: number; timestamp: number }>> {
+  return fetchWithCache('tps-all-latest', async () => {
+    try {
+      const response = await fetchWithRetry<any>(`${API_URL}/tps/all/latest`);
+
+      // Accept multiple backend response shapes and normalize:
+      // 1) { success: true, data: { [chainId]: { value, timestamp } } }
+      // 2) { success: true, data: Array<{ chainId, value, timestamp }> }
+      // 3) Array<{ chainId, value, timestamp }>
+      const payload = (response && typeof response === 'object' && 'data' in response) ? (response as any).data : response;
+      const map: Record<string, { value: number; timestamp: number }> = {};
+
+      if (Array.isArray(payload)) {
+        for (const item of payload) {
+          const chainId = String(item?.chainId ?? item?.evmChainId ?? item?.id ?? '');
+          if (!chainId) continue;
+          const value = Number(item?.tps?.value ?? item?.value ?? item?.tps ?? item?.totalTps);
+          const ts = Number(item?.tps?.timestamp ?? item?.timestamp ?? item?.time ?? item?.updatedAt ?? 0);
+          if (!Number.isFinite(value)) continue;
+          map[chainId] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+        }
+        return map;
+      }
+
+      if (payload && typeof payload === 'object') {
+        for (const [key, val] of Object.entries(payload)) {
+          if (!val || typeof val !== 'object') continue;
+          const value = Number((val as any).value ?? (val as any).tps ?? (val as any).totalTps);
+          const ts = Number((val as any).timestamp ?? (val as any).time ?? (val as any).updatedAt ?? 0);
+          if (!Number.isFinite(value)) continue;
+          map[String(key)] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+        }
+        return map;
+      }
+
+      return {};
+    } catch (error) {
+      console.error('All chains TPS latest fetch error:', error);
+      return {};
+    }
+  }, 60 * 1000); // Cache for 1 minute
 }
 
 export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPSHistory[]> {

@@ -8,6 +8,7 @@ import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getHealth } from '../api';
+import type { HealthStatus } from '../types';
 
 export function BlogList() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -183,12 +184,12 @@ export function BlogList() {
 
     if (loading && posts.length === 0) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+            <div className="min-h-screen bg-background text-foreground">
                 <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
                         <LoadingSpinner size="lg" />
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Loading amazing content...</p>
+                        <p className="mt-4 text-muted-foreground">Loading amazing content...</p>
                     </div>
                 </div>
             </div>
@@ -196,7 +197,7 @@ export function BlogList() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-dark-900">
+        <div className="min-h-screen flex flex-col bg-background text-foreground">
             <StatusBar health={health} />
 
             <div className="flex-1">
@@ -263,7 +264,7 @@ export function BlogList() {
                                 </div>
                                 <button
                                     onClick={() => fetchPosts(0, selectedTag || undefined)}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors"
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                     Retry
@@ -279,7 +280,7 @@ export function BlogList() {
                             <div className="flex-1">
                                 <div className="relative overflow-hidden">
                                     {/* Search Container */}
-                                    <div className="h-10 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-dark-700 focus-within:border-[#ef4444] dark:focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
+                                    <div className="h-10 bg-card rounded-lg border border-border focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
 
                                         {/* Animated Gradient Background */}
                                         {searchTerm && (
@@ -301,7 +302,7 @@ export function BlogList() {
 
                                         {/* Search Icon */}
                                         <div className="flex items-center justify-center w-10 h-full relative z-10">
-                                            <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                            <Search className="w-4 h-4 text-muted-foreground" />
                                         </div>
 
                                         {/* Input */}
@@ -310,13 +311,13 @@ export function BlogList() {
                                             placeholder="Search articles, topics, authors..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="flex-1 h-full bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm font-medium px-0 relative z-10"
+                                            className="flex-1 h-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm font-medium px-0 relative z-10"
                                         />
 
                                         {/* Results and Clear */}
                                         {(debouncedSearchTerm || selectedTag) && (
                                             <div className="flex items-center gap-2 pr-3 relative z-10">
-                                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                                <span className="text-xs text-muted-foreground font-medium">
                                                     {filteredPosts.length}
                                                 </span>
                                                 <button
@@ -324,10 +325,10 @@ export function BlogList() {
                                                         setSearchTerm('');
                                                         handleTagFilter(null);
                                                     }}
-                                                    className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center transition-colors duration-150"
+                                                    className="w-5 h-5 rounded-full bg-muted hover:bg-accent border border-border flex items-center justify-center transition-colors duration-150"
                                                     title="Clear search"
                                                 >
-                                                    <AlertCircle className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+                                                    <AlertCircle className="w-3 h-3 text-muted-foreground" />
                                                 </button>
                                             </div>
                                         )}
@@ -338,7 +339,7 @@ export function BlogList() {
                             {/* Tag Filters */}
                             {tags.length > 0 && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                    <div className="flex items-center gap-1 text-muted-foreground">
                                         <Filter className="w-3 h-3" />
                                         <span className="text-xs font-medium">Topics:</span>
                                     </div>
@@ -347,7 +348,7 @@ export function BlogList() {
                                         onClick={() => handleTagFilter(null)}
                                         className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${!selectedTag
                                             ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                                            : 'bg-muted text-foreground hover:bg-accent border border-border'
                                         }`}
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
@@ -361,7 +362,7 @@ export function BlogList() {
                                             onClick={() => handleTagFilter(tag.name)}
                                             className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${selectedTag === tag.name
                                                 ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                                                : 'bg-muted text-foreground hover:bg-accent border border-border'
                                             }`}
                                             whileHover={{ scale: 1.05 }}
                                             whileTap={{ scale: 0.95 }}
@@ -375,7 +376,7 @@ export function BlogList() {
                                     ))}
 
                                     {tags.length > 6 && (
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        <span className="text-xs text-muted-foreground">
                                             +{tags.length - 6}
                                         </span>
                                     )}
@@ -398,9 +399,9 @@ export function BlogList() {
                                     <div className="flex items-center gap-4 mb-8">
                                         <div className="flex items-center gap-2">
                                             <div className="w-3 h-3 bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-full"></div>
-                                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Featured Article</h2>
+                                            <h2 className="text-2xl font-semibold text-foreground">Featured Article</h2>
                                         </div>
-                                        <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
+                                        <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent"></div>
                                     </div>
 
                                     <BlogCard post={featuredPost} featured />
@@ -426,10 +427,10 @@ export function BlogList() {
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-2.5 h-2.5 bg-gradient-to-r from-[#dc2626] to-[#ef4444] rounded-full"></div>
-                                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Articles</h2>
+                                                <h2 className="text-xl font-semibold text-foreground">Latest Articles</h2>
                                             </div>
-                                            <div className="flex-1 h-px bg-gradient-to-r from-gray-300 dark:from-gray-600 to-transparent"></div>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">{regularPosts.length} articles</span>
+                                            <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent"></div>
+                                            <span className="text-sm text-muted-foreground">{regularPosts.length} articles</span>
                                         </div>
 
                                         {/* Grid */}
@@ -505,7 +506,7 @@ export function BlogList() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.4, delay: 0.6, ease: "easeOut" }}
                             >
-                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                                <h3 className="text-3xl font-semibold text-foreground mb-4">
                                     {searchTerm && selectedTag
                                         ? 'No articles match your search and filter'
                                         : searchTerm
@@ -516,7 +517,7 @@ export function BlogList() {
                                 </h3>
 
                                 <div className="max-w-lg mx-auto space-y-4">
-                                    <p className="text-lg text-gray-600 dark:text-gray-300">
+                                    <p className="text-lg text-muted-foreground">
                                         {searchTerm && selectedTag
                                             ? `No results found for "${searchTerm}" in the "${selectedTag}" category.`
                                             : searchTerm
@@ -550,7 +551,7 @@ export function BlogList() {
                                                 <>
                                                     <motion.button
                                                         onClick={() => setSearchTerm('')}
-                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
+                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-card text-foreground border border-border hover:bg-accent hover:border-[#ef4444]/20 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
                                                         whileHover={{ scale: 1.05, y: -1 }}
                                                         whileTap={{ scale: 0.95 }}
                                                     >
@@ -558,7 +559,7 @@ export function BlogList() {
                                                     </motion.button>
                                                     <motion.button
                                                         onClick={() => handleTagFilter(null)}
-                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
+                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-card text-foreground border border-border hover:bg-accent hover:border-[#ef4444]/20 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
                                                         whileHover={{ scale: 1.05, y: -1 }}
                                                         whileTap={{ scale: 0.95 }}
                                                     >

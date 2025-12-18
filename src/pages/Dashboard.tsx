@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getChains, getHealth, getCategories } from '../api';
+import { getAllChainsTPSLatest, getChains, getHealth, getCategories } from '../api';
 import { Chain, HealthStatus } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
@@ -43,14 +43,34 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData] = await Promise.all([
+      const [chainsData, healthData, categoriesData, tpsMap] = await Promise.all([
         getChains(filters),
         getHealth(),
-        getCategories()
+        getCategories(),
+        getAllChainsTPSLatest()
       ]);
 
+      // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
+      const chainsWithLatestTps = chainsData.map((chain) => {
+        const lookupId =
+          (chain.evmChainId ? String(chain.evmChainId) : undefined) ||
+          chain.originalChainId ||
+          chain.chainId;
+
+        const latest = lookupId ? tpsMap[lookupId] : undefined;
+        if (!latest) return chain;
+
+        return {
+          ...chain,
+          tps: {
+            value: Number(latest.value),
+            timestamp: Number(latest.timestamp)
+          }
+        };
+      });
+
       // Permanently exclude X-Chain and P-Chain
-      const excludedChains = chainsData.filter(chain => {
+      const excludedChains = chainsWithLatestTps.filter(chain => {
         const name = chain.chainName.toLowerCase();
         return !name.includes('x-chain') && !name.includes('p-chain');
       });

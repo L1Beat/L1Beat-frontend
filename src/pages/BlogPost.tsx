@@ -123,11 +123,11 @@ const NewsletterSubscription = () => {
                         <button 
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full px-6 py-4 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-transparent transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-lg"
+                            className="w-full px-6 py-4 bg-white text-black/90 font-semibold rounded-xl hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-transparent transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-lg"
                         >
                             {isSubmitting ? (
                                 <div className="flex items-center justify-center gap-2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-900 border-t-transparent"></div>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-black/70 border-t-transparent"></div>
                                     Subscribing...
                                 </div>
                             ) : (
@@ -334,12 +334,12 @@ export function BlogPost() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+            <div className="min-h-screen bg-background text-foreground">
                 <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
                         <LoadingSpinner size="lg" />
-                        <p className="mt-4 text-gray-600 dark:text-gray-300">Loading article...</p>
+                        <p className="mt-4 text-muted-foreground">Loading article...</p>
                     </div>
                 </div>
             </div>
@@ -348,7 +348,7 @@ export function BlogPost() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+            <div className="min-h-screen bg-background text-foreground">
                 <StatusBar health={health} />
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     <div className="text-center">
@@ -361,10 +361,10 @@ export function BlogPost() {
                             </div>
                         </div>
                         
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                        <h1 className="text-3xl font-semibold text-foreground mb-4">
                             {error === 'Post not found' ? 'Article Not Found' : 'Something went wrong'}
                         </h1>
-                        <p className="text-gray-600 dark:text-gray-300 mb-8 text-lg">
+                        <p className="text-muted-foreground mb-8 text-lg">
                             {error === 'Post not found'
                                 ? "The article you're looking for doesn't exist or has been moved."
                                 : error
@@ -380,7 +380,7 @@ export function BlogPost() {
                             {error !== 'Post not found' && (
                                 <button
                                     onClick={fetchPost}
-                                    className="flex items-center gap-2 px-8 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-semibold"
+                                    className="flex items-center gap-2 px-8 py-3 border border-border text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 rounded-xl transition-colors font-semibold"
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                     Try Again
@@ -414,7 +414,7 @@ export function BlogPost() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-900">
+        <div className="min-h-screen bg-background text-foreground">
             {/* SEO Meta Tags */}
             <SEO
                 title={post.title}
@@ -436,7 +436,7 @@ export function BlogPost() {
                 <div className="mb-8">
                     <Link
                         to="/blog"
-                        className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-colors group"
+                        className="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors group"
                     >
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" />
                         Back to Blog
@@ -462,13 +462,13 @@ export function BlogPost() {
                     )}
 
                     {/* Title */}
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
+                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground mb-6 leading-tight">
                         {post.title}
                     </h1>
 
                     {/* Subtitle */}
                     {post.subtitle && post.subtitle.trim() && (
-                        <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed font-light">
+                        <p className="text-xl md:text-2xl text-muted-foreground mb-8 leading-relaxed font-light">
                             {post.subtitle}
                         </p>
                     )}
@@ -555,16 +555,16 @@ export function BlogPost() {
                 )}
 
                 {/* Content */}
-                <div className="prose prose-lg max-w-none dark:prose-invert bg-transparent">
-                    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 lg:p-12 shadow-lg">
+                <div className="max-w-none">
+                    <div className="bg-card rounded-2xl border border-border p-8 lg:p-12 shadow-sm">
                         {post.mainContent ? (
                             renderMainContent(post.mainContent)
                         ) : post.content ? (
                             renderMainContent(post.content)
                         ) : (
                             <div className="text-center py-12">
-                                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-500 dark:text-gray-400 italic text-lg">No content available.</p>
+                                <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                                <p className="text-muted-foreground italic text-lg">No content available.</p>
                             </div>
                         )}
                     </div>
@@ -597,7 +597,7 @@ export function BlogPost() {
             </article>
 
             {/* Newsletter and Related Articles Section */}
-            <div className="bg-white dark:bg-dark-800 border-t border-gray-200 dark:border-gray-700">
+            <div className="bg-card border-t border-border">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     {/* Newsletter Subscription */}
                     <div className="mb-16">

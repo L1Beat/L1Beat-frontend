@@ -8,6 +8,65 @@ interface NoteBlockProps {
   children: React.ReactNode;
 }
 
+const markdownComponents = {
+  a: ({ className, ...props }: any) => (
+    <a
+      {...props}
+      className={[
+        'text-[#ef4444] underline underline-offset-4 decoration-[#ef4444]/30 hover:text-[#dc2626] transition-colors',
+        className
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    />
+  ),
+  p: ({ className, ...props }: any) => (
+    <p
+      {...props}
+      className={['leading-relaxed text-muted-foreground', className].filter(Boolean).join(' ')}
+    />
+  ),
+  strong: ({ className, ...props }: any) => (
+    <strong {...props} className={['font-semibold text-foreground', className].filter(Boolean).join(' ')} />
+  ),
+  code: ({ inline, className, ...props }: any) => {
+    if (inline) {
+      return (
+        <code
+          {...props}
+          className={[
+            'rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground',
+            className
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        />
+      );
+    }
+    return <code {...props} className={['font-mono text-sm text-foreground', className].filter(Boolean).join(' ')} />;
+  },
+  pre: ({ className, ...props }: any) => (
+    <pre
+      {...props}
+      className={[
+        'my-6 overflow-x-auto rounded-xl border border-border bg-muted p-4',
+        className
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    />
+  ),
+  ul: ({ className, ...props }: any) => (
+    <ul {...props} className={['my-4 ml-6 list-disc space-y-2', className].filter(Boolean).join(' ')} />
+  ),
+  ol: ({ className, ...props }: any) => (
+    <ol {...props} className={['my-4 ml-6 list-decimal space-y-2', className].filter(Boolean).join(' ')} />
+  ),
+  li: ({ className, ...props }: any) => (
+    <li {...props} className={['text-muted-foreground', className].filter(Boolean).join(' ')} />
+  )
+};
+
 const NoteBlock: React.FC<NoteBlockProps> = ({ 
   type = 'info', 
   title: defaultTitle,
@@ -15,15 +74,15 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
 }) => {
   const styles = {
     info: {
-      bg: 'bg-blue-50 dark:bg-blue-950/30',
+      bg: 'bg-blue-500/10',
       border: 'border-blue-500',
       icon: Info,
       iconColor: 'text-blue-500',
-      titleColor: 'text-blue-700 dark:text-blue-400',
+      titleColor: 'text-blue-600 dark:text-blue-400',
       title: 'Note'
     },
     warning: {
-      bg: 'bg-yellow-50 dark:bg-yellow-950/30',
+      bg: 'bg-yellow-500/10',
       border: 'border-yellow-500',
       icon: AlertTriangle,
       iconColor: 'text-yellow-600',
@@ -31,7 +90,7 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
       title: 'Warning'
     },
     error: {
-      bg: 'bg-red-50 dark:bg-red-950/30',
+      bg: 'bg-red-500/10',
       border: 'border-red-500',
       icon: AlertCircle,
       iconColor: 'text-red-500',
@@ -39,7 +98,7 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
       title: 'Error'
     },
     success: {
-      bg: 'bg-green-50 dark:bg-green-950/30',
+      bg: 'bg-green-500/10',
       border: 'border-green-500',
       icon: CheckCircle,
       iconColor: 'text-green-500',
@@ -62,7 +121,7 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
           <div className={`font-semibold mb-1 ${style.titleColor}`}>
             {title}
           </div>
-          <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed italic">
+          <div className="text-sm leading-relaxed text-muted-foreground">
             {children}
           </div>
         </div>
@@ -101,16 +160,16 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
     const children = isNested ? item.children : undefined;
     
     const depthClasses = [
-      'text-gray-700 dark:text-gray-300 leading-relaxed',
-      'text-gray-600 dark:text-gray-400 leading-relaxed text-[95%]',
-      'text-gray-500 dark:text-gray-500 leading-relaxed text-[90%]',
+      'text-muted-foreground leading-relaxed',
+      'text-muted-foreground leading-relaxed text-[95%] opacity-90',
+      'text-muted-foreground leading-relaxed text-[90%] opacity-80',
     ];
     
     const currentClass = depthClasses[Math.min(depth, 2)];
     
     return (
       <li key={index} className={currentClass}>
-        <ReactMarkdown>{content}</ReactMarkdown>
+        <ReactMarkdown components={markdownComponents as any}>{content}</ReactMarkdown>
         {children && children.length > 0 && (
           <ul className={`mt-2 space-y-1 ${depth === 0 ? 'ml-6' : 'ml-4'}`}>
             {children.map((child, childIndex) => 
@@ -138,7 +197,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
           const content = text.replace(pattern, '').trim();
           return (
             <NoteBlock key={index} type={type as any} title={title}>
-              <ReactMarkdown>{content}</ReactMarkdown>
+              <ReactMarkdown components={markdownComponents as any}>{content}</ReactMarkdown>
             </NoteBlock>
           );
         }
@@ -149,12 +208,12 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
       case 'heading':
         const HeadingTag = `h${block.level}` as keyof JSX.IntrinsicElements;
         const headingClasses = {
-          1: 'text-3xl font-bold mt-12 mb-6 text-gray-900 dark:text-white',
-          2: 'text-2xl font-bold mt-10 mb-5 text-gray-900 dark:text-white',
-          3: 'text-xl font-semibold mt-8 mb-4 text-gray-900 dark:text-white',
-          4: 'text-lg font-semibold mt-6 mb-3 text-gray-900 dark:text-white',
-          5: 'text-base font-semibold mt-4 mb-2 text-gray-900 dark:text-white',
-          6: 'text-sm font-semibold mt-4 mb-2 text-gray-700 dark:text-gray-300'
+          1: 'mt-10 mb-4 text-3xl font-semibold tracking-tight text-foreground',
+          2: 'mt-10 mb-4 text-2xl font-semibold tracking-tight text-foreground',
+          3: 'mt-8 mb-3 text-xl font-semibold text-foreground',
+          4: 'mt-6 mb-3 text-lg font-semibold text-foreground',
+          5: 'mt-4 mb-2 text-base font-semibold text-foreground',
+          6: 'mt-4 mb-2 text-sm font-semibold text-muted-foreground'
         };
         return (
           <HeadingTag key={index} className={headingClasses[block.level as keyof typeof headingClasses]}>
@@ -166,9 +225,9 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         return (
           <div 
             key={index}
-            className="mb-6 leading-relaxed text-gray-700 dark:text-gray-300"
+            className="mb-6 leading-relaxed text-muted-foreground"
           >
-            <ReactMarkdown>{text}</ReactMarkdown>
+            <ReactMarkdown components={markdownComponents as any}>{text}</ReactMarkdown>
           </div>
         );
 
@@ -179,13 +238,13 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
               <img
                 src={block.src}
                 alt={block.alt}
-                className="w-full h-auto rounded-xl shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]"
+                className="w-full h-auto rounded-xl border border-border shadow-sm transition-transform duration-300 group-hover:scale-[1.02]"
                 loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
             </div>
             {(block.caption || block.alt) && (
-              <figcaption className="text-sm text-gray-600 dark:text-gray-400 text-center mt-4 italic max-w-2xl mx-auto">
+              <figcaption className="text-sm text-muted-foreground text-center mt-4 italic max-w-2xl mx-auto">
                 {block.caption || block.alt}
               </figcaption>
             )}
@@ -196,7 +255,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         const ListTag = block.ordered ? 'ol' : 'ul';
         const listClass = block.ordered ? 
           'list-decimal pl-6 my-6 space-y-3' : 
-          'list-none my-6 space-y-3';
+          'list-disc pl-6 my-6 space-y-3';
         
         return (
           <ListTag key={index} className={listClass}>
@@ -208,11 +267,11 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         return (
           <blockquote 
             key={index}
-            className="border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900/20 dark:to-transparent pl-8 py-6 my-8 rounded-r-lg relative"
+            className="border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 pl-8 py-6 my-8 rounded-r-lg relative"
           >
-            <div className="absolute top-4 left-2 text-blue-400 text-4xl font-serif">"</div>
-            <div className="text-gray-700 dark:text-gray-300 italic text-lg leading-relaxed">
-              <ReactMarkdown>{block.content}</ReactMarkdown>
+            <div className="absolute top-4 left-2 text-[#ef4444]/40 text-4xl font-serif">"</div>
+            <div className="italic text-lg leading-relaxed text-muted-foreground">
+              <ReactMarkdown components={markdownComponents as any}>{block.content}</ReactMarkdown>
             </div>
           </blockquote>
         );
@@ -220,19 +279,14 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
       case 'code':
         return (
           <div key={index} className="my-8">
-            <div className="bg-gray-900 rounded-lg overflow-hidden">
-              <div className="bg-gray-800 px-4 py-2 text-sm text-gray-400 border-b border-gray-700">
+            <div className="bg-muted border border-border rounded-xl overflow-hidden">
+              <div className="px-4 py-2 text-sm text-muted-foreground border-b border-border flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  </div>
                   {block.language || 'Code'}
                 </span>
               </div>
               <pre className="p-4 overflow-x-auto">
-                <code className="text-green-400 text-sm font-mono leading-relaxed">
+                <code className="text-foreground text-sm font-mono leading-relaxed">
                   {block.content}
                 </code>
               </pre>
@@ -244,7 +298,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         if (block.platform === 'youtube') {
           return (
             <div key={index} className="my-12">
-              <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-2xl group">
+              <div className="relative aspect-video bg-muted border border-border rounded-xl overflow-hidden shadow-sm group">
                 <iframe
                   src={block.src}
                   className="w-full h-full"
@@ -264,7 +318,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
   };
 
   return (
-    <div className="prose prose-lg max-w-none">
+    <div className="max-w-none text-foreground">
       {blocks.map((block, index) => renderBlock(block, index))}
     </div>
   );

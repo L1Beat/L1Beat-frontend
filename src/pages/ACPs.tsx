@@ -30,6 +30,7 @@ import {
 import { getHealth } from '../api';
 import { acpService, LocalACP, EnhancedACP, ACPStats } from '../services/acpService';
 import EnhancedACPCard from '../components/ACPCard';
+import type { HealthStatus } from '../types';
 
 
 type ViewMode = 'grid' | 'list';
@@ -295,9 +296,9 @@ export default function ACPs() {
       case 'rejected':
       case 'stagnant':
       case 'stale':
-        return 'bg-gray-500 text-white';
+        return 'bg-muted text-foreground border border-border';
       default:
-        return 'bg-gray-400 text-white';
+        return 'bg-muted text-foreground border border-border';
     }
   };
 
@@ -310,7 +311,8 @@ export default function ACPs() {
       case 'High':
         return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
+        // Avoid bg-muted/xx opacity: CSS vars are not RGB, can break in dark mode.
+        return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
@@ -326,15 +328,15 @@ export default function ACPs() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mt-4 mb-2">
+            <h2 className="text-lg font-semibold text-foreground mt-4 mb-2">
               Loading ACPs...
             </h2>
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-muted-foreground">
               Processing Avalanche Community Proposals
             </p>
           </div>
@@ -345,15 +347,15 @@ export default function ACPs() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-lg font-semibold text-foreground mb-2">
               Failed to Load ACPs
             </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+            <p className="text-muted-foreground mb-4">
               {error}
             </p>
             <button
@@ -369,7 +371,7 @@ export default function ACPs() {
     );
   }
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <StatusBar health={health} />
 
       <div className="flex-1">
@@ -377,17 +379,17 @@ export default function ACPs() {
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                 Avalanche Community Proposals
               </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">
+              <p className="mt-2 text-muted-foreground">
                 Browse and explore all ACPs in the Avalanche ecosystem
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-800 hover:bg-gray-50 dark:hover:bg-dark-700"
+                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh
@@ -473,18 +475,18 @@ export default function ACPs() {
           )}
 
           {/* Controls Bar */}
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-4 mb-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               {/* Search Bar */}
               <div className="flex-1 max-w-xl">
                 <div className="relative group">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-[#ef4444] transition-colors w-5 h-5" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-[#ef4444] transition-colors w-5 h-5" />
                   <input
                     type="text"
                     placeholder="Search ACPs by number, title, or author..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/50 dark:bg-dark-900/50 focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all dark:text-white"
+                    className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-muted focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
@@ -497,7 +499,7 @@ export default function ACPs() {
                   className={`inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium transition-colors ${
                     showFilters
                       ? 'border-[#ef4444] text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20'
-                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600'
+                      : 'border-border text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20'
                   }`}
                 >
                   <Filter className="w-4 h-4 mr-2" />
@@ -510,10 +512,10 @@ export default function ACPs() {
                 </button>
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center bg-gray-100 dark:bg-dark-700 rounded-md p-1 relative">
+                <div className="flex items-center bg-muted border border-border rounded-md p-1 relative">
                   {/* Background slider */}
                   <motion.div
-                    className="absolute bg-white dark:bg-dark-600 shadow-sm rounded"
+                    className="absolute bg-card shadow-sm rounded"
                     layoutId="viewToggleBackground"
                     style={{
                       width: '32px',
@@ -526,8 +528,8 @@ export default function ACPs() {
                     onClick={() => setViewMode('grid')}
                     className={`relative z-10 p-2 rounded ${
                       viewMode === 'grid'
-                        ? 'text-gray-900 dark:text-white'
-                        : 'text-gray-600 dark:text-gray-400'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
                     }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -546,8 +548,8 @@ export default function ACPs() {
                     onClick={() => setViewMode('list')}
                     className={`relative z-10 p-2 rounded ${
                       viewMode === 'list'
-                        ? 'text-gray-900 dark:text-white'
-                        : 'text-gray-600 dark:text-gray-400'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
                     }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -568,17 +570,17 @@ export default function ACPs() {
 
             {/* Filters Panel */}
             {showFilters && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="mt-4 pt-4 border-t border-border">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {/* Status Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">
                       Status
                     </label>
                     <select
                       value={filters.status}
                       onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-dark-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
                     >
                       <option value="">All</option>
                       <option value="Draft">Draft</option>
@@ -593,13 +595,13 @@ export default function ACPs() {
 
                   {/* Track Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">
                       Track
                     </label>
                     <select
                       value={filters.track}
                       onChange={(e) => setFilters({ ...filters, track: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-dark-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
                     >
                       <option value="">All</option>
                       <option value="Standards Track">Standards Track</option>
@@ -611,13 +613,13 @@ export default function ACPs() {
 
                   {/* Complexity Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">
                       Complexity
                     </label>
                     <select
                       value={filters.complexity}
                       onChange={(e) => setFilters({ ...filters, complexity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-dark-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
                     >
                       <option value="">All</option>
                       <option value="Low">Low</option>
@@ -629,7 +631,7 @@ export default function ACPs() {
 
                   {/* Author Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">
                       Author
                     </label>
                     <input
@@ -637,7 +639,7 @@ export default function ACPs() {
                       value={filters.author}
                       onChange={(e) => setFilters({ ...filters, author: e.target.value })}
                       placeholder="Filter by author..."
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-dark-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground placeholder:text-muted-foreground"
                     />
                   </div>
 
@@ -653,7 +655,7 @@ export default function ACPs() {
                         author: '',
                         hasDiscussion: null
                       })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600"
+                      className="w-full px-3 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
                     >
                       Clear All
                     </button>
@@ -665,7 +667,7 @@ export default function ACPs() {
 
           {/* Results Count */}
           <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-sm text-muted-foreground">
               Showing {filteredAndSortedACPs.length} of {acps.length} ACPs
             </div>
             {filteredAndSortedACPs.length === 0 && (searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
@@ -699,13 +701,13 @@ export default function ACPs() {
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.1, ease: "easeOut" }}
                   >
-                    <Archive className="w-16 h-16 mx-auto text-gray-400 mb-6" />
+                    <Archive className="w-16 h-16 mx-auto text-muted-foreground mb-6" />
                   </motion.div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                  <h3 className="text-xl font-semibold text-foreground mb-3">
                     No ACPs match your criteria
                   </h3>
                   <div className="max-w-md mx-auto space-y-3">
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-muted-foreground">
                       {searchQuery && Object.values(filters).some(f => f !== '' && f !== null)
                         ? `No results found for "${searchQuery}" with current filters applied.`
                         : searchQuery
@@ -728,7 +730,7 @@ export default function ACPs() {
                         {searchQuery && (
                           <motion.button
                             onClick={() => setSearchQuery('')}
-                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-dark-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-600 rounded-md transition-colors"
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-foreground bg-muted border border-border hover:bg-accent hover:border-[#ef4444]/20 rounded-md transition-colors"
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             transition={{ duration: 0.2, ease: "easeOut" }}
