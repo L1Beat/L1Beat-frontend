@@ -98,13 +98,13 @@ export function AuthorCard({
         e.stopPropagation(); // Stop bubbling
         openModal();
       }}
-      className={`group inline-flex items-center gap-1 hover:text-[#ef4444] dark:hover:text-[#ef4444] transition-all duration-300 cursor-pointer transform hover:scale-105 ${className}`}
+      className={`group inline-flex items-center gap-1 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:text-[#ef4444] ${className}`}
     >
       {displayAuthor.avatar ? (
         <img 
           src={displayAuthor.avatar} 
           alt={displayAuthor.name}
-          className="w-4 h-4 rounded-full transition-transform duration-300 group-hover:scale-110 group-hover:shadow-lg"
+          className="w-4 h-4 rounded-full border border-border transition-transform duration-300 group-hover:scale-110 group-hover:shadow-sm"
         />
       ) : (
         <User className="w-4 h-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-12" />
@@ -133,14 +133,14 @@ export function AuthorCard({
         <div
           ref={modalRef}
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
-          className={`relative w-full max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-6 transform transition-all duration-300 ease-out animate-float ${
+          className={`relative w-full max-w-md bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl p-6 transform transition-all duration-300 ease-out animate-float ${
             isModalOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'
           }`}
         >
           {/* Close Button */}
           <button
             onClick={closeModal}
-            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+            className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all duration-200"
           >
             <X className="w-4 h-4" />
           </button>
@@ -151,7 +151,7 @@ export function AuthorCard({
               <img
                 src={displayAuthor.avatar}
                 alt={displayAuthor.name}
-                className="w-12 h-12 rounded-full border-2 border-gray-100 dark:border-gray-700 transition-all duration-300 group-hover:scale-110 group-hover:border-[#ef4444] dark:group-hover:border-[#ef4444]"
+                className="w-12 h-12 rounded-full border-2 border-border transition-all duration-300 group-hover:scale-110 group-hover:border-[#ef4444]"
               />
             ) : (
               <div className="w-12 h-12 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:from-[#dc2626] group-hover:to-[#b91c1c]">
@@ -160,11 +160,11 @@ export function AuthorCard({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 dark:text-white text-lg truncate transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
+            <h3 className="font-semibold text-foreground text-lg truncate transition-all duration-300 hover:text-[#ef4444]">
               {displayAuthor.name}
             </h3>
             {displayAuthor.role && (
-              <p className="text-sm text-[#ef4444] dark:text-[#ef4444] font-medium transition-all duration-300 hover:scale-105 hover:text-[#dc2626] dark:hover:text-[#dc2626]">
+              <p className="text-sm text-[#ef4444] font-medium transition-all duration-300 hover:scale-105 hover:text-[#dc2626]">
                 {displayAuthor.role}
               </p>
             )}
@@ -173,21 +173,21 @@ export function AuthorCard({
 
         {/* Bio */}
         {displayAuthor.bio && (
-          <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-4 line-clamp-3 transition-colors duration-300 hover:text-gray-700 dark:hover:text-gray-200">
+          <p className="text-muted-foreground text-sm leading-relaxed mb-4 line-clamp-3">
             {displayAuthor.bio}
           </p>
         )}
 
         {/* Stats */}
-        <div className="flex items-center gap-6 mb-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-6 mb-4 text-sm text-muted-foreground">
           {displayAuthor.postCount !== undefined && (
-              <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
+              <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444]">
               <Users className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
               <span>{displayAuthor.postCount} {displayAuthor.postCount === 1 ? 'post' : 'posts'}</span>
             </div>
           )}
           {displayAuthor.joinDate && (
-              <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444] dark:hover:text-[#ef4444]">
+              <div className="flex items-center gap-1 group transition-all duration-300 hover:text-[#ef4444]">
               <Calendar className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
               <span>Since {formatJoinDate(displayAuthor.joinDate)}</span>
             </div>
@@ -196,13 +196,13 @@ export function AuthorCard({
 
         {/* Social Links */}
         {displayAuthor.socialLinks && (
-          <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-300 hover:border-[#ef4444]/30 dark:hover:border-[#ef4444]/30">
+          <div className="flex items-center gap-3 pt-4 border-t border-border transition-colors duration-300 hover:border-[#ef4444]/30">
             {displayAuthor.socialLinks.website && (
               <a
                 href={displayAuthor.socialLinks.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                 title="Website"
               >
                 <Globe className="w-4 h-4" />
@@ -213,7 +213,7 @@ export function AuthorCard({
                 href={displayAuthor.socialLinks.twitter}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-gray-400 hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                className="p-2 rounded-lg text-muted-foreground hover:text-[#ef4444] hover:bg-muted transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                 title="Twitter"
               >
                 <Twitter className="w-4 h-4" />
@@ -224,7 +224,7 @@ export function AuthorCard({
                 href={displayAuthor.socialLinks.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-gray-400 hover:text-[#ef4444] hover:bg-[#ef4444]/10 dark:hover:bg-[#ef4444]/20 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                className="p-2 rounded-lg text-muted-foreground hover:text-[#ef4444] hover:bg-muted transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                 title="LinkedIn"
               >
                 <Linkedin className="w-4 h-4" />
@@ -235,7 +235,7 @@ export function AuthorCard({
                 href={displayAuthor.socialLinks.github}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                 title="GitHub"
               >
                 <Github className="w-4 h-4" />
@@ -246,7 +246,7 @@ export function AuthorCard({
                 href={displayAuthor.socialLinks.substack}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/30 transition-all duration-300 transform hover:scale-110 hover:rotate-12"
+                className="p-2 rounded-lg text-muted-foreground hover:text-[#ef4444] hover:bg-muted transition-all duration-300 transform hover:scale-110 hover:rotate-12"
                 title="Substack"
               >
                 <Mail className="w-4 h-4" />

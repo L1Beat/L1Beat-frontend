@@ -90,6 +90,24 @@ export function generateRpcUrl(chainId: string): string {
   return `https://subnets.avax.network/subnet/${chainId}/rpc`;
 }
 
+function toHexChainId(chain: Chain): string {
+  // Prefer explicit EVM chain id fields; chain.chainId is a routing slug in this app.
+  const raw =
+    (typeof chain.evmChainId === 'number' ? String(chain.evmChainId) : undefined) ||
+    chain.originalChainId ||
+    chain.chainId;
+
+  if (typeof raw === 'string' && raw.startsWith('0x')) {
+    return raw;
+  }
+
+  const numeric = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(numeric)) {
+    throw new Error('Invalid chain ID format');
+  }
+  return `0x${numeric.toString(16)}`;
+}
+
 /**
  * Add a network to CORE wallet (or other wallet fallback)
  */
@@ -103,20 +121,14 @@ export async function addNetworkToWallet(chain: Chain): Promise<boolean> {
     throw new Error('Network token information is required');
   }
 
-  // Generate RPC URL if not provided
-  const rpcUrl = chain.rpcUrl || generateRpcUrl(chain.chainId);
-  
-  // Ensure chainId is in hex format
-  let hexChainId: string;
-  if (chain.chainId.startsWith('0x')) {
-    hexChainId = chain.chainId;
-  } else {
-    const numericChainId = parseInt(chain.chainId);
-    if (isNaN(numericChainId)) {
-      throw new Error('Invalid chain ID format');
-    }
-    hexChainId = `0x${numericChainId.toString(16)}`;
-  }
+  // Prefer real RPC URLs from API; fall back to subnetId-based URL if present.
+  const rpcUrl =
+    chain.rpcUrl ||
+    chain.rpcUrls?.[0] ||
+    (chain.subnetId ? generateRpcUrl(chain.subnetId) : undefined) ||
+    generateRpcUrl(chain.chainId);
+
+  const hexChainId = toHexChainId(chain);
   
   try {
     await provider.request({

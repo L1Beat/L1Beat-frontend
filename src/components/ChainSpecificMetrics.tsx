@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
-import { getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
+import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
 import { Chain, DailyTxCount, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory, DailyActiveAddresses } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
@@ -131,22 +131,59 @@ export function ChainSpecificMetrics() {
   useEffect(() => {
     async function fetchChains() {
       try {
-        const chainsData = await getChains();
+        const [chainsData, cumulativeMap] = await Promise.all([
+          getChains(),
+          getAllChainsCumulativeTxCountLatest()
+        ]);
+
+        // Merge latest cumulative tx into chain objects (backend no longer includes it on /chains)
+        const chainsWithCumulative = chainsData.map((chain) => {
+          const lookupId =
+            (chain.evmChainId ? String(chain.evmChainId) : undefined) ||
+            chain.originalChainId ||
+            chain.chainId;
+
+          const latest = lookupId ? cumulativeMap[lookupId] : undefined;
+          if (!latest) return chain;
+
+          return {
+            ...chain,
+            cumulativeTxCount: {
+              value: Number(latest.value),
+              timestamp: Number(latest.timestamp)
+            }
+          };
+        });
+
         // Filter chains with validators and sort by cumulative transactions
-        const chainsWithValidators = chainsData.filter(chain => {
+        const chainsWithValidators = chainsWithCumulative.filter(chain => {
           const hasValidators = (chain.validators && chain.validators.length > 0) ||
                                (chain.validatorCount && chain.validatorCount > 0);
           return hasValidators;
         });
+        const isCChain = (chain: Chain) => {
+          // Prefer numeric IDs if present (routing chainId is a slug in this app)
+          if (chain.evmChainId === 43114) return true;
+          if (chain.originalChainId === '43114') return true;
+          const name = (chain.chainName || '').toLowerCase();
+          return name === 'c-chain' || name.includes('avalanche c-chain') || name.includes('c-chain');
+        };
+
+        // Sort: C-Chain first, then by cumulative tx count desc
         const sortedChains = [...chainsWithValidators].sort((a, b) => {
-          const aTxCount = a.cumulativeTxCount?.value || 0;
-          const bTxCount = b.cumulativeTxCount?.value || 0;
-          return bTxCount - aTxCount;
+          const aIsC = isCChain(a);
+          const bIsC = isCChain(b);
+          if (aIsC && !bIsC) return -1;
+          if (!aIsC && bIsC) return 1;
+
+          const aTxCount = Number(a.cumulativeTxCount?.value ?? 0);
+          const bTxCount = Number(b.cumulativeTxCount?.value ?? 0);
+          if (bTxCount !== aTxCount) return bTxCount - aTxCount;
+          // Stable tie-breaker (prevents “random” feeling when many are 0)
+          return a.chainName.localeCompare(b.chainName);
         });
         setChains(sortedChains);
-        const cChain = sortedChains.find(
-          chain => chain.chainName === 'C-Chain' || chain.chainId === 'mainnet'
-        );
+        const cChain = sortedChains.find(isCChain);
         setSelectedChain(cChain || sortedChains[0]);
       } catch (err) {
         console.error('Failed to fetch chains:', err);
@@ -519,7 +556,7 @@ export function ChainSpecificMetrics() {
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full sm:w-64 px-4 py-2.5 bg-accent border border-border rounded-lg flex items-center justify-between hover:bg-accent/80 transition-colors"
+              className="w-full sm:w-64 px-4 py-2.5 bg-muted/40 border border-border rounded-lg flex items-center justify-between hover:bg-muted/70 hover:border-[#ef4444]/20 transition-colors"
             >
               <span className="text-sm font-medium text-foreground">
                 {selectedChain?.chainName || 'Select Chain'}
@@ -536,7 +573,7 @@ export function ChainSpecificMetrics() {
                       setSelectedChain(chain);
                       setIsDropdownOpen(false);
                     }}
-                    className={`w-full px-4 py-3 text-left text-sm hover:bg-accent transition-colors ${
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
                       selectedChain?.chainId === chain.chainId
                         ? 'bg-[#ef4444]/10 text-[#ef4444] font-medium'
                         : 'text-foreground'
@@ -559,7 +596,7 @@ export function ChainSpecificMetrics() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 timeframe === days
                   ? 'bg-[#ef4444] text-white shadow-sm'
-                  : 'bg-accent text-foreground hover:bg-accent/80'
+                  : 'bg-muted/40 text-foreground hover:bg-muted/70 hover:border-[#ef4444]/20 border border-border'
               }`}
             >
               {days === 360 ? '1Y' : `${days}D`}

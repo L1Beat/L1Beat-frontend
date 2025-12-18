@@ -659,10 +659,10 @@ export function AvalancheNetworkMetrics() {
   // Loading state - must be AFTER all hooks
   if (loading && Object.keys(metricsData).length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6">
+      <div className="bg-card border border-border rounded-xl p-6">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network metrics...</p>
+          <p className="mt-4 text-muted-foreground">Loading network metrics...</p>
         </div>
       </div>
     );
@@ -695,7 +695,7 @@ export function AvalancheNetworkMetrics() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     timeframe === days
                       ? 'bg-[#ef4444] text-white shadow-sm'
-                      : 'bg-accent text-foreground hover:bg-accent/80'
+                      : 'bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20'
                   }`}
                 >
                   {days === 360 ? '1Y' : `${days}D`}
@@ -708,7 +708,7 @@ export function AvalancheNetworkMetrics() {
               <button
                 onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
                 disabled={!chartData}
-                className="p-2 rounded-lg bg-muted hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-lg bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Export chart"
               >
                 <Download className="w-4 h-4" />
@@ -717,14 +717,14 @@ export function AvalancheNetworkMetrics() {
                 <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-lg shadow-lg z-10">
                   <button
                     onClick={handleExportPNG}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-t-lg flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted/30 transition-colors rounded-t-lg flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export as PNG
                   </button>
                   <button
                     onClick={handleExportCSV}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-b-lg flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted/30 transition-colors rounded-b-lg flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export as CSV
@@ -766,7 +766,7 @@ export function AvalancheNetworkMetrics() {
                 {selectedMetrics.length > 1 && (
                   <button
                     onClick={() => handleRemoveMetric(metricId)}
-                    className="p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                    className="p-0.5 rounded-full hover:bg-muted/40 transition-colors"
                     title={`Remove ${metric.name}`}
                   >
                     <X className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
@@ -781,7 +781,7 @@ export function AvalancheNetworkMetrics() {
             <div className="relative">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-sm font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dashed border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors text-sm font-medium"
               >
                 <Plus className="w-4 h-4" />
                 Add Metric
@@ -838,7 +838,7 @@ export function AvalancheNetworkMetrics() {
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full">
-            <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
+            <p className="text-muted-foreground text-center mb-4">
               {error || 'No data available for this metric'}
             </p>
             {!error?.includes('coming soon') && !error?.includes('not available yet') && (

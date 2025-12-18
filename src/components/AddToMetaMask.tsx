@@ -118,25 +118,27 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
   };
 
   const getButtonStyles = () => {
-    const baseStyles = "inline-flex items-center gap-2 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+    const baseStyles =
+      "inline-flex items-center gap-2 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
     
     if (variant === 'compact') {
       switch (status) {
         case 'success':
-          return `${baseStyles} px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-700/50`;
+          return `${baseStyles} px-3 py-1.5 text-xs bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20`;
         case 'error':
-          return `${baseStyles} px-3 py-1.5 text-xs bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/50 dark:hover:bg-red-900/30 focus:ring-red-500`;
+          return `${baseStyles} px-3 py-1.5 text-xs bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/15 focus:ring-red-500`;
         default:
-          return `${baseStyles} px-3 py-1.5 text-xs bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-700/50 dark:hover:bg-orange-900/30 focus:ring-orange-500`;
+          // Brand-consistent "quiet" button for header toolbars
+          return `${baseStyles} px-3 py-1.5 text-xs bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] focus:ring-[#ef4444]`;
       }
     } else {
       switch (status) {
         case 'success':
-          return `${baseStyles} px-4 py-2 text-sm bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-700/50`;
+          return `${baseStyles} px-4 py-2 text-sm bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20`;
         case 'error':
-          return `${baseStyles} px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/50 dark:hover:bg-red-900/30 focus:ring-red-500`;
+          return `${baseStyles} px-4 py-2 text-sm bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/15 focus:ring-red-500`;
         default:
-          return `${baseStyles} px-4 py-2 text-sm bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-700/50 dark:hover:bg-orange-900/30 focus:ring-orange-500`;
+          return `${baseStyles} px-4 py-2 text-sm bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] focus:ring-[#ef4444]`;
       }
     }
   };
@@ -175,14 +177,14 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       <AnimatePresence>
         {status === 'error' && errorMessage && (
           <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-red-900 text-red-100 text-xs rounded-lg shadow-lg z-10 max-w-xs"
+            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded-lg shadow-lg z-10 max-w-xs"
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
             <div className="flex items-start gap-1">
-              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0 text-red-500" />
               <span>{errorMessage}</span>
             </div>
           </motion.div>
@@ -193,7 +195,7 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       <AnimatePresence>
         {status === 'success' && variant === 'compact' && (
           <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-green-900 text-green-100 text-xs rounded-lg shadow-lg z-10"
+            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded-lg shadow-lg z-10"
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}

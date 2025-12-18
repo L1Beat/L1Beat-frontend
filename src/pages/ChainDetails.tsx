@@ -115,7 +115,7 @@ export function ChainDetails() {
   };
 
   const getTPSColor = (tpsStr: string) => {
-    if (tpsStr === 'N/A') return 'text-gray-400 dark:text-gray-500';
+    if (tpsStr === 'N/A') return 'text-muted-foreground';
     if (tpsStr === '< 1.00') return 'text-yellow-500 dark:text-yellow-400';
     const tps = Number(tpsStr);
     if (tps >= 1) return 'text-green-500 dark:text-green-400';
@@ -168,12 +168,12 @@ export function ChainDetails() {
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
-            <p className="mt-4 text-gray-600 dark:text-gray-300">Loading chain details...</p>
+            <p className="mt-4 text-muted-foreground">Loading chain details...</p>
           </div>
         </div>
       </div>
@@ -182,12 +182,12 @@ export function ChainDetails() {
 
   if (error || !chain) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col">
         <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow-lg p-6 max-w-md w-full text-center">
+          <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full text-center">
             <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">{error}</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">{error}</h2>
             <button
               onClick={() => navigate('/')}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
@@ -242,7 +242,7 @@ export function ChainDetails() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-dark-900">
+    <div className="min-h-screen flex flex-col bg-background">
       <StatusBar health={health} />
       
       <div className="flex-1">
@@ -281,8 +281,15 @@ export function ChainDetails() {
           </div>
 
           {/* Compact Chain Header Card */}
-          <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
-            <div className="p-6">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.45)] mb-6">
+            {/* Decorative background */}
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#ef4444]/15 blur-3xl" />
+              <div className="absolute -bottom-28 -left-28 h-72 w-72 rounded-full bg-[#ef4444]/10 blur-3xl" />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/5 dark:to-white/5" />
+            </div>
+
+            <div className="relative p-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column: Chain Info */}
                 <div className="flex flex-col gap-6">
@@ -292,13 +299,13 @@ export function ChainDetails() {
                         <img
                           src={chain.chainLogoUri}
                           alt={`${chain.chainName} logo`}
-                          className="w-20 h-20 rounded-2xl shadow-md bg-transparent p-2"
+                          className="w-20 h-20 rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
                           onError={(e) => {
                             e.currentTarget.src = "/icon-dark-animated.svg";
                             e.currentTarget.onerror = null;
                           }}
                         />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white dark:border-dark-800">
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
                           <CheckCircle className="w-3.5 h-3.5 text-white" />
                         </div>
                       </div>
@@ -307,9 +314,9 @@ export function ChainDetails() {
                         <img
                           src="/icon-dark-animated.svg"
                           alt={`${chain.chainName} logo`}
-                          className="w-20 h-20 rounded-2xl shadow-md bg-transparent p-2"
+                          className="w-20 h-20 rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
                         />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white dark:border-dark-800">
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
                           <CheckCircle className="w-3.5 h-3.5 text-white" />
                         </div>
                       </div>
@@ -317,9 +324,9 @@ export function ChainDetails() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{chain.chainName}</h1>
+                        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{chain.chainName}</h1>
                         {chain.networkToken && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-dark-700 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 text-xs font-medium text-foreground border border-border">
                             {chain.networkToken.logoUri && (
                               <img
                                 src={chain.networkToken.logoUri}
@@ -333,7 +340,7 @@ export function ChainDetails() {
                       </div>
 
                       {chain.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4 line-clamp-2">
+                        <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
                           {chain.description}
                         </p>
                       )}
@@ -342,7 +349,7 @@ export function ChainDetails() {
                         {chain.categories?.map(category => (
                           <span
                             key={category}
-                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444] border border-[#ef4444]/20"
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20"
                           >
                             {category}
                           </span>
@@ -350,7 +357,7 @@ export function ChainDetails() {
                         {chain.assets?.map((asset, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-dark-700 rounded-md text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600"
+                            className="inline-flex items-center px-2.5 py-1 bg-muted/50 rounded-md text-xs font-medium text-muted-foreground border border-border"
                           >
                             {asset.symbol}
                           </span>
@@ -360,19 +367,19 @@ export function ChainDetails() {
                   </div>
 
                   {/* Actions Row */}
-                  <div className="flex items-center gap-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="flex items-center gap-3 border-t border-border pt-4">
                     {chain.website && (
                       <a
                         href={chain.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 rounded-lg text-sm font-medium text-gray-900 dark:text-white transition-colors"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-muted/40 hover:bg-muted/70 text-foreground transition-colors"
                       >
                         <Globe className="w-4 h-4" />
                         Website
                       </a>
                     )}
-                    <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                    <div className="h-8 w-px bg-border mx-1"></div>
                     {chain.socials?.map((social, index) => {
                       const Icon = getSocialIcon(social.name);
                       return (
@@ -381,7 +388,7 @@ export function ChainDetails() {
                           href={social.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2 text-gray-500 dark:text-gray-400 hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/10 rounded-lg transition-all"
+                          className="p-2 rounded-lg border border-transparent text-muted-foreground hover:text-[#ef4444] hover:bg-[#ef4444]/10 hover:border-[#ef4444]/15 transition-all"
                           title={social.name}
                         >
                           <Icon className="w-5 h-5" />
@@ -396,7 +403,8 @@ export function ChainDetails() {
 
                 {/* Right Column: Compact Metrics Grid */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
                       <Activity className="w-4 h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">TPS</span>
@@ -404,7 +412,8 @@ export function ChainDetails() {
                     <p className={`text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
                   </div>
 
-                  <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
                       <Users className="w-4 h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Validators</span>
@@ -412,7 +421,8 @@ export function ChainDetails() {
                     <p className="text-xl font-bold text-[#ef4444]">{chain.validators.length}</p>
                   </div>
 
-                  <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Avg Validator Uptime</span>
@@ -420,7 +430,8 @@ export function ChainDetails() {
                     <p className="text-xl font-bold text-[#ef4444]">{averageUptime.toFixed(1)}%</p>
                   </div>
 
-                  <div className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-3 border border-[#ef4444]/20 dark:border-[#ef4444]/50">
+                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
                       <Database className="w-4 h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Stake</span>
@@ -432,15 +443,15 @@ export function ChainDetails() {
             </div>
 
             {/* Compact Technical Details Grid */}
-            <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-700/30 p-6">
+            <div className="border-t border-border bg-muted/20 p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
-                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chain ID</span>
+                <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                  <span className="text-xs font-medium text-muted-foreground mb-1">Chain ID</span>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono font-semibold text-gray-900 dark:text-white">{chain.originalChainId || chain.chainId}</code>
+                    <code className="text-sm font-mono font-semibold text-foreground">{chain.originalChainId || chain.chainId}</code>
                     <button
                       onClick={() => handleCopy('chainId', chain.originalChainId || chain.chainId)}
-                      className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700"
+                      className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted"
                     >
                       {copied === 'chainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
@@ -448,15 +459,15 @@ export function ChainDetails() {
                 </div>
 
                 {chain.subnetId && (
-                  <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subnet ID</span>
+                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                    <span className="text-xs font-medium text-muted-foreground mb-1">Subnet ID</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-gray-900 dark:text-white truncate mr-2" title={chain.subnetId}>
+                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.subnetId}>
                         {chain.subnetId.slice(0, 8)}...{chain.subnetId.slice(-8)}
                       </code>
                       <button
                         onClick={() => handleCopy('subnetId', chain.subnetId)}
-                        className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700 shrink-0"
+                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
                       >
                         {copied === 'subnetId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -465,15 +476,15 @@ export function ChainDetails() {
                 )}
 
                 {chain.platformChainId && (
-                  <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Blockchain ID</span>
+                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                    <span className="text-xs font-medium text-muted-foreground mb-1">Blockchain ID</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-gray-900 dark:text-white truncate mr-2" title={chain.platformChainId}>
+                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.platformChainId}>
                         {chain.platformChainId.slice(0, 8)}...{chain.platformChainId.slice(-8)}
                       </code>
                       <button
                         onClick={() => handleCopy('platformChainId', chain.platformChainId)}
-                        className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700 shrink-0"
+                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
                       >
                         {copied === 'platformChainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -482,15 +493,15 @@ export function ChainDetails() {
                 )}
 
                 {chain.rpcUrls && chain.rpcUrls.length > 0 && (
-                  <div className="flex flex-col p-3 bg-white dark:bg-dark-800 rounded-lg border border-gray-200 dark:border-gray-600/50">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">RPC URL</span>
+                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                    <span className="text-xs font-medium text-muted-foreground mb-1">RPC URL</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-gray-900 dark:text-white truncate mr-2" title={chain.rpcUrls[0]}>
+                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.rpcUrls[0]}>
                         {chain.rpcUrls[0].replace('https://', '')}
                       </code>
                       <button
                         onClick={() => navigator.clipboard.writeText(chain.rpcUrls?.[0] || '')}
-                        className="text-gray-400 hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-dark-700 shrink-0"
+                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
@@ -501,7 +512,7 @@ export function ChainDetails() {
               
               {lastUpdate && (
                 <div className="mt-4 flex justify-end">
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-muted-foreground">
                     Last updated: {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
                   </span>
                 </div>
@@ -512,7 +523,7 @@ export function ChainDetails() {
 
             {/* Tab Navigation */}
             <div className="mb-6">
-              <div className="border-b border-gray-200 dark:border-gray-700">
+              <div className="border-b border-border">
                 <nav className="flex space-x-8" aria-label="Tabs">
                   {[
                     { id: 'validators', name: 'Validators', icon: Users, disabled: false },
@@ -534,8 +545,8 @@ export function ChainDetails() {
                             ${isActive
                               ? 'border-[#ef4444] text-[#ef4444]'
                               : tab.disabled
-                                ? 'border-transparent text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 cursor-pointer'
+                                ? 'border-transparent text-muted-foreground cursor-not-allowed opacity-50'
+                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border cursor-pointer'
                             }
                           `}
                         >
@@ -544,16 +555,16 @@ export function ChainDetails() {
                             ${isActive
                               ? 'text-[#ef4444]'
                               : tab.disabled
-                                ? 'text-gray-400 dark:text-gray-600'
-                                : 'text-gray-400 group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-400'
+                                ? 'text-muted-foreground'
+                                : 'text-muted-foreground group-hover:text-foreground'
                             }
                           `} />
                           {tab.name}
                         </button>
                         {tab.disabled && hoveredTab === tab.id && (
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg whitespace-nowrap z-10">
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1.5 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg whitespace-nowrap z-10 border border-border">
                             Coming soon
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900 dark:border-b-gray-700"></div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-popover"></div>
                           </div>
                         )}
                       </div>
@@ -571,39 +582,39 @@ export function ChainDetails() {
                   <StakeDistributionChart validators={chain.validators} />
                   
                   {/* Validators Table */}
-                  <div className="bg-white dark:bg-dark-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                     {/* Validators Header & Search */}
-                    <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-dark-700/20">
+                    <div className="p-6 border-b border-border bg-muted/20">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div>
-                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          <h3 className="text-xl font-semibold text-foreground">
                             Validators
                           </h3>
                         </div>
                         <div className="relative w-full sm:w-72">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                            <Search className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <input
                             type="text"
                             placeholder="Search by Node ID or Address..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-sm shadow-sm"
+                            className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-sm shadow-sm"
                           />
                         </div>
                       </div>
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-dark-700/50">
+                      <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted/20">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               Status
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'address') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -623,7 +634,7 @@ export function ChainDetails() {
                               </div>
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'stake') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -643,7 +654,7 @@ export function ChainDetails() {
                               </div>
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'uptime') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -664,13 +675,13 @@ export function ChainDetails() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-dark-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="bg-card divide-y divide-border">
                           {displayedValidators.map((validator, index) => {
                             const percentage = ((validator.weight / totalStake) * 100).toFixed(2);
                             return (
                               <tr 
                                 key={validator.address} 
-                                className="hover:bg-gray-50 dark:hover:bg-dark-700/50 transition-colors cursor-pointer"
+                                className="hover:bg-muted/30 transition-colors cursor-pointer"
                                 onClick={() => {
                                   if (validator.explorerUrl) {
                                     window.open(validator.explorerUrl, '_blank', 'noopener,noreferrer');
@@ -693,7 +704,7 @@ export function ChainDetails() {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-3">
                                     <div 
-                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-white dark:ring-dark-800" 
+                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-card" 
                                       style={{ 
                                         backgroundColor: getValidatorColor(index, theme === 'dark', 0.9)
                                       }}
@@ -701,26 +712,26 @@ export function ChainDetails() {
                                       {validator.address.slice(0, 2).toUpperCase()}
                                     </div>
                                     <div>
-                                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                      <div className="text-sm font-medium text-foreground">
                                         {validator.address.slice(0, 8)}...{validator.address.slice(-6)}
                                       </div>
-                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      <div className="text-xs text-muted-foreground">
                                         Node ID
                                       </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                                  <div className="text-sm text-foreground font-medium">
                                     {formatStakeNumber(validator.weight)} tokens
                                   </div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  <div className="text-xs text-muted-foreground">
                                     {percentage}% of total
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
-                                    <div className="flex-1 bg-gray-100 dark:bg-dark-700 rounded-full h-2 mr-3 overflow-hidden">
+                                    <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
                                       <div 
                                         className={`h-full rounded-full transition-all duration-500 ${
                                           (validator.uptime || 0) >= 90 ? 'bg-green-500' :
@@ -746,7 +757,7 @@ export function ChainDetails() {
 
                     {/* Show More Button */}
                     {filteredValidators.length > 10 && !showAllValidators && (
-                      <div className="px-6 py-4 bg-gray-50 dark:bg-dark-700/50 border-t border-gray-200 dark:border-gray-700">
+                      <div className="px-6 py-4 bg-muted/20 border-t border-border">
                         <button
                           onClick={() => setShowAllValidators(true)}
                           className="w-full text-center text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] text-sm font-medium py-2 transition-colors"
@@ -759,7 +770,7 @@ export function ChainDetails() {
                     {/* No Results */}
                     {searchTerm && filteredValidators.length === 0 && (
                       <div className="px-6 py-8 text-center">
-                        <p className="text-gray-500 dark:text-gray-400">
+                        <p className="text-muted-foreground">
                           No validators found matching "{searchTerm}"
                         </p>
                       </div>
