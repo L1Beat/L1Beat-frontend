@@ -514,14 +514,32 @@ export async function getAllChainsCumulativeTxCountLatest(): Promise<Record<stri
       const payload = (response && typeof response === 'object' && 'data' in response) ? (response as any).data : response;
       const map: Record<string, { value: number; timestamp: number }> = {};
 
+      const addAliases = (source: any, value: number, ts: number) => {
+        // Keep keying consistent with UI lookups (evmChainId -> originalChainId -> chainId),
+        // but also alias under other ids to be resilient to backend response shapes.
+        const candidates = [
+          source?.evmChainId,
+          source?.originalChainId,
+          source?.chainId,
+          source?.id,
+          source?._id
+        ]
+          .map((v) => (v === undefined || v === null ? '' : String(v)))
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const unique = Array.from(new Set(candidates));
+        for (const k of unique) {
+          map[k] = { value, timestamp: ts };
+        }
+      };
+
       if (Array.isArray(payload)) {
         for (const item of payload) {
-          const key = String(item?.chainId ?? item?.evmChainId ?? item?.id ?? '');
-          if (!key) continue;
           const value = Number(item?.cumulativeTxCount?.value ?? item?.value ?? item?.count);
           const ts = Number(item?.cumulativeTxCount?.timestamp ?? item?.timestamp ?? item?.time ?? 0);
           if (!Number.isFinite(value)) continue;
-          map[key] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+          addAliases(item, value, Number.isFinite(ts) ? ts : 0);
         }
         return map;
       }
@@ -532,7 +550,10 @@ export async function getAllChainsCumulativeTxCountLatest(): Promise<Record<stri
           const value = Number((val as any).value ?? (val as any).count);
           const ts = Number((val as any).timestamp ?? (val as any).time ?? 0);
           if (!Number.isFinite(value)) continue;
-          map[String(key)] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+          const normalizedTs = Number.isFinite(ts) ? ts : 0;
+          map[String(key)] = { value, timestamp: normalizedTs };
+          // If the value object also includes ids, alias under them too.
+          addAliases(val, value, normalizedTs);
         }
         return map;
       }
@@ -596,14 +617,30 @@ export async function getAllChainsTPSLatest(): Promise<Record<string, { value: n
       const payload = (response && typeof response === 'object' && 'data' in response) ? (response as any).data : response;
       const map: Record<string, { value: number; timestamp: number }> = {};
 
+      const addAliases = (source: any, value: number, ts: number) => {
+        const candidates = [
+          source?.evmChainId,
+          source?.originalChainId,
+          source?.chainId,
+          source?.id,
+          source?._id
+        ]
+          .map((v) => (v === undefined || v === null ? '' : String(v)))
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const unique = Array.from(new Set(candidates));
+        for (const k of unique) {
+          map[k] = { value, timestamp: ts };
+        }
+      };
+
       if (Array.isArray(payload)) {
         for (const item of payload) {
-          const chainId = String(item?.chainId ?? item?.evmChainId ?? item?.id ?? '');
-          if (!chainId) continue;
           const value = Number(item?.tps?.value ?? item?.value ?? item?.tps ?? item?.totalTps);
           const ts = Number(item?.tps?.timestamp ?? item?.timestamp ?? item?.time ?? item?.updatedAt ?? 0);
           if (!Number.isFinite(value)) continue;
-          map[chainId] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+          addAliases(item, value, Number.isFinite(ts) ? ts : 0);
         }
         return map;
       }
@@ -614,7 +651,9 @@ export async function getAllChainsTPSLatest(): Promise<Record<string, { value: n
           const value = Number((val as any).value ?? (val as any).tps ?? (val as any).totalTps);
           const ts = Number((val as any).timestamp ?? (val as any).time ?? (val as any).updatedAt ?? 0);
           if (!Number.isFinite(value)) continue;
-          map[String(key)] = { value, timestamp: Number.isFinite(ts) ? ts : 0 };
+          const normalizedTs = Number.isFinite(ts) ? ts : 0;
+          map[String(key)] = { value, timestamp: normalizedTs };
+          addAliases(val, value, normalizedTs);
         }
         return map;
       }
