@@ -334,13 +334,36 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
           } : null,
           // Handle various potential field names for validator count and ensure it's a number
           validatorCount: validatorCount,
-          validators: chain.validators ? chain.validators.map((validator: any) => ({
-            address: validator.nodeId,
-            active: validator.validationStatus === 'active',
-            uptime: validator.uptimePerformance,
-            weight: Number(validator.amountStaked),
-            explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
-          })) : [],
+          validators: chain.validators ? chain.validators.map((validator: any) => {
+            const amountStakedRaw = validator.amountStaked ?? validator.amount_staked;
+            const weightRaw = validator.weight ?? validator.validatorWeight ?? validator.stakeWeight;
+
+            const hasAmountStaked = Number.isFinite(Number(amountStakedRaw));
+            const hasWeight = Number.isFinite(Number(weightRaw));
+
+            const stakeUnit: 'tokens' | 'weight' | undefined =
+              hasAmountStaked ? 'tokens' : (hasWeight ? 'weight' : undefined);
+
+            const weightValue = hasAmountStaked
+              ? Number(amountStakedRaw)
+              : (hasWeight ? Number(weightRaw) : Number(validator.amountStaked));
+
+            return ({
+              address: validator.nodeId,
+              active: validator.validationStatus === 'active',
+              uptime: validator.uptimePerformance,
+              weight: Number(weightValue),
+              stakeUnit,
+              remainingBalance: Number(
+                validator.remainingBalance ??
+                validator.remaining_balance ??
+                validator.balance ??
+                validator.remaining ??
+                0
+              ) || undefined,
+              explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
+            });
+          }) : [],
           // Explicitly handle networkToken to ensure it's available
           networkToken: chain.networkToken || chain.token || chain.nativeToken || {
             name: 'AVAX',
@@ -367,13 +390,36 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
         return [];
       }
 
-      return data.map((validator: any) => ({
-        address: validator.nodeId,
-        active: validator.validationStatus === 'active',
-        uptime: validator.uptimePerformance,
-        weight: Number(validator.amountStaked),
-        explorerUrl: `${EXPLORER_URL}/validators/${validator.nodeId}`
-      }));
+      return data.map((validator: any) => {
+        const amountStakedRaw = validator.amountStaked ?? validator.amount_staked;
+        const weightRaw = validator.weight ?? validator.validatorWeight ?? validator.stakeWeight;
+
+        const hasAmountStaked = Number.isFinite(Number(amountStakedRaw));
+        const hasWeight = Number.isFinite(Number(weightRaw));
+
+        const stakeUnit: 'tokens' | 'weight' | undefined =
+          hasAmountStaked ? 'tokens' : (hasWeight ? 'weight' : undefined);
+
+        const weightValue = hasAmountStaked
+          ? Number(amountStakedRaw)
+          : (hasWeight ? Number(weightRaw) : Number(validator.amountStaked));
+
+        return ({
+          address: validator.nodeId,
+          active: validator.validationStatus === 'active',
+          uptime: validator.uptimePerformance,
+          weight: Number(weightValue),
+          stakeUnit,
+          remainingBalance: Number(
+            validator.remainingBalance ??
+            validator.remaining_balance ??
+            validator.balance ??
+            validator.remaining ??
+            0
+          ) || undefined,
+          explorerUrl: `${EXPLORER_URL}/validators/${validator.nodeId}`
+        });
+      });
     } catch (error) {
       console.error('Chain validators fetch error:', error);
       return [];

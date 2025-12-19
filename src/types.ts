@@ -62,6 +62,8 @@ export interface Validator {
   active: boolean;
   uptime: number;
   weight: number;
+  stakeUnit?: 'tokens' | 'weight';
+  remainingBalance?: number;
   explorerUrl?: string;
 }
 
