@@ -133,7 +133,15 @@ export function ChainDetails() {
         comparison = a.weight - b.weight;
         break;
       case 'uptime':
-        comparison = (a.uptime || 0) - (b.uptime || 0);
+        // If uptime is missing for this chain, fall back to remainingBalance (if present).
+        // Note: we treat 0 as a valid numeric value; missing is undefined/null/non-finite.
+        if (chain?.validators?.some(v => Number.isFinite(v.uptime))) {
+          comparison = (Number.isFinite(a.uptime) ? a.uptime : -1) - (Number.isFinite(b.uptime) ? b.uptime : -1);
+        } else {
+          const aBal = (a.remainingBalance ?? 0);
+          const bBal = (b.remainingBalance ?? 0);
+          comparison = aBal - bBal;
+        }
         break;
       case 'address':
         comparison = a.address.localeCompare(b.address);
@@ -152,6 +160,15 @@ export function ChainDetails() {
     ? chain.validators.reduce((sum, v) => sum + (v.uptime || 0), 0) / chain.validators.length 
     : 0;
 
+  const hasUptimeData = chain?.validators?.some(v => Number.isFinite(v.uptime)) ?? false;
+  const hasRemainingBalanceData = chain?.validators?.some(v => Number.isFinite(v.remainingBalance)) ?? false;
+  const stakeIsWeight = chain?.validators?.some(v => v.stakeUnit === 'weight') ?? false;
+  const maxRemainingBalance = chain?.validators?.reduce((max, v) => {
+    const bal = Number(v.remainingBalance);
+    if (!Number.isFinite(bal)) return max;
+    return Math.max(max, bal);
+  }, 0) ?? 0;
+
   // Format large numbers with abbreviations
   const formatStakeNumber = (num: number): string => {
     // Convert from blockchain denomination to actual tokens (divide by 10^9)
@@ -164,6 +181,16 @@ export function ChainDetails() {
     } else {
       return actualTokens.toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
+  };
+
+  // Validator operator cost assumption (used for remaining-balance runway coloring)
+  const MONTHLY_COST_AVAX = 1.33;
+  const toAvax = (raw: number) => raw / 1_000_000_000;
+  const formatStakeDisplay = (raw: number, unit?: 'tokens' | 'weight') => {
+    if (unit === 'weight') {
+      return Number(raw).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    }
+    return formatStakeNumber(raw);
   };
   
   if (loading) {
@@ -434,9 +461,22 @@ export function ChainDetails() {
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
                       <Database className="w-4 h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Stake</span>
+                      <span className="text-xs font-medium text-[#ef4444]">
+                        {stakeIsWeight ? 'Weight' : 'Stake'}
+                      </span>
+                      {stakeIsWeight && (
+                        <span
+                          className="text-muted-foreground cursor-help inline-flex"
+                          title="A measure of voting influence of this validator when validating for the Avalanche L1"
+                          aria-label="Weight tooltip"
+                        >
+                          <Info className="w-3.5 h-3.5" />
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444]">{formatStakeNumber(totalStake)}</p>
+                    <p className="text-xl font-bold text-[#ef4444]">
+                      {stakeIsWeight ? totalStake.toLocaleString() : formatStakeNumber(totalStake)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -645,7 +685,16 @@ export function ChainDetails() {
                               }}
                             >
                               <div className="flex items-center gap-1">
-                              Stake
+                              {stakeIsWeight ? 'Weight' : 'Stake'}
+                                {stakeIsWeight && (
+                                  <span
+                                    className="text-muted-foreground cursor-help inline-flex"
+                                    title="A measure of voting influence of this validator when validating for the Avalanche L1"
+                                    aria-label="Weight tooltip"
+                                  >
+                                    <Info className="w-3.5 h-3.5" />
+                                  </span>
+                                )}
                                 {sortBy === 'stake' && (
                                   <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
@@ -665,7 +714,7 @@ export function ChainDetails() {
                               }}
                             >
                               <div className="flex items-center gap-1">
-                              Avg Validator Uptime
+                              {hasUptimeData ? 'Avg Validator Uptime' : (hasRemainingBalanceData ? 'Remaining Balance' : 'Avg Validator Uptime')}
                                 {sortBy === 'uptime' && (
                                   <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
@@ -723,30 +772,88 @@ export function ChainDetails() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm text-foreground font-medium">
-                                    {formatStakeNumber(validator.weight)} tokens
+                                    {formatStakeDisplay(validator.weight, validator.stakeUnit)}{' '}
+                                    {validator.stakeUnit === 'weight' ? (
+                                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                        weight
+                                        <span
+                                          className="text-muted-foreground cursor-help inline-flex"
+                                          title="A measure of voting influence of this validator when validating for the Avalanche L1"
+                                          aria-label="Weight tooltip"
+                                        >
+                                          <Info className="w-3 h-3" />
+                                        </span>
+                                      </span>
+                                    ) : (
+                                      'tokens'
+                                    )}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {percentage}% of total
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center">
-                                    <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                          (validator.uptime || 0) >= 90 ? 'bg-green-500' :
-                                          (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
-                                        }`}
-                                        style={{ width: `${validator.uptime || 0}%` }}
-                                      ></div>
+                                  {hasUptimeData ? (
+                                    <div className="flex items-center">
+                                      <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                        <div 
+                                          className={`h-full rounded-full transition-all duration-500 ${
+                                            (validator.uptime || 0) >= 90 ? 'bg-green-500' :
+                                            (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
+                                          }`}
+                                          style={{ width: `${validator.uptime || 0}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className={`text-sm font-medium min-w-[3rem] ${
+                                        (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
+                                        (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                                      }`}>
+                                        {Number.isFinite(validator.uptime) ? `${validator.uptime.toFixed(1)}%` : 'N/A'}
+                                      </span>
                                     </div>
-                                    <span className={`text-sm font-medium min-w-[3rem] ${
-                                      (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
-                                      (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                                    }`}>
-                                      {validator.uptime ? `${validator.uptime.toFixed(1)}%` : 'N/A'}
-                                    </span>
-                                  </div>
+                                  ) : (
+                                    <div className="flex items-center">
+                                      <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                        {(() => {
+                                          const raw = Number(validator.remainingBalance ?? 0);
+                                          const avax = Number.isFinite(raw) ? toAvax(raw) : 0;
+                                          const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
+                                          const barColor =
+                                            monthsRemaining <= 1 ? 'bg-red-500' :
+                                            monthsRemaining <= 3 ? 'bg-yellow-500' :
+                                            'bg-green-500';
+
+                                          return (
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                          style={{
+                                            width: `${maxRemainingBalance > 0 ? Math.min(100, ((validator.remainingBalance ?? 0) / maxRemainingBalance) * 100) : 0}%`
+                                          }}
+                                        ></div>
+                                          );
+                                        })()}
+                                      </div>
+                                      {(() => {
+                                        const raw = Number(validator.remainingBalance);
+                                        if (!Number.isFinite(raw)) {
+                                          return <span className="text-sm font-medium min-w-[6rem] text-muted-foreground">N/A</span>;
+                                        }
+
+                                        const avax = toAvax(raw);
+                                        const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
+                                        const textColor =
+                                          monthsRemaining <= 1 ? 'text-red-600 dark:text-red-400' :
+                                          monthsRemaining <= 3 ? 'text-yellow-600 dark:text-yellow-400' :
+                                          'text-green-600 dark:text-green-400';
+
+                                        return (
+                                          <span className={`text-sm font-medium min-w-[6rem] ${textColor}`}>
+                                            {formatStakeNumber(raw)} AVAX
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );
