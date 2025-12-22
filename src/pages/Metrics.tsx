@@ -1,11 +1,10 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from '../components/StatusBar';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
+import { Footer } from '../components/Footer';
 import { getHealth } from '../api';
-import { useEffect, useState } from 'react';
 import { HealthStatus } from '../types';
-import { BarChart3 } from 'lucide-react';
 
 export function Metrics() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -34,6 +33,8 @@ export function Metrics() {
         {/* Chain-Specific Metrics */}
         <ChainSpecificMetrics />
       </main>
+
+      <Footer />
     </div>
   );
 }

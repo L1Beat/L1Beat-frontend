@@ -350,7 +350,7 @@ export function BlogPost() {
         return (
             <div className="min-h-screen bg-background text-foreground">
                 <StatusBar health={health} />
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     <div className="text-center">
                         <div className="relative inline-block mb-8">
                             <div className="w-24 h-24 bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-2xl flex items-center justify-center">
@@ -431,7 +431,7 @@ export function BlogPost() {
             <StatusBar health={health} />
 
             {/* Article */}
-            <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <article className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 {/* Simple Back Button */}
                 <div className="mb-8">
                     <Link
@@ -598,7 +598,7 @@ export function BlogPost() {
 
             {/* Newsletter and Related Articles Section */}
             <div className="bg-card border-t border-border">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     {/* Newsletter Subscription */}
                     <div className="mb-16">
                         <NewsletterSubscription />
