@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainValidators } from '../api';
@@ -15,12 +15,9 @@ import {
   Users,
   Zap,
   TrendingUp,
-  Database,
-  Network,
   AlertTriangle,
   Shield,
   Globe,
-  Twitter,
   MessageCircle,
   Github
 } from 'lucide-react';
@@ -32,6 +29,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
+import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 
 export function ChainDetails() {
   const { chainId } = useParams();
@@ -123,6 +121,14 @@ export function ChainDetails() {
     return 'text-red-500 dark:text-red-400';
   };
 
+  const tokenDecimals = chain?.networkToken?.decimals ?? 18;
+  const tokenSymbol = chain?.networkToken?.symbol || 'TOKEN';
+  // Avalanche staking/validator APIs often represent AVAX in nAVAX (1e9).
+  // Even if EVM-native AVAX uses 18 decimals, we should display validator stake using 9 decimals.
+  const stakeTokenDecimals = tokenSymbol === 'AVAX' ? 9 : tokenDecimals;
+
+  const getStakeBaseUnits = (v: { weight: string }) => parseBaseUnits(v.weight) ?? 0n;
+
   const filteredValidators = chain?.validators.filter(validator =>
     validator.address.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => {
@@ -130,7 +136,7 @@ export function ChainDetails() {
     
     switch (sortBy) {
       case 'stake':
-        comparison = a.weight - b.weight;
+        comparison = getStakeBaseUnits(a) < getStakeBaseUnits(b) ? -1 : (getStakeBaseUnits(a) > getStakeBaseUnits(b) ? 1 : 0);
         break;
       case 'uptime':
         // If uptime is missing for this chain, fall back to remainingBalance (if present).
@@ -155,42 +161,56 @@ export function ChainDetails() {
     ? filteredValidators 
     : filteredValidators.slice(0, 10);
 
-  const totalStake = chain?.validators.reduce((sum, v) => sum + v.weight, 0) || 0;
-  const averageUptime = chain?.validators.length 
-    ? chain.validators.reduce((sum, v) => sum + (v.uptime || 0), 0) / chain.validators.length 
-    : 0;
-
+  const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
   const hasUptimeData = chain?.validators?.some(v => Number.isFinite(v.uptime)) ?? false;
   const hasRemainingBalanceData = chain?.validators?.some(v => Number.isFinite(v.remainingBalance)) ?? false;
-  const stakeIsWeight = chain?.validators?.some(v => v.stakeUnit === 'weight') ?? false;
+
+  const sybilResistance = (chain?.sybilResistanceType || '').toLowerCase();
+
+  // Sybil resistance determines the meaning of stake metrics:
+  // - Proof of Stake: show stake (tokens)
+  // - Proof of Authority: no staking, show weight
+  // - Unknown/other: infer from validator payload
+  //
+  // NOTE: Some chains are marked PoS but the validator payload may not include `amountStaked`.
+  // In that case, we fall back to weight-mode rather than displaying a misleading ~0 after decimals conversion.
+  const stakeMode: 'tokens' | 'weight' =
+    sybilResistance === 'proof of authority'
+      ? 'weight'
+      : sybilResistance === 'proof of stake'
+        ? ((chain?.validators?.some(v => v.stakeUnit === 'tokens') ?? false) ? 'tokens' : 'weight')
+        : ((chain?.validators?.some(v => v.stakeUnit === 'weight') ?? false) ? 'weight' : 'tokens');
+
+  const stakeIsWeight = stakeMode === 'weight';
   const maxRemainingBalance = chain?.validators?.reduce((max, v) => {
     const bal = Number(v.remainingBalance);
     if (!Number.isFinite(bal)) return max;
     return Math.max(max, bal);
   }, 0) ?? 0;
 
-  // Format large numbers with abbreviations
-  const formatStakeNumber = (num: number): string => {
-    // Convert from blockchain denomination to actual tokens (divide by 10^9)
-    const actualTokens = num / 1_000_000_000;
-    
-    if (actualTokens >= 1_000_000) {
-      return `${(actualTokens / 1_000_000).toFixed(2)}M`;
-    } else if (actualTokens >= 1_000) {
-      return `${(actualTokens / 1_000).toFixed(2)}K`;
-    } else {
-      return actualTokens.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    }
-  };
-
   // Validator operator cost assumption (used for remaining-balance runway coloring)
   const MONTHLY_COST_AVAX = 1.33;
-  const toAvax = (raw: number) => raw / 1_000_000_000;
-  const formatStakeDisplay = (raw: number, unit?: 'tokens' | 'weight') => {
-    if (unit === 'weight') {
-      return Number(raw).toLocaleString(undefined, { maximumFractionDigits: 0 });
-    }
-    return formatStakeNumber(raw);
+  // remainingBalance units vary across backends/chains (some return 1e9, some 1e18 base units).
+  // Use a magnitude heuristic to normalize to AVAX:
+  // - >= 1e15: treat as 18-decimals
+  // - otherwise: treat as 9-decimals
+  const toAvax = (raw: number) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    return n >= 1e15 ? n / 1e18 : n / 1e9;
+  };
+  const formatAvax = (avax: number) => {
+    const n = Number(avax);
+    if (!Number.isFinite(n)) return 'N/A';
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+  const formatStakeDisplay = (rawBaseUnits: string, unit?: 'tokens' | 'weight') => {
+    // If this validator is in "weight" mode, treat it as a plain integer.
+    if (unit === 'weight') return formatUnits(rawBaseUnits, 0, { maxFractionDigits: 0 });
+    return formatUnits(rawBaseUnits, stakeTokenDecimals, { maxFractionDigits: 2 });
   };
   
   if (loading) {
@@ -451,31 +471,28 @@ export function ChainDetails() {
                   <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
-                      <Shield className="w-4 h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Avg Validator Uptime</span>
+                      <Globe className="w-4 h-4 text-[#ef4444]" />
+                      <span className="text-xs font-medium text-[#ef4444]">Type</span>
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444]">{averageUptime.toFixed(1)}%</p>
+                    <p className="text-xl font-bold text-[#ef4444]">
+                      {(() => {
+                        const name = (chain.chainName || '').toLowerCase();
+                        const evmId = String(chain.originalChainId || '');
+                        const isAvalancheCChain = name.includes('c-chain') || evmId === '43114';
+                        if (isAvalancheCChain) return 'Primary Network';
+                        return chain.isL1 ? 'L1' : 'Legacy Subnet';
+                      })()}
+                    </p>
                   </div>
 
                   <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-2 mb-1">
-                      <Database className="w-4 h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">
-                        {stakeIsWeight ? 'Weight' : 'Stake'}
-                      </span>
-                      {stakeIsWeight && (
-                        <span
-                          className="text-muted-foreground cursor-help inline-flex"
-                          title="A measure of voting influence of this validator when validating for the Avalanche L1"
-                          aria-label="Weight tooltip"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                        </span>
-                      )}
+                      <Shield className="w-4 h-4 text-[#ef4444]" />
+                      <span className="text-xs font-medium text-[#ef4444]">Sybil resistance</span>
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444]">
-                      {stakeIsWeight ? totalStake.toLocaleString() : formatStakeNumber(totalStake)}
+                    <p className="text-xl font-bold text-[#ef4444] truncate" title={chain.sybilResistanceType || 'N/A'}>
+                      {chain.sybilResistanceType || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -486,7 +503,7 @@ export function ChainDetails() {
             <div className="border-t border-border bg-muted/20 p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
-                  <span className="text-xs font-medium text-muted-foreground mb-1">Chain ID</span>
+                  <span className="text-xs font-medium text-muted-foreground mb-1">EVM Chain ID</span>
                   <div className="flex items-center justify-between">
                     <code className="text-sm font-mono font-semibold text-foreground">{chain.originalChainId || chain.chainId}</code>
                     <button
@@ -619,7 +636,12 @@ export function ChainDetails() {
               {activeTab === 'validators' && (
                 <div className="space-y-6">
                   {/* Stake Distribution Chart */}
-                  <StakeDistributionChart validators={chain.validators} />
+                  <StakeDistributionChart
+                    validators={chain.validators}
+                    mode={stakeMode}
+                    tokenSymbol={tokenSymbol}
+                    tokenDecimals={stakeTokenDecimals}
+                  />
                   
                   {/* Validators Table */}
                   <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -726,7 +748,12 @@ export function ChainDetails() {
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
                           {displayedValidators.map((validator, index) => {
-                            const percentage = ((validator.weight / totalStake) * 100).toFixed(2);
+                            const percentage = (() => {
+                              const v = unitsToNumber(validator.weight, stakeIsWeight ? 0 : stakeTokenDecimals);
+                              const t = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
+                              if (!Number.isFinite(v) || !Number.isFinite(t) || t <= 0) return '0.00';
+                              return ((v / t) * 100).toFixed(2);
+                            })();
                             return (
                               <tr 
                                 key={validator.address} 
@@ -772,8 +799,11 @@ export function ChainDetails() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm text-foreground font-medium">
-                                    {formatStakeDisplay(validator.weight, validator.stakeUnit)}{' '}
-                                    {validator.stakeUnit === 'weight' ? (
+                                    {formatStakeDisplay(
+                                      validator.weight,
+                                      stakeMode === 'weight' ? 'weight' : validator.stakeUnit
+                                    )}{' '}
+                                    {(stakeMode === 'weight' ? 'weight' : validator.stakeUnit) === 'weight' ? (
                                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                         weight
                                         <span
@@ -785,7 +815,7 @@ export function ChainDetails() {
                                         </span>
                                       </span>
                                     ) : (
-                                      'tokens'
+                                      tokenSymbol
                                     )}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
@@ -848,7 +878,7 @@ export function ChainDetails() {
 
                                         return (
                                           <span className={`text-sm font-medium min-w-[6rem] ${textColor}`}>
-                                            {formatStakeNumber(raw)} AVAX
+                                            {formatAvax(avax)} AVAX
                                           </span>
                                         );
                                       })()}

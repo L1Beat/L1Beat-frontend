@@ -344,15 +344,16 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             const stakeUnit: 'tokens' | 'weight' | undefined =
               hasAmountStaked ? 'tokens' : (hasWeight ? 'weight' : undefined);
 
-            const weightValue = hasAmountStaked
-              ? Number(amountStakedRaw)
-              : (hasWeight ? Number(weightRaw) : Number(validator.amountStaked));
+            const weightValueRaw = hasAmountStaked
+              ? amountStakedRaw
+              : (hasWeight ? weightRaw : validator.amountStaked);
 
             return ({
-              address: validator.nodeId,
-              active: validator.validationStatus === 'active',
-              uptime: validator.uptimePerformance,
-              weight: Number(weightValue),
+            address: validator.nodeId,
+            active: validator.validationStatus === 'active',
+            uptime: validator.uptimePerformance,
+              // Keep as string to preserve precision (nAVAX base units)
+              weight: String(weightValueRaw ?? '0'),
               stakeUnit,
               remainingBalance: Number(
                 validator.remainingBalance ??
@@ -361,15 +362,23 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
                 validator.remaining ??
                 0
               ) || undefined,
-              explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
+            explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
             });
           }) : [],
-          // Explicitly handle networkToken to ensure it's available
-          networkToken: chain.networkToken || chain.token || chain.nativeToken || {
-            name: 'AVAX',
-            symbol: 'AVAX',
-            decimals: 18
-          }
+          // Native token (used for stake formatting). Default decimals to 18 if missing.
+          networkToken: (() => {
+            const t = chain.networkToken || chain.token || chain.nativeToken;
+            const symbol = t?.symbol || t?.name || 'TOKEN';
+            const name = t?.name || symbol;
+            const decimals =
+              typeof t?.decimals === 'number' && Number.isFinite(t.decimals) ? t.decimals : 18;
+            return {
+              name,
+              symbol,
+              decimals,
+              logoUri: t?.logoUri,
+            };
+          })()
         };
       });
 
@@ -400,15 +409,16 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
         const stakeUnit: 'tokens' | 'weight' | undefined =
           hasAmountStaked ? 'tokens' : (hasWeight ? 'weight' : undefined);
 
-        const weightValue = hasAmountStaked
-          ? Number(amountStakedRaw)
-          : (hasWeight ? Number(weightRaw) : Number(validator.amountStaked));
+        const weightValueRaw = hasAmountStaked
+          ? amountStakedRaw
+          : (hasWeight ? weightRaw : validator.amountStaked);
 
         return ({
-          address: validator.nodeId,
-          active: validator.validationStatus === 'active',
-          uptime: validator.uptimePerformance,
-          weight: Number(weightValue),
+        address: validator.nodeId,
+        active: validator.validationStatus === 'active',
+        uptime: validator.uptimePerformance,
+          // Keep as string to preserve precision (nAVAX base units)
+          weight: String(weightValueRaw ?? '0'),
           stakeUnit,
           remainingBalance: Number(
             validator.remainingBalance ??
@@ -417,7 +427,7 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
             validator.remaining ??
             0
           ) || undefined,
-          explorerUrl: `${EXPLORER_URL}/validators/${validator.nodeId}`
+        explorerUrl: `${EXPLORER_URL}/validators/${validator.nodeId}`
         });
       });
     } catch (error) {

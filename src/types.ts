@@ -11,6 +11,8 @@ export interface Chain {
   chainName: string;
   chainLogoUri?: string;
   description?: string;
+  isL1?: boolean;
+  sybilResistanceType?: string;
   subnetId?: string;
   platformChainId?: string;
   tps: {
@@ -61,7 +63,11 @@ export interface Validator {
   address: string;
   active: boolean;
   uptime: number;
-  weight: number;
+  /**
+   * Validator stake/weight amount in nAVAX (1 AVAX = 1e9 nAVAX).
+   * Kept as string to preserve precision for very large values.
+   */
+  weight: string;
   stakeUnit?: 'tokens' | 'weight';
   remainingBalance?: number;
   explorerUrl?: string;
