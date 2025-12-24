@@ -39,7 +39,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
 
     // Calculate total stake/weight (base units or integer if weight-mode)
     const total = validators.reduce((sum, v) => sum + getStakeBase(v), 0n);
-
+    
     // Sort validators by stake weight in descending order
     const sortedValidators = [...validators].sort((a, b) => {
       const aw = getStakeBase(a);

@@ -606,7 +606,7 @@ export function NetworkTopologyGraph() {
                 )}
                 
                 {/* Node content - same for all nodes */}
-                <div className="w-full h-full flex items-center justify-center">
+                <div className="w-full h-full flex items-center justify-center relative">
                   {chain.chainLogoUri ? (
                     <img
                       src={chain.chainLogoUri}
@@ -623,6 +623,36 @@ export function NetworkTopologyGraph() {
                       alt={chain.chainName}
                       className="w-2/3 h-2/3 object-contain rounded-full"
                     />
+                  )}
+                  {/* Santa Hat for C-Chain - Christmas Theme */}
+                  {isCenter && (
+                    <svg
+                      width={nodeSize * 0.7}
+                      height={nodeSize * 0.5}
+                      viewBox="0 0 40 28"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="absolute z-20"
+                      style={{
+                        top: `-${nodeSize * 0.35}px`,
+                        left: '50%',
+                        transform: 'translateX(-50%) rotate(8deg)',
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
+                      }}
+                    >
+                      {/* Hat base */}
+                      <path d="M6 24 C6 22 8 20 12 20 L28 20 C32 20 34 22 34 24 L34 26 L6 26 Z" fill="#dc2626" />
+                      {/* Hat cone */}
+                      <path d="M10 20 L20 4 L30 20 Z" fill="#dc2626" />
+                      {/* Hat fold/tip going to the right */}
+                      <path d="M20 4 Q28 2 36 8 Q34 12 30 14 L20 4" fill="#b91c1c" />
+                      {/* White fur trim at bottom */}
+                      <rect x="4" y="23" width="32" height="5" rx="2.5" fill="#f8fafc" />
+                      {/* Pompom */}
+                      <circle cx="36" cy="8" r="4" fill="#f8fafc">
+                        <animate attributeName="r" values="4;4.5;4" dur="2s" repeatCount="indefinite" />
+                      </circle>
+                    </svg>
                   )}
                 </div>
               </div>
