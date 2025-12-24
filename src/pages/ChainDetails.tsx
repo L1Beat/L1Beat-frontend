@@ -824,23 +824,23 @@ export function ChainDetails() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   {hasUptimeData ? (
-                                    <div className="flex items-center">
-                                      <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
-                                        <div 
-                                          className={`h-full rounded-full transition-all duration-500 ${
-                                            (validator.uptime || 0) >= 90 ? 'bg-green-500' :
-                                            (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
-                                          }`}
-                                          style={{ width: `${validator.uptime || 0}%` }}
-                                        ></div>
-                                      </div>
-                                      <span className={`text-sm font-medium min-w-[3rem] ${
-                                        (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
-                                        (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                                      }`}>
-                                        {Number.isFinite(validator.uptime) ? `${validator.uptime.toFixed(1)}%` : 'N/A'}
-                                      </span>
+                                  <div className="flex items-center">
+                                    <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                          (validator.uptime || 0) >= 90 ? 'bg-green-500' :
+                                          (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
+                                        }`}
+                                        style={{ width: `${validator.uptime || 0}%` }}
+                                      ></div>
                                     </div>
+                                    <span className={`text-sm font-medium min-w-[3rem] ${
+                                      (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
+                                      (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                                    }`}>
+                                        {Number.isFinite(validator.uptime) ? `${validator.uptime.toFixed(1)}%` : 'N/A'}
+                                    </span>
+                                  </div>
                                   ) : (
                                     <div className="flex items-center">
                                       <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">

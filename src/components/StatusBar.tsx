@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../hooks/useTheme';
 import { L1BeatLogo } from './L1BeatLogo';
+import { Snowfall } from './Snowfall';
 
 interface StatusBarProps {
   health?: HealthStatus | null;
@@ -61,9 +62,13 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
   };
 
   return (
-    <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
-      }`}>
-      {/* Alpha Warning Banner */}
+    <>
+      {/* Christmas Theme - Snowfall */}
+      <Snowfall />
+
+      <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}>
+        {/* Alpha Warning Banner */}
       <div className="bg-[#ef4444]/15 supports-[backdrop-filter]:bg-[#ef4444]/10 supports-[backdrop-filter]:backdrop-blur-md border-b border-[#ef4444]/20 px-6 py-2 flex items-center justify-center gap-2">
         <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
         <p className="text-sm font-medium text-[#ef4444]">
@@ -188,6 +193,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
       </div>
         </nav>
       )}
-    </div>
+      </div>
+    </>
   );
 }

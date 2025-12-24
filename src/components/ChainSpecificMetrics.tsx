@@ -116,6 +116,7 @@ export function ChainSpecificMetrics() {
   const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
+  const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
   const chartRefs = useRef<Record<string, ChartJSInstance<'line'> | null>>({});
   const reducedMotion = prefersReducedMotion();
 
@@ -126,6 +127,22 @@ export function ChainSpecificMetrics() {
 
   const isDark = theme === 'dark';
   const isMobile = useMediaQuery(breakpoints.sm);
+
+  // Note: there's no bulk "active addresses latest" endpoint; we compute this client-side
+  // with a bounded number of requests (cached) to avoid hammering the API.
+  const topChainsByDailyActive = useMemo(() => {
+    const getLatest = (c: Chain) => Number(dailyActiveLatestByChainId[c.chainId] ?? 0);
+    const sorted = [...chains].sort((a, b) => {
+      const aVal = getLatest(a);
+      const bVal = getLatest(b);
+      if (bVal !== aVal) return bVal - aVal;
+      return a.chainName.localeCompare(b.chainName);
+    });
+
+    const top = sorted.slice(0, 6);
+    if (selectedChain && !top.some(c => c.chainId === selectedChain.chainId)) top.push(selectedChain);
+    return top;
+  }, [chains, selectedChain, dailyActiveLatestByChainId]);
 
   // Load chains on mount
   useEffect(() => {
@@ -193,6 +210,56 @@ export function ChainSpecificMetrics() {
     }
     fetchChains();
   }, []);
+
+  // Background: compute latest daily active addresses per chain for ranking the quick-select row.
+  useEffect(() => {
+    if (!chains.length) return;
+
+    let cancelled = false;
+
+    const getActiveAddressLookupId = (chain: Chain) =>
+      (chain.evmChainId ? String(chain.evmChainId) : undefined) || chain.originalChainId || chain.chainId;
+
+    // Limit to a reasonable subset first (already sorted with C-Chain first and by cumulative tx),
+    // so we don't fire a request for every chain on initial load.
+    const candidateChains = chains.slice(0, 25);
+
+    async function run() {
+      const concurrency = 6;
+      const queue = [...candidateChains];
+      const results: Record<string, number> = {};
+
+      async function worker() {
+        while (queue.length && !cancelled) {
+          const chain = queue.shift();
+          if (!chain) return;
+
+          const lookupId = getActiveAddressLookupId(chain);
+          if (!lookupId) continue;
+
+          try {
+            const data = await getDailyActiveAddresses(lookupId, 7);
+            const latest = data?.[data.length - 1];
+            const value = Number(latest?.activeAddresses ?? latest?.value ?? 0);
+            results[chain.chainId] = Number.isFinite(value) ? value : 0;
+          } catch {
+            results[chain.chainId] = 0;
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      if (cancelled) return;
+
+      setDailyActiveLatestByChainId(prev => ({ ...prev, ...results }));
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chains]);
 
   // Load metrics when chain or timeframe changes
   useEffect(() => {
@@ -536,72 +603,122 @@ export function ChainSpecificMetrics() {
   return (
     <div className="space-y-6">
       {/* Section Header with Chain Selector */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#ef4444] to-[#dc2626] flex items-center justify-center shadow-sm">
-              <BarChart3 className="w-5 h-5 text-white" />
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <div className="flex flex-col gap-5">
+          {/* Top row: Title + dropdown */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ef4444] to-[#dc2626] flex items-center justify-center shadow-sm">
+                <BarChart3 className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">
+                  Chain-Specific Metrics
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Detailed metrics for individual chains
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                Chain-Specific Metrics
-              </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Detailed metrics for individual chains
-              </p>
+
+            {/* Chain Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-full sm:w-72 px-4 py-2.5 bg-muted/40 border border-border rounded-xl flex items-center justify-between hover:bg-muted/70 hover:border-[#ef4444]/20 transition-colors"
+              >
+                <span className="text-sm font-medium text-foreground truncate">
+                  {selectedChain?.chainName || 'Select Chain'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-full sm:w-72 bg-card border border-border rounded-xl shadow-lg z-10 max-h-80 overflow-y-auto">
+                  {chains.map((chain) => (
+                    <button
+                      key={chain.chainId}
+                      onClick={() => {
+                        setSelectedChain(chain);
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
+                        selectedChain?.chainId === chain.chainId
+                          ? 'bg-[#ef4444]/10 text-[#ef4444] font-medium'
+                          : 'text-foreground'
+                      }`}
+                    >
+                      {chain.chainName}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Chain Selector Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full sm:w-64 px-4 py-2.5 bg-muted/40 border border-border rounded-lg flex items-center justify-between hover:bg-muted/70 hover:border-[#ef4444]/20 transition-colors"
-            >
-              <span className="text-sm font-medium text-foreground">
-                {selectedChain?.chainName || 'Select Chain'}
-              </span>
-              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-full sm:w-64 bg-card border border-border rounded-lg shadow-lg z-10 max-h-80 overflow-y-auto">
-                {chains.map((chain) => (
-                  <button
-                    key={chain.chainId}
-                    onClick={() => {
-                      setSelectedChain(chain);
-                      setIsDropdownOpen(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
-                      selectedChain?.chainId === chain.chainId
-                        ? 'bg-[#ef4444]/10 text-[#ef4444] font-medium'
-                        : 'text-foreground'
-                    }`}
-                  >
-                    {chain.chainName}
-                  </button>
-                ))}
+          {/* Second row: Top chains + timeframe */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Quick select: top chains by Daily Active Addresses */}
+            {topChainsByDailyActive.length > 0 && (
+              <div className="flex items-center gap-3">
+                <div className="shrink-0">
+                  <div className="text-xs font-medium text-muted-foreground">Top chains</div>
+                  <div className="text-[11px] text-muted-foreground/80">by daily active addresses</div>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                  {topChainsByDailyActive.map((chain) => {
+                    const isActive = selectedChain?.chainId === chain.chainId;
+                    const logoSrc = chain.chainLogoUri || '/icon-dark-animated.svg';
+                    const latestDAA = Number(dailyActiveLatestByChainId[chain.chainId] ?? 0);
+                    return (
+                      <button
+                        key={chain.chainId}
+                        onClick={() => {
+                          setSelectedChain(chain);
+                          setIsDropdownOpen(false);
+                        }}
+                        title={`${chain.chainName}${Number.isFinite(latestDAA) && latestDAA > 0 ? ` • ${latestDAA.toLocaleString()} DAA` : ''}`}
+                        className={[
+                          'h-11 w-11 rounded-2xl border transition-all flex items-center justify-center shrink-0',
+                          'bg-muted/20 hover:bg-muted/40',
+                          isActive
+                            ? 'border-[#ef4444]/40 ring-2 ring-[#ef4444]/20'
+                            : 'border-border hover:border-[#ef4444]/20'
+                        ].join(' ')}
+                      >
+                        <img
+                          src={logoSrc}
+                          alt={chain.chainName}
+                          className="h-8 w-8 rounded-xl bg-muted/30 ring-1 ring-border"
+                          onError={(e) => {
+                            e.currentTarget.src = '/icon-dark-animated.svg';
+                            e.currentTarget.onerror = null;
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Timeframe Selector */}
-        <div className="mt-6 flex flex-wrap gap-2">
-          {[7, 30, 90, 360].map((days) => (
-            <button
-              key={days}
-              onClick={() => setTimeframe(days as TimeframeOption)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                timeframe === days
-                  ? 'bg-[#ef4444] text-white shadow-sm'
-                  : 'bg-muted/40 text-foreground hover:bg-muted/70 hover:border-[#ef4444]/20 border border-border'
-              }`}
-            >
-              {days === 360 ? '1Y' : `${days}D`}
-            </button>
-          ))}
+            {/* Timeframe Selector */}
+            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+              {[7, 30, 90, 360].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setTimeframe(days as TimeframeOption)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    timeframe === days
+                      ? 'bg-[#ef4444] text-white shadow-sm'
+                      : 'bg-muted/40 text-foreground hover:bg-muted/70 hover:border-[#ef4444]/20 border border-border'
+                  }`}
+                >
+                  {days === 360 ? '1Y' : `${days}D`}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

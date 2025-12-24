@@ -37,14 +37,46 @@ export function L1BeatLogo({
   return (
     <div className={`flex items-center justify-center ${currentSize.gap}`}>
       {/* Icon - Network nodes connected by a heartbeat pulse line */}
-      <svg
-        width={currentSize.iconSize}
-        height={currentSize.iconSize}
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="shrink-0"
-      >
+      <div className="relative shrink-0">
+        {/* Santa Hat - Christmas Theme */}
+        <svg
+          width={currentSize.iconSize * 0.7}
+          height={currentSize.iconSize * 0.5}
+          viewBox="0 0 36 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="absolute -top-[35%] -left-[10%] z-10 transform -rotate-12"
+          style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.2))' }}
+        >
+          {/* Hat body */}
+          <path
+            d="M4 20 Q2 20 2 18 L6 8 Q12 -2 24 6 L28 16 Q28 20 26 20 Z"
+            fill="#dc2626"
+          />
+          {/* Hat fold/curve at top */}
+          <path
+            d="M22 8 Q28 4 32 10 L28 16 Q24 10 22 8"
+            fill="#b91c1c"
+          />
+          {/* White fur trim */}
+          <ellipse cx="14" cy="21" rx="14" ry="3" fill="#f8fafc" />
+          {/* Pompom */}
+          <circle cx="32" cy="8" r="4" fill="#f8fafc">
+            <animate
+              attributeName="r"
+              values="4;4.5;4"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </circle>
+        </svg>
+        <svg
+          width={currentSize.iconSize}
+          height={currentSize.iconSize}
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
         <defs>
           <linearGradient id={`iconGradient-${theme}`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={iconColor} stopOpacity="1" />
@@ -128,7 +160,7 @@ export function L1BeatLogo({
         </circle>
         
         <circle cx="42" cy="32" r="2.5" fill={iconColor} opacity="0.8" />
-        
+
         {/* Subtle connecting lines between some nodes for network effect */}
         <path
           d="M 14 16 L 22 20"
@@ -151,7 +183,8 @@ export function L1BeatLogo({
           strokeLinecap="round"
           opacity="0.3"
         />
-      </svg>
+        </svg>
+      </div>
 
       {/* Text Logo */}
       {!iconOnly && (
