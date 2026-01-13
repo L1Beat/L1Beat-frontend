@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories } from '../api';
-import { Chain, HealthStatus } from '../types';
+import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages } from '../api';
+import { Chain, HealthStatus, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
+import { ChainTableView } from '../components/ChainTableView';
 import { StatusBar } from '../components/StatusBar';
 import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
@@ -12,7 +13,7 @@ import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
-import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Filter, Search, Table } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
@@ -23,11 +24,12 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
+  const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
 
   async function fetchData() {
     try {
@@ -43,12 +45,25 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData, tpsMap] = await Promise.all([
+      const [chainsData, healthData, categoriesData, tpsMap, teleporterData] = await Promise.all([
         getChains(filters),
         getHealth(),
         getCategories(),
-        getAllChainsTPSLatest()
+        getAllChainsTPSLatest(),
+        getTeleporterMessages()
       ]);
+
+      // Calculate ICM message counts per chain
+      const icmCounts: Record<string, number> = {};
+      if (teleporterData && teleporterData.messages) {
+        teleporterData.messages.forEach((msg) => {
+          // Add to source chain count
+          icmCounts[msg.source] = (icmCounts[msg.source] || 0) + msg.value;
+          // Add to target chain count
+          icmCounts[msg.target] = (icmCounts[msg.target] || 0) + msg.value;
+        });
+      }
+      setIcmMessageCounts(icmCounts);
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
       const chainsWithLatestTps = chainsData.map((chain) => {
@@ -242,6 +257,36 @@ export function Dashboard() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* View Toggle Buttons */}
+              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-dark-800/50">
+                <motion.button
+                  onClick={() => setViewMode('grid')}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-[#ef4444] text-white'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </motion.button>
+                <motion.button
+                  onClick={() => setViewMode('table')}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-[#ef4444] text-white'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  title="Table View"
+                >
+                  <Table className="w-4 h-4" />
+                </motion.button>
+              </div>
+
               {/* Compact Search Bar */}
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -308,32 +353,8 @@ export function Dashboard() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                {viewMode === 'list' ? (
-                  <motion.div
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-                    initial="hidden"
-                    animate="visible"
-                    variants={{
-                      visible: {
-                        transition: {
-                          staggerChildren: 0.03
-                        }
-                      }
-                    }}
-                  >
-                    {filteredChains.map((chain) => (
-                      <motion.div
-                        key={chain.chainId}
-                        variants={{
-                          hidden: { opacity: 0, y: 20 },
-                          visible: { opacity: 1, y: 0 }
-                        }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
-                      >
-                        <ChainCard chain={chain} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
+                {viewMode === 'table' ? (
+                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} />
                 ) : (
                   <ChainListView chains={filteredChains} />
                 )}
