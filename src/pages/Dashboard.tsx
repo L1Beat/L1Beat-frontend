@@ -218,28 +218,28 @@ export function Dashboard() {
     <div className="min-h-screen bg-background text-foreground">
       <StatusBar health={health} />
       
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
         <NetworkMetricsBar />
         
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
-            <h2 className="text-xl font-semibold">
+            <Network className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
+            <h2 className="text-lg sm:text-xl font-semibold">
               Avalanche Interchain Messaging
             </h2>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <NetworkTopologyGraph />
             <TeleporterSankeyDiagram />
           </div>
         </div>
 
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
-              <h2 className="text-xl font-semibold">
+              <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <h2 className="text-lg sm:text-xl font-semibold">
                 Active Chains
               </h2>
               <AnimatePresence>
@@ -256,9 +256,9 @@ export function Dashboard() {
               </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               {/* View Toggle Buttons */}
-              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-dark-800/50">
+              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-dark-800/50 w-fit">
                 <motion.button
                   onClick={() => setViewMode('grid')}
                   whileHover={{ scale: 1.05 }}
@@ -288,7 +288,7 @@ export function Dashboard() {
               </div>
 
               {/* Compact Search Bar */}
-              <div className="relative group">
+              <div className="relative group flex-1 sm:flex-initial">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#ef4444] transition-colors" />
                 </div>
@@ -297,7 +297,7 @@ export function Dashboard() {
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
+                  className="block w-full sm:w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
                 />
               </div>
 
@@ -306,7 +306,7 @@ export function Dashboard() {
                 onClick={() => setIsFilterModalOpen(true)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
                   (selectedCategory || showChainsWithoutValidators)
                     ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
                     : 'bg-white dark:bg-dark-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-800 hover:border-gray-300 dark:hover:border-gray-600'

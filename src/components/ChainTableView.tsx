@@ -205,7 +205,7 @@ export const ChainTableView = memo(function ChainTableView({
   return (
     <div className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
       {/* Table container with horizontal scroll */}
-      <div className="overflow-x-auto scrollbar-hide">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[1050px]">
           <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
             <tr className="group">
@@ -427,9 +427,9 @@ export const ChainTableView = memo(function ChainTableView({
       </div>
 
       {/* Mobile scroll indicator */}
-      <div className="lg:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 px-4 py-2">
+      <div className="md:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 px-3 py-2">
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <AlertCircle className="w-4 h-4" />
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>Scroll horizontally to see all columns</span>
         </div>
       </div>
