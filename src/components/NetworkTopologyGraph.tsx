@@ -326,10 +326,10 @@ export function NetworkTopologyGraph() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-        <div className="h-[400px] flex flex-col items-center justify-center">
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network topology...</p>
+          <p className="mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-300">Loading network topology...</p>
         </div>
       </div>
     );
@@ -337,10 +337,10 @@ export function NetworkTopologyGraph() {
 
   if (error || chains.length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-        <div className="h-[400px] flex flex-col items-center justify-center">
-          <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
-          <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
+          <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mb-4" />
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 text-center mb-4 px-4">
             {error || 'No network data available'}
           </p>
           <button 
@@ -356,10 +356,10 @@ export function NetworkTopologyGraph() {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
             Avalanche Universe
           </h3>
           {chains.length > 0 && (
@@ -407,7 +407,7 @@ export function NetworkTopologyGraph() {
       
       <div 
         ref={containerRef} 
-        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[400px] w-full overflow-hidden"
+        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[300px] sm:h-[400px] w-full overflow-hidden"
       >
         {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
         <div className="absolute inset-0 overflow-hidden">
