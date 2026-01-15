@@ -236,7 +236,7 @@ export function Dashboard() {
         </div>
 
         <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
               <h2 className="text-lg sm:text-xl font-semibold">
