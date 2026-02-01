@@ -5,7 +5,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../hooks/useTheme';
 import { L1BeatLogo } from './L1BeatLogo';
-import { Snowfall } from './Snowfall';
 
 interface StatusBarProps {
   health?: HealthStatus | null;
@@ -63,9 +62,6 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
 
   return (
     <>
-      {/* Christmas Theme - Snowfall */}
-      <Snowfall />
-
       <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
         }`}>
         {/* Alpha Warning Banner */}
