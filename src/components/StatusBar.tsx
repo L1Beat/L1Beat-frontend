@@ -5,7 +5,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../hooks/useTheme';
 import { L1BeatLogo } from './L1BeatLogo';
-import { Snowfall } from './Snowfall';
 
 interface StatusBarProps {
   health?: HealthStatus | null;
@@ -63,25 +62,22 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
 
   return (
     <>
-      {/* Christmas Theme - Snowfall */}
-      <Snowfall />
-
       <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
         }`}>
         {/* Alpha Warning Banner */}
-      <div className="bg-[#ef4444]/15 supports-[backdrop-filter]:bg-[#ef4444]/10 supports-[backdrop-filter]:backdrop-blur-md border-b border-[#ef4444]/20 px-6 py-2 flex items-center justify-center gap-2">
-        <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
-        <p className="text-sm font-medium text-[#ef4444]">
+      <div className="bg-[#ef4444]/15 supports-[backdrop-filter]:bg-[#ef4444]/10 supports-[backdrop-filter]:backdrop-blur-md border-b border-[#ef4444]/20 px-4 sm:px-6 py-2 flex items-center justify-center gap-2">
+        <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444] flex-shrink-0" />
+        <p className="text-xs sm:text-sm font-medium text-[#ef4444] text-center">
               L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
             </p>
       </div>
 
       {/* Main Navigation */}
       <header className="border-b border-border bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Health Status */}
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-6">
               <button
                 onClick={handleLogoClick}
                 className="relative transform transition-all duration-300 hover:scale-105 focus:outline-none group"
@@ -98,9 +94,9 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
               </button>
 
               {health && (
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="hidden sm:flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm text-green-500">
+                  <span className="text-xs sm:text-sm text-green-500 whitespace-nowrap">
                     All Systems Operational
                   </span>
                 </div>
@@ -145,8 +141,8 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
       {/* Tabbed Navigation */}
       {showTabs && (
         <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="flex gap-1 overflow-x-auto md:overflow-visible">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="flex gap-1 overflow-x-auto scrollbar-hide">
               {navTabs.map(({ id, label, path, icon: Icon, comingSoon }) => {
                 if (comingSoon) {
                   return (
@@ -155,11 +151,11 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
                       className="relative group"
                     >
                       <button
-                        className="flex items-center gap-2 px-4 py-3 border-b-2 border-transparent text-muted-foreground transition-colors whitespace-nowrap cursor-not-allowed opacity-75"
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b-2 border-transparent text-muted-foreground transition-colors whitespace-nowrap cursor-not-allowed opacity-75"
                         disabled
                       >
-                        <Icon className="w-4 h-4" />
-                        {label}
+                        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="text-xs sm:text-sm">{label}</span>
                       </button>
                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-card border border-border text-foreground text-sm rounded-md shadow-lg whitespace-nowrap z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                         Coming Soon
@@ -171,7 +167,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
 
                 const active = isActive(path);
                 const tabClassName = `
-                  flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap
+                  flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b-2 transition-colors whitespace-nowrap
                   ${active 
                     ? 'border-[#ef4444] text-foreground' 
                     : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -184,8 +180,8 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
                     to={path}
                     className={tabClassName}
                   >
-                    <Icon className="w-4 h-4" />
-                    {label}
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="text-xs sm:text-sm">{label}</span>
                   </Link>
                 );
               })}

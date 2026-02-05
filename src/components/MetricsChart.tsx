@@ -102,7 +102,7 @@ export function MetricsChart({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
               {description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+                <p className="text-sm text-muted-foreground">{description}</p>
               )}
             </div>
           </div>
@@ -136,14 +136,14 @@ export function MetricsChart({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
               {description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+                <p className="text-sm text-muted-foreground">{description}</p>
               )}
             </div>
           </div>
         </div>
         <div className="h-64 flex flex-col items-center justify-center">
-          <AlertTriangle className="h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600 dark:text-gray-300 text-center">
+          <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground text-center">
             No data available
           </p>
         </div>
@@ -279,7 +279,7 @@ export function MetricsChart({
           display: false,
         },
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.08)',
           drawBorder: false,
         },
         ticks: {
@@ -305,12 +305,12 @@ export function MetricsChart({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
               {description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+                <p className="text-sm text-muted-foreground">{description}</p>
               )}
             </div>
           </div>
           {lastUpdated && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{lastUpdated}</p>
+            <p className="text-sm text-muted-foreground mt-1">{lastUpdated}</p>
           )}
         </div>
         <div className="flex items-center gap-4">

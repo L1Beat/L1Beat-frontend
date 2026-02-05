@@ -293,19 +293,19 @@ export function ChainDetails() {
       <StatusBar health={health} />
       
       <div className="flex-1">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
             <button
               onClick={() => navigate('/')}
-              className="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors"
+              className="inline-flex items-center px-3 sm:px-4 py-2 border border-border shadow-sm text-xs sm:text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
               Back to Dashboard
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {chain.network && (
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
                   chain.network === 'mainnet'
                     ? 'bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20'
                     : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20'
@@ -318,17 +318,17 @@ export function ChainDetails() {
                   href={chain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-3 py-1 border border-border rounded-lg text-sm font-medium text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
+                  className="inline-flex items-center px-2 sm:px-3 py-1 border border-border rounded-lg text-xs sm:text-sm font-medium text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
                 >
                   <ExternalLink className="w-3 h-3 mr-1.5" />
-                  Explorer
+                  <span className="hidden sm:inline">Explorer</span>
                 </a>
               )}
             </div>
           </div>
 
           {/* Compact Chain Header Card */}
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.45)] mb-6">
+          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.45)] mb-4 sm:mb-6">
             {/* Decorative background */}
             <div aria-hidden className="pointer-events-none absolute inset-0">
               <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#ef4444]/15 blur-3xl" />
@@ -336,24 +336,24 @@ export function ChainDetails() {
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/5 dark:to-white/5" />
             </div>
 
-            <div className="relative p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="relative p-4 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
                 {/* Left Column: Chain Info */}
-                <div className="flex flex-col gap-6">
-                  <div className="flex items-start gap-5">
+                <div className="flex flex-col gap-4 sm:gap-6">
+                  <div className="flex items-start gap-3 sm:gap-5">
                     {chain.chainLogoUri ? (
                       <div className="relative flex-shrink-0">
                         <img
                           src={chain.chainLogoUri}
                           alt={`${chain.chainName} logo`}
-                          className="w-20 h-20 rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
                           onError={(e) => {
                             e.currentTarget.src = "/icon-dark-animated.svg";
                             e.currentTarget.onerror = null;
                           }}
                         />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
-                          <CheckCircle className="w-3.5 h-3.5 text-white" />
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
+                          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
                         </div>
                       </div>
                     ) : (
@@ -361,17 +361,17 @@ export function ChainDetails() {
                         <img
                           src="/icon-dark-animated.svg"
                           alt={`${chain.chainName} logo`}
-                          className="w-20 h-20 rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
                         />
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
-                          <CheckCircle className="w-3.5 h-3.5 text-white" />
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
+                          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
                         </div>
                       </div>
                     )}
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{chain.chainName}</h1>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                        <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-foreground">{chain.chainName}</h1>
                         {chain.networkToken && (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 text-xs font-medium text-foreground border border-border">
                             {chain.networkToken.logoUri && (
@@ -387,12 +387,12 @@ export function ChainDetails() {
                       </div>
 
                       {chain.description && (
-                        <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
+                        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-3 sm:mb-4 line-clamp-2">
                           {chain.description}
                         </p>
                       )}
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         {chain.categories?.map(category => (
                           <span
                             key={category}
@@ -414,19 +414,19 @@ export function ChainDetails() {
                   </div>
 
                   {/* Actions Row */}
-                  <div className="flex items-center gap-3 border-t border-border pt-4">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 border-t border-border pt-3 sm:pt-4">
                     {chain.website && (
                       <a
                         href={chain.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-muted/40 hover:bg-muted/70 text-foreground transition-colors"
+                        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium border border-border bg-muted/40 hover:bg-muted/70 text-foreground transition-colors"
                       >
-                        <Globe className="w-4 h-4" />
-                        Website
+                        <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">Website</span>
                       </a>
                     )}
-                    <div className="h-8 w-px bg-border mx-1"></div>
+                    <div className="hidden sm:block h-8 w-px bg-border mx-1"></div>
                     {chain.socials?.map((social, index) => {
                       const Icon = getSocialIcon(social.name);
                       return (
@@ -435,10 +435,10 @@ export function ChainDetails() {
                           href={social.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2 rounded-lg border border-transparent text-muted-foreground hover:text-[#ef4444] hover:bg-[#ef4444]/10 hover:border-[#ef4444]/15 transition-all"
+                          className="p-1.5 sm:p-2 rounded-lg border border-transparent text-muted-foreground hover:text-[#ef4444] hover:bg-[#ef4444]/10 hover:border-[#ef4444]/15 transition-all"
                           title={social.name}
                         >
-                          <Icon className="w-5 h-5" />
+                          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                         </a>
                       );
                     })}
@@ -449,32 +449,32 @@ export function ChainDetails() {
                 </div>
 
                 {/* Right Column: Compact Metrics Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-2 mb-1">
-                      <Activity className="w-4 h-4 text-[#ef4444]" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                      <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">TPS</span>
                     </div>
-                    <p className={`text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
+                    <p className={`text-lg sm:text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
                   </div>
 
-                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-2 mb-1">
-                      <Users className="w-4 h-4 text-[#ef4444]" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Validators</span>
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444]">{chain.validators.length}</p>
+                    <p className="text-lg sm:text-xl font-bold text-[#ef4444]">{chain.validators.length}</p>
                   </div>
 
-                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-2 mb-1">
-                      <Globe className="w-4 h-4 text-[#ef4444]" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                      <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Type</span>
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444]">
+                    <p className="text-base sm:text-xl font-bold text-[#ef4444]">
                       {(() => {
                         const name = (chain.chainName || '').toLowerCase();
                         const evmId = String(chain.originalChainId || '');
@@ -485,13 +485,13 @@ export function ChainDetails() {
                     </p>
                   </div>
 
-                  <div className="relative overflow-hidden rounded-xl p-3 border border-[#ef4444]/20 bg-card">
+                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-2 mb-1">
-                      <Shield className="w-4 h-4 text-[#ef4444]" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                      <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
                       <span className="text-xs font-medium text-[#ef4444]">Sybil resistance</span>
                     </div>
-                    <p className="text-xl font-bold text-[#ef4444] truncate" title={chain.sybilResistanceType || 'N/A'}>
+                    <p className="text-sm sm:text-xl font-bold text-[#ef4444] truncate" title={chain.sybilResistanceType || 'N/A'}>
                       {chain.sybilResistanceType || 'N/A'}
                     </p>
                   </div>
@@ -500,12 +500,12 @@ export function ChainDetails() {
             </div>
 
             {/* Compact Technical Details Grid */}
-            <div className="border-t border-border bg-muted/20 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+            <div className="border-t border-border bg-muted/20 p-4 sm:p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
                   <span className="text-xs font-medium text-muted-foreground mb-1">EVM Chain ID</span>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono font-semibold text-foreground">{chain.originalChainId || chain.chainId}</code>
+                    <code className="text-xs sm:text-sm font-mono font-semibold text-foreground">{chain.originalChainId || chain.chainId}</code>
                     <button
                       onClick={() => handleCopy('chainId', chain.originalChainId || chain.chainId)}
                       className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted"
@@ -516,10 +516,10 @@ export function ChainDetails() {
                 </div>
 
                 {chain.subnetId && (
-                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
                     <span className="text-xs font-medium text-muted-foreground mb-1">Subnet ID</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.subnetId}>
+                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.subnetId}>
                         {chain.subnetId.slice(0, 8)}...{chain.subnetId.slice(-8)}
                       </code>
                       <button
@@ -533,10 +533,10 @@ export function ChainDetails() {
                 )}
 
                 {chain.platformChainId && (
-                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
                     <span className="text-xs font-medium text-muted-foreground mb-1">Blockchain ID</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.platformChainId}>
+                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.platformChainId}>
                         {chain.platformChainId.slice(0, 8)}...{chain.platformChainId.slice(-8)}
                       </code>
                       <button
@@ -550,10 +550,10 @@ export function ChainDetails() {
                 )}
 
                 {chain.rpcUrls && chain.rpcUrls.length > 0 && (
-                  <div className="flex flex-col p-3 bg-card rounded-lg border border-border">
+                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
                     <span className="text-xs font-medium text-muted-foreground mb-1">RPC URL</span>
                     <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono text-foreground truncate mr-2" title={chain.rpcUrls[0]}>
+                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.rpcUrls[0]}>
                         {chain.rpcUrls[0].replace('https://', '')}
                       </code>
                       <button
@@ -568,7 +568,7 @@ export function ChainDetails() {
               </div>
               
               {lastUpdate && (
-                <div className="mt-4 flex justify-end">
+                <div className="mt-3 sm:mt-4 flex justify-end">
                   <span className="text-xs text-muted-foreground">
                     Last updated: {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
                   </span>
@@ -579,9 +579,9 @@ export function ChainDetails() {
           </div>
 
             {/* Tab Navigation */}
-            <div className="mb-6">
-              <div className="border-b border-border">
-                <nav className="flex space-x-8" aria-label="Tabs">
+            <div className="mb-4 sm:mb-6">
+              <div className="border-b border-border overflow-x-auto">
+                <nav className="flex space-x-4 sm:space-x-8 min-w-max" aria-label="Tabs">
                   {[
                     { id: 'validators', name: 'Validators', icon: Users, disabled: false },
                     { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: true },
@@ -598,7 +598,7 @@ export function ChainDetails() {
                           onMouseLeave={() => setHoveredTab(null)}
                           disabled={tab.disabled}
                           className={`
-                            group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-all
+                            group inline-flex items-center py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-all whitespace-nowrap
                             ${isActive
                               ? 'border-[#ef4444] text-[#ef4444]'
                               : tab.disabled
@@ -608,7 +608,7 @@ export function ChainDetails() {
                           `}
                         >
                           <Icon className={`
-                            -ml-0.5 mr-2 h-5 w-5
+                            -ml-0.5 mr-1.5 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5
                             ${isActive
                               ? 'text-[#ef4444]'
                               : tab.disabled
@@ -631,10 +631,10 @@ export function ChainDetails() {
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Validators Tab */}
               {activeTab === 'validators' && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {/* Stake Distribution Chart */}
                   <StakeDistributionChart
                     validators={chain.validators}
@@ -646,10 +646,10 @@ export function ChainDetails() {
                   {/* Validators Table */}
                   <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                     {/* Validators Header & Search */}
-                    <div className="p-6 border-b border-border bg-muted/20">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                         <div>
-                          <h3 className="text-xl font-semibold text-foreground">
+                          <h3 className="text-lg sm:text-xl font-semibold text-foreground">
                             Validators
                           </h3>
                         </div>
@@ -672,11 +672,11 @@ export function ChainDetails() {
                       <table className="min-w-full divide-y divide-border">
                         <thead className="bg-muted/20">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               Status
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'address') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -696,7 +696,7 @@ export function ChainDetails() {
                               </div>
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'stake') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -725,7 +725,7 @@ export function ChainDetails() {
                               </div>
                             </th>
                             <th 
-                              className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'uptime') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -736,7 +736,8 @@ export function ChainDetails() {
                               }}
                             >
                               <div className="flex items-center gap-1">
-                              {hasUptimeData ? 'Avg Validator Uptime' : (hasRemainingBalanceData ? 'Remaining Balance' : 'Avg Validator Uptime')}
+                              <span className="hidden sm:inline">{hasUptimeData ? 'Avg Validator Uptime' : (hasRemainingBalanceData ? 'Remaining Balance' : 'Avg Validator Uptime')}</span>
+                              <span className="sm:hidden">{hasUptimeData ? 'Uptime' : (hasRemainingBalanceData ? 'Balance' : 'Uptime')}</span>
                                 {sortBy === 'uptime' && (
                                   <span className="text-[#ef4444]">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
@@ -894,10 +895,10 @@ export function ChainDetails() {
 
                     {/* Show More Button */}
                     {filteredValidators.length > 10 && !showAllValidators && (
-                      <div className="px-6 py-4 bg-muted/20 border-t border-border">
+                      <div className="px-4 sm:px-6 py-3 sm:py-4 bg-muted/20 border-t border-border">
                         <button
                           onClick={() => setShowAllValidators(true)}
-                          className="w-full text-center text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] text-sm font-medium py-2 transition-colors"
+                          className="w-full text-center text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] text-xs sm:text-sm font-medium py-2 transition-colors"
                         >
                           Show All Validators ({filteredValidators.length})
                         </button>
@@ -906,8 +907,8 @@ export function ChainDetails() {
 
                     {/* No Results */}
                     {searchTerm && filteredValidators.length === 0 && (
-                      <div className="px-6 py-8 text-center">
-                        <p className="text-muted-foreground">
+                      <div className="px-4 sm:px-6 py-6 sm:py-8 text-center">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                           No validators found matching "{searchTerm}"
                         </p>
                       </div>

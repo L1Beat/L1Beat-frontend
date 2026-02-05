@@ -22,7 +22,7 @@ const formatTPS = (tps: Chain['tps']) => {
 };
 
 const getTPSColor = (tpsStr: string) => {
-  if (tpsStr === 'N/A') return 'text-gray-400 dark:text-gray-500';
+  if (tpsStr === 'N/A') return 'text-muted-foreground';
   if (tpsStr === '< 1.0') return 'text-yellow-500 dark:text-yellow-400';
   const tps = Number(tpsStr);
   if (tps >= 1) return 'text-green-500 dark:text-green-400';
@@ -37,7 +37,7 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate }: 
   
   return (
     <motion.div
-      className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 p-4 cursor-pointer group transition-all duration-300 hover:border-[#ef4444]/50 hover:shadow-[0_10px_25px_-5px_rgba(239,68,68,0.1),0_8px_10px_-6px_rgba(239,68,68,0.05)]"
+      className="bg-card rounded-xl border border-border p-4 cursor-pointer group transition-all duration-300 hover:border-[#ef4444]/50"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -86,16 +86,16 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate }: 
                 {tpsValue} TPS
               </span>
             </div>
-            <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+            <div className="w-px h-3 bg-border flex-shrink-0"></div>
             <div className="flex items-center gap-1 min-w-[30px]">
-              <Server className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+              <Server className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground">
                 {chain.validatorCount || 0}
               </span>
             </div>
-            <div className="w-px h-3 bg-gray-200 dark:bg-gray-700 flex-shrink-0"></div>
+            <div className="w-px h-3 bg-border flex-shrink-0"></div>
             <div className="flex items-center gap-1 cursor-help" title="Coming Soon">
-              <Shield className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              <Shield className="w-3 h-3 text-muted-foreground flex-shrink-0" />
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-500/20">
                 STAGE
               </span>
@@ -126,7 +126,7 @@ export const ChainListView = memo(function ChainListView({ chains }: ChainListVi
   }, [navigate]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
       {chains.map((chain, index) => (
         <ChainListItem
           key={chain.chainId}

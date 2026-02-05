@@ -4,58 +4,74 @@
 
 @layer base {
   :root {
-    --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    
-    /* Design system colors - Light mode */
+    /* Shadows - light mode gets proper shadows (iOS HIG) */
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --card-shadow-hover: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+    /* Design system colors - Light mode (iOS HIG) */
     --background: #ffffff;
-    --foreground: oklch(0.145 0 0);
-    --card: #ffffff;
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: #030213;
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.95 0.0058 264.53);
-    --secondary-foreground: #030213;
-    --muted: #ececf0;
-    --muted-foreground: #717182;
-    --accent: #e9ebef;
-    --accent-foreground: #030213;
+    --foreground: #000000;
+    --card: #f2f2f7;
+    --card-foreground: #000000;
+    --popover: #ffffff;
+    --popover-foreground: #000000;
+    --primary: #000000;
+    --primary-foreground: #ffffff;
+    --secondary: #f2f2f7;
+    --secondary-foreground: #000000;
+    --muted: #f2f2f7;
+    --muted-foreground: rgba(60, 60, 67, 0.6);
+    --foreground-tertiary: rgba(60, 60, 67, 0.3);
+    --accent: #e5e5ea;
+    --accent-foreground: #000000;
     --destructive: #d4183d;
     --destructive-foreground: #ffffff;
-    --border: rgba(0, 0, 0, 0.1);
+    --border: rgba(0, 0, 0, 0.15);
+    --separator: rgba(60, 60, 67, 0.12);
     --input: transparent;
-    --input-background: #f3f3f5;
+    --input-background: #f2f2f7;
     --switch-background: #cbced4;
-    --ring: oklch(0.708 0 0);
+    --ring: rgba(60, 60, 67, 0.3);
     --radius: 0.625rem;
+
+    /* Fill colors for interactive elements */
+    --fill: rgba(120, 120, 128, 0.2);
+    --fill-secondary: rgba(120, 120, 128, 0.16);
+    --fill-tertiary: rgba(120, 120, 128, 0.12);
   }
 
   .dark {
-    --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.4);
-    
-    /* Design system colors - Dark mode */
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
+    /* iOS HIG: No shadows in dark mode - use background elevation instead */
+    --card-shadow: none;
+    --card-shadow-hover: none;
+
+    /* Design system colors - Dark mode (iOS HIG) */
+    --background: #000000;
+    --foreground: #ffffff;
+    --card: #1c1c1e;
+    --card-foreground: #ffffff;
+    --popover: #1c1c1e;
+    --popover-foreground: #ffffff;
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    --secondary: #2c2c2e;
+    --secondary-foreground: #ffffff;
+    --muted: #2c2c2e;
+    --muted-foreground: rgba(235, 235, 245, 0.6);
+    --foreground-tertiary: rgba(235, 235, 245, 0.3);
+    --accent: #2c2c2e;
+    --accent-foreground: #ffffff;
+    --destructive: #ff453a;
+    --destructive-foreground: #ffffff;
+    --border: rgba(84, 84, 88, 0.36);
+    --separator: rgba(84, 84, 88, 0.36);
+    --input: #2c2c2e;
+    --ring: rgba(235, 235, 245, 0.3);
+
+    /* Fill colors for interactive elements */
+    --fill: rgba(120, 120, 128, 0.36);
+    --fill-secondary: rgba(120, 120, 128, 0.32);
+    --fill-tertiary: rgba(120, 120, 128, 0.24);
   }
 
   body {
@@ -71,6 +87,7 @@
 @layer components {
   .stat-card {
     @apply relative overflow-hidden bg-card rounded-xl border border-border transition-all duration-300;
+    box-shadow: var(--card-shadow);
   }
 
   .stat-card::before {
@@ -80,6 +97,7 @@
 
   .chart-container {
     @apply bg-card rounded-xl border border-border transition-all duration-300;
+    box-shadow: var(--card-shadow);
   }
 
   .status-pill {
@@ -87,20 +105,20 @@
   }
 
   .status-pill.healthy {
-    @apply bg-green-100 dark:bg-green-500/20 text-green-800 dark:text-green-300;
+    @apply bg-green-50 text-green-700 dark:bg-green-500/20 dark:text-green-300;
   }
 
   .status-pill.warning {
-    @apply bg-yellow-100 dark:bg-yellow-500/20 text-yellow-800 dark:text-yellow-300;
+    @apply bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300;
   }
 
   .status-pill.error {
-    @apply bg-red-100 dark:bg-red-500/20 text-red-800 dark:text-red-300;
+    @apply bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-300;
   }
 
   /* Theme toggle button styles */
   .theme-toggle {
-    @apply p-2 rounded-lg bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 transition-all duration-200 border border-gray-200 dark:border-dark-600;
+    @apply p-2 rounded-lg bg-muted hover:bg-accent border border-border transition-all duration-200;
   }
 
   .theme-toggle svg {
@@ -396,34 +414,34 @@
 
   /* Markdown styles */
   .prose {
-    @apply text-gray-900 dark:text-gray-100;
+    @apply text-foreground;
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
 
   .prose h1 {
-    @apply text-3xl font-bold mb-6 mt-8 text-gray-900 dark:text-white;
+    @apply text-3xl font-bold mb-6 mt-8 text-foreground;
   }
 
   .prose h2 {
-    @apply text-2xl font-semibold mb-4 mt-6 text-gray-900 dark:text-white;
+    @apply text-2xl font-semibold mb-4 mt-6 text-foreground;
   }
 
   .prose h3 {
-    @apply text-xl font-semibold mb-3 mt-5 text-gray-900 dark:text-white;
+    @apply text-xl font-semibold mb-3 mt-5 text-foreground;
   }
 
   .prose p,
   .prose em {
-    @apply mb-4 leading-relaxed text-gray-700 dark:text-gray-300 break-words;
+    @apply mb-4 leading-relaxed text-foreground break-words;
   }
 
   .prose ul {
-    @apply list-none mb-4 space-y-2 text-gray-700 dark:text-gray-300;
+    @apply list-none mb-4 space-y-2 text-foreground;
   }
 
   .prose ol {
-    @apply list-decimal list-inside mb-4 space-y-2 text-gray-700 dark:text-gray-300;
+    @apply list-decimal list-inside mb-4 space-y-2 text-foreground;
   }
 
   .prose li {
@@ -435,23 +453,23 @@
   }
 
   .prose thead {
-    @apply border-b-2 border-gray-200 dark:border-gray-700;
+    @apply border-b-2 border-border;
   }
 
   .prose th {
-    @apply text-left p-2 text-sm font-medium text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700;
+    @apply text-left p-2 text-sm font-medium text-foreground border border-border;
   }
 
   .prose td {
-    @apply p-2 text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700;
+    @apply p-2 text-sm text-foreground border border-border;
   }
 
   .prose hr {
-    @apply my-8 border-gray-200 dark:border-gray-700;
+    @apply my-8 border-border;
   }
 
   .prose blockquote {
-    @apply border-l-4 border-gray-200 dark:border-gray-700 pl-4 my-4 italic text-gray-600 dark:text-gray-400;
+    @apply border-l-4 border-border pl-4 my-4 italic text-muted-foreground;
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
@@ -507,13 +525,13 @@
 
   .prose ul ul>li::before {
     content: '◦';
-    @apply absolute left-0 text-gray-500 dark:text-gray-400 text-base;
+    @apply absolute left-0 text-muted-foreground text-base;
   }
 
   /* Level 3+ nested lists */
   .prose ul ul ul>li::before {
     content: '▪';
-    @apply absolute left-0 text-gray-400 dark:text-gray-500 text-sm;
+    @apply absolute left-0 text-muted-foreground text-sm;
   }
 
   /* Ordered list nested items - remove numbers, use custom bullets */
@@ -532,18 +550,18 @@
 
   .prose ol ol>li::before {
     content: '◦';
-    @apply absolute left-0 text-gray-500 dark:text-gray-400 text-base;
+    @apply absolute left-0 text-muted-foreground text-base;
   }
 
   .prose ol ol ol>li::before {
     content: '▪';
-    @apply absolute left-0 text-gray-400 dark:text-gray-500 text-sm;
+    @apply absolute left-0 text-muted-foreground text-sm;
   }
 
   /* Mixed nested lists */
   .prose ol ul>li::before {
     content: '◦';
-    @apply absolute left-0 text-gray-500 dark:text-gray-400;
+    @apply absolute left-0 text-muted-foreground;
   }
 
   /* Special styling for definition-like list items */
@@ -710,67 +728,15 @@
     animation: none !important;
   }
 
-  .snowfall-container {
-    display: none !important;
-  }
 }
 
-/* Christmas Theme - Snowfall Animation */
-@keyframes snowfall {
-  0% {
-    top: -10px;
-    opacity: 0;
-  }
-  5% {
-    opacity: 1;
-  }
-  95% {
-    opacity: 1;
-  }
-  100% {
-    top: 100vh;
-    opacity: 0;
-  }
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-@keyframes snowfall-sway {
-  0%, 100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  25% {
-    transform: translateX(15px) rotate(90deg);
-  }
-  50% {
-    transform: translateX(0) rotate(180deg);
-  }
-  75% {
-    transform: translateX(-15px) rotate(270deg);
-  }
-}
-
-.snowfall-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-  overflow: hidden;
-}
-
-.snowflake {
-  position: absolute;
-  top: -10px;
-  background: radial-gradient(circle at 30% 30%, #ffffff, #e0e7ff);
-  border-radius: 50%;
-  animation-name: snowfall, snowfall-sway;
-  animation-timing-function: linear, ease-in-out;
-  animation-iteration-count: infinite, infinite;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
-}
-
-/* Dark mode snowflakes have more glow */
-.dark .snowflake {
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9), 0 0 12px rgba(200, 220, 255, 0.4);
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }

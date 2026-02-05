@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories } from '../api';
-import { Chain, HealthStatus } from '../types';
+import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages } from '../api';
+import { Chain, HealthStatus, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
+import { ChainTableView } from '../components/ChainTableView';
 import { StatusBar } from '../components/StatusBar';
 import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
@@ -12,7 +13,7 @@ import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
-import { LayoutGrid, Activity, Network, Filter, Search } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Filter, Search, Table } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
@@ -23,11 +24,12 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
+  const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
 
   async function fetchData() {
     try {
@@ -43,12 +45,25 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData, tpsMap] = await Promise.all([
+      const [chainsData, healthData, categoriesData, tpsMap, teleporterData] = await Promise.all([
         getChains(filters),
         getHealth(),
         getCategories(),
-        getAllChainsTPSLatest()
+        getAllChainsTPSLatest(),
+        getTeleporterMessages()
       ]);
+
+      // Calculate ICM message counts per chain
+      const icmCounts: Record<string, number> = {};
+      if (teleporterData && teleporterData.messages) {
+        teleporterData.messages.forEach((msg) => {
+          // Add to source chain count
+          icmCounts[msg.source] = (icmCounts[msg.source] || 0) + msg.value;
+          // Add to target chain count
+          icmCounts[msg.target] = (icmCounts[msg.target] || 0) + msg.value;
+        });
+      }
+      setIcmMessageCounts(icmCounts);
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
       const chainsWithLatestTps = chainsData.map((chain) => {
@@ -159,13 +174,13 @@ export function Dashboard() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4"
+        className="min-h-screen bg-background flex items-center justify-center p-4"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full"
+          className="bg-card border border-border rounded-lg p-6 max-w-md w-full"
         >
           <div className="text-center">
             <Activity className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -203,28 +218,28 @@ export function Dashboard() {
     <div className="min-h-screen bg-background text-foreground">
       <StatusBar health={health} />
       
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
         <NetworkMetricsBar />
         
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Network className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
-            <h2 className="text-xl font-semibold">
+            <Network className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
+            <h2 className="text-lg sm:text-xl font-semibold">
               Avalanche Interchain Messaging
             </h2>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <NetworkTopologyGraph />
             <TeleporterSankeyDiagram />
           </div>
         </div>
 
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="flex items-center gap-2">
-              <LayoutGrid className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
-              <h2 className="text-xl font-semibold">
+              <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <h2 className="text-lg sm:text-xl font-semibold">
                 Active Chains
               </h2>
               <AnimatePresence>
@@ -241,18 +256,48 @@ export function Dashboard() {
               </AnimatePresence>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+              {/* View Toggle Buttons */}
+              <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-card w-fit">
+                <motion.button
+                  onClick={() => setViewMode('grid')}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-[#ef4444] text-white'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </motion.button>
+                <motion.button
+                  onClick={() => setViewMode('table')}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`p-2 rounded transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-[#ef4444] text-white'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                  title="Table View"
+                >
+                  <Table className="w-4 h-4" />
+                </motion.button>
+              </div>
+
               {/* Compact Search Bar */}
-              <div className="relative group">
+              <div className="relative group flex-1 sm:flex-initial">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#ef4444] transition-colors" />
+                  <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-[#ef4444] transition-colors" />
                 </div>
                 <input
                   type="text"
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
+                  className="block w-full sm:w-64 pl-10 pr-4 py-2.5 border border-border rounded-lg text-sm bg-muted text-foreground placeholder-muted-foreground transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-background"
                 />
               </div>
 
@@ -261,10 +306,10 @@ export function Dashboard() {
                 onClick={() => setIsFilterModalOpen(true)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
                   (selectedCategory || showChainsWithoutValidators)
                     ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
-                    : 'bg-white dark:bg-dark-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-800 hover:border-gray-300 dark:hover:border-gray-600'
+                    : 'bg-card border-border text-foreground hover:bg-muted'
                 }`}
               >
                 <Filter className="w-4 h-4" />
@@ -296,7 +341,7 @@ export function Dashboard() {
                 transition={{ duration: 0.3 }}
                 className="text-center py-12"
               >
-                <p className="text-gray-500 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   No chains found matching "{searchTerm}"
                 </p>
               </motion.div>
@@ -308,32 +353,8 @@ export function Dashboard() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                {viewMode === 'list' ? (
-                  <motion.div
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-                    initial="hidden"
-                    animate="visible"
-                    variants={{
-                      visible: {
-                        transition: {
-                          staggerChildren: 0.03
-                        }
-                      }
-                    }}
-                  >
-                    {filteredChains.map((chain) => (
-                      <motion.div
-                        key={chain.chainId}
-                        variants={{
-                          hidden: { opacity: 0, y: 20 },
-                          visible: { opacity: 1, y: 0 }
-                        }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
-                      >
-                        <ChainCard chain={chain} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
+                {viewMode === 'table' ? (
+                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} />
                 ) : (
                   <ChainListView chains={filteredChains} />
                 )}

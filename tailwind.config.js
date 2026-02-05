@@ -4,6 +4,18 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+      fontSize: {
+        // iOS HIG type scale
+        'display': ['34px', { lineHeight: '41px', fontWeight: '700' }],
+        'heading': ['28px', { lineHeight: '34px', fontWeight: '700' }],
+        'title': ['22px', { lineHeight: '28px', fontWeight: '600' }],
+        'body': ['17px', { lineHeight: '22px', fontWeight: '400' }],
+        'label': ['15px', { lineHeight: '20px', fontWeight: '500' }],
+        'caption': ['13px', { lineHeight: '18px', fontWeight: '400' }],
+      },
       colors: {
         // Brand colors
         brand: {
@@ -40,8 +52,8 @@ export default {
           500: '#64748b',
           600: '#475569',
           700: '#334155',
-          800: '#1a1a1a', // Updated to brand card background
-          900: '#0a0a0a', // Updated to brand dark background
+          800: '#1c1c1e', // iOS HIG elevated surface
+          900: '#000000', // iOS HIG pure black background
           950: '#020617'
         }
       },

@@ -326,10 +326,10 @@ export function NetworkTopologyGraph() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-        <div className="h-[400px] flex flex-col items-center justify-center">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
+        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading network topology...</p>
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading network topology...</p>
         </div>
       </div>
     );
@@ -337,10 +337,10 @@ export function NetworkTopologyGraph() {
 
   if (error || chains.length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-        <div className="h-[400px] flex flex-col items-center justify-center">
-          <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
-          <p className="text-gray-600 dark:text-gray-300 text-center mb-4">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
+        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
+          <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mb-4" />
+          <p className="text-sm sm:text-base text-muted-foreground text-center mb-4 px-4">
             {error || 'No network data available'}
           </p>
           <button 
@@ -356,14 +356,14 @@ export function NetworkTopologyGraph() {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-6 h-full">
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
             Avalanche Universe
           </h3>
           {chains.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+            <span className="px-2 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground border border-border">
               {chains.length} Chains
             </span>
           )}
@@ -407,7 +407,7 @@ export function NetworkTopologyGraph() {
       
       <div 
         ref={containerRef} 
-        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[400px] w-full overflow-hidden"
+        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[300px] sm:h-[400px] w-full overflow-hidden"
       >
         {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
         <div className="absolute inset-0 overflow-hidden">
@@ -623,36 +623,6 @@ export function NetworkTopologyGraph() {
                       alt={chain.chainName}
                       className="w-2/3 h-2/3 object-contain rounded-full"
                     />
-                  )}
-                  {/* Santa Hat for C-Chain - Christmas Theme */}
-                  {isCenter && (
-                    <svg
-                      width={nodeSize * 0.7}
-                      height={nodeSize * 0.5}
-                      viewBox="0 0 40 28"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="absolute z-20"
-                      style={{
-                        top: `-${nodeSize * 0.35}px`,
-                        left: '50%',
-                        transform: 'translateX(-50%) rotate(8deg)',
-                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
-                      }}
-                    >
-                      {/* Hat base */}
-                      <path d="M6 24 C6 22 8 20 12 20 L28 20 C32 20 34 22 34 24 L34 26 L6 26 Z" fill="#dc2626" />
-                      {/* Hat cone */}
-                      <path d="M10 20 L20 4 L30 20 Z" fill="#dc2626" />
-                      {/* Hat fold/tip going to the right */}
-                      <path d="M20 4 Q28 2 36 8 Q34 12 30 14 L20 4" fill="#b91c1c" />
-                      {/* White fur trim at bottom */}
-                      <rect x="4" y="23" width="32" height="5" rx="2.5" fill="#f8fafc" />
-                      {/* Pompom */}
-                      <circle cx="36" cy="8" r="4" fill="#f8fafc">
-                        <animate attributeName="r" values="4;4.5;4" dur="2s" repeatCount="indefinite" />
-                      </circle>
-                    </svg>
                   )}
                 </div>
               </div>
