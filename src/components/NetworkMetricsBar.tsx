@@ -119,13 +119,13 @@ export function NetworkMetricsBar() {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
       {/* Network TPS */}
       {networkTPS && (
-        <div className="bg-white dark:bg-dark-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
+        <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="p-1.5 sm:p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
               <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Network TPS</p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Network TPS</p>
               <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{formatTPS(networkTPS.totalTps)}</p>
             </div>
           </div>
@@ -134,13 +134,13 @@ export function NetworkMetricsBar() {
 
       {/* 24h Tx Count */}
       {dailyTxCount && (
-        <div className="bg-white dark:bg-dark-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
+        <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="p-1.5 sm:p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
               <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Tx Count</p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Tx Count</p>
               <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{formatNumber(dailyTxCount.value)}</p>
             </div>
           </div>
@@ -149,13 +149,13 @@ export function NetworkMetricsBar() {
 
       {/* Max TPS */}
       {maxTPS && (
-        <div className="bg-white dark:bg-dark-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
+        <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="p-1.5 sm:p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
               <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Max TPS</p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily Max TPS</p>
               <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{formatTPS(maxTPS.value)}</p>
             </div>
           </div>
@@ -164,13 +164,13 @@ export function NetworkMetricsBar() {
 
       {/* Total Validators */}
       {validatorTotal && (
-        <div className="bg-white dark:bg-dark-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
+        <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="p-1.5 sm:p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Total Validators</p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium group-hover:text-[#ef4444]/80 transition-colors">Total Validators</p>
               <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{validatorTotal.totalValidators.toLocaleString()}</p>
             </div>
           </div>
@@ -179,13 +179,13 @@ export function NetworkMetricsBar() {
 
       {/* Total Messages (ICM) */}
       {teleporterData && (
-        <div className="bg-white dark:bg-dark-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
+        <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="p-1.5 sm:p-2 bg-[#ef4444]/10 rounded-lg group-hover:bg-[#ef4444]/20 transition-colors">
               <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444]" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily ICM Messages</p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium group-hover:text-[#ef4444]/80 transition-colors">Daily ICM Messages</p>
               <p className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">{formatNumber(teleporterData.messages.reduce((sum, msg) => sum + msg.value, 0))}</p>
             </div>
           </div>

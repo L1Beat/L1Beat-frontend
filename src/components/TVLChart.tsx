@@ -122,7 +122,7 @@ export function TVLChart() {
               <TrendingUp className="w-5 h-5 text-[#ef4444]" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Value Locked (TVL)</h3>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Historical TVL data across all chains
             </p>
           </div>
@@ -211,7 +211,7 @@ export function TVLChart() {
       y: {
         beginAtZero: true,
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+          color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.08)',
           drawBorder: false,
         },
         ticks: {
@@ -234,7 +234,7 @@ export function TVLChart() {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Value Locked (TVL)</h3>
           </div>
           {tvlHealth && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Last updated: {format(new Date(tvlHealth.lastUpdate), 'MMM d, h:mm a')}
             </p>
           )}

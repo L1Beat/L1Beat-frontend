@@ -689,10 +689,10 @@ export function TeleporterSankeyDiagram() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-300">Loading message flow data...</p>
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading message flow data...</p>
         </div>
       </div>
     );
@@ -700,10 +700,10 @@ export function TeleporterSankeyDiagram() {
 
   if (!data) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mb-4" />
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 text-center mb-4 px-4">
+          <p className="text-sm sm:text-base text-muted-foreground text-center mb-4 px-4">
             No Teleporter message data available
           </p>
           <button 
@@ -719,23 +719,23 @@ export function TeleporterSankeyDiagram() {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+    <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-base sm:text-lg font-semibold text-foreground">
             Avalanche Interchain Messages (ICM)
           </h3>
         </div>
         
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
           {/* Toggle switch for daily/weekly data */}
-          <div className="bg-gray-100 dark:bg-dark-700 rounded-full p-1 flex items-center">
+          <div className="bg-muted rounded-full p-1 flex items-center">
             <button
               onClick={() => setTimeframe('daily')}
               className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'daily'
                   ? 'bg-[#ef4444] text-white'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                  : 'text-muted-foreground hover:bg-accent'
               }`}
             >
               Daily
@@ -745,7 +745,7 @@ export function TeleporterSankeyDiagram() {
               className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 timeframe === 'weekly'
                   ? 'bg-[#ef4444] text-white'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600'
+                  : 'text-muted-foreground hover:bg-accent'
               }`}
             >
               Weekly
@@ -754,7 +754,7 @@ export function TeleporterSankeyDiagram() {
           
           <button 
             onClick={fetchData}
-            className="p-1.5 rounded-full bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors"
+            className="p-1.5 rounded-full bg-muted text-muted-foreground hover:bg-accent transition-colors"
             title="Refresh data"
           >
             <RefreshCw className="w-4 h-4" />

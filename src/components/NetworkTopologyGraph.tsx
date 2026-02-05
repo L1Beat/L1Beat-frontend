@@ -326,10 +326,10 @@ export function NetworkTopologyGraph() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-300">Loading network topology...</p>
+          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading network topology...</p>
         </div>
       </div>
     );
@@ -337,10 +337,10 @@ export function NetworkTopologyGraph() {
 
   if (error || chains.length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
         <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
           <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mb-4" />
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 text-center mb-4 px-4">
+          <p className="text-sm sm:text-base text-muted-foreground text-center mb-4 px-4">
             {error || 'No network data available'}
           </p>
           <button 
@@ -356,14 +356,14 @@ export function NetworkTopologyGraph() {
   }
 
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-md p-4 sm:p-6 h-full">
+    <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
             Avalanche Universe
           </h3>
           {chains.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+            <span className="px-2 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground border border-border">
               {chains.length} Chains
             </span>
           )}

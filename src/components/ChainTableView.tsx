@@ -45,7 +45,7 @@ const formatTPS = (tps: Chain["tps"]) => {
 };
 
 const getTPSColor = (tpsStr: string) => {
-  if (tpsStr === "N/A") return "text-gray-400 dark:text-gray-500";
+  if (tpsStr === "N/A") return "text-muted-foreground";
   if (tpsStr === "< 1.0") return "text-yellow-500 dark:text-yellow-400";
   const tps = Number(tpsStr);
   if (tps >= 1) return "text-green-500 dark:text-green-400";
@@ -77,7 +77,7 @@ const NetworkStatusBadge = () => (
 );
 
 const ComingSoonBadge = () => (
-  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-500/10 text-gray-500 dark:text-gray-400 border border-gray-500/20">
+  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground border border-border">
     <Clock className="w-3 h-3" />
     Soon
   </span>
@@ -107,7 +107,7 @@ const SortHeader = ({
       onClick={() => onSort(field)}
     >
       <div className="flex items-center gap-2 select-none">
-        <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
         {isActive && sortConfig.order === "asc" && (
@@ -117,7 +117,7 @@ const SortHeader = ({
           <ArrowDown className="w-3.5 h-3.5 text-[#ef4444]" />
         )}
         {!isActive && (
-          <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
       </div>
     </th>
@@ -203,18 +203,18 @@ export const ChainTableView = memo(function ChainTableView({
   });
 
   return (
-    <div className="bg-white dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
       {/* Table container with horizontal scroll */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1050px]">
-          <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800">
+          <thead className="bg-muted border-b border-border">
             <tr className="group">
               <SortHeader
                 field="chainId"
                 label="Chain ID"
                 sortConfig={sortConfig}
                 onSort={handleSort}
-                className="sticky left-0 bg-gray-50 dark:bg-gray-900/50 z-10"
+                className="sticky left-0 bg-muted z-10"
               />
               <SortHeader
                 field="chainName"
@@ -271,13 +271,13 @@ export const ChainTableView = memo(function ChainTableView({
                 onSort={handleSort}
               />
               <th className="px-4 py-3 text-left">
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Last Updated
                 </span>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-border">
             {sortedChains.map((chain, index) => {
               const tpsValue = formatTPS(chain.tps);
               const tpsColor = getTPSColor(tpsValue);
@@ -292,11 +292,11 @@ export const ChainTableView = memo(function ChainTableView({
                     delay: Math.min(index * 0.02, 0.3),
                     ease: [0.25, 0.46, 0.45, 0.94],
                   }}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-900/30 cursor-pointer transition-colors group"
+                  className="hover:bg-muted cursor-pointer transition-colors group"
                   onClick={() => handleNavigate(chain.chainId)}
                 >
                   {/* Chain ID - sticky */}
-                  <td className="px-3 py-3 sticky left-0 bg-white dark:bg-[#1a1a1a] group-hover:bg-gray-50 dark:group-hover:bg-gray-900/30 z-10">
+                  <td className="px-3 py-3 sticky left-0 bg-card group-hover:bg-muted z-10">
                     <code className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/50 px-2 py-1 rounded">
                       {chain.evmChainId || "N/A"}
                     </code>
@@ -346,7 +346,7 @@ export const ChainTableView = memo(function ChainTableView({
                   {/* Active Validators */}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
-                      <Server className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                      <Server className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {chain.validatorCount || 0}
                       </span>
@@ -384,7 +384,7 @@ export const ChainTableView = memo(function ChainTableView({
                       const count = icmMessageCounts[chain.chainName] || 0;
                       if (count === 0) {
                         return (
-                          <span className="text-sm text-gray-400 dark:text-gray-500">
+                          <span className="text-sm text-muted-foreground">
                             N/A
                           </span>
                         );
@@ -414,7 +414,7 @@ export const ChainTableView = memo(function ChainTableView({
 
                   {/* Last Updated */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap">
                       <Clock className="w-3 h-3" />
                       <span>{formatTimestamp(chain.tps?.timestamp)}</span>
                     </div>
@@ -427,8 +427,8 @@ export const ChainTableView = memo(function ChainTableView({
       </div>
 
       {/* Mobile scroll indicator */}
-      <div className="md:hidden border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 px-3 py-2">
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+      <div className="md:hidden border-t border-border bg-muted px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>Scroll horizontally to see all columns</span>
         </div>

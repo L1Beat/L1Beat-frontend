@@ -174,13 +174,13 @@ export function Dashboard() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4"
+        className="min-h-screen bg-background flex items-center justify-center p-4"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full"
+          className="bg-card border border-border rounded-lg p-6 max-w-md w-full"
         >
           <div className="text-center">
             <Activity className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -258,7 +258,7 @@ export function Dashboard() {
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               {/* View Toggle Buttons */}
-              <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-700 rounded-lg p-1 bg-white dark:bg-dark-800/50 w-fit">
+              <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-card w-fit">
                 <motion.button
                   onClick={() => setViewMode('grid')}
                   whileHover={{ scale: 1.05 }}
@@ -266,7 +266,7 @@ export function Dashboard() {
                   className={`p-2 rounded transition-all ${
                     viewMode === 'grid'
                       ? 'bg-[#ef4444] text-white'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : 'text-muted-foreground hover:bg-muted'
                   }`}
                   title="Grid View"
                 >
@@ -279,7 +279,7 @@ export function Dashboard() {
                   className={`p-2 rounded transition-all ${
                     viewMode === 'table'
                       ? 'bg-[#ef4444] text-white'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : 'text-muted-foreground hover:bg-muted'
                   }`}
                   title="Table View"
                 >
@@ -290,14 +290,14 @@ export function Dashboard() {
               {/* Compact Search Bar */}
               <div className="relative group flex-1 sm:flex-initial">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400 group-focus-within:text-[#ef4444] transition-colors" />
+                  <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-[#ef4444] transition-colors" />
                 </div>
                 <input
                   type="text"
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full sm:w-64 pl-10 pr-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-dark-800/50 text-gray-900 dark:text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-white dark:focus:bg-dark-800"
+                  className="block w-full sm:w-64 pl-10 pr-4 py-2.5 border border-border rounded-lg text-sm bg-muted text-foreground placeholder-muted-foreground transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-background"
                 />
               </div>
 
@@ -309,7 +309,7 @@ export function Dashboard() {
                 className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
                   (selectedCategory || showChainsWithoutValidators)
                     ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
-                    : 'bg-white dark:bg-dark-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-800 hover:border-gray-300 dark:hover:border-gray-600'
+                    : 'bg-card border-border text-foreground hover:bg-muted'
                 }`}
               >
                 <Filter className="w-4 h-4" />
@@ -341,7 +341,7 @@ export function Dashboard() {
                 transition={{ duration: 0.3 }}
                 className="text-center py-12"
               >
-                <p className="text-gray-500 dark:text-gray-400">
+                <p className="text-muted-foreground">
                   No chains found matching "{searchTerm}"
                 </p>
               </motion.div>

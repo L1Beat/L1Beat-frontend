@@ -83,7 +83,7 @@ export const ChainCard = memo(function ChainCard({ chain }: ChainCardProps) {
         
         <div className="grid grid-cols-2 gap-4">
           <motion.div
-            className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50"
+            className="p-3 rounded-lg bg-muted"
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.2 }}
           >
@@ -109,7 +109,7 @@ export const ChainCard = memo(function ChainCard({ chain }: ChainCardProps) {
           </motion.div>
 
           <motion.div
-            className="p-3 rounded-lg bg-gray-50 dark:bg-dark-800/50"
+            className="p-3 rounded-lg bg-muted"
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.2 }}
           >
@@ -137,7 +137,7 @@ export const ChainCard = memo(function ChainCard({ chain }: ChainCardProps) {
 
         {/* Category Badges */}
         {chain.categories && chain.categories.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
+          <div className="mt-4 pt-4 border-t border-border">
             <div className="flex flex-wrap gap-2">
               {chain.categories.slice(0, 3).map(category => (
                 <span
@@ -170,7 +170,7 @@ export const ChainCard = memo(function ChainCard({ chain }: ChainCardProps) {
         )}
 
         {chain.networkToken && (
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
+          <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-center gap-2">
               {chain.networkToken.logoUri && (
                 <img

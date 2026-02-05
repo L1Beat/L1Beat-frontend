@@ -136,7 +136,7 @@ export function TimeRangeSlider({
   return (
     <div className="mt-4 px-2">
       {/* Date labels */}
-      <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+      <div className="flex justify-between text-xs text-muted-foreground mb-1">
         <span>{formatDate(data[startIndex]?.date || '')}</span>
         <span>{formatDate(data[endIndex]?.date || '')}</span>
       </div>
@@ -172,18 +172,18 @@ export function TimeRangeSlider({
         </svg>
 
         {/* Dimmed areas outside selection */}
-        <div 
+        <div
           className="absolute top-0 bottom-0 left-0"
-          style={{ 
+          style={{
             width: `${startPercent}%`,
-            backgroundColor: isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(240, 240, 240, 0.8)'
+            backgroundColor: isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(0, 0, 0, 0.06)'
           }}
         />
-        <div 
+        <div
           className="absolute top-0 bottom-0 right-0"
-          style={{ 
+          style={{
             width: `${100 - endPercent}%`,
-            backgroundColor: isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(240, 240, 240, 0.8)'
+            backgroundColor: isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(0, 0, 0, 0.06)'
           }}
         />
 
@@ -234,11 +234,11 @@ export function TimeRangeSlider({
 
       {/* Full date range */}
       <div className="flex justify-between text-[10px] mt-1.5">
-        <span className="text-gray-500 dark:text-gray-400">{formatDate(data[0]?.date || '')}</span>
-        <span className="text-gray-400 dark:text-gray-500">
+        <span className="text-muted-foreground">{formatDate(data[0]?.date || '')}</span>
+        <span className="text-muted-foreground">
           Drag to select range
         </span>
-        <span className="text-gray-500 dark:text-gray-400">{formatDate(data[data.length - 1]?.date || '')}</span>
+        <span className="text-muted-foreground">{formatDate(data[data.length - 1]?.date || '')}</span>
       </div>
     </div>
   );
