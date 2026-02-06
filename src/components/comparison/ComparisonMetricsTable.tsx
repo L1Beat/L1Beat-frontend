@@ -1,7 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Chain, TPSHistory, CumulativeTxCount, DailyTxCount } from '../../types';
-import { Activity, Server, TrendingUp, Loader2, BarChart3 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Activity, Server, Loader2, BarChart3 } from 'lucide-react';
 
 interface ChainComparisonData {
   chain: Chain;
@@ -20,16 +19,22 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
 }: ComparisonMetricsTableProps) {
   const metrics = useMemo(() => {
     const chains = comparisonChains.map(data => {
-      const tpsValue = data.chain.tps?.value || 0;
+      // Compute latest TPS from history since /chains endpoint doesn't include it
+      const latestTps = data.tpsHistory.length > 0
+        ? data.tpsHistory[data.tpsHistory.length - 1].totalTps
+        : (data.chain.tps?.value || 0);
       const validatorCount = data.chain.validatorCount || 0;
-      const cumulativeTxValue = data.chain.cumulativeTxCount?.value || 0;
+      // Compute cumulative tx from history since /chains endpoint doesn't include it
+      const latestCumulativeTx = data.cumulativeTx.length > 0
+        ? data.cumulativeTx[data.cumulativeTx.length - 1].value
+        : (data.chain.cumulativeTxCount?.value || 0);
 
       return {
         chainId: data.chain.chainId,
         chainName: data.chain.chainName,
-        tps: tpsValue,
+        tps: latestTps,
         validators: validatorCount,
-        cumulativeTx: cumulativeTxValue,
+        cumulativeTx: latestCumulativeTx,
         loading: data.loading
       };
     });
@@ -106,26 +111,15 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
                     {chain.loading ? (
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-lg font-bold ${
-                            best
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {formatTPS(chain.tps)}
-                        </span>
-                        {best && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                          >
-                            <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />
-                          </motion.div>
-                        )}
-                      </div>
+                      <span
+                        className={`text-lg font-bold ${
+                          best
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-foreground'
+                        }`}
+                      >
+                        {formatTPS(chain.tps)}
+                      </span>
                     )}
                   </td>
                 );
@@ -147,26 +141,15 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
                     {chain.loading ? (
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-lg font-bold ${
-                            best
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {chain.validators}
-                        </span>
-                        {best && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                          >
-                            <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />
-                          </motion.div>
-                        )}
-                      </div>
+                      <span
+                        className={`text-lg font-bold ${
+                          best
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-foreground'
+                        }`}
+                      >
+                        {chain.validators}
+                      </span>
                     )}
                   </td>
                 );
@@ -190,26 +173,15 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
                     ) : chain.cumulativeTx === 0 ? (
                       <span className="text-sm text-muted-foreground">N/A</span>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-lg font-bold ${
-                            best
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          {formatCumulativeTx(chain.cumulativeTx)}
-                        </span>
-                        {best && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                          >
-                            <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />
-                          </motion.div>
-                        )}
-                      </div>
+                      <span
+                        className={`text-lg font-bold ${
+                          best
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-foreground'
+                        }`}
+                      >
+                        {formatCumulativeTx(chain.cumulativeTx)}
+                      </span>
                     )}
                   </td>
                 );
