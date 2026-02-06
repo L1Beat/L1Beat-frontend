@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { RefreshCw, Clock, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Plus, X } from 'lucide-react';
+import { RefreshCw, Clock, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Plus, X, Share2 } from 'lucide-react';
 import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TimeRangeSlider } from './TimeRangeSlider';
@@ -140,18 +141,66 @@ const METRICS = [
 
 export function AvalancheNetworkMetrics() {
   const { theme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Multi-metric data storage: { metricId: MetricData[] }
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
-  // Multiple selected metrics
-  const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(['networkTPS']);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const chartRef = useRef<ChartJSInstance<'line'>>(null);
   const reducedMotion = prefersReducedMotion();
-  
+  const [copied, setCopied] = useState(false);
+
+  // Read timeframe from URL or default to 7
+  const timeframeParam = searchParams.get('networkTimeframe');
+  const timeframe = useMemo(() => {
+    const parsed = parseInt(timeframeParam || '7', 10);
+    if ([7, 30, 90, 360].includes(parsed)) {
+      return parsed as TimeframeOption;
+    }
+    return 7 as TimeframeOption;
+  }, [timeframeParam]);
+
+  // Read selected metrics from URL or default to ['networkTPS']
+  const metricsParam = searchParams.get('networkMetrics');
+  const selectedMetrics = useMemo(() => {
+    if (!metricsParam) return ['networkTPS'] as MetricType[];
+    const parsed = metricsParam.split(',').filter(m =>
+      METRICS.some(metric => metric.id === m)
+    ) as MetricType[];
+    return parsed.length > 0 ? parsed.slice(0, 3) : ['networkTPS'] as MetricType[];
+  }, [metricsParam]);
+
+  // Update URL with current state
+  const updateUrl = useCallback((newTimeframe?: TimeframeOption, newMetrics?: MetricType[]) => {
+    const newParams = new URLSearchParams(searchParams);
+
+    if (newTimeframe !== undefined) {
+      newParams.set('networkTimeframe', String(newTimeframe));
+    }
+
+    if (newMetrics !== undefined) {
+      if (newMetrics.length > 0) {
+        newParams.set('networkMetrics', newMetrics.join(','));
+      } else {
+        newParams.delete('networkMetrics');
+      }
+    }
+
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Copy share URL to clipboard
+  const handleCopyShareUrl = useCallback(() => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
+
   // Range selection state
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(0);
@@ -203,17 +252,19 @@ export function AvalancheNetworkMetrics() {
   // Add a metric
   const handleAddMetric = useCallback((metricId: MetricType) => {
     if (!selectedMetrics.includes(metricId)) {
-      setSelectedMetrics(prev => [...prev, metricId]);
+      const newMetrics = [...selectedMetrics, metricId];
+      updateUrl(undefined, newMetrics);
     }
     setIsDropdownOpen(false);
-  }, [selectedMetrics]);
+  }, [selectedMetrics, updateUrl]);
 
   // Remove a metric
   const handleRemoveMetric = useCallback((metricId: MetricType) => {
     if (selectedMetrics.length > 1) {
-      setSelectedMetrics(prev => prev.filter(m => m !== metricId));
+      const newMetrics = selectedMetrics.filter(m => m !== metricId);
+      updateUrl(undefined, newMetrics);
     }
-  }, [selectedMetrics]);
+  }, [selectedMetrics, updateUrl]);
 
   // Export chart as PNG
   // Export dropdown state
@@ -435,7 +486,7 @@ export function AvalancheNetworkMetrics() {
   }, [timeframe, selectedMetrics.join(',')]); // Re-fetch when metrics change
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
-    setTimeframe(newTimeframe);
+    updateUrl(newTimeframe, undefined);
   };
 
   // Calculate average for primary metric - MUST be before any conditional returns
@@ -702,6 +753,15 @@ export function AvalancheNetworkMetrics() {
                 </button>
               ))}
             </div>
+
+            {/* Share Button */}
+            <button
+              onClick={handleCopyShareUrl}
+              className="p-2 rounded-lg bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors"
+              title={copied ? 'Copied!' : 'Copy share link'}
+            >
+              <Share2 className={`w-4 h-4 ${copied ? 'text-green-500' : ''}`} />
+            </button>
 
             {/* Export Dropdown */}
             <div className="relative">

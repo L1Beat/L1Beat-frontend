@@ -2,9 +2,10 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
-import { Chain, DailyTxCount, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory, DailyActiveAddresses } from '../types';
-import { ChevronDown, BarChart3, Users, Activity, Fuel, Download } from 'lucide-react';
+import { Chain } from '../types';
+import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
 import { TimeRangeSlider } from './TimeRangeSlider';
@@ -110,15 +111,16 @@ const METRICS = [
 
 export function ChainSpecificMetrics() {
   const { theme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [chains, setChains] = useState<Chain[]>([]);
   const [selectedChain, setSelectedChain] = useState<Chain | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
   const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
   const chartRefs = useRef<Record<string, ChartJSInstance<'line'> | null>>({});
   const reducedMotion = prefersReducedMotion();
+  const [copied, setCopied] = useState(false);
 
   // Range selection states for each metric
   const [rangeStates, setRangeStates] = useState<Record<string, { start: number; end: number }>>({});
@@ -126,6 +128,55 @@ export function ChainSpecificMetrics() {
   const [exportDropdownStates, setExportDropdownStates] = useState<Record<string, boolean>>({});
 
   const isDark = theme === 'dark';
+
+  // Read timeframe from URL
+  const timeframeParam = searchParams.get('chainMetricsTimeframe');
+  const timeframe = useMemo(() => {
+    const parsed = parseInt(timeframeParam || '7', 10);
+    if ([7, 14, 30, 90, 360].includes(parsed)) {
+      return parsed as TimeframeOption;
+    }
+    return 7 as TimeframeOption;
+  }, [timeframeParam]);
+
+  // Read chain from URL
+  const chainParam = searchParams.get('chainMetricsChain');
+
+  // Update URL with current state
+  const updateUrl = useCallback((chainId: string | null, newTimeframe?: number) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (chainId) {
+      newParams.set('chainMetricsChain', chainId);
+    } else {
+      newParams.delete('chainMetricsChain');
+    }
+    if (newTimeframe && newTimeframe !== 7) {
+      newParams.set('chainMetricsTimeframe', String(newTimeframe));
+    } else if (newTimeframe === 7) {
+      newParams.delete('chainMetricsTimeframe');
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Handle timeframe change
+  const handleTimeframeChange = useCallback((newTimeframe: TimeframeOption) => {
+    updateUrl(selectedChain?.chainId || null, newTimeframe);
+  }, [selectedChain, updateUrl]);
+
+  // Handle chain change
+  const handleChainChange = useCallback((chain: Chain) => {
+    setSelectedChain(chain);
+    updateUrl(chain.chainId, timeframe);
+  }, [timeframe, updateUrl]);
+
+  // Share button handler
+  const handleShare = useCallback(() => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
   const isMobile = useMediaQuery(breakpoints.sm);
 
   // Note: there's no bulk "active addresses latest" endpoint; we compute this client-side
@@ -196,10 +247,21 @@ export function ChainSpecificMetrics() {
           const aTxCount = Number(a.cumulativeTxCount?.value ?? 0);
           const bTxCount = Number(b.cumulativeTxCount?.value ?? 0);
           if (bTxCount !== aTxCount) return bTxCount - aTxCount;
-          // Stable tie-breaker (prevents “random” feeling when many are 0)
+          // Stable tie-breaker (prevents "random" feeling when many are 0)
           return a.chainName.localeCompare(b.chainName);
         });
         setChains(sortedChains);
+
+        // Check if URL has a chain param and find that chain
+        if (chainParam) {
+          const chainFromUrl = sortedChains.find(c => c.chainId === chainParam);
+          if (chainFromUrl) {
+            setSelectedChain(chainFromUrl);
+            return;
+          }
+        }
+
+        // Default to C-Chain or first chain
         const cChain = sortedChains.find(isCChain);
         setSelectedChain(cChain || sortedChains[0]);
       } catch (err) {
@@ -209,7 +271,7 @@ export function ChainSpecificMetrics() {
       }
     }
     fetchChains();
-  }, []);
+  }, [chainParam]);
 
   // Background: compute latest daily active addresses per chain for ranking the quick-select row.
   useEffect(() => {
@@ -639,7 +701,7 @@ export function ChainSpecificMetrics() {
                     <button
                       key={chain.chainId}
                       onClick={() => {
-                        setSelectedChain(chain);
+                        handleChainChange(chain);
                         setIsDropdownOpen(false);
                       }}
                       className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
@@ -674,7 +736,7 @@ export function ChainSpecificMetrics() {
                       <button
                         key={chain.chainId}
                         onClick={() => {
-                          setSelectedChain(chain);
+                          handleChainChange(chain);
                           setIsDropdownOpen(false);
                         }}
                         title={`${chain.chainName}${Number.isFinite(latestDAA) && latestDAA > 0 ? ` • ${latestDAA.toLocaleString()} DAA` : ''}`}
@@ -702,12 +764,12 @@ export function ChainSpecificMetrics() {
               </div>
             )}
 
-            {/* Timeframe Selector */}
-            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+            {/* Timeframe Selector + Share */}
+            <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
               {[7, 30, 90, 360].map((days) => (
                 <button
                   key={days}
-                  onClick={() => setTimeframe(days as TimeframeOption)}
+                  onClick={() => handleTimeframeChange(days as TimeframeOption)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                     timeframe === days
                       ? 'bg-[#ef4444] text-white shadow-sm'
@@ -717,6 +779,19 @@ export function ChainSpecificMetrics() {
                   {days === 360 ? '1Y' : `${days}D`}
                 </button>
               ))}
+
+              {/* Share Button */}
+              <button
+                onClick={handleShare}
+                className="p-2 rounded-xl bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 transition-all ml-2"
+                title="Share this view"
+              >
+                {copied ? (
+                  <span className="text-xs font-medium text-green-500 px-1">Copied!</span>
+                ) : (
+                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
             </div>
           </div>
         </div>
