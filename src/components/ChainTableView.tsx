@@ -365,11 +365,8 @@ export const ChainTableView = memo(function ChainTableView({
                         alt={chain.networkToken?.symbol || chain.chainName}
                         className="w-4 h-4 rounded-full"
                         onError={(e) => {
-                          const target = e.currentTarget;
-                          if (target.src !== "/icon-dark-animated.svg") {
-                            target.src =
-                              chain.chainLogoUri || "/icon-dark-animated.svg";
-                          }
+                          e.currentTarget.src = "/icon-dark-animated.svg";
+                          e.currentTarget.onerror = null;
                         }}
                       />
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
