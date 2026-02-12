@@ -1,10 +1,13 @@
 import { memo, useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
 import { format } from 'date-fns';
-import { TPSHistory, CumulativeTxCount, DailyTxCount } from '../../types';
+import { DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
 import { AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner } from '../LoadingSpinner';
+
+export type ComparisonMetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid';
 
 interface ChainComparisonData {
   chain: {
@@ -12,15 +15,18 @@ interface ChainComparisonData {
     chainName: string;
     chainLogoUri?: string;
   };
-  tpsHistory: TPSHistory[];
-  cumulativeTx: CumulativeTxCount[];
+  dailyActiveAddresses: DailyActiveAddresses[];
   dailyTxCount: DailyTxCount[];
+  maxTPS: MaxTPSHistory[];
+  gasUsed: GasUsedHistory[];
+  avgGasPrice: AvgGasPriceHistory[];
+  feesPaid: FeesPaidHistory[];
   loading: boolean;
 }
 
 interface ComparisonChartProps {
   comparisonChains: ChainComparisonData[];
-  metricType: 'tps' | 'transactions' | 'dailyTransactions';
+  metricType: ComparisonMetricType;
   title: string;
   valueLabel: string;
 }
@@ -31,6 +37,36 @@ const CHAIN_COLORS = [
   { line: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.1)' },   // Amber
   { line: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.1)' },     // Red
 ];
+
+function getDataPoints(data: ChainComparisonData, metricType: ComparisonMetricType): { timestamp: number }[] {
+  return data[metricType] as { timestamp: number }[];
+}
+
+function getValue(item: any, metricType: ComparisonMetricType): number {
+  if (metricType === 'dailyActiveAddresses') {
+    return (item as DailyActiveAddresses).activeAddresses;
+  }
+  return item.value;
+}
+
+function formatValue(value: number, metricType: ComparisonMetricType): string {
+  switch (metricType) {
+    case 'maxTPS':
+      return value.toFixed(2);
+    case 'avgGasPrice':
+      if (value < 0.001) return `${(value * 1e9).toFixed(2)}`;
+      return value.toFixed(6);
+    case 'feesPaid':
+      if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+      if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
+      return value.toFixed(2);
+    default:
+      if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+      if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+      if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+      return value.toLocaleString();
+  }
+}
 
 export const ComparisonChart = memo(function ComparisonChart({
   comparisonChains,
@@ -44,17 +80,9 @@ export const ComparisonChart = memo(function ComparisonChart({
   const isLoading = comparisonChains.some(c => c.loading);
 
   const chartData = useMemo(() => {
-    // Find all unique timestamps across all chains
     const allTimestamps = new Set<number>();
     comparisonChains.forEach(data => {
-      let dataPoints: { timestamp: number }[];
-      if (metricType === 'tps') {
-        dataPoints = data.tpsHistory;
-      } else if (metricType === 'dailyTransactions') {
-        dataPoints = data.dailyTxCount;
-      } else {
-        dataPoints = data.cumulativeTx;
-      }
+      const dataPoints = getDataPoints(data, metricType);
       dataPoints.forEach(item => allTimestamps.add(item.timestamp));
     });
 
@@ -63,24 +91,12 @@ export const ComparisonChart = memo(function ComparisonChart({
 
     const datasets = comparisonChains.map((data, index) => {
       const color = CHAIN_COLORS[index % CHAIN_COLORS.length];
-      let dataPoints: { timestamp: number; value?: number; totalTps?: number }[];
-      if (metricType === 'tps') {
-        dataPoints = data.tpsHistory;
-      } else if (metricType === 'dailyTransactions') {
-        dataPoints = data.dailyTxCount;
-      } else {
-        dataPoints = data.cumulativeTx;
-      }
+      const dataPoints = getDataPoints(data, metricType);
 
-      // Create a map for quick lookup
       const dataMap = new Map(
-        dataPoints.map(item => [
-          item.timestamp,
-          metricType === 'tps' ? (item as TPSHistory).totalTps : (item as CumulativeTxCount | DailyTxCount).value
-        ])
+        dataPoints.map(item => [item.timestamp, getValue(item, metricType)])
       );
 
-      // Map timestamps to values, using null for missing data
       const chartValues = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
 
       return {
@@ -152,10 +168,7 @@ export const ComparisonChart = memo(function ComparisonChart({
             const label = context.dataset.label || '';
             const value = context.parsed.y;
             if (value === null) return `${label}: No data`;
-            if (metricType === 'tps') {
-              return `${label}: ${value.toFixed(2)} ${valueLabel}`;
-            }
-            return `${label}: ${value.toLocaleString()} ${valueLabel}`;
+            return `${label}: ${formatValue(value, metricType)} ${valueLabel}`;
           }
         }
       },
@@ -192,12 +205,7 @@ export const ComparisonChart = memo(function ComparisonChart({
           },
           callback: (value: string | number) => {
             const num = Number(value);
-            if (metricType === 'tps') {
-              return num.toFixed(2);
-            }
-            if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-            if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-            return num.toLocaleString();
+            return formatValue(num, metricType);
           },
           padding: 8,
         },
@@ -207,48 +215,72 @@ export const ComparisonChart = memo(function ComparisonChart({
 
   if (isLoading) {
     return (
-      <div className="bg-card border border-border rounded-xl shadow-md p-6">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="bg-card border border-border rounded-xl shadow-md p-6"
+      >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px] flex flex-col items-center justify-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Loading chart data...</p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="mt-4 text-muted-foreground"
+          >
+            Loading chart data...
+          </motion.p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   const hasData = comparisonChains.some(c => {
-    let dataPoints: { timestamp: number }[];
-    if (metricType === 'tps') {
-      dataPoints = c.tpsHistory;
-    } else if (metricType === 'dailyTransactions') {
-      dataPoints = c.dailyTxCount;
-    } else {
-      dataPoints = c.cumulativeTx;
-    }
+    const dataPoints = getDataPoints(c, metricType);
     return dataPoints.length > 0;
   });
 
   if (!hasData) {
     return (
-      <div className="bg-card border border-border rounded-xl shadow-md p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="bg-card border border-border rounded-xl shadow-md p-6"
+      >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px] flex flex-col items-center justify-center">
-          <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <motion.div
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 20 }}
+          >
+            <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          </motion.div>
           <p className="text-muted-foreground text-center">
             No data available for comparison
           </p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl shadow-md p-6">
-      <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
-      <div className="h-[400px]">
-        <Line data={chartData} options={options} />
-      </div>
-    </div>
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={metricType}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -12 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
+        className="bg-card border border-border rounded-xl shadow-md p-6"
+      >
+        <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
+        <div className="h-[400px]">
+          <Line data={chartData} options={options} />
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
 });

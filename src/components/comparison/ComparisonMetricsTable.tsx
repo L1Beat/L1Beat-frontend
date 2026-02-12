@@ -1,12 +1,16 @@
 import { memo, useMemo } from 'react';
-import { Chain, TPSHistory, CumulativeTxCount, DailyTxCount } from '../../types';
+import { Chain, DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { Activity, Server, Loader2, BarChart3 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface ChainComparisonData {
   chain: Chain;
-  tpsHistory: TPSHistory[];
-  cumulativeTx: CumulativeTxCount[];
+  dailyActiveAddresses: DailyActiveAddresses[];
   dailyTxCount: DailyTxCount[];
+  maxTPS: MaxTPSHistory[];
+  gasUsed: GasUsedHistory[];
+  avgGasPrice: AvgGasPriceHistory[];
+  feesPaid: FeesPaidHistory[];
   loading: boolean;
 }
 
@@ -19,33 +23,31 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
 }: ComparisonMetricsTableProps) {
   const metrics = useMemo(() => {
     const chains = comparisonChains.map(data => {
-      // Compute latest TPS from history since /chains endpoint doesn't include it
-      const latestTps = data.tpsHistory.length > 0
-        ? data.tpsHistory[data.tpsHistory.length - 1].totalTps
-        : (data.chain.tps?.value || 0);
+      const latestMaxTps = data.maxTPS.length > 0
+        ? data.maxTPS[data.maxTPS.length - 1].value
+        : 0;
       const validatorCount = data.chain.validatorCount || 0;
-      // Compute cumulative tx from history since /chains endpoint doesn't include it
-      const latestCumulativeTx = data.cumulativeTx.length > 0
-        ? data.cumulativeTx[data.cumulativeTx.length - 1].value
-        : (data.chain.cumulativeTxCount?.value || 0);
+      const latestDailyTx = data.dailyTxCount.length > 0
+        ? data.dailyTxCount[data.dailyTxCount.length - 1].value
+        : 0;
 
       return {
         chainId: data.chain.chainId,
         chainName: data.chain.chainName,
-        tps: latestTps,
+        maxTps: latestMaxTps,
         validators: validatorCount,
-        cumulativeTx: latestCumulativeTx,
+        dailyTx: latestDailyTx,
         loading: data.loading
       };
     });
 
-    const maxTps = Math.max(...chains.map(c => c.tps));
+    const maxMaxTps = Math.max(...chains.map(c => c.maxTps));
     const maxValidators = Math.max(...chains.map(c => c.validators));
-    const maxCumulativeTx = Math.max(...chains.map(c => c.cumulativeTx));
+    const maxDailyTx = Math.max(...chains.map(c => c.dailyTx));
 
     return {
       chains,
-      best: { maxTps, maxValidators, maxCumulativeTx }
+      best: { maxMaxTps, maxValidators, maxDailyTx }
     };
   }, [comparisonChains]);
 
@@ -54,7 +56,7 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
     return tps.toFixed(2);
   };
 
-  const formatCumulativeTx = (value: number) => {
+  const formatCount = (value: number) => {
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
@@ -63,8 +65,41 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
 
   const isBest = (value: number, max: number) => value > 0 && value === max;
 
+  const rows = [
+    {
+      key: 'maxTps',
+      icon: Activity,
+      label: 'Max TPS',
+      getValue: (c: typeof metrics.chains[0]) => c.maxTps,
+      getBest: (c: typeof metrics.chains[0]) => isBest(c.maxTps, metrics.best.maxMaxTps),
+      format: formatTPS,
+    },
+    {
+      key: 'validators',
+      icon: Server,
+      label: 'Validators',
+      getValue: (c: typeof metrics.chains[0]) => c.validators,
+      getBest: (c: typeof metrics.chains[0]) => isBest(c.validators, metrics.best.maxValidators),
+      format: (v: number) => String(v),
+    },
+    {
+      key: 'dailyTx',
+      icon: BarChart3,
+      label: 'Daily Transactions',
+      getValue: (c: typeof metrics.chains[0]) => c.dailyTx,
+      getBest: (c: typeof metrics.chains[0]) => isBest(c.dailyTx, metrics.best.maxDailyTx),
+      format: formatCount,
+      showNA: true,
+    },
+  ];
+
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      className="bg-card border border-border rounded-xl overflow-hidden shadow-sm"
+    >
       <div className="p-6 border-b border-border bg-muted/20">
         <h3 className="text-lg font-semibold text-foreground">
           Performance Metrics
@@ -96,100 +131,54 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
             </tr>
           </thead>
           <tbody className="bg-card divide-y divide-border">
-            {/* TPS Row */}
-            <tr className="hover:bg-muted/30 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-[#ef4444]" />
-                  <span className="text-sm font-medium text-foreground">TPS</span>
-                </div>
-              </td>
-              {metrics.chains.map((chain) => {
-                const best = isBest(chain.tps, metrics.best.maxTps);
-                return (
-                  <td key={chain.chainId} className="px-6 py-4 whitespace-nowrap">
-                    {chain.loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <span
-                        className={`text-lg font-bold ${
-                          best
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-foreground'
-                        }`}
-                      >
-                        {formatTPS(chain.tps)}
-                      </span>
-                    )}
+            {rows.map((row, rowIndex) => {
+              const Icon = row.icon;
+              return (
+                <motion.tr
+                  key={row.key}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: rowIndex * 0.06, duration: 0.3 }}
+                  className="hover:bg-muted/30 transition-colors"
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-[#ef4444]" />
+                      <span className="text-sm font-medium text-foreground">{row.label}</span>
+                    </div>
                   </td>
-                );
-              })}
-            </tr>
-
-            {/* Validators Row */}
-            <tr className="hover:bg-muted/30 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-[#ef4444]" />
-                  <span className="text-sm font-medium text-foreground">Validators</span>
-                </div>
-              </td>
-              {metrics.chains.map((chain) => {
-                const best = isBest(chain.validators, metrics.best.maxValidators);
-                return (
-                  <td key={chain.chainId} className="px-6 py-4 whitespace-nowrap">
-                    {chain.loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    ) : (
-                      <span
-                        className={`text-lg font-bold ${
-                          best
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-foreground'
-                        }`}
-                      >
-                        {chain.validators}
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-
-            {/* Cumulative Transactions Row */}
-            <tr className="hover:bg-muted/30 transition-colors">
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-[#ef4444]" />
-                  <span className="text-sm font-medium text-foreground">Total Transactions</span>
-                </div>
-              </td>
-              {metrics.chains.map((chain) => {
-                const best = isBest(chain.cumulativeTx, metrics.best.maxCumulativeTx);
-                return (
-                  <td key={chain.chainId} className="px-6 py-4 whitespace-nowrap">
-                    {chain.loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    ) : chain.cumulativeTx === 0 ? (
-                      <span className="text-sm text-muted-foreground">N/A</span>
-                    ) : (
-                      <span
-                        className={`text-lg font-bold ${
-                          best
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-foreground'
-                        }`}
-                      >
-                        {formatCumulativeTx(chain.cumulativeTx)}
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+                  {metrics.chains.map((chain) => {
+                    const value = row.getValue(chain);
+                    const best = row.getBest(chain);
+                    return (
+                      <td key={chain.chainId} className="px-6 py-4 whitespace-nowrap">
+                        {chain.loading ? (
+                          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                        ) : row.showNA && value === 0 ? (
+                          <span className="text-sm text-muted-foreground">N/A</span>
+                        ) : (
+                          <motion.span
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: rowIndex * 0.06 + 0.15 }}
+                            className={`text-lg font-bold ${
+                              best
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-foreground'
+                            }`}
+                          >
+                            {row.format(value)}
+                          </motion.span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </motion.tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </div>
+    </motion.div>
   );
 });
