@@ -3,13 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainValidators } from '../api';
 import { Chain, TPSHistory } from '../types';
-import { 
-  Activity, 
-  ArrowLeft, 
-  Search, 
-  CheckCircle, 
-  Info, 
-  Copy, 
+import {
+  Activity,
+  ArrowLeft,
+  Search,
+  CheckCircle,
+  Info,
+  Copy,
   Check,
   ExternalLink,
   Users,
@@ -19,7 +19,8 @@ import {
   Shield,
   Globe,
   MessageCircle,
-  Github
+  Github,
+  BarChart3
 } from 'lucide-react';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 import { StatusBar } from '../components/StatusBar';
@@ -30,6 +31,7 @@ import { useTheme } from '../hooks/useTheme';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { ComparisonView } from '../components/comparison/ComparisonView';
 
 export function ChainDetails() {
   const { chainId } = useParams();
@@ -45,8 +47,9 @@ export function ChainDetails() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'validators'>('validators');
+  const [activeTab, setActiveTab] = useState<'validators' | 'compare'>('validators');
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const [availableChains, setAvailableChains] = useState<Chain[]>([]);
 
   useEffect(() => {
     async function fetchData() {
@@ -56,9 +59,9 @@ export function ChainDetails() {
           getChains(),
           getHealth()
         ]);
-        
+
         const foundChain = chains.find(c => c.chainId === chainId);
-        
+
         if (foundChain) {
           // Fetch validators specifically for this chain
           const validators = await getChainValidators(foundChain.originalChainId || foundChain.chainId);
@@ -66,8 +69,10 @@ export function ChainDetails() {
             ...foundChain,
             validators: validators.length > 0 ? validators : foundChain.validators // Use fetched validators if available
           };
-          
+
           setChain(chainWithValidators);
+          // Store all chains for comparison feature
+          setAvailableChains(chains);
           // Use originalChainId if available for API calls that might require the numeric ID
           // Fallback to chainId if originalChainId is not present
           const apiChainId = foundChain.originalChainId || foundChain.chainId;
@@ -584,6 +589,7 @@ export function ChainDetails() {
                 <nav className="flex space-x-4 sm:space-x-8 min-w-max" aria-label="Tabs">
                   {[
                     { id: 'validators', name: 'Validators', icon: Users, disabled: false },
+                    { id: 'compare', name: 'Compare', icon: BarChart3, disabled: false },
                     { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: true },
                     { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
                     { id: 'social', name: 'Social', icon: MessageCircle, disabled: true }
@@ -593,7 +599,7 @@ export function ChainDetails() {
                     return (
                       <div key={tab.id} className="relative">
                         <button
-                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators')}
+                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators' | 'compare')}
                           onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
                           onMouseLeave={() => setHoveredTab(null)}
                           disabled={tab.disabled}
@@ -632,6 +638,14 @@ export function ChainDetails() {
             </div>
 
             <div className="space-y-4 sm:space-y-6">
+              {/* Compare Tab */}
+              {activeTab === 'compare' && chain && (
+                <ComparisonView
+                  currentChain={chain}
+                  availableChains={availableChains}
+                />
+              )}
+
               {/* Validators Tab */}
               {activeTab === 'validators' && (
                 <div className="space-y-4 sm:space-y-6">
