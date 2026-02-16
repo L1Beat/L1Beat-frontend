@@ -1,4 +1,5 @@
 import { memo, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Chain } from '../../types';
 import { Search, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,7 +41,7 @@ export const ChainSelector = memo(function ChainSelector({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -173,6 +174,7 @@ export const ChainSelector = memo(function ChainSelector({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 });

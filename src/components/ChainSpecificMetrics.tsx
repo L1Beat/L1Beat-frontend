@@ -271,7 +271,17 @@ export function ChainSpecificMetrics() {
       }
     }
     fetchChains();
-  }, [chainParam]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync selected chain from URL param when chains are already loaded
+  useEffect(() => {
+    if (!chainParam || chains.length === 0) return;
+    const chainFromUrl = chains.find(c => c.chainId === chainParam);
+    if (chainFromUrl && chainFromUrl.chainId !== selectedChain?.chainId) {
+      setSelectedChain(chainFromUrl);
+    }
+  }, [chainParam, chains, selectedChain?.chainId]);
 
   // Background: compute latest daily active addresses per chain for ranking the quick-select row.
   useEffect(() => {

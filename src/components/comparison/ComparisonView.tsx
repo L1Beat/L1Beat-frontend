@@ -34,16 +34,6 @@ const COMPARISON_METRICS: { id: ComparisonMetricType; name: string; valueLabel: 
   { id: 'feesPaid', name: 'Daily Fees Paid', valueLabel: '' },
 ];
 
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] } },
-};
-
 export const ComparisonView = memo(function ComparisonView({
   currentChain,
   availableChains: providedChains
@@ -322,14 +312,14 @@ export const ComparisonView = memo(function ComparisonView({
   }
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="visible"
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {/* Header with Actions */}
-      <motion.div variants={fadeUp} className="bg-card border border-border rounded-xl p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+        className="bg-card border border-border rounded-xl p-6"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -648,6 +638,6 @@ export const ComparisonView = memo(function ComparisonView({
         onSelectChain={handleAddChain}
         maxChains={4}
       />
-    </motion.div>
+    </div>
   );
 });
