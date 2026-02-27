@@ -314,12 +314,7 @@ export const ComparisonView = memo(function ComparisonView({
   return (
     <div className="space-y-6">
       {/* Header with Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-        className="bg-card border border-border rounded-xl p-6"
-      >
+      <div className="bg-card border border-border rounded-xl p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -437,7 +432,7 @@ export const ComparisonView = memo(function ComparisonView({
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
 
       {/* Comparison Content */}
       <AnimatePresence mode="wait">
@@ -576,43 +571,19 @@ export const ComparisonView = memo(function ComparisonView({
             </motion.div>
           </motion.div>
         ) : (
-          <motion.div
-            key="empty-state"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+          <div
             className="bg-card border border-border rounded-xl p-12 text-center"
           >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 20 }}
-            >
-              <BarChart3 className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-            </motion.div>
-            <motion.h3
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-lg font-semibold text-foreground mb-2"
-            >
+            <BarChart3 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
               {comparisonChains.length === 0 ? 'Start Comparing Chains' : 'Add More Chains'}
-            </motion.h3>
-            <motion.p
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="text-sm text-muted-foreground mb-6"
-            >
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6">
               {comparisonChains.length === 0
                 ? 'Select at least 2 chains to compare their performance metrics side-by-side'
                 : 'Add at least one more chain to see the comparison'}
-            </motion.p>
+            </p>
             <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
               onClick={() => setIsModalOpen(!isModalOpen)}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -625,7 +596,7 @@ export const ComparisonView = memo(function ComparisonView({
               {isModalOpen ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
               {isModalOpen ? 'Close' : comparisonChains.length === 0 ? 'Select Chains' : 'Add Another Chain'}
             </motion.button>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
