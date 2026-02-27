@@ -197,6 +197,40 @@ export interface HealthStatus {
   timestamp: number;
 }
 
+// L1Beat external API types (https://api.l1beat.io)
+export interface L1BeatValidatorRecord {
+  subnet_id: string;
+  validation_id: string;
+  node_id: string;
+  balance: number;
+  weight: number;
+  start_time: string;
+  end_time: string;
+  uptime_percentage: number;
+  active: boolean;
+  initial_deposit: number;
+  total_topups: number;
+  refund_amount: number;
+  fees_paid: number;
+}
+
+export interface L1BeatFeeMetrics {
+  subnet_id: string;
+  total_deposited: number;
+  initial_deposits: number;
+  top_up_deposits: number;
+  total_refunded: number;
+  current_balance: number;
+  total_fees_paid: number;
+  deposit_tx_count: number;
+  validator_count: number;
+}
+
+export interface L1BeatApiMeta {
+  limit: number;
+  offset: number;
+}
+
 // Teleporter message types
 export interface TeleporterMessage {
   source: string;

@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatValidatorRecord, L1BeatFeeMetrics } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -1424,15 +1424,54 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
       const response = await fetchWithRetry<{ data: TeleporterDailyData[] }>(
         `${API_URL}/teleporter/messages/historical-daily?days=${days}`
       );
-      
+
       if (!response.data || !Array.isArray(response.data)) {
         throw new Error('Invalid Teleporter daily history data format');
       }
-      
+
       return response.data;
     } catch (error) {
       console.error('Teleporter daily history fetch error:', error);
       return [];
     }
   }, 15 * 60 * 1000); // Cache for 15 minutes
+}
+
+const L1BEAT_EXTERNAL_API = 'https://api.l1beat.io';
+
+export async function getL1BeatValidators(subnetId?: string, active?: boolean): Promise<L1BeatValidatorRecord[]> {
+  const cacheKey = `l1beat-validators-${subnetId ?? 'all'}-${active ?? 'all'}`;
+  return fetchWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams();
+      if (subnetId) params.set('subnet_id', subnetId);
+      if (active !== undefined) params.set('active', String(active));
+      params.set('limit', '1000');
+      const response = await fetchWithRetry<{ data: L1BeatValidatorRecord[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?${params.toString()}`
+      );
+      return response.data ?? [];
+    } catch (error) {
+      console.error('L1Beat validators fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000); // 5 min cache
+}
+
+export async function getL1BeatFeeMetrics(subnetId?: string): Promise<L1BeatFeeMetrics[]> {
+  const cacheKey = `l1beat-fees-${subnetId ?? 'all'}`;
+  return fetchWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams();
+      if (subnetId) params.set('subnet_id', subnetId);
+      params.set('limit', '1000');
+      const response = await fetchWithRetry<{ data: L1BeatFeeMetrics[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees?${params.toString()}`
+      );
+      return response.data ?? [];
+    } catch (error) {
+      console.error('L1Beat fee metrics fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000); // 5 min cache
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages } from '../api';
+import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages, getL1BeatValidators, getL1BeatFeeMetrics } from '../api';
 import { Chain, HealthStatus, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
@@ -30,6 +30,8 @@ export function Dashboard() {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
   const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [feesBySubnet, setFeesBySubnet] = useState<Record<string, number>>({});
 
   async function fetchData() {
     try {
@@ -45,12 +47,14 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData, tpsMap, teleporterData] = await Promise.all([
+      const [chainsData, healthData, categoriesData, tpsMap, teleporterData, validatorData, feeData] = await Promise.all([
         getChains(filters),
         getHealth(),
         getCategories(),
         getAllChainsTPSLatest(),
-        getTeleporterMessages()
+        getTeleporterMessages(),
+        getL1BeatValidators(undefined, true),
+        getL1BeatFeeMetrics()
       ]);
 
       // Calculate ICM message counts per chain
@@ -64,6 +68,20 @@ export function Dashboard() {
         });
       }
       setIcmMessageCounts(icmCounts);
+
+      // Build validator count map keyed by subnet_id
+      const validatorCounts: Record<string, number> = {};
+      validatorData.forEach((v) => {
+        validatorCounts[v.subnet_id] = (validatorCounts[v.subnet_id] || 0) + 1;
+      });
+      setValidatorCountBySubnet(validatorCounts);
+
+      // Build fee metrics map keyed by subnet_id (value in nAVAX)
+      const feesMap: Record<string, number> = {};
+      feeData.forEach((f) => {
+        feesMap[f.subnet_id] = f.total_fees_paid;
+      });
+      setFeesBySubnet(feesMap);
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
       const chainsWithLatestTps = chainsData.map((chain) => {
@@ -95,11 +113,15 @@ export function Dashboard() {
 
       if (!showChainsWithoutValidators) {
         // Default behavior: only show chains with validators or Avalanche primary chains
-        filteredChains = filteredChains.filter(chain =>
-          (chain.validatorCount && chain.validatorCount >= 1) ||
-          chain.chainName.toLowerCase().includes('avalanche') ||
-          chain.chainName.toLowerCase().includes('c-chain')
-        );
+        filteredChains = filteredChains.filter(chain => {
+          const subnetValidators = chain.subnetId ? validatorCounts[chain.subnetId] : undefined;
+          return (
+            (subnetValidators !== undefined && subnetValidators >= 1) ||
+            (chain.validatorCount && chain.validatorCount >= 1) ||
+            chain.chainName.toLowerCase().includes('avalanche') ||
+            chain.chainName.toLowerCase().includes('c-chain')
+          );
+        });
       }
       // If showChainsWithoutValidators is true, include all chains (no validator filter)
 
@@ -354,9 +376,9 @@ export function Dashboard() {
                 transition={{ duration: 0.3 }}
               >
                 {viewMode === 'table' ? (
-                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} />
+                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} validatorCountBySubnet={validatorCountBySubnet} feesBySubnet={feesBySubnet} />
                 ) : (
-                  <ChainListView chains={filteredChains} />
+                  <ChainListView chains={filteredChains} validatorCountBySubnet={validatorCountBySubnet} />
                 )}
               </motion.div>
             )}
