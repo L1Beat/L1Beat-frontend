@@ -416,3 +416,13 @@ export interface ACPSearchResponse extends ACPListResponse {
   filters: ACPFilters;
   suggestions?: string[];
 }
+
+// ============= CHAIN COMPARISON TYPES =============
+
+export interface ChainComparisonData {
+  chain: Chain;
+  tpsHistory: TPSHistory[];
+  cumulativeTx: CumulativeTxCount[];
+}
+
+export type ComparisonMetricType = 'tps' | 'transactions';

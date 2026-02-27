@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from '../components/StatusBar';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
+import { ComparisonView } from '../components/comparison';
 import { Footer } from '../components/Footer';
 import { getHealth } from '../api';
 import { HealthStatus } from '../types';
@@ -32,6 +33,11 @@ export function Metrics() {
 
         {/* Chain-Specific Metrics */}
         <ChainSpecificMetrics />
+
+        {/* Chain Comparison */}
+        <section>
+          <ComparisonView />
+        </section>
       </main>
 
       <Footer />
