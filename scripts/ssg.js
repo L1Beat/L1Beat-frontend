@@ -86,7 +86,7 @@ async function generate() {
         if (match) return match[1].trim();
       } catch (e) {}
       
-      return 'https://api.l1beat.io'; // Default fallback
+      return process.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io'; // Default fallback
     };
     
     const apiBaseUrl = await getApiUrl();

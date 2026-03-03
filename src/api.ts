@@ -1437,7 +1437,7 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
   }, 15 * 60 * 1000); // Cache for 15 minutes
 }
 
-const L1BEAT_EXTERNAL_API = 'https://api.l1beat.io';
+const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io';
 
 export async function getL1BeatValidators(subnetId?: string, active?: boolean): Promise<L1BeatValidatorRecord[]> {
   const cacheKey = `l1beat-validators-${subnetId ?? 'all'}-${active ?? 'all'}`;
