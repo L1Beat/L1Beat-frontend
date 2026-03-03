@@ -16,17 +16,19 @@ interface ChainComparisonData {
 
 interface ComparisonMetricsTableProps {
   comparisonChains: ChainComparisonData[];
+  validatorCountBySubnet?: Record<string, number>;
 }
 
 export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
-  comparisonChains
+  comparisonChains,
+  validatorCountBySubnet = {}
 }: ComparisonMetricsTableProps) {
   const metrics = useMemo(() => {
     const chains = comparisonChains.map(data => {
       const latestMaxTps = data.maxTPS.length > 0
         ? data.maxTPS[data.maxTPS.length - 1].value
         : 0;
-      const validatorCount = data.chain.validatorCount || 0;
+      const validatorCount = (data.chain.subnetId ? validatorCountBySubnet[data.chain.subnetId] : undefined) ?? data.chain.validatorCount ?? 0;
       const latestDailyTx = data.dailyTxCount.length > 0
         ? data.dailyTxCount[data.dailyTxCount.length - 1].value
         : 0;

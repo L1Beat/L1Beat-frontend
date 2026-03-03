@@ -12,6 +12,7 @@ import { LoadingSpinner } from '../LoadingSpinner';
 interface ComparisonViewProps {
   currentChain?: Chain;
   availableChains?: Chain[];
+  validatorCountBySubnet?: Record<string, number>;
 }
 
 interface ChainComparisonData {
@@ -36,7 +37,8 @@ const COMPARISON_METRICS: { id: ComparisonMetricType; name: string; valueLabel: 
 
 export const ComparisonView = memo(function ComparisonView({
   currentChain,
-  availableChains: providedChains
+  availableChains: providedChains,
+  validatorCountBySubnet = {}
 }: ComparisonViewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -451,7 +453,7 @@ export const ComparisonView = memo(function ComparisonView({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
-              <ComparisonMetricsTable comparisonChains={comparisonChains} />
+              <ComparisonMetricsTable comparisonChains={comparisonChains} validatorCountBySubnet={validatorCountBySubnet} />
             </motion.div>
 
             {/* Controls: Metric Dropdown, Timeframe, Share */}

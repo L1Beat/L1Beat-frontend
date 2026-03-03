@@ -39,11 +39,9 @@ export const ChainSelector = memo(function ChainSelector({
     setSearchTerm('');
   };
 
-  if (!isOpen) return null;
-
   return createPortal(
     <AnimatePresence>
-      <motion.div
+      {isOpen && <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -173,7 +171,7 @@ export const ChainSelector = memo(function ChainSelector({
             )}
           </div>
         </motion.div>
-      </motion.div>
+      </motion.div>}
     </AnimatePresence>,
     document.body
   );
