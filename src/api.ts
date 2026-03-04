@@ -69,7 +69,7 @@ const DEFAULT_HEADERS = {
 };
 
 // Define constants for rate limiting
-const REQUEST_LIMIT = 50; // Max requests per minute
+const REQUEST_LIMIT = 200; // Max requests per minute
 const REQUEST_PERIOD = 60 * 1000; // 1 minute in milliseconds
 
 // Track API calls for rate limiting
