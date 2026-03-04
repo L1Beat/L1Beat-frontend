@@ -4,23 +4,30 @@ import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
 import { ComparisonView } from '../components/comparison';
 import { Footer } from '../components/Footer';
-import { getHealth } from '../api';
+import { getHealth, getL1BeatFeeMetrics } from '../api';
 import { HealthStatus } from '../types';
 
 export function Metrics() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    async function fetchHealth() {
+    async function fetchData() {
       try {
-        const healthData = await getHealth();
+        const [healthData, feeData] = await Promise.all([
+          getHealth(),
+          getL1BeatFeeMetrics()
+        ]);
         setHealth(healthData);
+        const counts: Record<string, number> = {};
+        feeData.forEach((f) => { counts[f.subnet_id] = f.validator_count; });
+        setValidatorCountBySubnet(counts);
       } catch (err) {
-        console.error('Failed to fetch health:', err);
+        console.error('Failed to fetch data:', err);
       }
     }
 
-    fetchHealth();
+    fetchData();
   }, []);
 
   return (
@@ -36,7 +43,7 @@ export function Metrics() {
 
         {/* Chain Comparison */}
         <section>
-          <ComparisonView />
+          <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
         </section>
       </main>
 

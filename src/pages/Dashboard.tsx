@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages, getL1BeatValidators, getL1BeatFeeMetrics } from '../api';
+import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages, getL1BeatFeeMetrics } from '../api';
 import { Chain, HealthStatus, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
@@ -47,13 +47,12 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData, tpsMap, teleporterData, validatorData, feeData] = await Promise.all([
+      const [chainsData, healthData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
         getChains(filters),
         getHealth(),
         getCategories(),
         getAllChainsTPSLatest(),
         getTeleporterMessages(),
-        getL1BeatValidators(undefined, true),
         getL1BeatFeeMetrics()
       ]);
 
@@ -69,18 +68,14 @@ export function Dashboard() {
       }
       setIcmMessageCounts(icmCounts);
 
-      // Build validator count map keyed by subnet_id
+      // Build validator count and fee maps from fee metrics (validator_count is included per subnet)
       const validatorCounts: Record<string, number> = {};
-      validatorData.forEach((v) => {
-        validatorCounts[v.subnet_id] = (validatorCounts[v.subnet_id] || 0) + 1;
-      });
-      setValidatorCountBySubnet(validatorCounts);
-
-      // Build fee metrics map keyed by subnet_id (value in nAVAX)
       const feesMap: Record<string, number> = {};
       feeData.forEach((f) => {
+        validatorCounts[f.subnet_id] = f.validator_count;
         feesMap[f.subnet_id] = f.total_fees_paid;
       });
+      setValidatorCountBySubnet(validatorCounts);
       setFeesBySubnet(feesMap);
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)

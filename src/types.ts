@@ -226,11 +226,6 @@ export interface L1BeatFeeMetrics {
   validator_count: number;
 }
 
-export interface L1BeatApiMeta {
-  limit: number;
-  offset: number;
-}
-
 // Teleporter message types
 export interface TeleporterMessage {
   source: string;

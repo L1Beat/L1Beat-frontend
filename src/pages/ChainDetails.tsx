@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainValidators } from '../api';
+import { getChains, getTPSHistory, getChainValidators, getL1BeatFeeMetrics } from '../api';
 import { Chain, TPSHistory } from '../types';
 import {
   Activity,
@@ -50,15 +50,20 @@ export function ChainDetails() {
   const [activeTab, setActiveTab] = useState<'validators' | 'compare'>('validators');
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [availableChains, setAvailableChains] = useState<Chain[]>([]);
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chains, healthData] = await Promise.all([
+        const [chains, healthData, feeData] = await Promise.all([
           getChains(),
-          getHealth()
+          getHealth(),
+          getL1BeatFeeMetrics()
         ]);
+        const counts: Record<string, number> = {};
+        feeData.forEach((f) => { counts[f.subnet_id] = f.validator_count; });
+        setValidatorCountBySubnet(counts);
 
         const foundChain = chains.find(c => c.chainId === chainId);
 
@@ -643,6 +648,7 @@ export function ChainDetails() {
                 <ComparisonView
                   currentChain={chain}
                   availableChains={availableChains}
+                  validatorCountBySubnet={validatorCountBySubnet}
                 />
               )}
 

@@ -1439,39 +1439,105 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
 
 const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io';
 
+// Fetch from external APIs without headers that trigger CORS preflight.
+// Only sends Accept: application/json (a CORS-safe header).
+async function fetchExternalWithRetry<T>(
+  url: string,
+  retries: number = 3,
+  backoffFactor: number = 2,
+  timeout: number = 30000
+): Promise<T> {
+  let lastError: Error = new Error('Unknown error occurred');
+  let attempt = 0;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    while (attempt < retries) {
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          mode: 'cors',
+          credentials: 'omit',
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json() as T;
+      } catch (error) {
+        lastError = error as Error;
+
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          throw new Error('Request timeout');
+        }
+
+        attempt++;
+        if (attempt === retries) break;
+
+        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Paginate through all pages of an L1Beat external API endpoint.
+async function fetchAllL1BeatPages<T>(
+  endpoint: string,
+  extraParams: Record<string, string> = {}
+): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
+    const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+      `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
+    );
+    const chunk = response.data ?? [];
+    all.push(...chunk);
+    hasMore = response.meta?.has_more ?? false;
+    offset += limit;
+  }
+
+  return all;
+}
+
 export async function getL1BeatValidators(subnetId?: string, active?: boolean): Promise<L1BeatValidatorRecord[]> {
   const cacheKey = `l1beat-validators-${subnetId ?? 'all'}-${active ?? 'all'}`;
   return fetchWithCache(cacheKey, async () => {
     try {
-      const params = new URLSearchParams();
-      if (subnetId) params.set('subnet_id', subnetId);
-      if (active !== undefined) params.set('active', String(active));
-      params.set('limit', '1000');
-      const response = await fetchWithRetry<{ data: L1BeatValidatorRecord[] }>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?${params.toString()}`
-      );
-      return response.data ?? [];
+      const extraParams: Record<string, string> = {};
+      if (subnetId) extraParams['subnet_id'] = subnetId;
+      if (active !== undefined) extraParams['active'] = String(active);
+      return await fetchAllL1BeatPages<L1BeatValidatorRecord>('/api/v1/data/validators', extraParams);
     } catch (error) {
       console.error('L1Beat validators fetch error:', error);
       return [];
     }
-  }, 5 * 60 * 1000); // 5 min cache
+  }, 5 * 60 * 1000);
 }
 
 export async function getL1BeatFeeMetrics(subnetId?: string): Promise<L1BeatFeeMetrics[]> {
   const cacheKey = `l1beat-fees-${subnetId ?? 'all'}`;
   return fetchWithCache(cacheKey, async () => {
     try {
-      const params = new URLSearchParams();
-      if (subnetId) params.set('subnet_id', subnetId);
-      params.set('limit', '1000');
-      const response = await fetchWithRetry<{ data: L1BeatFeeMetrics[] }>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees?${params.toString()}`
-      );
-      return response.data ?? [];
+      const extraParams: Record<string, string> = {};
+      if (subnetId) extraParams['subnet_id'] = subnetId;
+      return await fetchAllL1BeatPages<L1BeatFeeMetrics>('/api/v1/metrics/fees', extraParams);
     } catch (error) {
       console.error('L1Beat fee metrics fetch error:', error);
       return [];
     }
-  }, 5 * 60 * 1000); // 5 min cache
+  }, 5 * 60 * 1000);
 }
