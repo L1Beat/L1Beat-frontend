@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatValidatorRecord, L1BeatFeeMetrics } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -1439,8 +1439,27 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
 
 const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io';
 
-// Fetch from external APIs without headers that trigger CORS preflight.
-// Only sends Accept: application/json (a CORS-safe header).
+// Cache wrapper for external API calls — skips the internal rate limiter since
+// these calls go to a different origin and should not consume the backend quota.
+async function fetchExternalWithCache<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  duration: number = CACHE_DURATION
+): Promise<T> {
+  const cached = cache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.timestamp < duration) {
+    return cached.data;
+  }
+  const data = await fetcher();
+  const sanitizedData = sanitizeResponse(data);
+  cache.set(key, { data: sanitizedData, timestamp: now });
+  return sanitizedData;
+}
+
+// Fetch from external APIs with only CORS-safe headers (no Cache-Control /
+// Content-Type / Origin that trigger a preflight). Creates a fresh
+// AbortController per attempt so retries are not dead after a timeout.
 async function fetchExternalWithRetry<T>(
   url: string,
   retries: number = 3,
@@ -1448,48 +1467,44 @@ async function fetchExternalWithRetry<T>(
   timeout: number = 30000
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error occurred');
-  let attempt = 0;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  try {
-    while (attempt < retries) {
-      try {
-        const response = await fetch(url, {
-          signal: controller.signal,
-          mode: 'cors',
-          credentials: 'omit',
-          headers: { 'Accept': 'application/json' },
-        });
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Accept': 'application/json' },
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-        return await response.json() as T;
-      } catch (error) {
-        lastError = error as Error;
+      return await response.json() as T;
+    } catch (error) {
+      lastError = error instanceof DOMException && error.name === 'AbortError'
+        ? new Error('Request timeout')
+        : error as Error;
 
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          throw new Error('Request timeout');
-        }
-
-        attempt++;
-        if (attempt === retries) break;
-
-        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
+      if (attempt < retries - 1) {
+        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    throw lastError;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw lastError;
 }
 
 // Paginate through all pages of an L1Beat external API endpoint.
+// Stops when has_more is false or a page returns no data (guards against a
+// stuck has_more=true from a misbehaving API).
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
   extraParams: Record<string, string> = {}
@@ -1497,40 +1512,24 @@ async function fetchAllL1BeatPages<T>(
   const all: T[] = [];
   let offset = 0;
   const limit = 100;
-  let hasMore = true;
 
-  while (hasMore) {
+  while (true) {
     const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
     const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
       `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
     );
     const chunk = response.data ?? [];
     all.push(...chunk);
-    hasMore = response.meta?.has_more ?? false;
+    if (chunk.length === 0 || !response.meta?.has_more) break;
     offset += limit;
   }
 
   return all;
 }
 
-export async function getL1BeatValidators(subnetId?: string, active?: boolean): Promise<L1BeatValidatorRecord[]> {
-  const cacheKey = `l1beat-validators-${subnetId ?? 'all'}-${active ?? 'all'}`;
-  return fetchWithCache(cacheKey, async () => {
-    try {
-      const extraParams: Record<string, string> = {};
-      if (subnetId) extraParams['subnet_id'] = subnetId;
-      if (active !== undefined) extraParams['active'] = String(active);
-      return await fetchAllL1BeatPages<L1BeatValidatorRecord>('/api/v1/data/validators', extraParams);
-    } catch (error) {
-      console.error('L1Beat validators fetch error:', error);
-      return [];
-    }
-  }, 5 * 60 * 1000);
-}
-
 export async function getL1BeatFeeMetrics(subnetId?: string): Promise<L1BeatFeeMetrics[]> {
   const cacheKey = `l1beat-fees-${subnetId ?? 'all'}`;
-  return fetchWithCache(cacheKey, async () => {
+  return fetchExternalWithCache(cacheKey, async () => {
     try {
       const extraParams: Record<string, string> = {};
       if (subnetId) extraParams['subnet_id'] = subnetId;

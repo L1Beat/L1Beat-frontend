@@ -272,7 +272,7 @@ export const ChainTableView = memo(function ChainTableView({
               />
               <SortHeader
                 field="feesToPChain"
-                label="Fees to P-Chain (Monthly)"
+                label="Fees to P-Chain (Total)"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />

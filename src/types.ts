@@ -198,22 +198,6 @@ export interface HealthStatus {
 }
 
 // L1Beat external API types (https://api.l1beat.io)
-export interface L1BeatValidatorRecord {
-  subnet_id: string;
-  validation_id: string;
-  node_id: string;
-  balance: number;
-  weight: number;
-  start_time: string;
-  end_time: string;
-  uptime_percentage: number;
-  active: boolean;
-  initial_deposit: number;
-  total_topups: number;
-  refund_amount: number;
-  fees_paid: number;
-}
-
 export interface L1BeatFeeMetrics {
   subnet_id: string;
   total_deposited: number;
