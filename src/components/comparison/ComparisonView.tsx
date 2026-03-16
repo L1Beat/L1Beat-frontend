@@ -59,7 +59,9 @@ export const ComparisonView = memo(function ComparisonView({
   const timeframeParam = searchParams.get('timeframe');
   const timeframe = (timeframeParam === '30' ? 30 : 7) as 7 | 30;
 
-  // Update URL with current state
+  // Update URL with current state. Always writes both timeframe and metric so
+  // that partial updates (e.g. changing only the metric) don't silently drop
+  // the other param and break shareable URLs.
   const updateUrl = useCallback((chainIds: string[], newTimeframe?: number, newMetric?: ComparisonMetricType) => {
     const newParams = new URLSearchParams(searchParams);
 
@@ -69,16 +71,11 @@ export const ComparisonView = memo(function ComparisonView({
       newParams.delete('compare');
     }
 
-    if (newTimeframe) {
-      newParams.set('timeframe', String(newTimeframe));
-    }
-
-    if (newMetric) {
-      newParams.set('metric', newMetric);
-    }
+    newParams.set('timeframe', String(newTimeframe ?? timeframe));
+    newParams.set('metric', newMetric ?? selectedMetric);
 
     setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, timeframe, selectedMetric]);
 
   // Handle timeframe change
   const handleTimeframeChange = useCallback((newTimeframe: 7 | 30) => {
@@ -143,24 +140,29 @@ export const ComparisonView = memo(function ComparisonView({
     fetchAvailableChains();
   }, [providedChains]);
 
-  // Fetch all 6 metric types for a chain
-  const fetchChainData = useCallback(async (chain: Chain, index: number) => {
+  // Fetch all 6 metric types for a chain. Keyed by chainId (not positional
+  // index) so that concurrent adds don't overwrite each other's slots when
+  // React state hasn't committed yet.
+  const fetchChainData = useCallback(async (chain: Chain) => {
+    const targetChainId = chain.chainId;
     try {
-      const chainId = chain.originalChainId || chain.chainId;
-      const evmChainIdStr = chain.evmChainId ? String(chain.evmChainId) : chainId;
+      const apiChainId = chain.originalChainId || chain.chainId;
+      const evmChainIdStr = chain.evmChainId ? String(chain.evmChainId) : apiChainId;
 
       const [activeAddresses, dailyTx, maxTps, gasUsedData, avgGasPriceData, feesPaidData] = await Promise.all([
         getDailyActiveAddresses(evmChainIdStr, timeframe).catch(() => []),
-        getChainTxCountHistory(chainId, timeframe).catch(() => []),
-        getChainMaxTPSHistory(chainId, timeframe).catch(() => []),
-        getChainGasUsedHistory(chainId, timeframe).catch(() => []),
-        getChainAvgGasPriceHistory(chainId, timeframe).catch(() => []),
-        getChainFeesPaidHistory(chainId, timeframe).catch(() => [])
+        getChainTxCountHistory(apiChainId, timeframe).catch(() => []),
+        getChainMaxTPSHistory(apiChainId, timeframe).catch(() => []),
+        getChainGasUsedHistory(apiChainId, timeframe).catch(() => []),
+        getChainAvgGasPriceHistory(apiChainId, timeframe).catch(() => []),
+        getChainFeesPaidHistory(apiChainId, timeframe).catch(() => [])
       ]);
 
       setComparisonChains(prev => {
+        const idx = prev.findIndex(c => c.chain.chainId === targetChainId);
+        if (idx === -1) return prev; // chain was removed while loading
         const updated = [...prev];
-        updated[index] = {
+        updated[idx] = {
           chain,
           dailyActiveAddresses: activeAddresses,
           dailyTxCount: dailyTx,
@@ -175,11 +177,10 @@ export const ComparisonView = memo(function ComparisonView({
     } catch (error) {
       console.error('Failed to fetch chain data:', error);
       setComparisonChains(prev => {
+        const idx = prev.findIndex(c => c.chain.chainId === targetChainId);
+        if (idx === -1) return prev;
         const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          loading: false
-        };
+        updated[idx] = { ...updated[idx], loading: false };
         return updated;
       });
     }
@@ -212,8 +213,8 @@ export const ComparisonView = memo(function ComparisonView({
 
       if (initialChains.length > 0) {
         setComparisonChains(initialChains);
-        initialChains.forEach((data, index) => {
-          fetchChainData(data.chain, index);
+        initialChains.forEach((data) => {
+          fetchChainData(data.chain);
         });
       }
     } else if (currentChain) {
@@ -227,7 +228,7 @@ export const ComparisonView = memo(function ComparisonView({
         feesPaid: [],
         loading: true
       }]);
-      fetchChainData(currentChain, 0);
+      fetchChainData(currentChain);
       updateUrl([currentChain.chainId]);
     }
 
@@ -247,8 +248,8 @@ export const ComparisonView = memo(function ComparisonView({
 
       const updated = prev.map(c => ({ ...c, loading: true }));
 
-      prev.forEach((data, index) => {
-        fetchChainData(data.chain, index);
+      prev.forEach((data) => {
+        fetchChainData(data.chain);
       });
 
       return updated;
@@ -259,7 +260,6 @@ export const ComparisonView = memo(function ComparisonView({
     if (comparisonChains.length >= 4) return;
     if (comparisonChains.some(c => c.chain.chainId === chain.chainId)) return;
 
-    const newIndex = comparisonChains.length;
     const newChains = [
       ...comparisonChains,
       {
@@ -277,7 +277,7 @@ export const ComparisonView = memo(function ComparisonView({
 
     updateUrl(newChains.map(c => c.chain.chainId));
 
-    fetchChainData(chain, newIndex);
+    fetchChainData(chain);
     setIsModalOpen(false);
   };
 
