@@ -364,7 +364,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
           // Native token (used for stake formatting). Default decimals to 18 if missing.
           networkToken: (() => {
             const t = chain.networkToken || chain.token || chain.nativeToken;
-            const symbol = t?.symbol || t?.name || 'TOKEN';
+            const symbol = t?.symbol || t?.name || 'N/A';
             const name = t?.name || symbol;
             const decimals =
               typeof t?.decimals === 'number' && Number.isFinite(t.decimals) ? t.decimals : 18;

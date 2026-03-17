@@ -23,13 +23,10 @@ import {
   BarChart3
 } from 'lucide-react';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
-import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
-import { getHealth } from '../api';
-import { HealthStatus } from '../types';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 import { ComparisonView } from '../components/comparison/ComparisonView';
 
@@ -42,7 +39,6 @@ export function ChainDetails() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAllValidators, setShowAllValidators] = useState(false);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [sortBy, setSortBy] = useState<'stake' | 'uptime' | 'address'>('stake');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
@@ -56,9 +52,8 @@ export function ChainDetails() {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chains, healthData, feeData] = await Promise.all([
+        const [chains, feeData] = await Promise.all([
           getChains(),
-          getHealth(),
           getL1BeatFeeMetrics()
         ]);
         const counts: Record<string, number> = {};
@@ -83,7 +78,6 @@ export function ChainDetails() {
           const apiChainId = foundChain.originalChainId || foundChain.chainId;
           const history = await getTPSHistory(7, apiChainId);
           setTPSHistory(history);
-          setHealth(healthData);
           setError(null);
         } else {
           setError('Chain not found');
@@ -132,7 +126,7 @@ export function ChainDetails() {
   };
 
   const tokenDecimals = chain?.networkToken?.decimals ?? 18;
-  const tokenSymbol = chain?.networkToken?.symbol || 'TOKEN';
+  const tokenSymbol = chain?.networkToken?.symbol || 'N/A';
   // Avalanche staking/validator APIs often represent AVAX in nAVAX (1e9).
   // Even if EVM-native AVAX uses 18 decimals, we should display validator stake using 9 decimals.
   const stakeTokenDecimals = tokenSymbol === 'AVAX' ? 9 : tokenDecimals;
@@ -226,7 +220,6 @@ export function ChainDetails() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
@@ -240,7 +233,6 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full text-center">
             <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -300,8 +292,6 @@ export function ChainDetails() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <StatusBar health={health} />
-      
       <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Header */}

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages, getL1BeatFeeMetrics } from '../api';
-import { Chain, HealthStatus, TeleporterMessageData } from '../types';
+import { getAllChainsTPSLatest, getChains, getCategories, getTeleporterMessages, getL1BeatFeeMetrics } from '../api';
+import { Chain, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
 import { ChainTableView } from '../components/ChainTableView';
-import { StatusBar } from '../components/StatusBar';
 import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
@@ -18,13 +17,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [currentPage, setCurrentPage] = useState(1);
+  const CHAINS_PER_PAGE = 20;
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -47,9 +47,8 @@ export function Dashboard() {
       const filters: { category?: string } = {};
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, healthData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
+      const [chainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
         getChains(filters),
-        getHealth(),
         getCategories(),
         getAllChainsTPSLatest(),
         getTeleporterMessages(),
@@ -137,7 +136,6 @@ export function Dashboard() {
       });
 
       setChains(sortedChains);
-      setHealth(healthData);
       setCategories(categoriesData);
       setError(null);
     } catch (err) {
@@ -154,13 +152,8 @@ export function Dashboard() {
   }, [selectedCategory, showChainsWithoutValidators]);
 
   useEffect(() => {
-    // Refresh health status every 5 minutes (increased from 1 minute)
-    const healthInterval = setInterval(() => {
-      getHealth().then(setHealth).catch(console.error);
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(healthInterval);
-  }, []);
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, showChainsWithoutValidators, viewMode]);
 
   useEffect(() => {
     // Restore scroll position when returning from chain details
@@ -180,6 +173,12 @@ export function Dashboard() {
   const filteredChains = chains.filter(chain =>
     chain.chainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     chain.chainId.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredChains.length / CHAINS_PER_PAGE);
+  const paginatedChains = filteredChains.slice(
+    (currentPage - 1) * CHAINS_PER_PAGE,
+    currentPage * CHAINS_PER_PAGE
   );
 
   if (loading) {
@@ -233,8 +232,6 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <StatusBar health={health} />
-      
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
         <NetworkMetricsBar />
         
@@ -364,20 +361,74 @@ export function Dashboard() {
               </motion.div>
             ) : (
               <motion.div
-                key={`${viewMode}-${selectedCategory}-${searchTerm}`}
+                key={`${viewMode}-${selectedCategory}-${searchTerm}-${currentPage}`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
               >
                 {viewMode === 'table' ? (
-                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} validatorCountBySubnet={validatorCountBySubnet} feesBySubnet={feesBySubnet} />
+                  <ChainTableView chains={paginatedChains} icmMessageCounts={icmMessageCounts} validatorCountBySubnet={validatorCountBySubnet} feesBySubnet={feesBySubnet} />
                 ) : (
                   <ChainListView chains={filteredChains} validatorCountBySubnet={validatorCountBySubnet} />
                 )}
               </motion.div>
             )}
           </AnimatePresence>
+
+          {viewMode === 'table' && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <span className="text-sm text-muted-foreground">
+                {(currentPage - 1) * CHAINS_PER_PAGE + 1}–{Math.min(currentPage * CHAINS_PER_PAGE, filteredChains.length)} of {filteredChains.length} chains
+              </span>
+              <div className="flex items-center gap-1">
+                <motion.button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Prev
+                </motion.button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .reduce<(number | 'ellipsis')[]>((acc, page, idx, arr) => {
+                    if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                    acc.push(page);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === 'ellipsis' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground text-sm select-none">…</span>
+                    ) : (
+                      <motion.button
+                        key={item}
+                        onClick={() => setCurrentPage(item as number)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                          currentPage === item
+                            ? 'bg-[#ef4444] border-[#ef4444] text-white'
+                            : 'border-border bg-card text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {item}
+                      </motion.button>
+                    )
+                  )}
+                <motion.button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </motion.button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
