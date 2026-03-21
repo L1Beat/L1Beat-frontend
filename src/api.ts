@@ -1,17 +1,14 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
 // XSS protection - sanitize strings in API responses
+// Only encode < and > to prevent HTML tag injection. React already escapes
+// attribute values and text nodes, so encoding & / " / ' here would
+// double-encode and corrupt URLs (e.g. &amp; in image src attributes).
 function sanitizeString(value: string): string {
   if (typeof value !== 'string') return value;
-  
-  // Replace potentially dangerous characters
-  return value
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Sanitize API response recursively
@@ -69,7 +66,7 @@ const DEFAULT_HEADERS = {
 };
 
 // Define constants for rate limiting
-const REQUEST_LIMIT = 50; // Max requests per minute
+const REQUEST_LIMIT = 200; // Max requests per minute
 const REQUEST_PERIOD = 60 * 1000; // 1 minute in milliseconds
 
 // Track API calls for rate limiting
@@ -99,7 +96,6 @@ const apiRequestTracker = {
       this.rateLimitTimeout = setTimeout(() => {
         this.isRateLimited = false;
         this.requests = [];
-        console.log('Rate limit reset');
       }, REQUEST_PERIOD);
     }
     
@@ -132,7 +128,6 @@ async function fetchWithCache<T>(
     
     // If we have cached data (even if expired), use it
     if (cached) {
-      console.log(`Using stale cached data for ${key} due to rate limiting`);
       return cached.data;
     }
   }
@@ -161,81 +156,79 @@ async function fetchWithRetry<T>(
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error occurred');
   let attempt = 0;
-  
-  // Create a new AbortController for each retry attempt
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    while (attempt < retries) {
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-          mode: 'cors',
-          credentials: 'omit',
-          headers: {
-            ...DEFAULT_HEADERS,
-            ...options.headers,
-            'Cache-Control': 'no-cache',
-          },
-        });
 
-        // Check for HTTP errors
-        if (!response.ok) {
-          if (response.status === 504) {
-            throw new Error('Server timeout - The request took too long to complete');
-          }
-          if (response.status === 429) {
-            throw new Error('Rate limit exceeded - Please try again later');
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+  while (attempt < retries) {
+    // Fresh controller per attempt so a timeout on one attempt doesn't
+    // permanently abort the signal shared by subsequent retries.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          return data;
-        }
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          ...DEFAULT_HEADERS,
+          ...options.headers,
+          'Cache-Control': 'no-cache',
+        },
+      });
 
-        throw new Error('Invalid content type');
-      } catch (error) {
-        lastError = error as Error;
-        
-        // Check if the request was aborted (timeout)
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          throw new Error('Request timeout - The connection to the server timed out');
+      clearTimeout(timeoutId);
+
+      // Check for HTTP errors
+      if (!response.ok) {
+        if (response.status === 504) {
+          throw new Error('Server timeout - The request took too long to complete');
         }
-        
-        // Check if it's a CORS error
-        if (error instanceof TypeError && error.message.includes('CORS')) {
-          console.error('CORS error detected:', error);
-          break; // Exit retry loop and return fallback data
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded - Please try again later');
         }
-        
-        // Check for network errors (offline)
-        if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('Network request failed'))) {
-          console.error('Network error detected:', error);
-          break; // Exit retry loop and return fallback data
-        }
-        
-        attempt++;
-        
-        if (attempt === retries) break;
-        
-        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
-        const jitter = Math.random() * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay + jitter));
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      }
+
+      throw new Error('Invalid content type');
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error as Error;
+
+      // Check if the request was aborted (timeout)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Request timeout - The connection to the server timed out');
+      }
+
+      // Check if it's a CORS error
+      if (error instanceof TypeError && error.message.includes('CORS')) {
+        console.error('CORS error detected:', error);
+        break; // Exit retry loop and return fallback data
+      }
+
+      // Check for network errors (offline)
+      if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('Network request failed'))) {
+        console.error('Network error detected:', error);
+        break; // Exit retry loop and return fallback data
+      }
+
+      attempt++;
+
+      if (attempt === retries) break;
+
+      const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
+      const jitter = Math.random() * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
-    
-    // If we've exhausted all retries, return fallback data instead of throwing
-    console.warn('All retry attempts failed, returning fallback data:', lastError.message);
-    return getFallbackData<T>();
-  } finally {
-    // Always clear the timeout to prevent memory leaks
-    clearTimeout(timeoutId);
   }
+
+  console.warn('All retry attempts failed, returning fallback data:', lastError.message);
+  return getFallbackData<T>();
 }
 
 // Fallback data generator
@@ -291,28 +284,31 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
       const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const data = await fetchWithRetry<any[]>(url);
 
-      const chains = data.map((chain) => {
-        // Debug: Log chain data to see networkToken field
-        if (!chain.networkToken && !chain.token && !chain.nativeToken) {
-          console.log(`Chain ${chain.chainName} missing networkToken field. Available fields:`, Object.keys(chain));
-        }
+      // Track seen slugs to prevent routing collisions between chains whose
+      // names reduce to the same slug after lowercasing and stripping specials.
+      const seenSlugs = new Map<string, number>();
 
+      const chains = data.map((chain) => {
         // Handle potential backend property name changes
         // Prioritize using the chain name as the primary ID for URLs, but keep numeric IDs for other purposes if needed
         // We sanitize the chain name to be URL-friendly (lowercase, replace spaces with dashes)
         const rawChainId = chain.evmChainId || chain.chainId || chain.id || chain._id;
-        
+
         // Generate a slug from the chain name if available
-        let chainSlug = rawChainId;
+        let baseSlug = String(rawChainId || '');
         if (chain.chainName) {
-          chainSlug = chain.chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+          baseSlug = chain.chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         }
-        
-        if (!chainSlug) {
+
+        if (!baseSlug) {
           console.warn('Chain missing ID and Name:', chain);
-          // Fallback to a random string if absolutely nothing is available (should shouldn't happen)
-           chainSlug = Math.random().toString(36).substring(7);
+          baseSlug = Math.random().toString(36).substring(7);
         }
+
+        // Deduplicate: append -2, -3, … for any slug seen more than once
+        const count = seenSlugs.get(baseSlug) ?? 0;
+        seenSlugs.set(baseSlug, count + 1);
+        const chainSlug = count === 0 ? baseSlug : `${baseSlug}-${count + 1}`;
 
         const validatorCountRaw = chain.validatorCount || chain.validatorsCount || chain.validator_count || chain.nodeCount || 0;
         const validatorCount = Number(validatorCountRaw);
@@ -368,7 +364,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
           // Native token (used for stake formatting). Default decimals to 18 if missing.
           networkToken: (() => {
             const t = chain.networkToken || chain.token || chain.nativeToken;
-            const symbol = t?.symbol || t?.name || 'TOKEN';
+            const symbol = t?.symbol || t?.name || 'N/A';
             const name = t?.name || symbol;
             const decimals =
               typeof t?.decimals === 'number' && Number.isFinite(t.decimals) ? t.decimals : 18;
@@ -1315,7 +1311,6 @@ export async function getNetworkActiveAddressesHistory(days: number = 30): Promi
 export async function getDailyActiveAddresses(chainId: string, days: number = 30): Promise<DailyActiveAddresses[]> {
   return fetchWithCache(`daily-active-addresses-${chainId}-${days}`, async () => {
     try {
-      console.log(`Fetching daily active addresses for chainId: ${chainId}, days: ${days}`);
       const timestamp = Math.floor(Date.now() / 1000);
       const url = `${API_URL}/chains/${chainId}/active-addresses/history?days=${days}&t=${timestamp}`;
 
@@ -1424,15 +1419,119 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
       const response = await fetchWithRetry<{ data: TeleporterDailyData[] }>(
         `${API_URL}/teleporter/messages/historical-daily?days=${days}`
       );
-      
+
       if (!response.data || !Array.isArray(response.data)) {
         throw new Error('Invalid Teleporter daily history data format');
       }
-      
+
       return response.data;
     } catch (error) {
       console.error('Teleporter daily history fetch error:', error);
       return [];
     }
   }, 15 * 60 * 1000); // Cache for 15 minutes
+}
+
+const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io';
+
+// Cache wrapper for external API calls — skips the internal rate limiter since
+// these calls go to a different origin and should not consume the backend quota.
+async function fetchExternalWithCache<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  duration: number = CACHE_DURATION
+): Promise<T> {
+  const cached = cache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.timestamp < duration) {
+    return cached.data;
+  }
+  const data = await fetcher();
+  const sanitizedData = sanitizeResponse(data);
+  cache.set(key, { data: sanitizedData, timestamp: now });
+  return sanitizedData;
+}
+
+// Fetch from external APIs with only CORS-safe headers (no Cache-Control /
+// Content-Type / Origin that trigger a preflight). Creates a fresh
+// AbortController per attempt so retries are not dead after a timeout.
+async function fetchExternalWithRetry<T>(
+  url: string,
+  retries: number = 3,
+  backoffFactor: number = 2,
+  timeout: number = 30000
+): Promise<T> {
+  let lastError: Error = new Error('Unknown error occurred');
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json() as T;
+    } catch (error) {
+      lastError = error instanceof DOMException && error.name === 'AbortError'
+        ? new Error('Request timeout')
+        : error as Error;
+
+      if (attempt < retries - 1) {
+        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastError;
+}
+
+// Paginate through all pages of an L1Beat external API endpoint.
+// Stops when has_more is false or a page returns no data (guards against a
+// stuck has_more=true from a misbehaving API).
+async function fetchAllL1BeatPages<T>(
+  endpoint: string,
+  extraParams: Record<string, string> = {}
+): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
+    const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+      `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
+    );
+    const chunk = response.data ?? [];
+    all.push(...chunk);
+    if (chunk.length === 0 || !response.meta?.has_more) break;
+    offset += limit;
+  }
+
+  return all;
+}
+
+export async function getL1BeatFeeMetrics(subnetId?: string): Promise<L1BeatFeeMetrics[]> {
+  const cacheKey = `l1beat-fees-${subnetId ?? 'all'}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const extraParams: Record<string, string> = {};
+      if (subnetId) extraParams['subnet_id'] = subnetId;
+      return await fetchAllL1BeatPages<L1BeatFeeMetrics>('/api/v1/metrics/fees', extraParams);
+    } catch (error) {
+      console.error('L1Beat fee metrics fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
 }

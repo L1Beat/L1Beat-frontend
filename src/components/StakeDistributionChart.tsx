@@ -32,7 +32,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     mode === 'weight' ? true : mode === 'tokens' ? false : validators.some(v => v.stakeUnit === 'weight');
 
   const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
-  const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'TOKEN');
+  const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'N/A');
 
   const { data, totalStakeBaseUnits, baseByIndex } = useMemo(() => {
     const getStakeBase = (v: Validator) => parseBaseUnits(v.weight) ?? 0n;

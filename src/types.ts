@@ -197,6 +197,19 @@ export interface HealthStatus {
   timestamp: number;
 }
 
+// L1Beat external API types (https://api.l1beat.io)
+export interface L1BeatFeeMetrics {
+  subnet_id: string;
+  total_deposited: number;
+  initial_deposits: number;
+  top_up_deposits: number;
+  total_refunded: number;
+  current_balance: number;
+  total_fees_paid: number;
+  deposit_tx_count: number;
+  validator_count: number;
+}
+
 // Teleporter message types
 export interface TeleporterMessage {
   source: string;
@@ -417,12 +430,3 @@ export interface ACPSearchResponse extends ACPListResponse {
   suggestions?: string[];
 }
 
-// ============= CHAIN COMPARISON TYPES =============
-
-export interface ChainComparisonData {
-  chain: Chain;
-  tpsHistory: TPSHistory[];
-  cumulativeTx: CumulativeTxCount[];
-}
-
-export type ComparisonMetricType = 'tps' | 'transactions';

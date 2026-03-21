@@ -16,6 +16,8 @@ import {
 interface ChainTableViewProps {
   chains: Chain[];
   icmMessageCounts?: Record<string, number>;
+  validatorCountBySubnet?: Record<string, number>;
+  feesBySubnet?: Record<string, number>;
 }
 
 type SortField =
@@ -66,6 +68,15 @@ const formatTimestamp = (timestamp: number | undefined) => {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+};
+
+const formatFeesAvax = (nAvax: number | undefined): string => {
+  if (nAvax === undefined || nAvax === null) return "N/A";
+  const avax = nAvax / 1_000_000_000;
+  if (avax === 0) return "0 AVAX";
+  if (avax >= 1_000_000) return `${(avax / 1_000_000).toFixed(2)}M AVAX`;
+  if (avax >= 1_000) return `${(avax / 1_000).toFixed(2)}K AVAX`;
+  return `${avax.toFixed(2)} AVAX`;
 };
 
 // Placeholder badge components for missing data
@@ -127,6 +138,8 @@ const SortHeader = ({
 export const ChainTableView = memo(function ChainTableView({
   chains,
   icmMessageCounts = {},
+  validatorCountBySubnet = {},
+  feesBySubnet = {},
 }: ChainTableViewProps) {
   const navigate = useNavigate();
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -176,8 +189,8 @@ export const ChainTableView = memo(function ChainTableView({
         return order * (tpsA - tpsB);
 
       case "validators":
-        const validatorsA = a.validatorCount ?? 0;
-        const validatorsB = b.validatorCount ?? 0;
+        const validatorsA = (a.subnetId ? validatorCountBySubnet[a.subnetId] : undefined) ?? a.validatorCount ?? 0;
+        const validatorsB = (b.subnetId ? validatorCountBySubnet[b.subnetId] : undefined) ?? b.validatorCount ?? 0;
         return order * (validatorsA - validatorsB);
 
       case "nativeToken":
@@ -190,9 +203,14 @@ export const ChainTableView = memo(function ChainTableView({
         const icmB = icmMessageCounts[b.chainName] || 0;
         return order * (icmA - icmB);
 
+      case "feesToPChain": {
+        const feesA = a.subnetId ? (feesBySubnet[a.subnetId] ?? -1) : -1;
+        const feesB = b.subnetId ? (feesBySubnet[b.subnetId] ?? -1) : -1;
+        return order * (feesA - feesB);
+      }
+
       // Placeholder sorts for missing data
       case "networkStatus":
-      case "feesToPChain":
       case "governanceStage":
       case "riskLevel":
         return 0;
@@ -254,7 +272,7 @@ export const ChainTableView = memo(function ChainTableView({
               />
               <SortHeader
                 field="feesToPChain"
-                label="Fees to P-Chain (Monthly)"
+                label="Fees to P-Chain (Total)"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
@@ -281,6 +299,9 @@ export const ChainTableView = memo(function ChainTableView({
             {sortedChains.map((chain, index) => {
               const tpsValue = formatTPS(chain.tps);
               const tpsColor = getTPSColor(tpsValue);
+              const validatorCount = (chain.subnetId ? validatorCountBySubnet[chain.subnetId] : undefined) ?? chain.validatorCount ?? 0;
+              const feesNAvax = chain.subnetId ? feesBySubnet[chain.subnetId] : undefined;
+              const feesDisplay = formatFeesAvax(feesNAvax);
 
               return (
                 <motion.tr
@@ -348,7 +369,7 @@ export const ChainTableView = memo(function ChainTableView({
                     <div className="flex items-center gap-1.5">
                       <Server className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {chain.validatorCount || 0}
+                        {validatorCount}
                       </span>
                     </div>
                   </td>
@@ -394,9 +415,15 @@ export const ChainTableView = memo(function ChainTableView({
                     })()}
                   </td>
 
-                  {/* Fees to P-Chain (Monthly) - Coming Soon */}
+                  {/* Fees to P-Chain */}
                   <td className="px-3 py-3">
-                    <ComingSoonBadge />
+                    {feesNAvax !== undefined ? (
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {feesDisplay}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">N/A</span>
+                    )}
                   </td>
 
                   {/* Governance Stage - Coming Soon */}

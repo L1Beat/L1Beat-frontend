@@ -6,7 +6,6 @@ import { Typography } from '../components/branding/Typography';
 import { UsageGuidelines } from '../components/branding/UsageGuidelines';
 import { DownloadAssets } from '../components/branding/DownloadAssets';
 import { ExampleApplications } from '../components/branding/ExampleApplications';
-import { StatusBar } from '../components/StatusBar';
 import { useTheme } from '../hooks/useTheme';
 import { Copy, Download, Palette, Type, Layout, Package } from 'lucide-react';
 
@@ -28,8 +27,6 @@ export function BrandGuidelines() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors">
-      <StatusBar showTabs={false} />
-
       {/* Navigation */}
       <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md sticky top-[107px] z-40">
         <div className="max-w-7xl mx-auto px-6">

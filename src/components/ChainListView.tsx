@@ -6,12 +6,14 @@ import { motion } from 'framer-motion';
 
 interface ChainListViewProps {
   chains: Chain[];
+  validatorCountBySubnet?: Record<string, number>;
 }
 
 interface ChainListItemProps {
   chain: Chain;
   index: number;
   onNavigate: (chainId: string) => void;
+  validatorCount: number;
 }
 
 // Helper functions moved outside component
@@ -31,7 +33,7 @@ const getTPSColor = (tpsStr: string) => {
 };
 
 // Memoized list item to prevent re-renders during parent animations
-const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate }: ChainListItemProps) {
+const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate, validatorCount }: ChainListItemProps) {
   const tpsValue = formatTPS(chain.tps);
   const tpsColor = getTPSColor(tpsValue);
   
@@ -90,7 +92,7 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate }: 
             <div className="flex items-center gap-1 min-w-[30px]">
               <Server className="w-3 h-3 text-muted-foreground flex-shrink-0" />
               <span className="text-xs font-medium text-muted-foreground">
-                {chain.validatorCount || 0}
+                {validatorCount}
               </span>
             </div>
             <div className="w-px h-3 bg-border flex-shrink-0"></div>
@@ -110,13 +112,13 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate }: 
   return (
     prevProps.chain.chainId === nextProps.chain.chainId &&
     prevProps.chain.tps?.value === nextProps.chain.tps?.value &&
-    prevProps.chain.validatorCount === nextProps.chain.validatorCount &&
+    prevProps.validatorCount === nextProps.validatorCount &&
     prevProps.index === nextProps.index
   );
 });
 
 // Memoized container component
-export const ChainListView = memo(function ChainListView({ chains }: ChainListViewProps) {
+export const ChainListView = memo(function ChainListView({ chains, validatorCountBySubnet = {} }: ChainListViewProps) {
   const navigate = useNavigate();
 
   const handleNavigate = useCallback((chainId: string) => {
@@ -127,14 +129,18 @@ export const ChainListView = memo(function ChainListView({ chains }: ChainListVi
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-      {chains.map((chain, index) => (
-        <ChainListItem
-          key={chain.chainId}
-          chain={chain}
-          index={index}
-          onNavigate={handleNavigate}
-        />
-      ))}
+      {chains.map((chain, index) => {
+        const validatorCount = (chain.subnetId ? validatorCountBySubnet[chain.subnetId] : undefined) ?? chain.validatorCount ?? 0;
+        return (
+          <ChainListItem
+            key={chain.chainId}
+            chain={chain}
+            index={index}
+            onNavigate={handleNavigate}
+            validatorCount={validatorCount}
+          />
+        );
+      })}
     </div>
   );
 });

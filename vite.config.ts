@@ -10,11 +10,13 @@ export default defineConfig(async ({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '');
   const apiBaseUrl = env.VITE_API_BASE_URL;
+  const l1beatExternalApi = env.VITE_L1BEAT_EXTERNAL_API;
 
   return {
     define: {
       'process.env': {},
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
+      'import.meta.env.VITE_L1BEAT_EXTERNAL_API': JSON.stringify(l1beatExternalApi),
     },
     plugins: [
       react(),

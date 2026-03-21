@@ -4,11 +4,8 @@ import { Search, Filter, Tag, AlertCircle, RefreshCw, TrendingUp, Clock, Calenda
 import { motion, AnimatePresence } from 'framer-motion';
 import { BlogPost, getBlogPosts, getBlogTags, BlogTag } from '../api/blogApi';
 import { BlogCard } from '../components/BlogCard';
-import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { getHealth } from '../api';
-import type { HealthStatus } from '../types';
 
 export function BlogList() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -23,7 +20,6 @@ export function BlogList() {
     );
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [health, setHealth] = useState<HealthStatus | null>(null);
     const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -112,7 +108,6 @@ export function BlogList() {
     useEffect(() => {
         fetchPosts(0, selectedTag || undefined);
         fetchTags();
-        getHealth().then(setHealth);
     }, [selectedTag]);
 
     const handleTagFilter = (tag: string | null) => {
@@ -185,7 +180,6 @@ export function BlogList() {
     if (loading && posts.length === 0) {
         return (
             <div className="min-h-screen bg-background text-foreground">
-                <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
                         <LoadingSpinner size="lg" />
@@ -198,8 +192,6 @@ export function BlogList() {
 
     return (
         <div className="min-h-screen flex flex-col bg-background text-foreground">
-            <StatusBar health={health} />
-
             <div className="flex-1">
                 {/* Hero Section */}
                 <div className="relative bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#b91c1c] overflow-hidden">
