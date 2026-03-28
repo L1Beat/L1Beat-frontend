@@ -12,7 +12,7 @@ import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
-import { LayoutGrid, Activity, Network, Filter, Search, Table } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Filter, Search, Table, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
@@ -21,14 +21,14 @@ export function Dashboard() {
   const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('dashboardSearch') || '');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => (sessionStorage.getItem('dashboardViewMode') as 'grid' | 'table') || 'grid');
+  const [currentPage, setCurrentPage] = useState(() => Number(sessionStorage.getItem('dashboardPage')) || 1);
   const CHAINS_PER_PAGE = 20;
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => sessionStorage.getItem('dashboardCategory') || '');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
+  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(() => sessionStorage.getItem('dashboardShowNoValidators') === 'true');
   const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
   const [feesBySubnet, setFeesBySubnet] = useState<Record<string, number>>({});
@@ -44,8 +44,9 @@ export function Dashboard() {
       setError(null);
 
       // Build filter object
-      const filters: { category?: string } = {};
+      const filters: { category?: string; includeInactive?: boolean } = {};
       if (selectedCategory) filters.category = selectedCategory;
+      if (showChainsWithoutValidators) filters.includeInactive = true;
 
       const [chainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
         getChains(filters),
@@ -67,15 +68,17 @@ export function Dashboard() {
       }
       setIcmMessageCounts(icmCounts);
 
-      // Build validator count and fee maps from fee metrics (validator_count is included per subnet)
-      const validatorCounts: Record<string, number> = {};
+      // Build fee map from fee metrics
       const feesMap: Record<string, number> = {};
       feeData.forEach((f) => {
-        validatorCounts[f.subnet_id] = f.validator_count;
         feesMap[f.subnet_id] = f.total_fees_paid;
       });
-      setValidatorCountBySubnet(validatorCounts);
       setFeesBySubnet(feesMap);
+
+      // Validator counts are already included in the chains endpoint as
+      // chain.validatorCount (mapped from active_validators).  No need for
+      // separate per-subnet API calls — components fall back to
+      // chain.validatorCount when validatorCountBySubnet has no entry.
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
       const chainsWithLatestTps = chainsData.map((chain) => {
@@ -106,12 +109,11 @@ export function Dashboard() {
       let filteredChains = excludedChains;
 
       if (!showChainsWithoutValidators) {
-        // Default behavior: only show chains with validators or Avalanche primary chains
+        // Default behavior: only show chains with active validators or Avalanche primary chains
         filteredChains = filteredChains.filter(chain => {
-          const subnetValidators = chain.subnetId ? validatorCounts[chain.subnetId] : undefined;
+          const subnetValidators = chain.validatorCount ?? 0;
           return (
             (subnetValidators !== undefined && subnetValidators >= 1) ||
-            (chain.validatorCount && chain.validatorCount >= 1) ||
             chain.chainName.toLowerCase().includes('avalanche') ||
             chain.chainName.toLowerCase().includes('c-chain')
           );
@@ -150,6 +152,18 @@ export function Dashboard() {
   useEffect(() => {
     fetchData();
   }, [selectedCategory, showChainsWithoutValidators]);
+
+  // Persist filter state to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('dashboardSearch', searchTerm);
+    sessionStorage.setItem('dashboardViewMode', viewMode);
+    sessionStorage.setItem('dashboardCategory', selectedCategory);
+    sessionStorage.setItem('dashboardShowNoValidators', String(showChainsWithoutValidators));
+  }, [searchTerm, viewMode, selectedCategory, showChainsWithoutValidators]);
+
+  useEffect(() => {
+    sessionStorage.setItem('dashboardPage', String(currentPage));
+  }, [currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -254,8 +268,11 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
               <h2 className="text-lg sm:text-xl font-semibold">
-                Active Chains
+                {showChainsWithoutValidators ? 'All Chains' : 'Active Chains'}
               </h2>
+              <span className="text-sm text-muted-foreground font-medium">
+                ({filteredChains.length})
+              </span>
               <AnimatePresence>
                 {isRefetching && (
                   <motion.div
@@ -271,6 +288,44 @@ export function Dashboard() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+              {/* Category Quick Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {['Gaming', 'DeFi', 'RWA', 'AI', 'DePIN'].map(cat => {
+                  // Match case-insensitively against available categories
+                  const matched = categories.find(c => c.toLowerCase() === cat.toLowerCase());
+                  if (!matched) return null;
+                  return (
+                    <motion.button
+                      key={matched}
+                      onClick={() => setSelectedCategory(selectedCategory === matched ? '' : matched)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap border transition-all ${
+                        selectedCategory === matched
+                          ? 'bg-[#ef4444] border-[#ef4444] text-white'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground hover:border-[#ef4444]/40'
+                      }`}
+                    >
+                      {cat}
+                    </motion.button>
+                  );
+                })}
+                <AnimatePresence>
+                  {selectedCategory && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => setSelectedCategory('')}
+                      className="px-2 py-1 text-xs font-medium text-[#ef4444] hover:bg-[#ef4444]/10 rounded-full transition-colors"
+                      title="Clear filter"
+                    >
+                      Clear
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
               {/* View Toggle Buttons */}
               <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-card w-fit">
                 <motion.button

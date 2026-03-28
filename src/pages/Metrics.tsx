@@ -3,7 +3,7 @@ import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
 import { ComparisonView } from '../components/comparison';
 import { Footer } from '../components/Footer';
-import { getL1BeatFeeMetrics } from '../api';
+import { getChains, getL1BeatActiveValidatorCounts } from '../api';
 
 export function Metrics() {
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
@@ -11,9 +11,9 @@ export function Metrics() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const feeData = await getL1BeatFeeMetrics();
-        const counts: Record<string, number> = {};
-        feeData.forEach((f) => { counts[f.subnet_id] = f.validator_count; });
+        const chains = await getChains();
+        const subnetIds = chains.map(c => c.subnetId).filter(Boolean) as string[];
+        const counts = await getL1BeatActiveValidatorCounts(subnetIds);
         setValidatorCountBySubnet(counts);
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -43,4 +43,3 @@ export function Metrics() {
     </div>
   );
 }
-

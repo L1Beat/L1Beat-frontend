@@ -48,6 +48,7 @@ export const ComparisonView = memo(function ComparisonView({
   const [urlInitialized, setUrlInitialized] = useState(false);
   const [copied, setCopied] = useState(false);
   const [metricDropdownOpen, setMetricDropdownOpen] = useState(false);
+  const metricDropdownRef = useRef<HTMLDivElement>(null);
 
   // Read selected metric from URL or default
   const metricParam = searchParams.get('metric');
@@ -59,11 +60,15 @@ export const ComparisonView = memo(function ComparisonView({
   const timeframeParam = searchParams.get('timeframe');
   const timeframe = (timeframeParam === '30' ? 30 : 7) as 7 | 30;
 
+  // Keep a ref to the latest searchParams so updateUrl never captures stale values
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+
   // Update URL with current state. Always writes both timeframe and metric so
   // that partial updates (e.g. changing only the metric) don't silently drop
   // the other param and break shareable URLs.
   const updateUrl = useCallback((chainIds: string[], newTimeframe?: number, newMetric?: ComparisonMetricType) => {
-    const newParams = new URLSearchParams(searchParams);
+    const newParams = new URLSearchParams(searchParamsRef.current);
 
     if (chainIds.length > 0) {
       newParams.set('compare', chainIds.join(','));
@@ -75,7 +80,19 @@ export const ComparisonView = memo(function ComparisonView({
     newParams.set('metric', newMetric ?? selectedMetric);
 
     setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams, timeframe, selectedMetric]);
+  }, [setSearchParams, timeframe, selectedMetric]);
+
+  // Close metric dropdown on outside click
+  useEffect(() => {
+    if (!metricDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (metricDropdownRef.current && !metricDropdownRef.current.contains(e.target as Node)) {
+        setMetricDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [metricDropdownOpen]);
 
   // Handle timeframe change
   const handleTimeframeChange = useCallback((newTimeframe: 7 | 30) => {
@@ -96,6 +113,8 @@ export const ComparisonView = memo(function ComparisonView({
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      console.warn('Clipboard write failed');
     });
   }, []);
 
@@ -245,14 +264,11 @@ export const ComparisonView = memo(function ComparisonView({
 
     setComparisonChains(prev => {
       if (prev.length === 0) return prev;
+      return prev.map(c => ({ ...c, loading: true }));
+    });
 
-      const updated = prev.map(c => ({ ...c, loading: true }));
-
-      prev.forEach((data) => {
-        fetchChainData(data.chain);
-      });
-
-      return updated;
+    comparisonChains.forEach((data) => {
+      fetchChainData(data.chain);
     });
   }, [timeframe, fetchChainData]);
 
@@ -464,7 +480,7 @@ export const ComparisonView = memo(function ComparisonView({
               className="flex flex-col sm:flex-row items-center justify-center gap-4"
             >
               {/* Metric Selector Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={metricDropdownRef}>
                 <motion.button
                   onClick={() => setMetricDropdownOpen(!metricDropdownOpen)}
                   whileHover={{ scale: 1.02 }}

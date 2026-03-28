@@ -115,20 +115,24 @@ export function FilterModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Validators
               </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showChainsWithoutValidators}
-                  onChange={(e) => onShowChainsWithoutValidatorsChange(e.target.checked)}
-                  className="w-4 h-4 text-[#ef4444] border-border rounded focus:ring-[#ef4444] bg-muted cursor-pointer"
-                />
+              <button
+                onClick={() => onShowChainsWithoutValidatorsChange(!showChainsWithoutValidators)}
+                className="flex items-center gap-3 cursor-pointer w-full"
+              >
+                <div className={`relative w-9 h-5 rounded-full transition-colors ${
+                  showChainsWithoutValidators ? 'bg-[#ef4444]' : 'bg-muted border border-border'
+                }`}>
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                    showChainsWithoutValidators ? 'translate-x-4' : ''
+                  }`} />
+                </div>
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
                     Include chains without validators
                   </span>
                 </div>
-              </label>
+              </button>
             </div>
           </div>
 

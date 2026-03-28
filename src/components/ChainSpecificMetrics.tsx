@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
+import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
 import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
 import { Chain } from '../types';
@@ -119,6 +120,7 @@ export function ChainSpecificMetrics() {
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
   const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
   const chartRefs = useRef<Record<string, ChartJSInstance<'line'> | null>>({});
+  const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const reducedMotion = prefersReducedMotion();
   const [copied, setCopied] = useState(false);
 
@@ -175,6 +177,8 @@ export function ChainSpecificMetrics() {
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      console.warn('Clipboard write failed');
     });
   }, []);
   const isMobile = useMediaQuery(breakpoints.sm);
@@ -445,19 +449,35 @@ export function ChainSpecificMetrics() {
   }, [metricsData, selectedChain, timeframe, rangeStates]);
 
   // Download PNG handler for a specific metric
-  const handleDownloadPNG = useCallback((metricId: MetricType) => {
-    const chartRef = chartRefs.current[metricId];
-    if (!chartRef || !selectedChain) return;
+  const handleDownloadPNG = useCallback(async (metricId: MetricType) => {
+    const container = chartContainerRefs.current[metricId];
+    if (!container || !selectedChain) return;
 
     const metric = METRICS.find(m => m.id === metricId);
     if (!metric) return;
 
-    const link = document.createElement('a');
-    link.download = `${selectedChain.chainName}-${metric.name.replace(/\s+/g, '-')}-${timeframe}d.png`;
-    link.href = chartRef.toBase64Image('image/png', 1);
-    link.click();
+    try {
+      container.classList.add('exporting');
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      const canvas = await html2canvas(container, {
+        backgroundColor: isDark ? '#0f172a' : '#ffffff',
+        scale: 2,
+        useCORS: true,
+      });
+
+      container.classList.remove('exporting');
+
+      const link = document.createElement('a');
+      link.download = `${selectedChain.chainName}-${metric.name.replace(/\s+/g, '-')}-${timeframe}d.png`;
+      link.href = canvas.toDataURL('image/png', 1);
+      link.click();
+    } catch (err) {
+      console.error('Failed to export PNG:', err);
+      container.classList.remove('exporting');
+    }
     setExportDropdownStates(prev => ({ ...prev, [metricId]: false }));
-  }, [selectedChain, timeframe]);
+  }, [selectedChain, timeframe, isDark]);
 
   // Create chart component for each metric
   const renderMetricChart = (metricId: MetricType) => {
@@ -591,7 +611,14 @@ export function ChainSpecificMetrics() {
     const Icon = metric.icon;
 
     return (
-      <div key={metricId} className="bg-card rounded-xl border border-border p-6">
+      <div key={metricId} ref={(el) => { chartContainerRefs.current[metricId] = el; }} className="bg-card rounded-xl border border-border p-6">
+        {/* Export-only chain name */}
+        <div className="export-show hidden items-center justify-between mb-2">
+          <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
+          <span className="text-sm text-muted-foreground">
+            {timeframe === 360 ? '1Y' : `${timeframe}D`} · {format(new Date(), 'MMM d, yyyy')}
+          </span>
+        </div>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -609,7 +636,7 @@ export function ChainSpecificMetrics() {
               </p>
             </div>
           </div>
-          <div className="relative">
+          <div className="relative export-hide">
             <button
               onClick={() => toggleExportDropdown(metricId)}
               className="p-2 rounded-lg hover:bg-accent transition-colors"

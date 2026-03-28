@@ -7,6 +7,7 @@ import ACPDetails  from './pages/ACPDetails';
 import { BlogList } from './pages/BlogList';
 import { BlogPost } from './pages/BlogPost';
 import { Metrics } from './pages/Metrics';
+import { ValidatorDetails } from './pages/ValidatorDetails';
 import { BrandGuidelines } from './pages/BrandGuidelines';
 import { NotFound } from './pages/NotFound';
 import { StatusBar } from './components/StatusBar';
@@ -74,6 +75,7 @@ function App() {
         hrefAttr === '/' ||
         hrefAttr.startsWith('/blog') ||
         hrefAttr.startsWith('/chain') ||
+        hrefAttr.startsWith('/validator') ||
         hrefAttr.startsWith('#'); // Hash links
 
       if (isInternalNavigation) {
@@ -118,6 +120,7 @@ function App() {
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />
         <Route path="/blog" element={<BlogList />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
+        <Route path="/validator/:validatorId" element={<ValidatorDetails />} />
         <Route path="/brand" element={<BrandGuidelines />} />
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />

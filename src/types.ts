@@ -71,6 +71,15 @@ export interface Validator {
   stakeUnit?: 'tokens' | 'weight';
   remainingBalance?: number;
   explorerUrl?: string;
+  validationId?: string;
+}
+
+export interface ValidatorDeposit {
+  tx_id: string;
+  tx_type: 'RegisterL1Validator' | 'IncreaseL1ValidatorBalance' | 'DisableL1Validator' | 'SetL1ValidatorWeight' | 'ConvertSubnetToL1';
+  block_number: number;
+  block_time: string;
+  amount: number; // nAVAX
 }
 
 // TVL related types
@@ -207,6 +216,15 @@ export interface L1BeatFeeMetrics {
   current_balance: number;
   total_fees_paid: number;
   deposit_tx_count: number;
+  validator_count: number;
+}
+
+export interface L1BeatFeeSummary {
+  total_deposited: number;
+  total_refunded: number;
+  total_fees_paid: number;
+  current_balance: number;
+  subnet_count: number;
   validator_count: number;
 }
 
