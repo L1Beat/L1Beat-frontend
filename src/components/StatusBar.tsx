@@ -1,6 +1,6 @@
-import { AlertTriangle, Menu, X, ExternalLink, LayoutGrid, FileText, BookOpen, BarChart3, Code } from 'lucide-react';
+import { AlertTriangle, Menu, X, LayoutGrid, FileText, BookOpen, BarChart3, Code } from 'lucide-react';
 import { HealthStatus } from '../types';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '../hooks/useTheme';
@@ -12,13 +12,9 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ health, showTabs = true }: StatusBarProps) {
-  const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [showComingSoon, setShowComingSoon] = useState(false);
-  
-  // Navigation tabs configuration
+
   const navTabs = [
     { id: 'dashboard', label: 'Dashboard', path: '/', icon: LayoutGrid },
     { id: 'metrics', label: 'Metrics', path: '/metrics', icon: BarChart3 },
@@ -26,24 +22,10 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
     { id: 'blog', label: 'Blog', path: '/blog', icon: BookOpen },
     { id: 'api', label: 'API', path: '', icon: Code, comingSoon: true },
   ];
+
   const location = useLocation();
   const navigate = useNavigate();
   const { theme } = useTheme();
-
-  useEffect(() => {
-    const controlNavbar = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY < lastScrollY || currentScrollY < 50) {
-        setIsVisible(true);
-      } else if (currentScrollY > lastScrollY && currentScrollY > 50) {
-        setIsVisible(false);
-      }
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', controlNavbar);
-    return () => window.removeEventListener('scroll', controlNavbar);
-  }, [lastScrollY]);
 
   const handleLogoClick = () => {
     if (!isAnimating) {
@@ -61,15 +43,13 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
   };
 
   return (
-    <>
-      <div className={`sticky top-0 z-50 transform transition-transform duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'
-        }`}>
-        {/* Alpha Warning Banner */}
+    <div className="sticky top-0 z-50">
+      {/* Alpha Warning Banner */}
       <div className="bg-[#ef4444]/15 supports-[backdrop-filter]:bg-[#ef4444]/10 supports-[backdrop-filter]:backdrop-blur-md border-b border-[#ef4444]/20 px-4 sm:px-6 py-2 flex items-center justify-center gap-2">
         <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444] flex-shrink-0" />
         <p className="text-xs sm:text-sm font-medium text-[#ef4444] text-center">
-              L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
-            </p>
+          L1Beat is currently in alpha. Data shown may be incomplete or inaccurate.
+        </p>
       </div>
 
       {/* Main Navigation */}
@@ -83,12 +63,9 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
                 className="relative transform transition-all duration-300 hover:scale-105 focus:outline-none group"
               >
                 <div
-                  className={`absolute inset-0 bg-[#ef4444]/20 dark:bg-[#ef4444]/30 rounded-lg filter blur-xl transition-opacity duration-500 ${isAnimating ?
-                    'animate-heartbeat-glow' : 'opacity-0'
-                    }`}
+                  className={`absolute inset-0 bg-[#ef4444]/20 dark:bg-[#ef4444]/30 rounded-lg filter blur-xl transition-opacity duration-500 ${isAnimating ? 'animate-heartbeat-glow' : 'opacity-0'}`}
                 />
-                <div className={`relative ${isAnimating ? 'animate-heartbeat' : ''
-                    } transition-transform duration-300`}>
+                <div className={`relative ${isAnimating ? 'animate-heartbeat' : ''} transition-transform duration-300`}>
                   <L1BeatLogo size="small" theme={theme} variant="header" />
                 </div>
               </button>
@@ -124,8 +101,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
           </div>
 
           {/* Mobile Menu */}
-          <div className={`md:hidden transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
-            }`}>
+          <div className={`md:hidden transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-border">
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between px-3">
@@ -146,10 +122,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
               {navTabs.map(({ id, label, path, icon: Icon, comingSoon }) => {
                 if (comingSoon) {
                   return (
-                    <div 
-                      key={id} 
-                      className="relative group"
-                    >
+                    <div key={id} className="relative group">
                       <button
                         className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b-2 border-transparent text-muted-foreground transition-colors whitespace-nowrap cursor-not-allowed opacity-75"
                         disabled
@@ -168,28 +141,23 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
                 const active = isActive(path);
                 const tabClassName = `
                   flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 border-b-2 transition-colors whitespace-nowrap
-                  ${active 
-                    ? 'border-[#ef4444] text-foreground' 
+                  ${active
+                    ? 'border-[#ef4444] text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                   }
                 `;
 
                 return (
-                  <Link 
-                    key={id} 
-                    to={path}
-                    className={tabClassName}
-                  >
+                  <Link key={id} to={path} className={tabClassName}>
                     <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span className="text-xs sm:text-sm">{label}</span>
                   </Link>
                 );
               })}
-        </div>
-      </div>
+            </div>
+          </div>
         </nav>
       )}
-      </div>
-    </>
+    </div>
   );
 }

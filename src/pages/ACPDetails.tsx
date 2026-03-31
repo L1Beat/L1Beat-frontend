@@ -8,7 +8,6 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
 import 'katex/dist/katex.min.css';
-import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
@@ -28,8 +27,6 @@ import {
   BookOpen,
   Info
 } from 'lucide-react';
-import { getHealth } from '../api';
-import { HealthStatus } from '../types';
 import { acpService, LocalACP } from '../services/acpService';
 const preprocessContent = (content: string) => {
   return content
@@ -59,7 +56,6 @@ export default function ACPDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
 
   // Dynamically load syntax highlighter only on client side
   const [SyntaxHighlighter, setSyntaxHighlighter] = useState<any>(null);
@@ -92,20 +88,16 @@ export default function ACPDetails() {
         setError(null);
 
         console.log(`Loading ACP-${acpNumber} from local data...`);
-        const [acpData, healthData] = await Promise.all([
-          acpService.loadACPByNumber(acpNumber),
-          getHealth(),
-        ]);
-        
+        const acpData = await acpService.loadACPByNumber(acpNumber);
+
         if (!mounted) return;
-        
+
         if (!acpData) {
           setError(`ACP-${acpNumber} not found`);
           return;
         }
 
         setAcp(acpData);
-        setHealth(healthData);
       } catch (err) {
         if (!mounted) return;
         console.error(`Error loading ACP-${acpNumber}:`, err);
@@ -451,7 +443,6 @@ export default function ACPDetails() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
@@ -470,7 +461,6 @@ export default function ACPDetails() {
   if (error || !acp) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
@@ -510,8 +500,6 @@ export default function ACPDetails() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <StatusBar health={health} />
-
       <div className="flex-1">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}

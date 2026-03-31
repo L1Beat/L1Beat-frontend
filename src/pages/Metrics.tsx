@@ -1,30 +1,30 @@
 import { useEffect, useState } from 'react';
-import { StatusBar } from '../components/StatusBar';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
+import { ComparisonView } from '../components/comparison';
 import { Footer } from '../components/Footer';
-import { getHealth } from '../api';
-import { HealthStatus } from '../types';
+import { getChains, getL1BeatActiveValidatorCounts } from '../api';
 
 export function Metrics() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    async function fetchHealth() {
+    async function fetchData() {
       try {
-        const healthData = await getHealth();
-        setHealth(healthData);
+        const chains = await getChains();
+        const subnetIds = chains.map(c => c.subnetId).filter(Boolean) as string[];
+        const counts = await getL1BeatActiveValidatorCounts(subnetIds);
+        setValidatorCountBySubnet(counts);
       } catch (err) {
-        console.error('Failed to fetch health:', err);
+        console.error('Failed to fetch data:', err);
       }
     }
 
-    fetchHealth();
+    fetchData();
   }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <StatusBar health={health} />
 
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
         {/* Network-Wide Metrics */}
@@ -32,10 +32,14 @@ export function Metrics() {
 
         {/* Chain-Specific Metrics */}
         <ChainSpecificMetrics />
+
+        {/* Chain Comparison */}
+        <section>
+          <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
+        </section>
       </main>
 
       <Footer />
     </div>
   );
 }
-

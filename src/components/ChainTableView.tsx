@@ -3,23 +3,23 @@ import { Chain } from "../types";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Zap,
   Server,
-  Shield,
   Clock,
   AlertCircle,
+  ChevronRight,
 } from "lucide-react";
 
 interface ChainTableViewProps {
   chains: Chain[];
   icmMessageCounts?: Record<string, number>;
+  validatorCountBySubnet?: Record<string, number>;
+  feesBySubnet?: Record<string, number>;
 }
 
 type SortField =
-  | "chainId"
   | "chainName"
   | "networkStatus"
   | "tps"
@@ -53,32 +53,19 @@ const getTPSColor = (tpsStr: string) => {
   return "text-red-500 dark:text-red-400";
 };
 
-const formatTimestamp = (timestamp: number | undefined) => {
-  if (!timestamp) return "N/A";
-  const date = new Date(timestamp * 1000);
-  const now = Date.now();
-  const diff = now - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+const formatFeesAvax = (nAvax: number | undefined): string => {
+  if (nAvax === undefined || nAvax === null) return "N/A";
+  const avax = nAvax / 1_000_000_000;
+  if (avax === 0) return "0 AVAX";
+  if (avax >= 1_000_000) return `${(avax / 1_000_000).toFixed(2)}M AVAX`;
+  if (avax >= 1_000) return `${(avax / 1_000).toFixed(2)}K AVAX`;
+  return `${avax.toFixed(2)} AVAX`;
 };
 
-// Placeholder badge components for missing data
-const NetworkStatusBadge = () => (
-  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-500 border border-green-500/20">
-    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-    Active
-  </span>
-);
-
+// Placeholder badge components
 const ComingSoonBadge = () => (
-  <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground border border-border">
-    <Clock className="w-3 h-3" />
+  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-muted/60 text-muted-foreground/70 border border-border/50">
+    <Clock className="w-2.5 h-2.5" />
     Soon
   </span>
 );
@@ -103,21 +90,18 @@ const SortHeader = ({
 
   return (
     <th
-      className={`px-3 py-3 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${className}`}
+      className={`px-4 py-3 text-left cursor-pointer select-none transition-colors hover:bg-[rgba(120,120,128,0.12)] ${className}`}
       onClick={() => onSort(field)}
     >
-      <div className="flex items-center gap-2 select-none">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.5px]">
           {label}
         </span>
         {isActive && sortConfig.order === "asc" && (
-          <ArrowUp className="w-3.5 h-3.5 text-[#ef4444]" />
+          <ArrowUp className="w-3 h-3 text-[#ef4444]" />
         )}
         {isActive && sortConfig.order === "desc" && (
-          <ArrowDown className="w-3.5 h-3.5 text-[#ef4444]" />
-        )}
-        {!isActive && (
-          <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ArrowDown className="w-3 h-3 text-[#ef4444]" />
         )}
       </div>
     </th>
@@ -127,6 +111,8 @@ const SortHeader = ({
 export const ChainTableView = memo(function ChainTableView({
   chains,
   icmMessageCounts = {},
+  validatorCountBySubnet = {},
+  feesBySubnet = {},
 }: ChainTableViewProps) {
   const navigate = useNavigate();
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -162,11 +148,6 @@ export const ChainTableView = memo(function ChainTableView({
     const order = sortConfig.order === "asc" ? 1 : -1;
 
     switch (sortConfig.field) {
-      case "chainId":
-        const idA = a.evmChainId ?? 0;
-        const idB = b.evmChainId ?? 0;
-        return order * (idA - idB);
-
       case "chainName":
         return order * a.chainName.localeCompare(b.chainName);
 
@@ -176,8 +157,8 @@ export const ChainTableView = memo(function ChainTableView({
         return order * (tpsA - tpsB);
 
       case "validators":
-        const validatorsA = a.validatorCount ?? 0;
-        const validatorsB = b.validatorCount ?? 0;
+        const validatorsA = (a.subnetId ? validatorCountBySubnet[a.subnetId] : undefined) ?? a.validatorCount ?? 0;
+        const validatorsB = (b.subnetId ? validatorCountBySubnet[b.subnetId] : undefined) ?? b.validatorCount ?? 0;
         return order * (validatorsA - validatorsB);
 
       case "nativeToken":
@@ -190,9 +171,13 @@ export const ChainTableView = memo(function ChainTableView({
         const icmB = icmMessageCounts[b.chainName] || 0;
         return order * (icmA - icmB);
 
-      // Placeholder sorts for missing data
+      case "feesToPChain": {
+        const feesA = a.subnetId ? (feesBySubnet[a.subnetId] ?? -1) : -1;
+        const feesB = b.subnetId ? (feesBySubnet[b.subnetId] ?? -1) : -1;
+        return order * (feesA - feesB);
+      }
+
       case "networkStatus":
-      case "feesToPChain":
       case "governanceStage":
       case "riskLevel":
         return 0;
@@ -203,24 +188,17 @@ export const ChainTableView = memo(function ChainTableView({
   });
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
-      {/* Table container with horizontal scroll */}
+    <div className="bg-card rounded-xl border border-border overflow-hidden" style={{ boxShadow: 'var(--card-shadow, none)' }}>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1050px]">
-          <thead className="bg-muted border-b border-border">
-            <tr className="group">
-              <SortHeader
-                field="chainId"
-                label="Chain ID"
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                className="sticky left-0 bg-muted z-10"
-              />
+        <table className="w-full min-w-[900px]">
+          <thead>
+            <tr className="border-b border-border bg-[#f2f2f7] dark:bg-[#2c2c2e]">
               <SortHeader
                 field="chainName"
-                label="Chain Name"
+                label="Chain"
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                className="sticky left-0 z-10 bg-[#f2f2f7] dark:bg-[#2c2c2e]"
               />
               <SortHeader
                 field="networkStatus"
@@ -230,19 +208,19 @@ export const ChainTableView = memo(function ChainTableView({
               />
               <SortHeader
                 field="tps"
-                label="TPS (24h Avg)"
+                label="TPS (24h)"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
               <SortHeader
                 field="validators"
-                label="Active Validators"
+                label="Validators"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
               <SortHeader
                 field="nativeToken"
-                label="Native Token"
+                label="Token"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
@@ -254,7 +232,7 @@ export const ChainTableView = memo(function ChainTableView({
               />
               <SortHeader
                 field="feesToPChain"
-                label="Fees to P-Chain (Monthly)"
+                label="Fees to P-Chain"
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
@@ -270,92 +248,80 @@ export const ChainTableView = memo(function ChainTableView({
                 sortConfig={sortConfig}
                 onSort={handleSort}
               />
-              <th className="px-4 py-3 text-left">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Last Updated
-                </span>
-              </th>
+              <th className="w-10" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody>
             {sortedChains.map((chain, index) => {
               const tpsValue = formatTPS(chain.tps);
               const tpsColor = getTPSColor(tpsValue);
+              const validatorCount = (chain.subnetId ? validatorCountBySubnet[chain.subnetId] : undefined) ?? chain.validatorCount ?? 0;
+              const feesNAvax = chain.subnetId ? feesBySubnet[chain.subnetId] : undefined;
+              const feesDisplay = formatFeesAvax(feesNAvax);
 
               return (
                 <motion.tr
                   key={chain.chainId}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   transition={{
-                    duration: 0.3,
-                    delay: Math.min(index * 0.02, 0.3),
-                    ease: [0.25, 0.46, 0.45, 0.94],
+                    duration: 0.2,
+                    delay: Math.min(index * 0.015, 0.3),
                   }}
-                  className="hover:bg-muted cursor-pointer transition-colors group"
+                  className="border-b border-border/50 last:border-b-0 hover:bg-[rgba(120,120,128,0.12)] cursor-pointer transition-colors duration-150 group"
                   onClick={() => handleNavigate(chain.chainId)}
                 >
-                  {/* Chain ID - sticky */}
-                  <td className="px-3 py-3 sticky left-0 bg-card group-hover:bg-muted z-10">
-                    <code className="text-xs font-mono text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/50 px-2 py-1 rounded">
-                      {chain.evmChainId || "N/A"}
-                    </code>
-                  </td>
-
                   {/* Chain Name with Logo */}
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      {chain.chainLogoUri ? (
+                  <td className="px-4 py-3.5 sticky left-0 bg-card group-hover:bg-[rgba(120,120,128,0.12)] z-10 transition-colors duration-150">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-[#f2f2f7] dark:bg-[#2c2c2e] flex items-center justify-center">
                         <img
-                          src={chain.chainLogoUri}
-                          alt={`${chain.chainName} logo`}
-                          className="w-7 h-7 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
+                          src={chain.chainLogoUri || "/icon-dark-animated.svg"}
+                          alt={chain.chainName}
+                          className="w-8 h-8 rounded-lg object-cover"
                           onError={(e) => {
                             e.currentTarget.src = "/icon-dark-animated.svg";
                             e.currentTarget.onerror = null;
                           }}
                         />
-                      ) : (
-                        <img
-                          src="/icon-dark-animated.svg"
-                          alt={`${chain.chainName} logo`}
-                          className="w-7 h-7 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
-                        />
-                      )}
-                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      </div>
+                      <span className="text-sm font-semibold text-foreground whitespace-nowrap">
                         {chain.chainName}
                       </span>
                     </div>
                   </td>
 
-                  {/* Network Status */}
-                  <td className="px-3 py-3">
-                    <NetworkStatusBadge />
+                  {/* Status */}
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-green-500/10 text-green-500 dark:text-[#30d158]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-[#30d158]"></span>
+                      Active
+                    </span>
                   </td>
 
-                  {/* TPS (24h Avg) */}
-                  <td className="px-3 py-3">
+                  {/* TPS */}
+                  <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
                       <Zap className={`w-3.5 h-3.5 ${tpsColor}`} />
-                      <span className={`text-sm font-semibold ${tpsColor}`}>
+                      <span className={`text-sm font-semibold tabular-nums ${tpsColor}`}>
                         {tpsValue}
                       </span>
                     </div>
                   </td>
 
-                  {/* Active Validators */}
-                  <td className="px-3 py-3">
+                  {/* Validators */}
+                  <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1.5">
-                      <Server className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {chain.validatorCount || 0}
+                      <Server className="w-3.5 h-3.5 text-muted-foreground/60" />
+                      <span className="text-sm font-medium text-foreground tabular-nums">
+                        {validatorCount.toLocaleString()}
                       </span>
                     </div>
                   </td>
 
                   {/* Native Token */}
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5">
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-2">
                       <img
                         src={
                           chain.networkToken?.logoUri ||
@@ -363,58 +329,59 @@ export const ChainTableView = memo(function ChainTableView({
                           "/icon-dark-animated.svg"
                         }
                         alt={chain.networkToken?.symbol || chain.chainName}
-                        className="w-4 h-4 rounded-full"
+                        className="w-4 h-4 rounded-full flex-shrink-0"
                         onError={(e) => {
                           e.currentTarget.src = "/icon-dark-animated.svg";
                           e.currentTarget.onerror = null;
                         }}
                       />
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <span className="text-sm font-medium text-foreground">
                         {chain.networkToken?.symbol || "N/A"}
                       </span>
                     </div>
                   </td>
 
-                  {/* ICM Messages (24h) */}
-                  <td className="px-3 py-3">
+                  {/* ICM Messages */}
+                  <td className="px-4 py-3.5">
                     {(() => {
                       const count = icmMessageCounts[chain.chainName] || 0;
                       if (count === 0) {
                         return (
-                          <span className="text-sm text-muted-foreground">
-                            N/A
-                          </span>
+                          <span className="text-sm text-muted-foreground/60">—</span>
                         );
                       }
                       return (
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <span className="text-sm font-semibold text-foreground tabular-nums">
                           {count.toLocaleString()}
                         </span>
                       );
                     })()}
                   </td>
 
-                  {/* Fees to P-Chain (Monthly) - Coming Soon */}
-                  <td className="px-3 py-3">
+                  {/* Fees to P-Chain */}
+                  <td className="px-4 py-3.5">
+                    {feesNAvax !== undefined ? (
+                      <span className="text-sm font-medium text-foreground tabular-nums">
+                        {feesDisplay}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/60">—</span>
+                    )}
+                  </td>
+
+                  {/* Governance */}
+                  <td className="px-4 py-3.5">
                     <ComingSoonBadge />
                   </td>
 
-                  {/* Governance Stage - Coming Soon */}
-                  <td className="pr-0 pl-2 py-3">
+                  {/* Risk */}
+                  <td className="px-4 py-3.5">
                     <ComingSoonBadge />
                   </td>
 
-                  {/* Risk Level - Coming Soon */}
-                  <td className="pl-2 pr-2 py-3">
-                    <ComingSoonBadge />
-                  </td>
-
-                  {/* Last Updated */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap">
-                      <Clock className="w-3 h-3" />
-                      <span>{formatTimestamp(chain.tps?.timestamp)}</span>
-                    </div>
+                  {/* Row arrow */}
+                  <td className="px-3 py-3.5">
+                    <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-[#ef4444] transition-colors duration-150" />
                   </td>
                 </motion.tr>
               );
@@ -423,10 +390,10 @@ export const ChainTableView = memo(function ChainTableView({
         </table>
       </div>
 
-      {/* Mobile scroll indicator */}
-      <div className="md:hidden border-t border-border bg-muted px-3 py-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+      {/* Mobile scroll hint */}
+      <div className="md:hidden border-t border-border bg-muted/50 px-4 py-2.5">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />
           <span>Scroll horizontally to see all columns</span>
         </div>
       </div>

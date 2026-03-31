@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
+import html2canvas from 'html2canvas';
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { RefreshCw, Clock, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Plus, X } from 'lucide-react';
-import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory } from '../api';
+import { RefreshCw, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Share2, Coins, Info } from 'lucide-react';
+import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory, getNetworkDailyFeeBurn, getL1BeatFeeSummary } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TimeRangeSlider } from './TimeRangeSlider';
 import { 
@@ -25,6 +27,7 @@ interface MetricData {
   value: number;
   metadata?: {
     chainCount?: number;
+    dailyBurn?: number;
     chains?: Array<{
       chainId: string;
       chainName: string;
@@ -33,24 +36,25 @@ interface MetricData {
   };
 }
 
-type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed';
+type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'feeBurn';
 
-// Distinct colors for each metric (for multi-metric comparison)
+// Distinct colors for each metric
 const METRIC_COLORS = {
   networkTPS: { main: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.15)' },           // Red
-  dailyActiveAddresses: { main: 'rgb(59, 130, 246)', fill: 'rgba(59, 130, 246, 0.15)' }, // Blue  
+  dailyActiveAddresses: { main: 'rgb(59, 130, 246)', fill: 'rgba(59, 130, 246, 0.15)' }, // Blue
   dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },        // Purple
   maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },                // Green
   gasUsed: { main: 'rgb(249, 115, 22)', fill: 'rgba(249, 115, 22, 0.15)' },             // Orange
   dailyMessageVolume: { main: 'rgb(236, 72, 153)', fill: 'rgba(236, 72, 153, 0.15)' },  // Pink
+  feeBurn: { main: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.15)' },              // Amber
 };
 
 const METRICS = [
   { 
-    id: 'networkTPS' as const, 
+    id: 'networkTPS' as const,
     name: 'TPS',
     fullName: 'Network TPS',
-    description: 'Average transactions per second across the entire network',
+    description: 'Average transactions per second aggregated across all Avalanche L1s and C-Chain',
     icon: Activity,
     color: METRIC_COLORS.networkTPS,
     valueFormatter: (value: number) => value.toFixed(2),
@@ -60,7 +64,7 @@ const METRICS = [
     id: 'dailyActiveAddresses' as const, 
     name: 'Active Addresses',
     fullName: 'Daily Active Addresses',
-    description: 'Total unique active addresses across all chains daily',
+    description: 'Total unique wallet addresses that sent or received transactions across all chains in a day',
     icon: Users,
     color: METRIC_COLORS.dailyActiveAddresses,
     valueFormatter: (value: number) => {
@@ -78,7 +82,7 @@ const METRICS = [
     id: 'dailyTxCount' as const,
     name: 'Tx Count',
     fullName: 'Daily Transaction Count',
-    description: 'Total transactions processed across the entire network daily',
+    description: 'Total number of transactions processed across all Avalanche chains per day',
     icon: BarChart3,
     color: METRIC_COLORS.dailyTxCount,
     valueFormatter: (value: number) => {
@@ -99,7 +103,7 @@ const METRICS = [
     id: 'maxTPS' as const,
     name: 'Max TPS',
     fullName: 'Maximum TPS',
-    description: 'Maximum transactions per second recorded daily',
+    description: 'Highest TPS peak recorded in a single day across the entire Avalanche network',
     icon: Activity,
     color: METRIC_COLORS.maxTPS,
     valueFormatter: (value: number) => value.toFixed(2),
@@ -109,7 +113,7 @@ const METRICS = [
     id: 'gasUsed' as const,
     name: 'Gas Used',
     fullName: 'Daily Gas Used',
-    description: 'Total gas consumed by transactions across the network',
+    description: 'Total computational gas consumed by all transactions across Avalanche chains per day',
     icon: Fuel,
     color: METRIC_COLORS.gasUsed,
     valueFormatter: (value: number) => {
@@ -126,32 +130,97 @@ const METRICS = [
     },
     unit: 'gas'
   },
-  { 
-    id: 'dailyMessageVolume' as const, 
-    name: 'Messages',
-    fullName: 'Daily Message Volume',
-    description: 'Total messages sent across the network daily',
+  {
+    id: 'dailyMessageVolume' as const,
+    name: 'ICM Messages',
+    fullName: 'Daily ICM Message Volume',
+    description: 'Total Interchain Messages (ICM) sent across Avalanche L1s daily',
     icon: MessageSquare,
     color: METRIC_COLORS.dailyMessageVolume,
     valueFormatter: (value: number) => value.toLocaleString(),
     unit: 'messages'
   },
+  {
+    id: 'feeBurn' as const,
+    name: 'L1 Validation Fees',
+    fullName: 'L1 Validation Fees',
+    description: 'Cumulative AVAX paid by L1 validators to the P-Chain for continuous validation. Tooltip shows daily fees.',
+    icon: Coins,
+    color: METRIC_COLORS.feeBurn,
+    valueFormatter: (value: number) => {
+      if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+      if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+      if (value >= 1) return value.toFixed(2);
+      return value.toFixed(4);
+    },
+    unit: 'AVAX'
+  },
 ];
 
 export function AvalancheNetworkMetrics() {
   const { theme } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Multi-metric data storage: { metricId: MetricData[] }
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
-  // Multiple selected metrics
-  const [selectedMetrics, setSelectedMetrics] = useState<MetricType[]>(['networkTPS']);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const chartRef = useRef<ChartJSInstance<'line'>>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const reducedMotion = prefersReducedMotion();
-  
+  const [copied, setCopied] = useState(false);
+
+  // Read timeframe from URL or default to 7
+  const timeframeParam = searchParams.get('networkTimeframe');
+  const timeframe = useMemo(() => {
+    const parsed = parseInt(timeframeParam || '7', 10);
+    if ([7, 30, 90, 360].includes(parsed)) {
+      return parsed as TimeframeOption;
+    }
+    return 7 as TimeframeOption;
+  }, [timeframeParam]);
+
+  // Read selected metric from URL or default to 'networkTPS' (single metric only)
+  const metricsParam = searchParams.get('networkMetrics');
+  const selectedMetrics = useMemo(() => {
+    if (!metricsParam) return ['networkTPS'] as MetricType[];
+    const first = metricsParam.split(',').find(m =>
+      METRICS.some(metric => metric.id === m)
+    ) as MetricType | undefined;
+    return first ? [first] : ['networkTPS'] as MetricType[];
+  }, [metricsParam]);
+
+  // Update URL with current state
+  const updateUrl = useCallback((newTimeframe?: TimeframeOption, newMetrics?: MetricType[]) => {
+    const newParams = new URLSearchParams(searchParams);
+
+    if (newTimeframe !== undefined) {
+      newParams.set('networkTimeframe', String(newTimeframe));
+    }
+
+    if (newMetrics !== undefined) {
+      if (newMetrics.length > 0) {
+        newParams.set('networkMetrics', newMetrics.join(','));
+      } else {
+        newParams.delete('networkMetrics');
+      }
+    }
+
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Copy share URL to clipboard
+  const handleCopyShareUrl = useCallback(() => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      console.warn('Clipboard write failed');
+    });
+  }, []);
+
   // Range selection state
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(0);
@@ -200,35 +269,39 @@ export function AvalancheNetworkMetrics() {
     return primaryData.slice(start, end + 1);
   }, [primaryData, rangeStart, rangeEnd]);
 
-  // Add a metric
-  const handleAddMetric = useCallback((metricId: MetricType) => {
-    if (!selectedMetrics.includes(metricId)) {
-      setSelectedMetrics(prev => [...prev, metricId]);
-    }
-    setIsDropdownOpen(false);
-  }, [selectedMetrics]);
-
-  // Remove a metric
-  const handleRemoveMetric = useCallback((metricId: MetricType) => {
-    if (selectedMetrics.length > 1) {
-      setSelectedMetrics(prev => prev.filter(m => m !== metricId));
-    }
-  }, [selectedMetrics]);
 
   // Export chart as PNG
   // Export dropdown state
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
-  const handleExportPNG = useCallback(() => {
-    if (chartRef.current) {
+  const handleExportPNG = useCallback(async () => {
+    if (!containerRef.current) return;
+
+    try {
+      // Toggle export mode: show export header, hide interactive controls
+      containerRef.current.classList.add('exporting');
+      // Wait a frame for the DOM to update
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      const canvas = await html2canvas(containerRef.current, {
+        backgroundColor: isDark ? '#0f172a' : '#ffffff',
+        scale: 2,
+        useCORS: true,
+      });
+
+      containerRef.current.classList.remove('exporting');
+
       const link = document.createElement('a');
       const metricNames = selectedMetrics.join('-');
       link.download = `l1beat-${metricNames}-${timeframe}d.png`;
-      link.href = chartRef.current.toBase64Image('image/png', 1);
+      link.href = canvas.toDataURL('image/png', 1);
       link.click();
-      setIsExportDropdownOpen(false);
+    } catch (err) {
+      console.error('Failed to export PNG:', err);
+      containerRef.current?.classList.remove('exporting');
     }
-  }, [selectedMetrics, timeframe]);
+    setIsExportDropdownOpen(false);
+  }, [selectedMetrics, timeframe, isDark]);
 
   const handleExportCSV = useCallback(() => {
     if (!filteredPrimaryData.length) return;
@@ -368,6 +441,35 @@ export function AvalancheNetworkMetrics() {
               metadata: {}
             }));
           break;
+
+        case 'feeBurn':
+          // Fetch all-time total and daily data in parallel
+          const [feeSummary, feeBurnDaily] = await Promise.all([
+            getL1BeatFeeSummary(),
+            getNetworkDailyFeeBurn(daysToFetch === 360 ? 365 : daysToFetch)
+          ]);
+
+          const sortedFeeBurn = feeBurnDaily
+            .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .slice(-daysToFetch);
+
+          if (sortedFeeBurn.length > 0 && feeSummary) {
+            const allTimeTotal = feeSummary.total_fees_paid / 1_000_000_000;
+            const windowSum = sortedFeeBurn.reduce((sum, item) => sum + item.value, 0);
+            let cumulative = allTimeTotal - windowSum;
+
+            processedData = sortedFeeBurn.map(item => {
+              cumulative += item.value;
+              return {
+                timestamp: item.timestamp,
+                date: new Date(item.timestamp * 1000).toISOString(),
+                value: cumulative,
+                metadata: { dailyBurn: item.value }
+              };
+            });
+          }
+          break;
       }
 
     return processedData;
@@ -435,7 +537,7 @@ export function AvalancheNetworkMetrics() {
   }, [timeframe, selectedMetrics.join(',')]); // Re-fetch when metrics change
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
-    setTimeframe(newTimeframe);
+    updateUrl(newTimeframe, undefined);
   };
 
   // Calculate average for primary metric - MUST be before any conditional returns
@@ -510,8 +612,7 @@ export function AvalancheNetworkMetrics() {
     };
   }, [filteredPrimaryData, selectedMetrics, metricsData, rangeStart, rangeEnd, isMobile, isDark]);
 
-  // Check if we have multiple metrics selected
-  const hasMultipleMetrics = selectedMetrics.length > 1;
+  const hasMultipleMetrics = false;
 
   // Memoized chart options with reduced motion support
   const options = useMemo(() => ({
@@ -572,8 +673,24 @@ export function AvalancheNetworkMetrics() {
             const metricId = selectedMetrics[datasetIndex];
             const metric = METRICS.find(m => m.id === metricId);
             if (!metric) return '';
-            
+
             const value = context.parsed.y;
+            const lines = [`Total Burned: ${metric.valueFormatter(value)} ${metric.unit}`];
+
+            // For fee burn, also show daily burn from metadata
+            if (metricId === 'feeBurn') {
+              const dataIndex = context.dataIndex;
+              const metricData = metricsData[metricId] || [];
+              const start = Math.max(0, rangeStart);
+              const filtered = metricData.slice(start, rangeEnd + 1);
+              const dailyBurn = filtered[dataIndex]?.metadata?.dailyBurn;
+              if (dailyBurn != null) {
+                const dailyFormatted = dailyBurn >= 1 ? dailyBurn.toFixed(4) : dailyBurn.toFixed(6);
+                lines.push(`Daily Burn: ${dailyFormatted} AVAX`);
+              }
+              return lines;
+            }
+
             return `${metric.name}: ${metric.valueFormatter(value)} ${metric.unit}`;
           },
           // Use metric color for tooltip color box
@@ -654,7 +771,6 @@ export function AvalancheNetworkMetrics() {
     },
   }), [isDark, isMobile, reducedMotion, filteredPrimaryData, selectedMetrics, hasMultipleMetrics, getPercentChange, averageValue]);
 
-  const latestData = filteredPrimaryData[filteredPrimaryData.length - 1];
 
   // Loading state - must be AFTER all hooks
   if (loading && Object.keys(metricsData).length === 0) {
@@ -668,11 +784,8 @@ export function AvalancheNetworkMetrics() {
     );
   }
 
-  // Get available metrics (not already selected)
-  const availableMetrics = METRICS.filter(m => !selectedMetrics.includes(m.id));
-
   return (
-    <div className="bg-card rounded-xl border border-border p-6">
+    <div ref={containerRef} className="bg-card rounded-xl border border-border p-6">
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -680,12 +793,12 @@ export function AvalancheNetworkMetrics() {
               <BarChart3 className="w-5 h-5 text-[#ef4444]" />
               <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground export-hide">
               Compare multiple metrics across the Avalanche network
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 export-hide">
             {/* Timeframe Selector */}
             <div className="flex flex-wrap gap-2">
               {[7, 30, 90, 360].map((days) => (
@@ -702,6 +815,15 @@ export function AvalancheNetworkMetrics() {
                 </button>
               ))}
             </div>
+
+            {/* Share Button */}
+            <button
+              onClick={handleCopyShareUrl}
+              className="p-2 rounded-lg bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors"
+              title={copied ? 'Copied!' : 'Copy share link'}
+            >
+              <Share2 className={`w-4 h-4 ${copied ? 'text-green-500' : ''}`} />
+            </button>
 
             {/* Export Dropdown */}
             <div className="relative">
@@ -735,96 +857,72 @@ export function AvalancheNetworkMetrics() {
           </div>
         </div>
 
-        {/* Metric Pills and Add Button */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Selected Metrics as Pills */}
-          {selectedMetrics.map((metricId) => {
-            const metric = METRICS.find(m => m.id === metricId);
-            if (!metric) return null;
+        {/* Metric Selector Buttons — hidden during export */}
+        <div className="flex flex-wrap items-center gap-2 export-hide">
+          {METRICS.map((metric) => {
             const Icon = metric.icon;
-            const metricData = metricsData[metricId] || [];
+            const isSelected = selectedMetrics[0] === metric.id;
+            const metricData = metricsData[metric.id] || [];
             const latestValue = metricData[metricData.length - 1]?.value;
-            
+
             return (
-              <div
-                key={metricId}
-                className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full border-2 transition-colors"
-                style={{ 
+              <button
+                key={metric.id}
+                onClick={() => updateUrl(undefined, [metric.id])}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  isSelected
+                    ? 'border-2 shadow-sm'
+                    : 'border border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/30'
+                }`}
+                style={isSelected ? {
                   borderColor: metric.color.main,
-                  backgroundColor: `${metric.color.main}15`
-                }}
+                  backgroundColor: `${metric.color.main}15`,
+                  color: metric.color.main,
+                } : undefined}
               >
-                <Icon className="w-4 h-4" style={{ color: metric.color.main }} />
-                <span className="text-sm font-medium" style={{ color: metric.color.main }}>
-                  {metric.name}
-                </span>
-                {latestValue !== undefined && (
+                <Icon className="w-3.5 h-3.5" />
+                <span>{metric.name}</span>
+                {isSelected && latestValue !== undefined && (
                   <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: metric.color.main, color: 'white' }}>
                     {metric.valueFormatter(latestValue)}
                   </span>
                 )}
-                {selectedMetrics.length > 1 && (
-                  <button
-                    onClick={() => handleRemoveMetric(metricId)}
-                    className="p-0.5 rounded-full hover:bg-muted/40 transition-colors"
-                    title={`Remove ${metric.name}`}
-                  >
-                    <X className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
-                  </button>
-                )}
-              </div>
+              </button>
             );
           })}
 
-          {/* Add Metrics Button - max 3 metrics allowed */}
-          {availableMetrics.length > 0 && selectedMetrics.length < 3 && (
-            <div className="relative">
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dashed border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Add Metric
-              </button>
-              
-              {isDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-72 bg-card rounded-lg shadow-xl border border-border py-2 z-20">
-                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Available Metrics
-                  </div>
-                  {availableMetrics.map(metric => {
-                    const Icon = metric.icon;
-                    return (
-                      <button
-                        key={metric.id}
-                        onClick={() => handleAddMetric(metric.id)}
-                        className="w-full text-left px-3 py-2.5 hover:bg-accent transition-colors flex items-center gap-3"
-                      >
-                        <div 
-                          className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: `${metric.color.main}20` }}
-                        >
-                          <Icon className="w-4 h-4" style={{ color: metric.color.main }} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{metric.fullName}</div>
-                          <div className="text-xs text-muted-foreground">{metric.description}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+          {/* Info tooltip for selected metric */}
+          <div className="ml-auto relative group">
+            <div className="flex items-center gap-1.5 text-muted-foreground cursor-help">
+              <Info className="w-4 h-4" />
             </div>
-          )}
+            <div className="absolute right-0 top-full mt-2 px-3 py-2.5 rounded-lg bg-card border border-border text-xs max-w-[280px] whitespace-normal opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-30 shadow-xl">
+              <div className="absolute right-3 bottom-full w-0 h-0 border-x-[5px] border-x-transparent border-b-[5px] border-b-border" />
+              <p className="font-semibold text-foreground mb-1">{primaryMetric.fullName}</p>
+              <p className="text-muted-foreground leading-relaxed">{primaryMetric.description}</p>
+            </div>
+          </div>
+        </div>
 
-          {/* Last Updated */}
-          {latestData && (
-            <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="w-3.5 h-3.5" />
-              <span>{format(parseISO(latestData.date), 'MMM d, yyyy')}</span>
+        {/* Export-only header — visible only during PNG export */}
+        <div className="export-show hidden items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="text-lg font-bold" style={{ color: primaryMetric.color.main }}>
+              {primaryMetric.fullName}
             </div>
-          )}
+            {(() => {
+              const d = metricsData[selectedMetrics[0]] || [];
+              const v = d[d.length - 1]?.value;
+              return v !== undefined ? (
+                <span className="text-2xl font-bold" style={{ color: primaryMetric.color.main }}>
+                  {primaryMetric.valueFormatter(v)} {primaryMetric.unit}
+                </span>
+              ) : null;
+            })()}
+          </div>
+          <span className="text-sm text-muted-foreground">
+            {timeframe === 360 ? '1Y' : `${timeframe}D`} · {format(new Date(), 'MMM d, yyyy')}
+          </span>
         </div>
       </div>
 

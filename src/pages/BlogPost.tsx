@@ -22,10 +22,8 @@ import {
 import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
 import { getBlogPostImageUrl } from '../utils/imageExtractor';
 import { AuthorCard } from '../components/AuthorCard';
-import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { HealthStatus } from '../types';
 import { RelatedArticles } from '../components/RelatedArticles';
 import { SEO } from '../components/SEO';
 
@@ -174,7 +172,6 @@ export function BlogPost() {
     const [post, setPost] = useState<BlogPostType | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [health] = useState<HealthStatus | null>(null);
     const [shareMenuOpen, setShareMenuOpen] = useState(false);
     const [isBookmarked, setIsBookmarked] = useState(false);
     const [isLiked, setIsLiked] = useState(false);
@@ -335,7 +332,6 @@ export function BlogPost() {
     if (loading) {
         return (
             <div className="min-h-screen bg-background text-foreground">
-                <StatusBar health={health} />
                 <div className="flex items-center justify-center py-20">
                     <div className="text-center">
                         <LoadingSpinner size="lg" />
@@ -349,7 +345,6 @@ export function BlogPost() {
     if (error) {
         return (
             <div className="min-h-screen bg-background text-foreground">
-                <StatusBar health={health} />
                 <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
                     <div className="text-center">
                         <div className="relative inline-block mb-8">
@@ -427,8 +422,6 @@ export function BlogPost() {
                 author={post.author}
                 tags={post.tags}
             />
-
-            <StatusBar health={health} />
 
             {/* Article */}
             <article className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

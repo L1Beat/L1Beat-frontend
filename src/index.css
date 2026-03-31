@@ -602,6 +602,13 @@
   .ease-spring {
     transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 
@@ -739,4 +746,12 @@
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
+}
+
+/* PNG export mode: hide controls, show export header */
+.exporting .export-hide {
+  display: none !important;
+}
+.exporting .export-show {
+  display: flex !important;
 }

@@ -2,7 +2,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { StatusBar } from '../components/StatusBar';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
@@ -27,10 +26,8 @@ import {
   Code,
   AlertCircle
 } from 'lucide-react';
-import { getHealth } from '../api';
 import { acpService, LocalACP, EnhancedACP, ACPStats } from '../services/acpService';
 import EnhancedACPCard from '../components/ACPCard';
-import type { HealthStatus } from '../types';
 
 
 type ViewMode = 'grid' | 'list';
@@ -67,8 +64,6 @@ export default function ACPs() {
 
   });
 
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-
   useEffect(() => {
     let mounted = true;
     
@@ -80,19 +75,15 @@ export default function ACPs() {
         setError(null);
 
         console.log('Loading ACPs from local data...');
-        const [acpsData, healthData] = await Promise.all([
-          acpService.loadACPs(),
-          getHealth(),
-        ]);
-        
+        const acpsData = await acpService.loadACPs();
+
         if (!mounted) return;
-        
+
         if (acpsData.length === 0) {
           throw new Error('No ACPs found. Make sure the submodule is initialized and the build script has been run.');
         }
         setAcps(acpsData);
         setStats(calculateStats(acpsData));
-        setHealth(healthData);
         setError(null);
       } catch (err) {
         if (!mounted) return;
@@ -329,7 +320,6 @@ export default function ACPs() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
@@ -348,7 +338,6 @@ export default function ACPs() {
   if (error) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
@@ -372,8 +361,6 @@ export default function ACPs() {
   }
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <StatusBar health={health} />
-
       <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}

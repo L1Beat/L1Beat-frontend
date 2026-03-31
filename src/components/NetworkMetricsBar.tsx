@@ -191,6 +191,7 @@ export function NetworkMetricsBar() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

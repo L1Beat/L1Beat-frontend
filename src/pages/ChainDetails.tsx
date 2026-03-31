@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainValidators } from '../api';
+import { getChains, getTPSHistory, getChainValidators, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory } from '../types';
-import { 
-  Activity, 
-  ArrowLeft, 
-  Search, 
-  CheckCircle, 
-  Info, 
-  Copy, 
+import {
+  Activity,
+  ArrowLeft,
+  Search,
+  CheckCircle,
+  Info,
+  Copy,
   Check,
   ExternalLink,
   Users,
@@ -19,17 +19,20 @@ import {
   Shield,
   Globe,
   MessageCircle,
-  Github
+  Github,
+  BarChart3
 } from 'lucide-react';
+import { Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip as ChartTooltip } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
-import { StatusBar } from '../components/StatusBar';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip);
 import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
-import { getHealth } from '../api';
-import { HealthStatus } from '../types';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { ComparisonView } from '../components/comparison/ComparisonView';
 
 export function ChainDetails() {
   const { chainId } = useParams();
@@ -40,40 +43,66 @@ export function ChainDetails() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAllValidators, setShowAllValidators] = useState(false);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [sortBy, setSortBy] = useState<'stake' | 'uptime' | 'address'>('stake');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'validators'>('validators');
+  const [activeTab, setActiveTab] = useState<'validators' | 'compare' | 'economics'>('validators');
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const [availableChains, setAvailableChains] = useState<Chain[]>([]);
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+  const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
+  const [allTimeFeesBurned, setAllTimeFeesBurned] = useState<number>(0);
+  const [feeBurnTimeframe, setFeeBurnTimeframe] = useState<0 | 7 | 30 | 90>(0);
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
-        const [chains, healthData] = await Promise.all([
-          getChains(),
-          getHealth()
-        ]);
-        
+        const chains = await getChains({ includeInactive: true });
+        // Validator counts already come from the chains endpoint (chain.validatorCount).
+
         const foundChain = chains.find(c => c.chainId === chainId);
-        
+
         if (foundChain) {
-          // Fetch validators specifically for this chain
-          const validators = await getChainValidators(foundChain.originalChainId || foundChain.chainId);
+          // Fetch subnet type and active validators in parallel
+          let validators: import('../types').Validator[] = [];
+          if (foundChain.subnetId) {
+            const [vals, sType] = await Promise.all([
+              getL1BeatValidators(foundChain.subnetId, true),
+              getL1BeatSubnetType(foundChain.subnetId),
+            ]);
+            validators = vals;
+            setSubnetType(sType);
+            // If no active validators found, fetch all (including inactive)
+            if (validators.length === 0) {
+              validators = await getL1BeatValidators(foundChain.subnetId, false);
+              setShowInactive(true);
+            }
+          }
           const chainWithValidators = {
             ...foundChain,
-            validators: validators.length > 0 ? validators : foundChain.validators // Use fetched validators if available
+            validators
           };
-          
+
           setChain(chainWithValidators);
+          // Store all chains for comparison feature
+          setAvailableChains(chains);
           // Use originalChainId if available for API calls that might require the numeric ID
           // Fallback to chainId if originalChainId is not present
           const apiChainId = foundChain.originalChainId || foundChain.chainId;
-          const history = await getTPSHistory(7, apiChainId);
+          const [history, feeBurnData, feeMetrics] = await Promise.all([
+            getTPSHistory(7, apiChainId),
+            foundChain.subnetId ? getL1BeatDailyFeeBurn(foundChain.subnetId) : Promise.resolve([]),
+            foundChain.subnetId ? getL1BeatFeeMetrics(foundChain.subnetId) : Promise.resolve([])
+          ]);
           setTPSHistory(history);
-          setHealth(healthData);
+          setDailyFeeBurn(feeBurnData);
+          if (feeMetrics.length > 0) {
+            setAllTimeFeesBurned(feeMetrics[0].total_fees_paid);
+          }
           setError(null);
         } else {
           setError('Chain not found');
@@ -87,6 +116,26 @@ export function ChainDetails() {
 
     fetchData();
   }, [chainId]);
+
+  // Lazy-load inactive validators when user toggles "Show Inactive"
+  useEffect(() => {
+    if (!showInactive || !chain?.subnetId) return;
+    // If we only have active validators, fetch all to include inactive
+    const hasInactive = chain.validators.some(v => !v.active);
+    if (hasInactive) return;
+
+    getL1BeatValidators(chain.subnetId, false).then((allVals) => {
+      if (allVals.length > chain.validators.length) {
+        setChain(prev => prev ? { ...prev, validators: allVals } : prev);
+      }
+    });
+  }, [showInactive, chain?.subnetId]);
+
+  // Filter fee burn data by timeframe for display
+  const filteredFeeBurn = useMemo(() => {
+    if (feeBurnTimeframe === 0) return dailyFeeBurn;
+    return dailyFeeBurn.slice(-feeBurnTimeframe);
+  }, [dailyFeeBurn, feeBurnTimeframe]);
 
   const handleCopy = async (type: 'chainId' | 'subnetId' | 'platformChainId', value?: string) => {
     if (value) {
@@ -122,7 +171,7 @@ export function ChainDetails() {
   };
 
   const tokenDecimals = chain?.networkToken?.decimals ?? 18;
-  const tokenSymbol = chain?.networkToken?.symbol || 'TOKEN';
+  const tokenSymbol = chain?.networkToken?.symbol || 'N/A';
   // Avalanche staking/validator APIs often represent AVAX in nAVAX (1e9).
   // Even if EVM-native AVAX uses 18 decimals, we should display validator stake using 9 decimals.
   const stakeTokenDecimals = tokenSymbol === 'AVAX' ? 9 : tokenDecimals;
@@ -130,6 +179,7 @@ export function ChainDetails() {
   const getStakeBaseUnits = (v: { weight: string }) => parseBaseUnits(v.weight) ?? 0n;
 
   const filteredValidators = chain?.validators.filter(validator =>
+    (showInactive || validator.active) &&
     validator.address.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => {
     let comparison = 0;
@@ -162,8 +212,11 @@ export function ChainDetails() {
     : filteredValidators.slice(0, 10);
 
   const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
-  const hasUptimeData = chain?.validators?.some(v => Number.isFinite(v.uptime)) ?? false;
-  const hasRemainingBalanceData = chain?.validators?.some(v => Number.isFinite(v.remainingBalance)) ?? false;
+  // L1 subnets use continuous fees — show remaining balance column.
+  // Legacy subnets (primary network) use staking — show uptime column.
+  const isL1Subnet = subnetType === 'l1';
+  const hasRemainingBalanceData = isL1Subnet && (chain?.validators?.some(v => Number.isFinite(v.remainingBalance)) ?? false);
+  const hasUptimeData = !hasRemainingBalanceData && (chain?.validators?.some(v => Number.isFinite(v.uptime) && v.uptime > 0) ?? false);
 
   const sybilResistance = (chain?.sybilResistanceType || '').toLowerCase();
 
@@ -216,7 +269,6 @@ export function ChainDetails() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
@@ -230,7 +282,6 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StatusBar health={health} />
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full text-center">
             <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -290,8 +341,6 @@ export function ChainDetails() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <StatusBar health={health} />
-      
       <div className="flex-1">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Header */}
@@ -352,8 +401,12 @@ export function ChainDetails() {
                             e.currentTarget.onerror = null;
                           }}
                         />
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
-                          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 ${chain.validators.some(v => v.active) ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center border-2 border-card`}>
+                          {chain.validators.some(v => v.active) ? (
+                            <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -363,8 +416,12 @@ export function ChainDetails() {
                           alt={`${chain.chainName} logo`}
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
                         />
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-card">
-                          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 ${chain.validators.some(v => v.active) ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center border-2 border-card`}>
+                          {chain.validators.some(v => v.active) ? (
+                            <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                          )}
                         </div>
                       </div>
                     )}
@@ -372,6 +429,17 @@ export function ChainDetails() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                         <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-foreground">{chain.chainName}</h1>
+                        {chain.validators.some(v => v.active) ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 dark:text-[#30d158] border border-green-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-[#30d158]"></span>
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-500 border border-red-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                            Inactive
+                          </span>
+                        )}
                         {chain.networkToken && (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 text-xs font-medium text-foreground border border-border">
                             {chain.networkToken.logoUri && (
@@ -463,9 +531,9 @@ export function ChainDetails() {
                     <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
                       <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Validators</span>
+                      <span className="text-xs font-medium text-[#ef4444]">Active Validators</span>
                     </div>
-                    <p className="text-lg sm:text-xl font-bold text-[#ef4444]">{chain.validators.length}</p>
+                    <p className="text-lg sm:text-xl font-bold text-[#ef4444]">{chain.validatorCount || chain.validators.filter(v => v.active).length}</p>
                   </div>
 
                   <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
@@ -584,7 +652,8 @@ export function ChainDetails() {
                 <nav className="flex space-x-4 sm:space-x-8 min-w-max" aria-label="Tabs">
                   {[
                     { id: 'validators', name: 'Validators', icon: Users, disabled: false },
-                    { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: true },
+                    { id: 'compare', name: 'Compare', icon: BarChart3, disabled: false },
+                    { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: false },
                     { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
                     { id: 'social', name: 'Social', icon: MessageCircle, disabled: true }
                   ].map((tab) => {
@@ -593,7 +662,7 @@ export function ChainDetails() {
                     return (
                       <div key={tab.id} className="relative">
                         <button
-                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators')}
+                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators' | 'compare' | 'economics')}
                           onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
                           onMouseLeave={() => setHoveredTab(null)}
                           disabled={tab.disabled}
@@ -632,26 +701,318 @@ export function ChainDetails() {
             </div>
 
             <div className="space-y-4 sm:space-y-6">
+              {/* Compare Tab */}
+              {activeTab === 'compare' && chain && (
+                <ComparisonView
+                  currentChain={chain}
+                  availableChains={availableChains}
+                  validatorCountBySubnet={validatorCountBySubnet}
+                />
+              )}
+
+              {/* Economics Tab */}
+              {activeTab === 'economics' && (
+                <div className="space-y-4 sm:space-y-6">
+                  {dailyFeeBurn.length > 0 ? (() => {
+                    const allTimeBurnedAvax = allTimeFeesBurned / 1_000_000_000;
+                    const latestDay = dailyFeeBurn[dailyFeeBurn.length - 1];
+                    const latestDailyAvax = latestDay ? latestDay.total_fees_burned / 1_000_000_000 : 0;
+                    const latestValidators = latestDay?.active_validators ?? 0;
+                    const visibleBurnedAvax = filteredFeeBurn.reduce((sum, d) => sum + d.total_fees_burned, 0) / 1_000_000_000;
+                    const avgDailyAvax = visibleBurnedAvax / filteredFeeBurn.length;
+                    const formatAvaxValue = (v: number) => {
+                      if (v >= 1000) return `${(v / 1000).toFixed(2)}K`;
+                      if (v >= 1) return v.toFixed(2);
+                      if (v >= 0.01) return v.toFixed(4);
+                      return v.toFixed(6);
+                    };
+
+                    return (
+                      <>
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="bg-card rounded-xl p-4 border border-[#ef4444]/20">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Activity className="w-4 h-4 text-[#ef4444]" />
+                              <span className="text-xs font-medium text-[#ef4444]">Total Burned</span>
+                            </div>
+                            <p className="text-xl font-bold text-[#ef4444]">{formatAvaxValue(allTimeBurnedAvax)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">AVAX (all time)</p>
+                          </div>
+                          <div className="bg-card rounded-xl p-4 border border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-xs font-medium text-foreground">Today's Burn</span>
+                            </div>
+                            <p className="text-xl font-bold text-foreground">{formatAvaxValue(latestDailyAvax)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">AVAX</p>
+                          </div>
+                          <div className="bg-card rounded-xl p-4 border border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-xs font-medium text-foreground">Avg Daily Burn</span>
+                            </div>
+                            <p className="text-xl font-bold text-foreground">{formatAvaxValue(avgDailyAvax)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">AVAX / day</p>
+                          </div>
+                          <div className="bg-card rounded-xl p-4 border border-border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Users className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-xs font-medium text-foreground">Active Validators</span>
+                            </div>
+                            <p className="text-xl font-bold text-foreground">{latestValidators}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">current</p>
+                          </div>
+                        </div>
+
+                        {/* Cumulative Fee Burn Chart */}
+                        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
+                          <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div>
+                              <h3 className="text-base sm:text-lg font-bold text-foreground">Cumulative Fee Burn</h3>
+                              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Total AVAX burned to P-Chain over time</p>
+                            </div>
+                            <div className="flex gap-1.5">
+                              {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+                                <button
+                                  key={value}
+                                  onClick={() => setFeeBurnTimeframe(value as 0 | 7 | 30 | 90)}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                    feeBurnTimeframe === value
+                                      ? 'bg-[#ef4444] text-white shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="px-2 sm:px-4 pb-4 sm:pb-6">
+                            <div className="h-[300px] sm:h-[400px]">
+                              {(() => {
+                                // For "All" view, start from 0. For filtered views, offset so the end matches the all-time total.
+                                const startOffset = feeBurnTimeframe === 0 ? 0 : (() => {
+                                  const visibleSum = filteredFeeBurn.reduce((s, d) => s + d.total_fees_burned, 0) / 1_000_000_000;
+                                  return allTimeBurnedAvax - visibleSum;
+                                })();
+                                const cumulativeData = filteredFeeBurn.reduce<number[]>((acc, d, i) => {
+                                  const dailyAvax = d.total_fees_burned / 1_000_000_000;
+                                  acc.push(i === 0 ? startOffset + dailyAvax : acc[i - 1] + dailyAvax);
+                                  return acc;
+                                }, []);
+
+                                // Crosshair plugin matching AvalancheNetworkMetrics
+                                const crosshairPlugin = {
+                                  id: 'feeBurnCrosshair',
+                                  afterDraw: (chart: any) => {
+                                    const { tooltip, ctx, chartArea } = chart;
+                                    if (tooltip?.opacity > 0 && tooltip?.caretX) {
+                                      ctx.save();
+                                      ctx.beginPath();
+                                      ctx.setLineDash([6, 4]);
+                                      ctx.moveTo(tooltip.caretX, chartArea.top);
+                                      ctx.lineTo(tooltip.caretX, chartArea.bottom);
+                                      ctx.lineWidth = 1;
+                                      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+                                      ctx.stroke();
+                                      ctx.restore();
+                                    }
+                                  },
+                                };
+
+                                // Line shadow plugin matching AvalancheNetworkMetrics
+                                const lineShadowPlugin = {
+                                  id: 'feeBurnLineShadow',
+                                  beforeDatasetsDraw: (chart: any) => {
+                                    const { ctx } = chart;
+                                    ctx.save();
+                                    ctx.shadowColor = 'rgba(239, 68, 68, 0.35)';
+                                    ctx.shadowBlur = 12;
+                                    ctx.shadowOffsetX = 0;
+                                    ctx.shadowOffsetY = 4;
+                                  },
+                                  afterDatasetsDraw: (chart: any) => {
+                                    chart.ctx.restore();
+                                  },
+                                };
+
+                                const isDark = theme === 'dark';
+
+                                return (
+                                  <Line
+                                    data={{
+                                      labels: filteredFeeBurn.map(d => {
+                                        const date = new Date(d.date + 'T00:00:00');
+                                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                      }),
+                                      datasets: [{
+                                        label: 'Cumulative Burn (AVAX)',
+                                        data: cumulativeData,
+                                        borderColor: 'rgb(239, 68, 68)',
+                                        backgroundColor: (ctx: any) => {
+                                          const chart = ctx.chart;
+                                          const { ctx: c, chartArea } = chart;
+                                          if (!chartArea) return 'rgba(239, 68, 68, 0.1)';
+                                          const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                                          gradient.addColorStop(0, 'rgba(239, 68, 68, 0.35)');
+                                          gradient.addColorStop(0.4, 'rgba(239, 68, 68, 0.15)');
+                                          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.02)');
+                                          return gradient;
+                                        },
+                                        fill: true,
+                                        borderWidth: isDark ? 2.5 : 2,
+                                        tension: 0.35,
+                                        pointRadius: 0,
+                                        pointHoverRadius: 7,
+                                        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
+                                        pointHoverBorderColor: 'rgb(239, 68, 68)',
+                                        pointHoverBorderWidth: 2.5,
+                                      }],
+                                    }}
+                                    plugins={[crosshairPlugin, lineShadowPlugin]}
+                                    options={{
+                                      responsive: true,
+                                      maintainAspectRatio: false,
+                                      animation: { duration: 750, easing: 'easeInOutQuart' },
+                                      interaction: { mode: 'index', intersect: false },
+                                      plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.97)' : 'rgba(255, 255, 255, 0.98)',
+                                          titleColor: isDark ? '#f1f5f9' : '#0f172a',
+                                          bodyColor: isDark ? '#cbd5e1' : '#334155',
+                                          borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0, 0, 0, 0.1)',
+                                          borderWidth: 1,
+                                          padding: 16,
+                                          boxPadding: 8,
+                                          cornerRadius: 12,
+                                          caretSize: 8,
+                                          caretPadding: 12,
+                                          titleFont: { size: 15, weight: 'bold' as const },
+                                          bodyFont: { size: 13 },
+                                          bodySpacing: 6,
+                                          titleMarginBottom: 10,
+                                          displayColors: false,
+                                          callbacks: {
+                                            title: (items: any[]) => {
+                                              if (!items.length) return '';
+                                              const idx = items[0].dataIndex;
+                                              const entry = filteredFeeBurn[idx];
+                                              if (!entry) return '';
+                                              const date = new Date(entry.date + 'T00:00:00');
+                                              return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                                            },
+                                            label: (ctx: any) => {
+                                              const v = ctx.parsed.y;
+                                              const formatted = v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toFixed(6);
+                                              return `Total Burned: ${formatted} AVAX`;
+                                            },
+                                            afterLabel: (ctx: any) => {
+                                              const idx = ctx.dataIndex;
+                                              const entry = filteredFeeBurn[idx];
+                                              if (!entry) return '';
+                                              const dailyAvax = entry.total_fees_burned / 1_000_000_000;
+                                              const dailyFormatted = dailyAvax >= 1 ? dailyAvax.toFixed(4) : dailyAvax.toFixed(6);
+                                              return [
+                                                `Daily Burn: ${dailyFormatted} AVAX`,
+                                                `Validators: ${entry.active_validators}`,
+                                              ];
+                                            },
+                                          },
+                                        },
+                                      },
+                                      scales: {
+                                        x: {
+                                          grid: { display: false },
+                                          border: { display: false },
+                                          ticks: {
+                                            color: isDark ? '#94a3b8' : '#64748b',
+                                            font: { size: 11 },
+                                            maxTicksLimit: 8,
+                                            maxRotation: 0,
+                                          },
+                                        },
+                                        y: {
+                                          beginAtZero: false,
+                                          border: { display: false },
+                                          grid: { color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)' },
+                                          ticks: {
+                                            color: isDark ? '#94a3b8' : '#64748b',
+                                            font: { size: 11 },
+                                            maxTicksLimit: 8,
+                                            callback: (value: any) => {
+                                              if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+                                              if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+                                              if (value >= 1) return value.toFixed(1);
+                                              return value.toFixed(2);
+                                            },
+                                          },
+                                        },
+                                      },
+                                    }}
+                                  />
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })() : (
+                    <div className="bg-card rounded-xl border border-border p-8 text-center">
+                      <TrendingUp className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-muted-foreground">No fee burn data available for this chain.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Validators Tab */}
               {activeTab === 'validators' && (
                 <div className="space-y-4 sm:space-y-6">
-                  {/* Stake Distribution Chart */}
-                  <StakeDistributionChart
-                    validators={chain.validators}
-                    mode={stakeMode}
-                    tokenSymbol={tokenSymbol}
-                    tokenDecimals={stakeTokenDecimals}
-                  />
-                  
+                  {/* No active validators warning */}
+                  {chain.validators.length > 0 && !chain.validators.some(v => v.active) && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
+                      <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                      <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                        This chain has no active validators. Showing historical validator data below.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Stake Distribution Chart — active validators only */}
+                  {chain.validators.some(v => v.active) && (
+                    <StakeDistributionChart
+                      validators={chain.validators.filter(v => v.active)}
+                      mode={stakeMode}
+                      tokenSymbol={tokenSymbol}
+                      tokenDecimals={stakeTokenDecimals}
+                      onValidatorClick={(v) => navigate(`/validator/${v.validationId || v.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`)}
+                    />
+                  )}
+
                   {/* Validators Table */}
                   <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                     {/* Validators Header & Search */}
                     <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                        <div>
+                        <div className="flex items-center gap-4">
                           <h3 className="text-lg sm:text-xl font-semibold text-foreground">
-                            Validators
+                            Active Validators
+                            <span className="ml-2 text-base font-normal text-muted-foreground">
+                              ({chain.validatorCount || chain.validators.filter(v => v.active).length})
+                            </span>
                           </h3>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={showInactive}
+                              onChange={(e) => setShowInactive(e.target.checked)}
+                              className="w-4 h-4 rounded border-border text-[#ef4444] focus:ring-[#ef4444] accent-[#ef4444] cursor-pointer"
+                            />
+                            <span className="text-sm text-muted-foreground">Include inactive</span>
+                          </label>
                         </div>
                         <div className="relative w-full sm:w-72">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -760,9 +1121,7 @@ export function ChainDetails() {
                                 key={validator.address} 
                                 className="hover:bg-muted/30 transition-colors cursor-pointer"
                                 onClick={() => {
-                                  if (validator.explorerUrl) {
-                                    window.open(validator.explorerUrl, '_blank', 'noopener,noreferrer');
-                                  }
+                                  navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -780,9 +1139,9 @@ export function ChainDetails() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-3">
-                                    <div 
-                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-card" 
-                                      style={{ 
+                                    <div
+                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-card"
+                                      style={{
                                         backgroundColor: getValidatorColor(index, theme === 'dark', 0.9)
                                       }}
                                     >

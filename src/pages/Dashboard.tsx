@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllChainsTPSLatest, getChains, getHealth, getCategories, getTeleporterMessages } from '../api';
-import { Chain, HealthStatus, TeleporterMessageData } from '../types';
+import { getAllChainsTPSLatest, getChains, getCategories, getTeleporterMessages, getL1BeatFeeMetrics } from '../api';
+import { Chain, TeleporterMessageData } from '../types';
 import { ChainCard } from '../components/ChainCard';
 import { ChainListView } from '../components/ChainListView';
 import { ChainTableView } from '../components/ChainTableView';
-import { StatusBar } from '../components/StatusBar';
 import { TVLChart } from '../components/TVLChart';
 import { L1MetricsChart } from '../components/L1MetricsChart';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
@@ -13,23 +12,26 @@ import { NetworkMetricsBar } from '../components/NetworkMetricsBar';
 import { Footer } from '../components/Footer';
 import { FilterModal } from '../components/FilterModal';
 import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
-import { LayoutGrid, Activity, Network, Filter, Search, Table } from 'lucide-react';
+import { LayoutGrid, Activity, Network, Filter, Search, Table, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function Dashboard() {
   const [chains, setChains] = useState<Chain[]>([]);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefetching, setIsRefetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('dashboardSearch') || '');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => (sessionStorage.getItem('dashboardViewMode') as 'grid' | 'table') || 'grid');
+  const [currentPage, setCurrentPage] = useState(() => Number(sessionStorage.getItem('dashboardPage')) || 1);
+  const CHAINS_PER_PAGE = 20;
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => sessionStorage.getItem('dashboardCategory') || '');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(false);
+  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(() => sessionStorage.getItem('dashboardShowNoValidators') === 'true');
   const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
+  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [feesBySubnet, setFeesBySubnet] = useState<Record<string, number>>({});
 
   async function fetchData() {
     try {
@@ -42,15 +44,16 @@ export function Dashboard() {
       setError(null);
 
       // Build filter object
-      const filters: { category?: string } = {};
+      const filters: { category?: string; includeInactive?: boolean } = {};
       if (selectedCategory) filters.category = selectedCategory;
+      if (showChainsWithoutValidators) filters.includeInactive = true;
 
-      const [chainsData, healthData, categoriesData, tpsMap, teleporterData] = await Promise.all([
+      const [chainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
         getChains(filters),
-        getHealth(),
         getCategories(),
         getAllChainsTPSLatest(),
-        getTeleporterMessages()
+        getTeleporterMessages(),
+        getL1BeatFeeMetrics()
       ]);
 
       // Calculate ICM message counts per chain
@@ -64,6 +67,18 @@ export function Dashboard() {
         });
       }
       setIcmMessageCounts(icmCounts);
+
+      // Build fee map from fee metrics
+      const feesMap: Record<string, number> = {};
+      feeData.forEach((f) => {
+        feesMap[f.subnet_id] = f.total_fees_paid;
+      });
+      setFeesBySubnet(feesMap);
+
+      // Validator counts are already included in the chains endpoint as
+      // chain.validatorCount (mapped from active_validators).  No need for
+      // separate per-subnet API calls — components fall back to
+      // chain.validatorCount when validatorCountBySubnet has no entry.
 
       // Merge latest TPS from bulk endpoint (backend no longer includes tps on /chains)
       const chainsWithLatestTps = chainsData.map((chain) => {
@@ -94,12 +109,15 @@ export function Dashboard() {
       let filteredChains = excludedChains;
 
       if (!showChainsWithoutValidators) {
-        // Default behavior: only show chains with validators or Avalanche primary chains
-        filteredChains = filteredChains.filter(chain =>
-          (chain.validatorCount && chain.validatorCount >= 1) ||
-          chain.chainName.toLowerCase().includes('avalanche') ||
-          chain.chainName.toLowerCase().includes('c-chain')
-        );
+        // Default behavior: only show chains with active validators or Avalanche primary chains
+        filteredChains = filteredChains.filter(chain => {
+          const subnetValidators = chain.validatorCount ?? 0;
+          return (
+            (subnetValidators !== undefined && subnetValidators >= 1) ||
+            chain.chainName.toLowerCase().includes('avalanche') ||
+            chain.chainName.toLowerCase().includes('c-chain')
+          );
+        });
       }
       // If showChainsWithoutValidators is true, include all chains (no validator filter)
 
@@ -120,7 +138,6 @@ export function Dashboard() {
       });
 
       setChains(sortedChains);
-      setHealth(healthData);
       setCategories(categoriesData);
       setError(null);
     } catch (err) {
@@ -136,14 +153,21 @@ export function Dashboard() {
     fetchData();
   }, [selectedCategory, showChainsWithoutValidators]);
 
+  // Persist filter state to sessionStorage
   useEffect(() => {
-    // Refresh health status every 5 minutes (increased from 1 minute)
-    const healthInterval = setInterval(() => {
-      getHealth().then(setHealth).catch(console.error);
-    }, 5 * 60 * 1000);
+    sessionStorage.setItem('dashboardSearch', searchTerm);
+    sessionStorage.setItem('dashboardViewMode', viewMode);
+    sessionStorage.setItem('dashboardCategory', selectedCategory);
+    sessionStorage.setItem('dashboardShowNoValidators', String(showChainsWithoutValidators));
+  }, [searchTerm, viewMode, selectedCategory, showChainsWithoutValidators]);
 
-    return () => clearInterval(healthInterval);
-  }, []);
+  useEffect(() => {
+    sessionStorage.setItem('dashboardPage', String(currentPage));
+  }, [currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, showChainsWithoutValidators, viewMode]);
 
   useEffect(() => {
     // Restore scroll position when returning from chain details
@@ -163,6 +187,12 @@ export function Dashboard() {
   const filteredChains = chains.filter(chain =>
     chain.chainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     chain.chainId.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredChains.length / CHAINS_PER_PAGE);
+  const paginatedChains = filteredChains.slice(
+    (currentPage - 1) * CHAINS_PER_PAGE,
+    currentPage * CHAINS_PER_PAGE
   );
 
   if (loading) {
@@ -216,8 +246,6 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <StatusBar health={health} />
-      
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
         <NetworkMetricsBar />
         
@@ -240,8 +268,11 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
               <h2 className="text-lg sm:text-xl font-semibold">
-                Active Chains
+                {showChainsWithoutValidators ? 'All Chains' : 'Active Chains'}
               </h2>
+              <span className="text-sm text-muted-foreground font-medium">
+                ({filteredChains.length})
+              </span>
               <AnimatePresence>
                 {isRefetching && (
                   <motion.div
@@ -257,6 +288,44 @@ export function Dashboard() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+              {/* Category Quick Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {['Gaming', 'DeFi', 'RWA', 'AI', 'DePIN'].map(cat => {
+                  // Match case-insensitively against available categories
+                  const matched = categories.find(c => c.toLowerCase() === cat.toLowerCase());
+                  if (!matched) return null;
+                  return (
+                    <motion.button
+                      key={matched}
+                      onClick={() => setSelectedCategory(selectedCategory === matched ? '' : matched)}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap border transition-all ${
+                        selectedCategory === matched
+                          ? 'bg-[#ef4444] border-[#ef4444] text-white'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground hover:border-[#ef4444]/40'
+                      }`}
+                    >
+                      {cat}
+                    </motion.button>
+                  );
+                })}
+                <AnimatePresence>
+                  {selectedCategory && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => setSelectedCategory('')}
+                      className="px-2 py-1 text-xs font-medium text-[#ef4444] hover:bg-[#ef4444]/10 rounded-full transition-colors"
+                      title="Clear filter"
+                    >
+                      Clear
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
               {/* View Toggle Buttons */}
               <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-card w-fit">
                 <motion.button
@@ -347,20 +416,74 @@ export function Dashboard() {
               </motion.div>
             ) : (
               <motion.div
-                key={`${viewMode}-${selectedCategory}-${searchTerm}`}
+                key={`${viewMode}-${selectedCategory}-${searchTerm}-${currentPage}`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
               >
                 {viewMode === 'table' ? (
-                  <ChainTableView chains={filteredChains} icmMessageCounts={icmMessageCounts} />
+                  <ChainTableView chains={paginatedChains} icmMessageCounts={icmMessageCounts} validatorCountBySubnet={validatorCountBySubnet} feesBySubnet={feesBySubnet} />
                 ) : (
-                  <ChainListView chains={filteredChains} />
+                  <ChainListView chains={filteredChains} validatorCountBySubnet={validatorCountBySubnet} />
                 )}
               </motion.div>
             )}
           </AnimatePresence>
+
+          {viewMode === 'table' && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <span className="text-sm text-muted-foreground">
+                {(currentPage - 1) * CHAINS_PER_PAGE + 1}–{Math.min(currentPage * CHAINS_PER_PAGE, filteredChains.length)} of {filteredChains.length} chains
+              </span>
+              <div className="flex items-center gap-1">
+                <motion.button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Prev
+                </motion.button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .reduce<(number | 'ellipsis')[]>((acc, page, idx, arr) => {
+                    if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                    acc.push(page);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === 'ellipsis' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground text-sm select-none">…</span>
+                    ) : (
+                      <motion.button
+                        key={item}
+                        onClick={() => setCurrentPage(item as number)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+                          currentPage === item
+                            ? 'bg-[#ef4444] border-[#ef4444] text-white'
+                            : 'border-border bg-card text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {item}
+                      </motion.button>
+                    )
+                  )}
+                <motion.button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </motion.button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

@@ -1,17 +1,14 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
 // XSS protection - sanitize strings in API responses
+// Only encode < and > to prevent HTML tag injection. React already escapes
+// attribute values and text nodes, so encoding & / " / ' here would
+// double-encode and corrupt URLs (e.g. &amp; in image src attributes).
 function sanitizeString(value: string): string {
   if (typeof value !== 'string') return value;
-  
-  // Replace potentially dangerous characters
-  return value
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Sanitize API response recursively
@@ -69,7 +66,7 @@ const DEFAULT_HEADERS = {
 };
 
 // Define constants for rate limiting
-const REQUEST_LIMIT = 50; // Max requests per minute
+const REQUEST_LIMIT = 200; // Max requests per minute
 const REQUEST_PERIOD = 60 * 1000; // 1 minute in milliseconds
 
 // Track API calls for rate limiting
@@ -99,7 +96,6 @@ const apiRequestTracker = {
       this.rateLimitTimeout = setTimeout(() => {
         this.isRateLimited = false;
         this.requests = [];
-        console.log('Rate limit reset');
       }, REQUEST_PERIOD);
     }
     
@@ -132,7 +128,6 @@ async function fetchWithCache<T>(
     
     // If we have cached data (even if expired), use it
     if (cached) {
-      console.log(`Using stale cached data for ${key} due to rate limiting`);
       return cached.data;
     }
   }
@@ -161,81 +156,79 @@ async function fetchWithRetry<T>(
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error occurred');
   let attempt = 0;
-  
-  // Create a new AbortController for each retry attempt
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    while (attempt < retries) {
-      try {
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-          mode: 'cors',
-          credentials: 'omit',
-          headers: {
-            ...DEFAULT_HEADERS,
-            ...options.headers,
-            'Cache-Control': 'no-cache',
-          },
-        });
 
-        // Check for HTTP errors
-        if (!response.ok) {
-          if (response.status === 504) {
-            throw new Error('Server timeout - The request took too long to complete');
-          }
-          if (response.status === 429) {
-            throw new Error('Rate limit exceeded - Please try again later');
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+  while (attempt < retries) {
+    // Fresh controller per attempt so a timeout on one attempt doesn't
+    // permanently abort the signal shared by subsequent retries.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          return data;
-        }
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          ...DEFAULT_HEADERS,
+          ...options.headers,
+          'Cache-Control': 'no-cache',
+        },
+      });
 
-        throw new Error('Invalid content type');
-      } catch (error) {
-        lastError = error as Error;
-        
-        // Check if the request was aborted (timeout)
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          throw new Error('Request timeout - The connection to the server timed out');
+      clearTimeout(timeoutId);
+
+      // Check for HTTP errors
+      if (!response.ok) {
+        if (response.status === 504) {
+          throw new Error('Server timeout - The request took too long to complete');
         }
-        
-        // Check if it's a CORS error
-        if (error instanceof TypeError && error.message.includes('CORS')) {
-          console.error('CORS error detected:', error);
-          break; // Exit retry loop and return fallback data
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded - Please try again later');
         }
-        
-        // Check for network errors (offline)
-        if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('Network request failed'))) {
-          console.error('Network error detected:', error);
-          break; // Exit retry loop and return fallback data
-        }
-        
-        attempt++;
-        
-        if (attempt === retries) break;
-        
-        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
-        const jitter = Math.random() * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay + jitter));
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      }
+
+      throw new Error('Invalid content type');
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error as Error;
+
+      // Check if the request was aborted (timeout)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Request timeout - The connection to the server timed out');
+      }
+
+      // Check if it's a CORS error
+      if (error instanceof TypeError && error.message.includes('CORS')) {
+        console.error('CORS error detected:', error);
+        break; // Exit retry loop and return fallback data
+      }
+
+      // Check for network errors (offline)
+      if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('Network request failed'))) {
+        console.error('Network error detected:', error);
+        break; // Exit retry loop and return fallback data
+      }
+
+      attempt++;
+
+      if (attempt === retries) break;
+
+      const delay = Math.min(1000 * Math.pow(backoffFactor, attempt), 10000);
+      const jitter = Math.random() * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
-    
-    // If we've exhausted all retries, return fallback data instead of throwing
-    console.warn('All retry attempts failed, returning fallback data:', lastError.message);
-    return getFallbackData<T>();
-  } finally {
-    // Always clear the timeout to prevent memory leaks
-    clearTimeout(timeoutId);
   }
+
+  console.warn('All retry attempts failed, returning fallback data:', lastError.message);
+  return getFallbackData<T>();
 }
 
 // Fallback data generator
@@ -279,115 +272,82 @@ function getFallbackData<T>(): T {
   return fallbackData as unknown as T;
 }
 
-export async function getChains(filters?: { category?: string; network?: 'mainnet' | 'fuji' }): Promise<Chain[]> {
-  const queryParams = new URLSearchParams();
-  if (filters?.category) queryParams.append('category', filters.category);
-  if (filters?.network) queryParams.append('network', filters.network);
+export async function getChains(filters?: { category?: string; network?: 'mainnet' | 'fuji'; includeInactive?: boolean }): Promise<Chain[]> {
+  const activeParam = filters?.includeInactive ? 'false' : 'true';
+  const cacheKey = `chains_l1beat_${filters?.category || 'all'}_${filters?.network || 'all'}_active_${activeParam}`;
 
-  const cacheKey = `chains_${queryParams.toString() || 'all'}`;
-
-  return fetchWithCache(cacheKey, async () => {
+  return fetchExternalWithCache(cacheKey, async () => {
     try {
-      const url = `${API_URL}/chains${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const data = await fetchWithRetry<any[]>(url);
+      const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' });
 
-      const chains = data.map((chain) => {
-        // Debug: Log chain data to see networkToken field
-        if (!chain.networkToken && !chain.token && !chain.nativeToken) {
-          console.log(`Chain ${chain.chainName} missing networkToken field. Available fields:`, Object.keys(chain));
-        }
+      // Track seen slugs to prevent routing collisions
+      const seenSlugs = new Map<string, number>();
 
-        // Handle potential backend property name changes
-        // Prioritize using the chain name as the primary ID for URLs, but keep numeric IDs for other purposes if needed
-        // We sanitize the chain name to be URL-friendly (lowercase, replace spaces with dashes)
-        const rawChainId = chain.evmChainId || chain.chainId || chain.id || chain._id;
-        
-        // Generate a slug from the chain name if available
-        let chainSlug = rawChainId;
-        if (chain.chainName) {
-          chainSlug = chain.chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        }
-        
-        if (!chainSlug) {
-          console.warn('Chain missing ID and Name:', chain);
-          // Fallback to a random string if absolutely nothing is available (should shouldn't happen)
-           chainSlug = Math.random().toString(36).substring(7);
-        }
+      const chains = allChains
+        .map((chain) => {
+          const chainName = chain.name || chain.chain_name || '';
+          const evmChainId = chain.evm_chain_id ? String(chain.evm_chain_id) : '';
+          const rawChainId = evmChainId || chain.chain_id || '';
 
-        const validatorCountRaw = chain.validatorCount || chain.validatorsCount || chain.validator_count || chain.nodeCount || 0;
-        const validatorCount = Number(validatorCountRaw);
+          // Generate URL-friendly slug from chain name
+          let baseSlug = chainName
+            ? chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+            : String(rawChainId || Math.random().toString(36).substring(7));
 
-        return {
-          ...chain,
-          // We use the slug as the main chainId for routing purposes
-          chainId: String(chainSlug),
-          // We store the original numeric ID if we need it for API calls
-          originalChainId: String(rawChainId),
-          tps: chain.tps ? {
-            value: Number(chain.tps.value),
-            timestamp: chain.tps.timestamp
-          } : null,
-          // cumulativeTxCount is now included in the backend response
-          cumulativeTxCount: chain.cumulativeTxCount ? {
-            value: chain.cumulativeTxCount.value,
-            timestamp: chain.cumulativeTxCount.timestamp
-          } : null,
-          // Handle various potential field names for validator count and ensure it's a number
-          validatorCount: validatorCount,
-          validators: chain.validators ? chain.validators.map((validator: any) => {
-            const amountStakedRaw = validator.amountStaked ?? validator.amount_staked;
-            const weightRaw = validator.weight ?? validator.validatorWeight ?? validator.stakeWeight;
+          // Deduplicate slugs
+          const count = seenSlugs.get(baseSlug) ?? 0;
+          seenSlugs.set(baseSlug, count + 1);
+          const chainSlug = count === 0 ? baseSlug : `${baseSlug}-${count + 1}`;
 
-            const hasAmountStaked = Number.isFinite(Number(amountStakedRaw));
-            const hasWeight = Number.isFinite(Number(weightRaw));
+          const t = chain.network_token;
 
-            const stakeUnit: 'tokens' | 'weight' | undefined =
-              hasAmountStaked ? 'tokens' : (hasWeight ? 'weight' : undefined);
-
-            const weightValueRaw = hasAmountStaked
-              ? amountStakedRaw
-              : (hasWeight ? weightRaw : validator.amountStaked);
-
-            return ({
-            address: validator.nodeId,
-            active: validator.validationStatus === 'active',
-            uptime: validator.uptimePerformance,
-              // Keep as string to preserve precision (nAVAX base units)
-              weight: String(weightValueRaw ?? '0'),
-              stakeUnit,
-              remainingBalance: Number(
-                validator.remainingBalance ??
-                validator.remaining_balance ??
-                validator.balance ??
-                validator.remaining ??
-                0
-              ) || undefined,
-            explorerUrl: chain.explorerUrl ? `${EXPLORER_URL}/validators/${validator.nodeId}` : undefined
-            });
-          }) : [],
-          // Native token (used for stake formatting). Default decimals to 18 if missing.
-          networkToken: (() => {
-            const t = chain.networkToken || chain.token || chain.nativeToken;
-            const symbol = t?.symbol || t?.name || 'TOKEN';
-            const name = t?.name || symbol;
-            const decimals =
-              typeof t?.decimals === 'number' && Number.isFinite(t.decimals) ? t.decimals : 18;
-            return {
-              name,
-              symbol,
-              decimals,
-              logoUri: t?.logoUri,
-            };
-          })()
-        };
-      });
+          return {
+            chainId: chainSlug,
+            originalChainId: rawChainId,
+            chainName,
+            chainLogoUri: chain.logo_url || '/icon-dark-animated.svg',
+            description: chain.description || '',
+            website: chain.website_url || '',
+            socials: chain.socials || [],
+            categories: chain.categories || [],
+            subnetId: chain.subnet_id || '',
+            platformChainId: chain.chain_id || '',
+            evmChainId: chain.evm_chain_id || undefined,
+            isL1: chain.chain_type === 'l1',
+            sybilResistanceType: chain.sybil_resistance_type || '',
+            network: chain.network || 'mainnet',
+            rpcUrl: chain.rpc_url || '',
+            explorerUrl: chain.explorer_url || '',
+            validatorCount: chain.active_validators ?? chain.validator_count ?? 0,
+            validators: [],
+            tps: null,
+            cumulativeTxCount: null,
+            networkToken: t ? {
+              name: t.name || t.symbol || 'N/A',
+              symbol: t.symbol || t.name || 'N/A',
+              decimals: typeof t.decimals === 'number' ? t.decimals : 18,
+              logoUri: t.logo_uri || undefined,
+            } : {
+              name: 'N/A',
+              symbol: 'N/A',
+              decimals: 18,
+              logoUri: undefined,
+            },
+          };
+        })
+        .filter((chain) => {
+          // Apply filters
+          if (filters?.category && !chain.categories.map((c: string) => c.toLowerCase()).includes(filters.category.toLowerCase())) return false;
+          if (filters?.network && chain.network !== filters.network) return false;
+          return true;
+        });
 
       return chains;
     } catch (error) {
-      console.error('Chains fetch error:', error);
+      console.error('L1Beat chains fetch error:', error);
       return [];
     }
-  });
+  }, 5 * 60 * 1000);
 }
 
 export async function getChainValidators(chainId: string): Promise<Validator[]> {
@@ -438,15 +398,17 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
 }
 
 export async function getCategories(): Promise<string[]> {
-  return fetchWithCache('categories', async () => {
+  return fetchExternalWithCache('categories_l1beat', async () => {
     try {
-      const data = await fetchWithRetry<string[]>(`${API_URL}/chains/categories`);
-      return data || [];
+      const chains = await getChains();
+      const categorySet = new Set<string>();
+      chains.forEach(c => c.categories?.forEach((cat: string) => categorySet.add(cat)));
+      return Array.from(categorySet).sort();
     } catch (error) {
       console.error('Categories fetch error:', error);
       return [];
     }
-  });
+  }, 5 * 60 * 1000);
 }
 
 export async function getTVLHistory(days: number = 30): Promise<TVLHistory[]> {
@@ -1315,7 +1277,6 @@ export async function getNetworkActiveAddressesHistory(days: number = 30): Promi
 export async function getDailyActiveAddresses(chainId: string, days: number = 30): Promise<DailyActiveAddresses[]> {
   return fetchWithCache(`daily-active-addresses-${chainId}-${days}`, async () => {
     try {
-      console.log(`Fetching daily active addresses for chainId: ${chainId}, days: ${days}`);
       const timestamp = Math.floor(Date.now() / 1000);
       const url = `${API_URL}/chains/${chainId}/active-addresses/history?days=${days}&t=${timestamp}`;
 
@@ -1424,15 +1385,393 @@ export async function getTeleporterDailyHistory(days: number = 30): Promise<Tele
       const response = await fetchWithRetry<{ data: TeleporterDailyData[] }>(
         `${API_URL}/teleporter/messages/historical-daily?days=${days}`
       );
-      
+
       if (!response.data || !Array.isArray(response.data)) {
         throw new Error('Invalid Teleporter daily history data format');
       }
-      
+
       return response.data;
     } catch (error) {
       console.error('Teleporter daily history fetch error:', error);
       return [];
     }
   }, 15 * 60 * 1000); // Cache for 15 minutes
+}
+
+const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https://api.l1beat.io';
+
+// Cache wrapper for external API calls — skips the internal rate limiter since
+// these calls go to a different origin and should not consume the backend quota.
+async function fetchExternalWithCache<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  duration: number = CACHE_DURATION
+): Promise<T> {
+  const cached = cache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.timestamp < duration) {
+    return cached.data;
+  }
+  const data = await fetcher();
+  const sanitizedData = sanitizeResponse(data);
+  cache.set(key, { data: sanitizedData, timestamp: now });
+  return sanitizedData;
+}
+
+// Fetch from external APIs with only CORS-safe headers (no Cache-Control /
+// Content-Type / Origin that trigger a preflight). Creates a fresh
+// AbortController per attempt so retries are not dead after a timeout.
+async function fetchExternalWithRetry<T>(
+  url: string,
+  retries: number = 3,
+  backoffFactor: number = 2,
+  timeout: number = 30000
+): Promise<T> {
+  let lastError: Error = new Error('Unknown error occurred');
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json() as T;
+    } catch (error) {
+      lastError = error instanceof DOMException && error.name === 'AbortError'
+        ? new Error('Request timeout')
+        : error as Error;
+
+      if (attempt < retries - 1) {
+        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastError;
+}
+
+// Paginate through all pages of an L1Beat external API endpoint.
+// Stops when has_more is false or a page returns no data (guards against a
+// stuck has_more=true from a misbehaving API).
+async function fetchAllL1BeatPages<T>(
+  endpoint: string,
+  extraParams: Record<string, string> = {}
+): Promise<T[]> {
+  const all: T[] = [];
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
+    const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+      `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
+    );
+    const chunk = response.data ?? [];
+    all.push(...chunk);
+    if (chunk.length === 0 || !response.meta?.has_more) break;
+    offset += limit;
+  }
+
+  // Deduplicate — the API can return overlapping items across pages
+  const seen = new Set<string>();
+  return all.filter((item: any) => {
+    const key = item.chain_id || item.id || JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// Fetch the count of active validators for a single subnet by requesting
+// limit=1 and reading meta.total.  Cached per subnet for 5 minutes.
+export async function getL1BeatActiveValidatorCount(subnetId: string): Promise<number> {
+  const cacheKey = `l1beat-active-validators-${subnetId}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams({ subnet_id: subnetId, active: 'true', count: 'true', limit: '1' });
+      const response = await fetchExternalWithRetry<{ data: unknown[]; meta: { total: number } }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?${params.toString()}`
+      );
+      return response.meta?.total ?? 0;
+    } catch (error) {
+      console.error(`L1Beat active validator count fetch error (${subnetId}):`, error);
+      return 0;
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Fetch active validator counts for multiple subnets in batches to avoid 429s.
+// Returns a map of subnetId -> active validator count.
+export async function getL1BeatActiveValidatorCounts(subnetIds: string[]): Promise<Record<string, number>> {
+  const unique = [...new Set(subnetIds.filter(Boolean))];
+  const counts: Record<string, number> = {};
+  const BATCH_SIZE = 5;
+
+  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
+    const batch = unique.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (id) => ({ id, count: await getL1BeatActiveValidatorCount(id) }))
+    );
+    results.forEach(({ id, count }) => { counts[id] = count; });
+  }
+
+  return counts;
+}
+
+// L1Beat subnet record as returned by /api/v1/data/subnets/{id}
+export interface L1BeatSubnet {
+  subnet_id: string;
+  subnet_type: 'l1' | 'legacy';
+  created_block: number;
+  created_time: string;
+  chain_id: string;
+  converted_block?: number;
+  converted_time?: string;
+}
+
+// L1Beat validator record as returned by /api/v1/data/validators
+export interface L1BeatValidator {
+  subnet_id: string;
+  validation_id: string;
+  node_id: string;
+  balance?: number;
+  weight: number;
+  start_time: string;
+  end_time?: string;
+  uptime_percentage?: number;
+  active: boolean;
+  initial_deposit?: number;
+  total_topups?: number;
+  refund_amount?: number;
+  fees_paid?: number;
+  // Legacy subnet validators only — enriched with Primary Network data
+  primary_stake?: number;   // nAVAX staked on Primary Network
+  primary_uptime?: number;  // uptime percentage on Primary Network (0-100)
+
+  // L1 registration info (detail endpoint only)
+  tx_hash?: string;
+  tx_type?: string;  // 'RegisterL1ValidatorTx' | 'ConvertSubnetToL1Tx'
+  created_block?: number;
+  created_time?: string;
+  bls_public_key?: string;
+  remaining_balance_owner?: string;
+
+  // L1 computed fields
+  total_deposited?: number;
+  daily_fee_burn?: number;
+  estimated_days_left?: number;
+
+  // All active validators with end_time
+  days_remaining?: number;
+
+  // Primary Network detail fields
+  delegation_fee_percent?: number;
+  delegator_count?: number;
+  total_delegated?: number;
+  total_stake?: number;
+  network_share_percent?: number;
+}
+
+// Fetch validators for a subnet from L1Beat and convert to our Validator type.
+// By default fetches only active validators. Pass activeOnly=false to include inactive.
+export async function getL1BeatValidators(subnetId: string, activeOnly: boolean = true): Promise<Validator[]> {
+  const cacheKey = `l1beat-validators-detail-${subnetId}-${activeOnly ? 'active' : 'all'}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const params: Record<string, string> = { subnet_id: subnetId };
+      if (activeOnly) params['active'] = 'true';
+      const allValidators = await fetchAllL1BeatPages<L1BeatValidator>(
+        '/api/v1/data/validators',
+        params
+      );
+      return allValidators.map((v) => ({
+        address: v.node_id,
+        active: v.active,
+        uptime: v.primary_uptime ?? v.uptime_percentage,
+        weight: String(v.weight),
+        stakeUnit: 'weight' as const,
+        remainingBalance: v.balance,
+        explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
+        validationId: v.validation_id,
+      }));
+    } catch (error) {
+      console.error(`L1Beat validators fetch error (${subnetId}):`, error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+export async function getL1BeatFeeMetrics(subnetId?: string): Promise<L1BeatFeeMetrics[]> {
+  const cacheKey = `l1beat-fees-${subnetId ?? 'all'}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const extraParams: Record<string, string> = {};
+      if (subnetId) extraParams['subnet_id'] = subnetId;
+      return await fetchAllL1BeatPages<L1BeatFeeMetrics>('/api/v1/metrics/fees', extraParams);
+    } catch (error) {
+      console.error('L1Beat fee metrics fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Fetch the global fee summary (aggregated across all subnets)
+export async function getL1BeatFeeSummary(): Promise<L1BeatFeeSummary | null> {
+  return fetchExternalWithCache('l1beat-fee-summary', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: any[]; summary: L1BeatFeeSummary }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees?limit=1`
+      );
+      return response.summary ?? null;
+    } catch (error) {
+      console.error('L1Beat fee summary fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Daily fee burn for a single subnet
+export interface DailyFeeBurnValidator {
+  validation_id: string;
+  node_id: string;
+  fees_burned: number;
+  active_seconds: number;
+}
+
+export interface DailyFeeBurn {
+  date: string;
+  total_fees_burned: number;
+  active_validators: number;
+  validators?: DailyFeeBurnValidator[];
+}
+
+export async function getL1BeatDailyFeeBurn(subnetId: string, options?: { days?: number; validators?: boolean }): Promise<DailyFeeBurn[]> {
+  const days = options?.days;
+  const validators = options?.validators;
+  const cacheKey = `l1beat-daily-fees-${subnetId}-${days ?? 'all'}-${validators ? 'v' : ''}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams({ subnet_id: subnetId });
+      if (days) params.set('days', String(days));
+      if (validators) params.set('validators', 'true');
+      const response = await fetchExternalWithRetry<{ data: DailyFeeBurn[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees/daily?${params.toString()}`
+      );
+      return response.data ?? [];
+    } catch (error) {
+      console.error(`L1Beat daily fee burn fetch error (${subnetId}):`, error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Aggregate daily fee burn across all L1 subnets for network-wide chart
+export async function getNetworkDailyFeeBurn(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
+  const cacheKey = `l1beat-network-daily-fees-${days}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      // Get all L1 chains to find subnet IDs
+      const chains = await getChains();
+      const l1SubnetIds = [...new Set(
+        chains.filter(c => c.isL1 && c.subnetId).map(c => c.subnetId)
+      )];
+
+      // Fetch daily fees for all subnets in parallel
+      const allFees = await Promise.all(
+        l1SubnetIds.map(id => getL1BeatDailyFeeBurn(id))
+      );
+
+      // Aggregate by date
+      const feesByDate = new Map<string, number>();
+      allFees.flat().forEach(entry => {
+        const current = feesByDate.get(entry.date) || 0;
+        feesByDate.set(entry.date, current + entry.total_fees_burned);
+      });
+
+      // Convert to sorted array, filter by days, convert nAVAX to AVAX
+      const sorted = Array.from(feesByDate.entries())
+        .map(([date, nAvax]) => ({
+          timestamp: Math.floor(new Date(date).getTime() / 1000),
+          value: nAvax / 1_000_000_000,
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-days);
+
+      return sorted;
+    } catch (error) {
+      console.error('Network daily fee burn fetch error:', error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Fetch a single validator by validation_id or node_id from L1Beat.
+export async function getL1BeatValidator(id: string, subnetId?: string): Promise<L1BeatValidator | null> {
+  const cacheKey = `l1beat-validator-${id}-${subnetId ?? 'base'}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const url = subnetId
+        ? `${L1BEAT_EXTERNAL_API}/api/v1/data/validators/${encodeURIComponent(id)}?subnet_id=${encodeURIComponent(subnetId)}`
+        : `${L1BEAT_EXTERNAL_API}/api/v1/data/validators/${encodeURIComponent(id)}`;
+      const response = await fetchExternalWithRetry<{ data: L1BeatValidator }>(url);
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`L1Beat validator fetch error (${id}):`, error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Fetch deposit history for a validator from L1Beat.
+export async function getL1BeatValidatorDeposits(id: string): Promise<ValidatorDeposit[]> {
+  const cacheKey = `l1beat-validator-deposits-${id}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      return await fetchAllL1BeatPages<ValidatorDeposit>(
+        `/api/v1/data/validators/${encodeURIComponent(id)}/deposits`
+      );
+    } catch (error) {
+      console.error(`L1Beat validator deposits fetch error (${id}):`, error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Fetch the subnet type for a single subnet by ID.
+export async function getL1BeatSubnetType(subnetId: string): Promise<'l1' | 'legacy' | null> {
+  const cacheKey = `l1beat-subnet-type-${subnetId}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: { subnet: L1BeatSubnet } }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/subnets/${encodeURIComponent(subnetId)}`
+      );
+      return response.data?.subnet?.subnet_type ?? null;
+    } catch (error) {
+      console.error(`L1Beat subnet type fetch error (${subnetId}):`, error);
+      return null;
+    }
+  }, 15 * 60 * 1000);
+}
+
+// Resolve a chain by its subnet ID (uses cached getChains data).
+export async function getChainBySubnetId(subnetId: string): Promise<Chain | null> {
+  try {
+    const chains = await getChains();
+    return chains.find(c => c.subnetId === subnetId) ?? null;
+  } catch {
+    return null;
+  }
 }

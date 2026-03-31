@@ -22,9 +22,10 @@ interface StakeDistributionChartProps {
   mode?: 'tokens' | 'weight';
   tokenSymbol?: string;
   tokenDecimals?: number;
+  onValidatorClick?: (validator: Validator) => void;
 }
 
-export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals }: StakeDistributionChartProps) {
+export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals, onValidatorClick }: StakeDistributionChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -32,9 +33,9 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     mode === 'weight' ? true : mode === 'tokens' ? false : validators.some(v => v.stakeUnit === 'weight');
 
   const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
-  const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'TOKEN');
+  const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'N/A');
 
-  const { data, totalStakeBaseUnits, baseByIndex } = useMemo(() => {
+  const { data, totalStakeBaseUnits, baseByIndex, sortedTop } = useMemo(() => {
     const getStakeBase = (v: Validator) => parseBaseUnits(v.weight) ?? 0n;
 
     // Calculate total stake/weight (base units or integer if weight-mode)
@@ -85,12 +86,26 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
       },
       totalStakeBaseUnits: total,
       baseByIndex,
+      sortedTop: top50,
     };
   }, [validators, isDark, isWeightMode, decimals]);
 
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    onHover: (_event: any, elements: any[]) => {
+      const canvas = _event.native?.target as HTMLCanvasElement | undefined;
+      if (canvas) {
+        canvas.style.cursor = elements.length > 0 && elements[0].index < sortedTop.length ? 'pointer' : 'default';
+      }
+    },
+    onClick: (_event: any, elements: any[]) => {
+      if (!onValidatorClick || elements.length === 0) return;
+      const idx = elements[0].index;
+      if (idx < sortedTop.length) {
+        onValidatorClick(sortedTop[idx]);
+      }
+    },
     plugins: {
       legend: {
         display: false,
