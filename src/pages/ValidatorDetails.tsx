@@ -362,11 +362,40 @@ export function ValidatorDetails() {
               {isL1 ? (
                 <>
                   <DetailRow label="Total Deposited" value={`${formatAvax(totalDeposited)} AVAX`} />
-                  <DetailRow label="Fees Paid" value={`${formatAvax(feesPaid)} AVAX`} />
+                  <DetailRow label="Fees Paid" value={`${formatAvax(feesPaid)} AVAX`} valueColor="text-red-500" />
+                  <DetailRow label="Initial Deposit" value={`${formatAvax(initialDeposit)} AVAX`} />
+                  <DetailRow label="Total Top-ups" value={`${formatAvax(totalTopups)} AVAX`} valueColor="text-green-500" />
                   {refundAmount > 0 && (
                     <DetailRow label="Refund Amount" value={`${formatAvax(refundAmount)} AVAX`} />
                   )}
                   <DetailRow label="Weight" value={validator.weight.toLocaleString()} />
+
+                  {/* Balance Breakdown Bar */}
+                  {totalDeposited > 0 && (
+                    <div className="pt-3 mt-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-2.5">Balance Breakdown</p>
+                      <div className="flex w-full h-2.5 rounded-full bg-muted overflow-hidden gap-0.5">
+                        <div
+                          className="h-full rounded-l-full bg-red-500 transition-all"
+                          style={{ width: `${(feesPaid / totalDeposited) * 100}%` }}
+                        />
+                        <div
+                          className="h-full rounded-r-full bg-green-500 transition-all"
+                          style={{ width: `${(balance / totalDeposited) * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-red-500" />
+                          <span className="text-[10px] text-muted-foreground">Fees Paid ({totalDeposited > 0 ? Math.round((feesPaid / totalDeposited) * 100) : 0}%)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="text-[10px] text-muted-foreground">Balance ({totalDeposited > 0 ? Math.round((balance / totalDeposited) * 100) : 0}%)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>

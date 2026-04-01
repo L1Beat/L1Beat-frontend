@@ -88,8 +88,8 @@ export function ChainDetails() {
           };
 
           setChain(chainWithValidators);
-          // Store all chains for comparison feature
-          setAvailableChains(chains);
+          // Don't pass chains to comparison — let it fetch its own active-only list
+          setAvailableChains([]);
           // Use originalChainId if available for API calls that might require the numeric ID
           // Fallback to chainId if originalChainId is not present
           const apiChainId = foundChain.originalChainId || foundChain.chainId;
@@ -705,7 +705,6 @@ export function ChainDetails() {
               {activeTab === 'compare' && chain && (
                 <ComparisonView
                   currentChain={chain}
-                  availableChains={availableChains}
                   validatorCountBySubnet={validatorCountBySubnet}
                 />
               )}
