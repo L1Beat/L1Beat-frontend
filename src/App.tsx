@@ -10,6 +10,7 @@ import { Metrics } from './pages/Metrics';
 import { ValidatorDetails } from './pages/ValidatorDetails';
 import { BrandGuidelines } from './pages/BrandGuidelines';
 import { NotFound } from './pages/NotFound';
+import { APIPlayground } from './pages/APIPlayground';
 import { StatusBar } from './components/StatusBar';
 import { getHealth } from './api';
 import { HealthStatus } from './types';
@@ -121,6 +122,7 @@ function App() {
         <Route path="/blog" element={<BlogList />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/validator/:validatorId" element={<ValidatorDetails />} />
+        <Route path="/api" element={<APIPlayground />} />
         <Route path="/brand" element={<BrandGuidelines />} />
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
