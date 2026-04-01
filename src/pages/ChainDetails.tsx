@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainValidators, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, DailyFeeBurn } from '../api';
@@ -52,6 +52,8 @@ export function ChainDetails() {
     return params.has('compare') ? 'compare' : 'validators';
   });
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const compareRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToCompare = useRef(false);
   const [availableChains, setAvailableChains] = useState<Chain[]>([]);
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
@@ -59,6 +61,21 @@ export function ChainDetails() {
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
   const [allTimeFeesBurned, setAllTimeFeesBurned] = useState<number>(0);
   const [feeBurnTimeframe, setFeeBurnTimeframe] = useState<0 | 7 | 30 | 90>(0);
+
+  // Auto-scroll to compare section when opened via shared URL
+  useEffect(() => {
+    if (hasScrolledToCompare.current || activeTab !== 'compare') return;
+    hasScrolledToCompare.current = true;
+    let attempts = 0;
+    const tryScroll = () => {
+      if (compareRef.current && attempts < 10) {
+        compareRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        attempts++;
+        setTimeout(tryScroll, 500);
+      }
+    };
+    setTimeout(tryScroll, 500);
+  }, [activeTab]);
 
   useEffect(() => {
     async function fetchData() {
@@ -705,12 +722,12 @@ export function ChainDetails() {
 
             <div className="space-y-4 sm:space-y-6">
               {/* Compare Tab */}
-              {activeTab === 'compare' && chain && (
+              {activeTab === 'compare' && chain && (<div ref={compareRef}>
                 <ComparisonView
                   currentChain={chain}
                   validatorCountBySubnet={validatorCountBySubnet}
                 />
-              )}
+              </div>)}
 
               {/* Economics Tab */}
               {activeTab === 'economics' && (

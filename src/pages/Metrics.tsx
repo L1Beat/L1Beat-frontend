@@ -29,13 +29,18 @@ export function Metrics() {
 
   // Auto-scroll to comparison section when URL has compare params
   useEffect(() => {
-    if (hasScrolled.current) return;
-    if (searchParams.has('compare') && comparisonRef.current) {
-      hasScrolled.current = true;
-      setTimeout(() => {
-        comparisonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
-    }
+    if (hasScrolled.current || !searchParams.has('compare')) return;
+    hasScrolled.current = true;
+    // Retry scroll until the element is in the right position (content may still be loading)
+    let attempts = 0;
+    const tryScroll = () => {
+      if (comparisonRef.current && attempts < 10) {
+        comparisonRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        attempts++;
+        setTimeout(tryScroll, 500);
+      }
+    };
+    setTimeout(tryScroll, 500);
   }, [searchParams]);
 
   return (
