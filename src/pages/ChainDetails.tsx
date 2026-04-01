@@ -47,7 +47,10 @@ export function ChainDetails() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'validators' | 'compare' | 'economics'>('validators');
+  const [activeTab, setActiveTab] = useState<'validators' | 'compare' | 'economics'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('compare') ? 'compare' : 'validators';
+  });
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [availableChains, setAvailableChains] = useState<Chain[]>([]);
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});

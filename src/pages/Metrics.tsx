@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
 import { ComparisonView } from '../components/comparison';
@@ -7,6 +8,9 @@ import { getChains, getL1BeatActiveValidatorCounts } from '../api';
 
 export function Metrics() {
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [searchParams] = useSearchParams();
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  const hasScrolled = useRef(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -23,6 +27,17 @@ export function Metrics() {
     fetchData();
   }, []);
 
+  // Auto-scroll to comparison section when URL has compare params
+  useEffect(() => {
+    if (hasScrolled.current) return;
+    if (searchParams.has('compare') && comparisonRef.current) {
+      hasScrolled.current = true;
+      setTimeout(() => {
+        comparisonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, [searchParams]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
 
@@ -34,7 +49,7 @@ export function Metrics() {
         <ChainSpecificMetrics />
 
         {/* Chain Comparison */}
-        <section>
+        <section ref={comparisonRef}>
           <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
         </section>
       </main>
