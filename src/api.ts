@@ -2,6 +2,14 @@ import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
+// Filter predicate to exclude today's partial data from time-series arrays.
+// Data for the current day is incomplete and causes misleading dips in charts.
+function isNotToday(d: { timestamp: number }): boolean {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+  return d.timestamp < todayStart;
+}
+
 // XSS protection - sanitize strings in API responses
 // Only encode < and > to prevent HTML tag injection. React already escapes
 // attribute values and text nodes, so encoding & / " / ' here would
@@ -489,7 +497,7 @@ export async function getTPSHistory(days: number = 7, chainId?: string): Promise
           chainCount: Number(item.chainCount || 1),
           date: item.timestamp
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('TPS history fetch error:', error);
       return [];
@@ -510,7 +518,7 @@ export async function getCumulativeTxCount(chainId: string, days: number = 7): P
       }
 
       return response.data
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Cumulative transaction count fetch error:', error);
       return [];
@@ -705,7 +713,7 @@ export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPS
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network max TPS history fetch error:', error);
       return [];
@@ -734,7 +742,7 @@ export async function getChainMaxTPSHistory(chainId: string, days: number = 30):
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Chain max TPS history fetch error:', error);
       return [];
@@ -765,7 +773,7 @@ export async function getDailyMessageVolumeFromExternal(days: number = 30): Prom
           timestamp: Math.floor(new Date(item.date).getTime() / 1000),
           value: Number(item.messageCount || item.count || item.value || 0)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Daily message volume fetch error:', error);
       return [];
@@ -842,7 +850,7 @@ export async function getNetworkTxCountHistory(days: number = 30): Promise<Daily
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network tx count history fetch error:', error);
       return [];
@@ -871,7 +879,7 @@ export async function getChainTxCountHistory(chainId: string, days: number = 30)
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Chain tx count history fetch error:', error);
       return [];
@@ -900,7 +908,7 @@ export async function getNetworkGasUsedHistory(days: number = 30): Promise<GasUs
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network gas used history fetch error:', error);
       return [];
@@ -929,7 +937,7 @@ export async function getChainGasUsedHistory(chainId: string, days: number = 30)
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Chain gas used history fetch error:', error);
       return [];
@@ -1036,7 +1044,7 @@ export async function getNetworkAvgGasPriceHistory(days: number = 30): Promise<A
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network avg gas price history fetch error:', error);
       return [];
@@ -1075,7 +1083,7 @@ export async function getChainAvgGasPriceHistory(chainId: string, days: number =
             value: value
           };
         })
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Chain avg gas price history fetch error:', error);
       return [];
@@ -1159,7 +1167,7 @@ export async function getChainFeesPaidHistory(chainId: string, days: number = 30
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Chain fees paid history fetch error:', error);
       return [];
@@ -1212,7 +1220,7 @@ export async function getNetworkFeesPaidHistory(days: number = 30): Promise<Fees
           timestamp: Number(item.timestamp),
           value: Number(item.value)
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network fees paid history fetch error:', error);
       return [];
@@ -1266,7 +1274,7 @@ export async function getNetworkActiveAddressesHistory(days: number = 30): Promi
           activeAddresses: Number(item.value),
           transactions: 0 // API doesn't provide transactions count yet
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network active addresses history fetch error:', error);
       return [];
@@ -1296,7 +1304,7 @@ export async function getDailyActiveAddresses(chainId: string, days: number = 30
           activeAddresses: Number(item.value),
           transactions: 0 // API doesn't provide transactions count yet
         }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Daily active addresses fetch error:', error);
       return [];
