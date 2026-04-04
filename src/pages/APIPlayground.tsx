@@ -19,8 +19,9 @@ import { WebSocketPanel } from '../components/playground/WebSocketPanel';
 import { HistoryBar, HistoryEntry } from '../components/playground/HistoryBar';
 import { ChainOption } from '../components/playground/SmartParamInput';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { PLAYGROUND_API_BASE } from '../components/playground/constants';
 
-const BASE_URL = 'https://api.l1beat.io';
+const BASE_URL = PLAYGROUND_API_BASE;
 const HISTORY_STORAGE_KEY = 'l1beat_playground_history';
 const MAX_HISTORY = 20;
 const CARRY_OVER_PARAMS = ['chainId', 'limit', 'offset', 'subnet_id'];
@@ -132,9 +133,6 @@ function buildCurl(url: string): string {
   return `curl "${url}"`;
 }
 
-function buildFetch(url: string): string {
-  return `fetch("${url}")\n  .then(r => r.json())\n  .then(console.log)`;
-}
 
 function getValidationErrors(
   endpoint: EndpointDef,
@@ -247,18 +245,8 @@ export function APIPlayground() {
     };
   }, [selectedId, params, setSearchParams]);
 
-  // Keyboard shortcut: Cmd+Enter / Ctrl+Enter
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (selectedId && !isWsEndpoint(selectedId)) handleExecute();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, params, isLoading]);
+  // Keyboard shortcut ref — populated after handleExecute is defined below
+  const handleExecuteRef = useRef<() => void>(() => {});
 
   const handleParamChange = useCallback((name: string, value: string) => {
     setParams((prev) => ({ ...prev, [name]: value }));
@@ -349,6 +337,20 @@ export function APIPlayground() {
     handleExecuteWithParams(params);
   }, [handleExecuteWithParams, params]);
 
+  // Keep ref current so the keyboard handler below never captures a stale closure
+  useEffect(() => { handleExecuteRef.current = handleExecute; }, [handleExecute]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedId && !isWsEndpoint(selectedId)) handleExecuteRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedId]);
+
   const handleFeaturedSelect = useCallback(
     (endpointId: string, featuredParams: Record<string, string>) => {
       const endpoint = getEndpointById(endpointId);
@@ -362,6 +364,7 @@ export function APIPlayground() {
       setNetworkError(null);
       setMobileTab('request');
 
+      setCumulativeData([]);
       if (!isWsEndpoint(endpointId)) {
         const restEndpoint = REST_ENDPOINTS.find((e) => e.id === endpointId);
         if (restEndpoint) {
@@ -373,6 +376,10 @@ export function APIPlayground() {
               const elapsed = Math.round(performance.now() - startTime);
               let json: unknown = null;
               try { json = await res.json(); } catch { json = { error: { message: 'Response body was not valid JSON' } }; }
+              const freshData = Array.isArray((json as Record<string, unknown>)?.data)
+                ? (json as Record<string, unknown>).data as unknown[]
+                : [];
+              setCumulativeData(freshData);
               setResponse(json);
               setStatus(res.status);
               setDurationMs(elapsed);
@@ -467,7 +474,6 @@ export function APIPlayground() {
   const currentEndpoint = selectedId ? REST_ENDPOINTS.find((e) => e.id === selectedId) : null;
   const constructedUrl = currentEndpoint ? buildUrl(currentEndpoint.path, params) : '';
   const curlSnippet = constructedUrl ? buildCurl(constructedUrl) : '';
-  const fetchSnippet = constructedUrl ? buildFetch(constructedUrl) : '';
   const validationErrors = currentEndpoint ? getValidationErrors(currentEndpoint, params) : {};
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
   const suggestedNext: EndpointDef[] = currentEndpoint?.suggestedNext
@@ -580,7 +586,7 @@ export function APIPlayground() {
                       isLoading={isLoading}
                       constructedUrl={constructedUrl}
                       curlSnippet={curlSnippet}
-                      fetchSnippet={fetchSnippet}
+
                       chains={chains}
                       hasValidationErrors={hasValidationErrors}
                       validationErrors={validationErrors}
@@ -682,7 +688,7 @@ export function APIPlayground() {
                       isLoading={isLoading}
                       constructedUrl={constructedUrl}
                       curlSnippet={curlSnippet}
-                      fetchSnippet={fetchSnippet}
+
                       chains={chains}
                       hasValidationErrors={hasValidationErrors}
                       validationErrors={validationErrors}

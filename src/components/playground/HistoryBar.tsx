@@ -5,6 +5,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '../branding/ui/collapsible';
+import { PLAYGROUND_API_BASE } from './constants';
 
 export interface HistoryEntry {
   id: string;
@@ -49,7 +50,7 @@ function relativeTime(timestamp: number): string {
   return `${hours}h ago`;
 }
 
-const BASE_URL = 'https://api.l1beat.io';
+const BASE_URL = PLAYGROUND_API_BASE;
 
 function shortenedPath(url: string): string {
   const path = url.startsWith(BASE_URL) ? url.slice(BASE_URL.length) : url;

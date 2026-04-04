@@ -48,7 +48,7 @@ const limitParam = (max = 100): ParamDef => ({
   kind: 'query',
   type: 'int',
   required: false,
-  default: '20',
+  default: '5',
   min: 1,
   max,
   description: 'Number of results to return',

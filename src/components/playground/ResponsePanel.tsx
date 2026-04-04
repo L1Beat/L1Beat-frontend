@@ -81,22 +81,29 @@ function RateLimitCard({
 
 // ─── JSON Viewer ─────────────────────────────────────────────────────────────
 
+interface ExpandSignals {
+  expandSig: number;
+  collapseSig: number;
+  generation: number;
+}
+const ExpandContext = React.createContext<ExpandSignals>({ expandSig: 0, collapseSig: 0, generation: 0 });
+
 interface JsonNodeProps {
   value: unknown;
   depth: number;
-  generation: number;
 }
 
-function JsonNode({ value, depth, generation }: JsonNodeProps) {
+function JsonNode({ value, depth }: JsonNodeProps) {
+  const { expandSig, collapseSig, generation } = React.useContext(ExpandContext);
   const isArray = Array.isArray(value);
   const isObject =
     value !== null && typeof value === 'object' && !isArray;
   const isComplex = isArray || isObject;
 
-  const defaultOpen = depth === 0 || (isComplex && (isArray ? (value as unknown[]).length : Object.keys(value as object).length) <= 3);
+  const defaultOpen = isComplex;
   const [open, setOpen] = useState(defaultOpen);
 
-  // Reset open state when generation changes
+  // Reset to default when a new response arrives
   const prevGenRef = useRef(generation);
   useEffect(() => {
     if (prevGenRef.current !== generation) {
@@ -104,6 +111,24 @@ function JsonNode({ value, depth, generation }: JsonNodeProps) {
       setOpen(defaultOpen);
     }
   }, [generation, defaultOpen]);
+
+  // Expand all signal
+  const prevExpandSig = useRef(expandSig);
+  useEffect(() => {
+    if (prevExpandSig.current !== expandSig) {
+      prevExpandSig.current = expandSig;
+      if (isComplex) setOpen(true);
+    }
+  }, [expandSig, isComplex]);
+
+  // Collapse all signal
+  const prevCollapseSig = useRef(collapseSig);
+  useEffect(() => {
+    if (prevCollapseSig.current !== collapseSig) {
+      prevCollapseSig.current = collapseSig;
+      if (isComplex) setOpen(false);
+    }
+  }, [collapseSig, isComplex]);
 
   const indent = { paddingLeft: `${depth * 16}px` };
 
@@ -154,7 +179,7 @@ function JsonNode({ value, depth, generation }: JsonNodeProps) {
         <span className="text-muted-foreground">[</span>
         {arr.map((item, i) => (
           <div key={i} style={indent}>
-            <JsonNode value={item} depth={depth + 1} generation={generation} />
+            <JsonNode value={item} depth={depth + 1} />
             {i < arr.length - 1 && <span className="text-muted-foreground">,</span>}
           </div>
         ))}
@@ -200,7 +225,7 @@ function JsonNode({ value, depth, generation }: JsonNodeProps) {
           <div key={key} style={indent}>
             <span className="text-[#60a5fa]">{JSON.stringify(key)}</span>
             <span className="text-muted-foreground">: </span>
-            <JsonNode value={obj[key]} depth={depth + 1} generation={generation} />
+            <JsonNode value={obj[key]} depth={depth + 1} />
             {i < keys.length - 1 && <span className="text-muted-foreground">,</span>}
           </div>
         ))}
@@ -249,6 +274,8 @@ export function ResponsePanel({
 }: ResponsePanelProps) {
   const [copiedJson, setCopiedJson] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [expandSig, setExpandSig] = useState(0);
+  const [collapseSig, setCollapseSig] = useState(0);
 
   const copyJson = useCallback(() => {
     try {
@@ -261,15 +288,15 @@ export function ResponsePanel({
     }
   }, [response]);
 
-  const expandAll = () => setGeneration((g) => g + 1);
-  const collapseAll = () => setGeneration((g) => g + 1);
+  const expandAll = () => setExpandSig((s) => s + 1);
+  const collapseAll = () => setCollapseSig((s) => s + 1);
 
-  // Reset generation when response changes
+  // Reset to default open state when a new response arrives
   const prevResponseRef = useRef(response);
   useEffect(() => {
     if (prevResponseRef.current !== response) {
       prevResponseRef.current = response;
-      setGeneration(0);
+      setGeneration((g) => g + 1);
     }
   }, [response]);
 
@@ -430,7 +457,9 @@ export function ResponsePanel({
       {/* JSON Viewer */}
       <div className="flex-1 overflow-auto scrollbar-hide">
         <pre className="font-mono text-xs leading-relaxed p-6">
-          <JsonNode value={response} depth={0} generation={generation} />
+          <ExpandContext.Provider value={{ expandSig, collapseSig, generation }}>
+            <JsonNode value={response} depth={0} />
+          </ExpandContext.Provider>
         </pre>
 
         {/* Load More — inline at the bottom of the data */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WsEndpointDef } from './endpointCatalog';
 import { SmartParamInput, ChainOption } from './SmartParamInput';
+import { PLAYGROUND_WS_BASE } from './constants';
 
 type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -82,7 +83,7 @@ export function WebSocketPanel({
   const wsRef = useRef<WebSocket | null>(null);
 
   const chainId = params.chainId || '43114';
-  const wsUrl = `wss://api.l1beat.io/ws/blocks/${chainId}`;
+  const wsUrl = `${PLAYGROUND_WS_BASE}/ws/blocks/${chainId}`;
 
   const disconnect = useCallback(() => {
     wsRef.current?.close();
@@ -101,7 +102,7 @@ export function WebSocketPanel({
     setRawMessages([]);
     setMsgCount(0);
 
-    const socket = new WebSocket(`wss://api.l1beat.io/ws/blocks/${params.chainId || '43114'}`);
+    const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       setStatus('connected');
@@ -154,19 +155,18 @@ export function WebSocketPanel({
         setMsgCount((c) => c + 1);
       }
 
-      if (viewMode === 'raw') {
-        setRawMessages((prev) =>
-          [
-            {
-              id: crypto.randomUUID(),
-              type: msg.type,
-              data: msg.data,
-              ts: Date.now(),
-            },
-            ...prev,
-          ].slice(0, 100)
-        );
-      }
+      // Always capture raw messages regardless of current view mode
+      setRawMessages((prev) =>
+        [
+          {
+            id: crypto.randomUUID(),
+            type: msg.type,
+            data: msg.data,
+            ts: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 100)
+      );
     };
 
     socket.onerror = () => {
@@ -179,7 +179,7 @@ export function WebSocketPanel({
     };
 
     wsRef.current = socket;
-  }, [params.chainId, viewMode]);
+  }, [params.chainId, wsUrl]);
 
   // Cleanup on unmount
   useEffect(() => {

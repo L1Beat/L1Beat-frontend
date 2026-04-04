@@ -12,7 +12,7 @@ import {
   Check,
   type LucideIcon,
 } from 'lucide-react';
-import { FEATURED_QUERIES, isWsEndpoint } from './endpointCatalog';
+import { FEATURED_QUERIES, REST_ENDPOINTS, WS_ENDPOINTS, isWsEndpoint } from './endpointCatalog';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Blocks,
@@ -87,9 +87,9 @@ export function LandingState({ onSelect }: LandingStateProps) {
 
         {/* Stats row */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
-          <span>23 REST endpoints</span>
+          <span>{REST_ENDPOINTS.length} REST endpoints</span>
           <span className="text-border">·</span>
-          <span>1 WebSocket</span>
+          <span>{WS_ENDPOINTS.length} WebSocket</span>
           <span className="text-border">·</span>
           <span>Open CORS</span>
           <span className="text-border">·</span>

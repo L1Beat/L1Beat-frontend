@@ -11,7 +11,6 @@ interface RequestPanelProps {
   isLoading: boolean;
   constructedUrl: string;
   curlSnippet: string;
-  fetchSnippet: string;
   chains: ChainOption[];
   hasValidationErrors: boolean;
   validationErrors?: Record<string, boolean>;
@@ -69,6 +68,25 @@ function CodeBlock({ label, content }: { label: string; content: string }) {
   );
 }
 
+function UrlBlock({ url }: { url: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">URL</span>
+        <CopyButton text={url} />
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto border border-border hover:border-[#ef4444]/40 transition-colors group"
+      >
+        <pre className="whitespace-pre-wrap break-all text-foreground group-hover:text-[#ef4444]/70 transition-colors duration-150">{url}</pre>
+      </a>
+    </div>
+  );
+}
+
 const isMac =
   typeof navigator !== 'undefined' &&
   (navigator.platform.includes('Mac') || navigator.userAgent.includes('Mac'));
@@ -81,7 +99,6 @@ export function RequestPanel({
   isLoading,
   constructedUrl,
   curlSnippet,
-  fetchSnippet,
   chains,
   hasValidationErrors,
   validationErrors = {},
@@ -175,9 +192,8 @@ export function RequestPanel({
             </h3>
             <div className="flex-1 h-px bg-border" />
           </div>
-          <CodeBlock label="URL" content={constructedUrl} />
+          <UrlBlock url={constructedUrl} />
           <CodeBlock label="curl" content={curlSnippet} />
-          <CodeBlock label="JavaScript" content={fetchSnippet} />
         </div>
 
         {/* Execute button */}

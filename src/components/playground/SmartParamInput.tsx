@@ -1,19 +1,5 @@
-import React, { useState } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import React from 'react';
 import { ParamDef } from './endpointCatalog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../branding/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '../branding/ui/command';
 import { Switch } from '../branding/ui/switch';
 
 export interface ChainOption {
@@ -30,86 +16,18 @@ interface SmartParamInputProps {
   hasError: boolean;
 }
 
-function ChainIdInput({
-  param,
-  value,
-  onChange,
-  chains,
-  hasError,
-}: SmartParamInputProps) {
-  const [open, setOpen] = useState(false);
-
-  if (chains.length === 0) {
-    return (
-      <input
-        type="text"
-        inputMode="numeric"
-        value={value}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === '' || /^\d*$/.test(v)) onChange(v);
-        }}
-        placeholder={param.placeholder ?? '43114'}
-        className={`w-full px-3 py-2 rounded-lg bg-muted border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] ${
-          hasError ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-        }`}
-      />
-    );
-  }
-
-  const selected = chains.find((c) => String(c.evmChainId) === value);
-  const displayLabel = selected
-    ? `${selected.name} · ${selected.evmChainId}`
-    : value
-    ? `Chain ${value}`
-    : 'Select chain...';
+function ChainIdInput({ onChange }: Pick<SmartParamInputProps, 'onChange'>) {
+  // Ensure value is always set to Avalanche C-Chain
+  React.useEffect(() => { onChange('43114'); }, []);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] ${
-            hasError ? 'border-red-500 ring-1 ring-red-500' : 'border-border'
-          }`}
-        >
-          <span className={selected || value ? 'text-foreground' : 'text-muted-foreground'}>
-            {displayLabel}
-          </span>
-          <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 ml-2" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search chains..." />
-          <CommandList>
-            <CommandEmpty>No chain found.</CommandEmpty>
-            <CommandGroup>
-              {chains.map((chain) => (
-                <CommandItem
-                  key={chain.evmChainId}
-                  value={`${chain.name} ${chain.evmChainId}`}
-                  onSelect={() => {
-                    onChange(String(chain.evmChainId));
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={`mr-2 w-4 h-4 flex-shrink-0 ${
-                      String(chain.evmChainId) === value ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  />
-                  <span className="flex-1 truncate">{chain.name}</span>
-                  <span className="text-muted-foreground text-xs ml-2 font-mono">
-                    {chain.evmChainId}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <div
+      title="More chains coming soon"
+      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted border border-border text-sm cursor-default select-none"
+    >
+      <span className="text-foreground">Avalanche C-Chain</span>
+      <span className="text-muted-foreground font-mono text-xs">43114</span>
+    </div>
   );
 }
 
@@ -125,15 +43,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
   const renderInput = () => {
     switch (param.type) {
       case 'chainId':
-        return (
-          <ChainIdInput
-            param={param}
-            value={value}
-            onChange={onChange}
-            chains={chains}
-            hasError={hasError}
-          />
-        );
+        return <ChainIdInput onChange={onChange} />;
 
       case 'enum': {
         const isRequired = param.required;
@@ -157,8 +67,8 @@ export function SmartParamInput(props: SmartParamInputProps) {
         const isOn = value === 'true';
         return (
           <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-muted-foreground">
-              {isOn ? 'Enabled' : 'Disabled'}
+            <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${isOn ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+              {isOn ? 'on' : 'off'}
             </span>
             <Switch
               checked={isOn}
