@@ -20,7 +20,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
     { id: 'metrics', label: 'Metrics', path: '/metrics', icon: BarChart3 },
     { id: 'acps', label: 'ACPs', path: '/acps', icon: FileText },
     { id: 'blog', label: 'Blog', path: '/blog', icon: BookOpen },
-    { id: 'api', label: 'API', path: '', icon: Code, comingSoon: true },
+    { id: 'api', label: 'API', path: '/api', icon: Code },
   ];
 
   const location = useLocation();
