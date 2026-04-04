@@ -16,9 +16,7 @@ interface SmartParamInputProps {
   hasError: boolean;
 }
 
-function ChainIdInput({ onChange }: Pick<SmartParamInputProps, 'onChange'>) {
-  // Ensure value is always set to Avalanche C-Chain
-  React.useEffect(() => { onChange('43114'); }, []);
+function ChainIdInput() {
 
   return (
     <div
@@ -43,7 +41,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
   const renderInput = () => {
     switch (param.type) {
       case 'chainId':
-        return <ChainIdInput onChange={onChange} />;
+        return <ChainIdInput />;
 
       case 'enum': {
         const isRequired = param.required;

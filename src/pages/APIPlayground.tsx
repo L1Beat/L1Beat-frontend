@@ -282,9 +282,13 @@ export function APIPlayground() {
       if (!selectedId || isWsEndpoint(selectedId)) return;
       const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
       if (!endpoint) return;
-      if (Object.keys(getValidationErrors(endpoint, overrideParams)).length > 0) return;
+      // Strip cursor so a fresh execute always starts from page 1
+      const cleanParams = { ...overrideParams };
+      delete cleanParams['cursor'];
+      if (Object.keys(getValidationErrors(endpoint, cleanParams)).length > 0) return;
 
-      const url = buildUrl(endpoint.path, overrideParams);
+      const url = buildUrl(endpoint.path, cleanParams);
+      setParams((prev) => { const p = { ...prev }; delete p['cursor']; return p; });
       setIsLoading(true);
       setNetworkError(null);
       setResponse(null);
