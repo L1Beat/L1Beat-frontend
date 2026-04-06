@@ -28,7 +28,7 @@ export function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string>(() => sessionStorage.getItem('dashboardCategory') || '');
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [showChainsWithoutValidators, setShowChainsWithoutValidators] = useState(() => sessionStorage.getItem('dashboardShowNoValidators') === 'true');
+  const [validatorFilter, setValidatorFilter] = useState<'active' | 'all' | 'inactive'>(() => (sessionStorage.getItem('dashboardValidatorFilter') as 'active' | 'all' | 'inactive') || 'active');
   const [icmMessageCounts, setIcmMessageCounts] = useState<Record<string, number>>({});
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
   const [feesBySubnet, setFeesBySubnet] = useState<Record<string, number>>({});
@@ -43,18 +43,24 @@ export function Dashboard() {
       }
       setError(null);
 
-      // Build filter object
-      const filters: { category?: string; includeInactive?: boolean } = {};
-      if (selectedCategory) filters.category = selectedCategory;
-      if (showChainsWithoutValidators) filters.includeInactive = true;
+      // Build filter objects
+      const baseFilters: { category?: string } = {};
+      if (selectedCategory) baseFilters.category = selectedCategory;
 
-      const [chainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
-        getChains(filters),
+      const activeFilters = { ...baseFilters };
+      const allFilters = { ...baseFilters, includeInactive: true };
+
+      // For 'inactive' we need both sets to subtract; otherwise fetch just what's needed
+      const [activeChainsData, allChainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
+        getChains(activeFilters),
+        validatorFilter !== 'active' ? getChains(allFilters) : Promise.resolve([] as Chain[]),
         getCategories(),
         getAllChainsTPSLatest(),
         getTeleporterMessages(),
         getL1BeatFeeMetrics()
       ]);
+
+      const chainsData = validatorFilter === 'active' ? activeChainsData : allChainsData;
 
       // Calculate ICM message counts per chain
       const icmCounts: Record<string, number> = {};
@@ -105,21 +111,35 @@ export function Dashboard() {
         return !name.includes('x-chain') && !name.includes('p-chain');
       });
 
+      // Helper: apply the "active" frontend filter
+      const isChainActive = (chain: Chain) => {
+        const subnetValidators = chain.validatorCount ?? 0;
+        return (
+          (subnetValidators !== undefined && subnetValidators >= 1) ||
+          chain.chainName.toLowerCase().includes('avalanche') ||
+          chain.chainName.toLowerCase().includes('c-chain')
+        );
+      };
+
       // Apply validator filter
       let filteredChains = excludedChains;
 
-      if (!showChainsWithoutValidators) {
-        // Default behavior: only show chains with active validators or Avalanche primary chains
-        filteredChains = filteredChains.filter(chain => {
-          const subnetValidators = chain.validatorCount ?? 0;
-          return (
-            (subnetValidators !== undefined && subnetValidators >= 1) ||
-            chain.chainName.toLowerCase().includes('avalanche') ||
-            chain.chainName.toLowerCase().includes('c-chain')
-          );
-        });
+      if (validatorFilter === 'active') {
+        filteredChains = filteredChains.filter(isChainActive);
+      } else if (validatorFilter === 'inactive') {
+        // Build active set by running activeChainsData through the same X/P-Chain exclusion + active filter
+        const activeIds = new Set(
+          activeChainsData
+            .filter(chain => {
+              const name = chain.chainName.toLowerCase();
+              return !name.includes('x-chain') && !name.includes('p-chain');
+            })
+            .filter(isChainActive)
+            .map(c => c.platformChainId || c.chainName)
+        );
+        filteredChains = filteredChains.filter(chain => !activeIds.has(chain.platformChainId || chain.chainName));
       }
-      // If showChainsWithoutValidators is true, include all chains (no validator filter)
+      // If validatorFilter === 'all', include all chains (no validator filter)
 
       // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {
@@ -151,15 +171,15 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedCategory, showChainsWithoutValidators]);
+  }, [selectedCategory, validatorFilter]);
 
   // Persist filter state to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('dashboardSearch', searchTerm);
     sessionStorage.setItem('dashboardViewMode', viewMode);
     sessionStorage.setItem('dashboardCategory', selectedCategory);
-    sessionStorage.setItem('dashboardShowNoValidators', String(showChainsWithoutValidators));
-  }, [searchTerm, viewMode, selectedCategory, showChainsWithoutValidators]);
+    sessionStorage.setItem('dashboardValidatorFilter', validatorFilter);
+  }, [searchTerm, viewMode, selectedCategory, validatorFilter]);
 
   useEffect(() => {
     sessionStorage.setItem('dashboardPage', String(currentPage));
@@ -167,7 +187,7 @@ export function Dashboard() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, showChainsWithoutValidators, viewMode]);
+  }, [searchTerm, selectedCategory, validatorFilter, viewMode]);
 
   useEffect(() => {
     // Restore scroll position when returning from chain details
@@ -268,7 +288,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5 text-[#ef4444] dark:text-[#ef4444]" />
               <h2 className="text-lg sm:text-xl font-semibold">
-                {showChainsWithoutValidators ? 'All Chains' : 'Active Chains'}
+                {validatorFilter === 'all' ? 'All Chains' : validatorFilter === 'inactive' ? 'Inactive Chains' : 'Active Chains'}
               </h2>
               <span className="text-sm text-muted-foreground font-medium">
                 ({filteredChains.length})
@@ -376,7 +396,7 @@ export function Dashboard() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg text-sm font-medium transition-all ${
-                  (selectedCategory || showChainsWithoutValidators)
+                  (selectedCategory || validatorFilter !== 'active')
                     ? 'bg-[#ef4444]/10 border-[#ef4444]/20 text-[#ef4444]'
                     : 'bg-card border-border text-foreground hover:bg-muted'
                 }`}
@@ -384,7 +404,7 @@ export function Dashboard() {
                 <Filter className="w-4 h-4" />
                 <span>Filters</span>
                 <AnimatePresence>
-                  {(selectedCategory || showChainsWithoutValidators) && (
+                  {(selectedCategory || validatorFilter !== 'active') && (
                     <motion.span
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -392,7 +412,7 @@ export function Dashboard() {
                       transition={{ duration: 0.2 }}
                       className="ml-1 px-2 py-0.5 text-xs font-bold bg-[#ef4444] text-white rounded-full"
                     >
-                      {[selectedCategory, showChainsWithoutValidators].filter(Boolean).length}
+                      {[selectedCategory, validatorFilter !== 'active'].filter(Boolean).length}
                     </motion.span>
                   )}
                 </AnimatePresence>
@@ -495,8 +515,8 @@ export function Dashboard() {
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         categories={categories}
-        showChainsWithoutValidators={showChainsWithoutValidators}
-        onShowChainsWithoutValidatorsChange={setShowChainsWithoutValidators}
+        validatorFilter={validatorFilter}
+        onValidatorFilterChange={setValidatorFilter}
       />
     </div>
   );

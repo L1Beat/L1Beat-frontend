@@ -2,14 +2,16 @@ import React from 'react';
 import { X, Filter, Users, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+type ValidatorFilter = 'active' | 'all' | 'inactive';
+
 interface FilterModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedCategory: string;
   onCategoryChange: (value: string) => void;
   categories: string[];
-  showChainsWithoutValidators: boolean;
-  onShowChainsWithoutValidatorsChange: (value: boolean) => void;
+  validatorFilter: ValidatorFilter;
+  onValidatorFilterChange: (value: ValidatorFilter) => void;
 }
 
 export function FilterModal({
@@ -18,12 +20,12 @@ export function FilterModal({
   selectedCategory,
   onCategoryChange,
   categories,
-  showChainsWithoutValidators,
-  onShowChainsWithoutValidatorsChange
+  validatorFilter,
+  onValidatorFilterChange
 }: FilterModalProps) {
   const handleReset = () => {
     onCategoryChange('');
-    onShowChainsWithoutValidatorsChange(false);
+    onValidatorFilterChange('active');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -34,7 +36,7 @@ export function FilterModal({
 
   const hasActiveFilters =
     selectedCategory !== '' ||
-    showChainsWithoutValidators;
+    validatorFilter !== 'active';
 
   return (
     <AnimatePresence>
@@ -112,27 +114,28 @@ export function FilterModal({
 
             {/* Validator Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Validators
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Chain Status
               </label>
-              <button
-                onClick={() => onShowChainsWithoutValidatorsChange(!showChainsWithoutValidators)}
-                className="flex items-center gap-3 cursor-pointer w-full"
-              >
-                <div className={`relative w-9 h-5 rounded-full transition-colors ${
-                  showChainsWithoutValidators ? 'bg-[#ef4444]' : 'bg-muted border border-border'
-                }`}>
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                    showChainsWithoutValidators ? 'translate-x-4' : ''
-                  }`} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    Include chains without validators
-                  </span>
-                </div>
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: 'active' as ValidatorFilter, label: 'Active' },
+                  { value: 'all' as ValidatorFilter, label: 'All Chains' },
+                  { value: 'inactive' as ValidatorFilter, label: 'Inactive Only' },
+                ]).map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => onValidatorFilterChange(option.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      validatorFilter === option.value
+                        ? 'bg-[#ef4444] text-white'
+                        : 'bg-muted text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
