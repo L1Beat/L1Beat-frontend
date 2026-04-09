@@ -239,7 +239,7 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
+      <main className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
         <NetworkMetricsBar />
         
         <div className="mb-6 sm:mb-8">
@@ -359,8 +359,16 @@ export function Dashboard() {
                   placeholder="Search chains..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full sm:w-64 pl-10 pr-4 py-2.5 border border-border rounded-lg text-sm bg-muted text-foreground placeholder-muted-foreground transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-background"
+                  className="block w-full sm:w-64 pl-10 pr-9 py-2.5 border border-border rounded-lg text-sm bg-muted text-foreground placeholder-muted-foreground transition-all focus:outline-none focus:ring-2 focus:ring-[#ef4444]/20 focus:border-[#ef4444] focus:bg-background"
                 />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
 
               {/* Filter Button */}
@@ -390,6 +398,27 @@ export function Dashboard() {
                   )}
                 </AnimatePresence>
               </motion.button>
+
+              {/* Clear All Filters */}
+              <AnimatePresence>
+                {(selectedCategory || validatorFilter !== 'active' || searchTerm) && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => {
+                      setSelectedCategory('');
+                      setValidatorFilter('active');
+                      setSearchTerm('');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-[#ef4444] hover:bg-[#ef4444]/10 rounded-lg transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Clear all</span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

@@ -362,7 +362,7 @@ export default function ACPs() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <div className="flex-1">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>

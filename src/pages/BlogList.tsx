@@ -204,7 +204,7 @@ export function BlogList() {
                     <div className="absolute bottom-20 right-10 w-24 h-24 bg-purple-300/20 rounded-full blur-lg animate-bounce"></div>
                     <div className="absolute top-1/2 left-1/3 w-16 h-16 bg-[#ef4444]/15 rounded-full blur-md animate-ping"></div>
                     
-                    <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+                    <div className="relative max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
                         <div className="text-center">
                             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
                                 Insights from the Avalanche Ecosystem
@@ -244,7 +244,7 @@ export function BlogList() {
                     </div>
                 </div>
 
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                     {/* Error State */}
                     {error && (
                         <div className="mb-8 p-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">

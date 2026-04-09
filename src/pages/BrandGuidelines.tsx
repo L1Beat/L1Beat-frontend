@@ -29,7 +29,7 @@ export function BrandGuidelines() {
     <div className="min-h-screen bg-background text-foreground transition-colors">
       {/* Navigation */}
       <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md sticky top-[107px] z-40">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-6">
           <div className="flex gap-1 overflow-x-auto no-scrollbar">
             {sections.map(({ id, label, icon: Icon }) => (
               <button
@@ -52,7 +52,7 @@ export function BrandGuidelines() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-6 py-12">
         {activeSection === 'overview' && (
           <div className="space-y-12">
             {/* Hero Section */}

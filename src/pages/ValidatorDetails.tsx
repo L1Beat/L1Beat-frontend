@@ -118,7 +118,7 @@ export function ValidatorDetails() {
   if (error || !validator) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6">
             <ArrowLeft className="w-4 h-4" />
             <span>Back</span>
@@ -182,7 +182,7 @@ export function ValidatorDetails() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {/* Back navigation */}
         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
           <button

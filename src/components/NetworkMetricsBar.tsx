@@ -116,7 +116,7 @@ export function NetworkMetricsBar() {
   if (loading) return null;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-4 mb-6 sm:mb-8">
       {/* Network TPS */}
       {networkTPS && (
         <div className="bg-card rounded-lg p-3 sm:p-4 border border-border hover:border-[#ef4444]/50 transition-colors duration-300 flex items-center justify-between group">

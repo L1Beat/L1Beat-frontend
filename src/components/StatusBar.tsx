@@ -1,4 +1,4 @@
-import { AlertTriangle, Menu, X, LayoutGrid, FileText, BookOpen, BarChart3, Code } from 'lucide-react';
+import { AlertTriangle, LayoutGrid, FileText, BookOpen, BarChart3, Code } from 'lucide-react';
 import { HealthStatus } from '../types';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -12,7 +12,6 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ health, showTabs = true }: StatusBarProps) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const navTabs = [
@@ -54,7 +53,7 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
 
       {/* Main Navigation */}
       <header className="border-b border-border bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             {/* Logo and Health Status */}
             <div className="flex items-center gap-3 sm:gap-6">
@@ -80,44 +79,16 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
               )}
             </div>
 
-            {/* Desktop Navigation - Right side actions */}
-            <nav className="hidden md:flex items-center gap-2">
-              <ThemeToggle />
-            </nav>
-
-            {/* Mobile Menu Button */}
-            <div className="md:hidden">
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white focus:outline-none"
-              >
-                {isMobileMenuOpen ? (
-                  <X className="h-6 w-6" />
-                ) : (
-                  <Menu className="h-6 w-6" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Mobile Menu */}
-          <div className={`md:hidden transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-            <div className="px-2 pt-2 pb-3 space-y-1 border-t border-border">
-              <div className="pt-4 border-t border-border">
-                <div className="flex items-center justify-between px-3">
-                  <span className="text-sm font-medium">Theme</span>
-                  <ThemeToggle />
-                </div>
-              </div>
-            </div>
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
       {/* Tabbed Navigation */}
       {showTabs && (
-        <nav className="border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <nav className="hidden md:block border-b border-border bg-muted/80 supports-[backdrop-filter]:bg-muted/30 supports-[backdrop-filter]:backdrop-blur-md">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6">
             <div className="flex gap-1 overflow-x-auto scrollbar-hide">
               {navTabs.map(({ id, label, path, icon: Icon, comingSoon }) => {
                 if (comingSoon) {
@@ -156,6 +127,33 @@ export function StatusBar({ health, showTabs = true }: StatusBarProps) {
               })}
             </div>
           </div>
+        </nav>
+      )}
+
+      {/* Mobile Floating Bottom Nav */}
+      {showTabs && (
+        <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2 rounded-2xl bg-[#1c1c1e]/90 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 shadow-2xl">
+          {navTabs.map(({ id, label, path, icon: Icon, comingSoon }) => {
+            if (comingSoon) return null;
+
+            const active = isActive(path);
+            return (
+              <Link
+                key={id}
+                to={path}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 ${
+                  active
+                    ? 'bg-[#ef4444] text-white shadow-lg shadow-[#ef4444]/25'
+                    : 'text-white/60 hover:text-white/90'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {active && (
+                  <span className="text-xs font-semibold">{label}</span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
       )}
     </div>

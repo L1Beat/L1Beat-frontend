@@ -39,7 +39,7 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate, va
   
   return (
     <motion.div
-      className="bg-card rounded-xl border border-border p-4 cursor-pointer group transition-all duration-300 hover:border-[#ef4444]/50"
+      className="bg-card rounded-xl border border-border p-3 sm:p-4 cursor-pointer group transition-all duration-300 hover:border-[#ef4444]/50"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -54,12 +54,12 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate, va
       whileTap={{ scale: 0.98 }}
       onClick={() => onNavigate(chain.chainId)}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         {chain.chainLogoUri ? (
           <motion.img
             src={chain.chainLogoUri}
             alt={`${chain.chainName} logo`}
-            className="w-10 h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
             whileHover={{ scale: 1.1 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             onError={(e) => {
@@ -71,31 +71,29 @@ const ChainListItem = memo(function ChainListItem({ chain, index, onNavigate, va
           <motion.img
             src="/icon-dark-animated.svg"
             alt={`${chain.chainName} logo`}
-            className="w-10 h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg shadow-sm flex-shrink-0 bg-white dark:bg-gray-900"
             whileHover={{ scale: 1.1 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           />
         )}
-        
+
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate mb-1.5">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1.5 break-words">
             {chain.chainName}
           </h3>
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <div className="flex items-center gap-1 min-w-[70px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
               <Zap className={`w-3 h-3 ${tpsColor} flex-shrink-0`} />
               <span className={`text-xs font-medium ${tpsColor}`}>
                 {tpsValue} TPS
               </span>
             </div>
-            <div className="w-px h-3 bg-border flex-shrink-0"></div>
-            <div className="flex items-center gap-1 min-w-[30px]">
+            <div className="flex items-center gap-1">
               <Server className="w-3 h-3 text-muted-foreground flex-shrink-0" />
               <span className="text-xs font-medium text-muted-foreground">
                 {validatorCount}
               </span>
             </div>
-            <div className="w-px h-3 bg-border flex-shrink-0"></div>
             <div className="flex items-center gap-1 cursor-help" title="Coming Soon">
               <Shield className="w-3 h-3 text-muted-foreground flex-shrink-0" />
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 border border-yellow-500/20">
@@ -128,7 +126,7 @@ export const ChainListView = memo(function ChainListView({ chains, validatorCoun
   }, [navigate]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-4">
       {chains.map((chain, index) => {
         const validatorCount = (chain.subnetId ? validatorCountBySubnet[chain.subnetId] : undefined) ?? chain.validatorCount ?? 0;
         return (
