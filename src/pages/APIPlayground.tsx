@@ -397,11 +397,12 @@ export function APIPlayground() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         if (selectedId && !isWsEndpoint(selectedId)) handleExecuteRef.current();
       }
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [selectedId]);
 
   const handleFeaturedSelect = useCallback(
