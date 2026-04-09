@@ -43,24 +43,17 @@ export function Dashboard() {
       }
       setError(null);
 
-      // Build filter objects
-      const baseFilters: { category?: string } = {};
-      if (selectedCategory) baseFilters.category = selectedCategory;
+      // Always fetch all chains — filter by is_active on the frontend
+      const filters: { category?: string; includeInactive?: boolean } = { includeInactive: true };
+      if (selectedCategory) filters.category = selectedCategory;
 
-      const activeFilters = { ...baseFilters };
-      const allFilters = { ...baseFilters, includeInactive: true };
-
-      // For 'inactive' we need both sets to subtract; otherwise fetch just what's needed
-      const [activeChainsData, allChainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
-        getChains(activeFilters),
-        validatorFilter !== 'active' ? getChains(allFilters) : Promise.resolve([] as Chain[]),
+      const [chainsData, categoriesData, tpsMap, teleporterData, feeData] = await Promise.all([
+        getChains(filters),
         getCategories(),
         getAllChainsTPSLatest(),
         getTeleporterMessages(),
         getL1BeatFeeMetrics()
       ]);
-
-      const chainsData = validatorFilter === 'active' ? activeChainsData : allChainsData;
 
       // Calculate ICM message counts per chain
       const icmCounts: Record<string, number> = {};
@@ -111,35 +104,15 @@ export function Dashboard() {
         return !name.includes('x-chain') && !name.includes('p-chain');
       });
 
-      // Helper: apply the "active" frontend filter
-      const isChainActive = (chain: Chain) => {
-        const subnetValidators = chain.validatorCount ?? 0;
-        return (
-          (subnetValidators !== undefined && subnetValidators >= 1) ||
-          chain.chainName.toLowerCase().includes('avalanche') ||
-          chain.chainName.toLowerCase().includes('c-chain')
-        );
-      };
-
-      // Apply validator filter
+      // Apply validator filter using backend's is_active field
       let filteredChains = excludedChains;
 
       if (validatorFilter === 'active') {
-        filteredChains = filteredChains.filter(isChainActive);
+        filteredChains = filteredChains.filter(chain => chain.isActive);
       } else if (validatorFilter === 'inactive') {
-        // Build active set by running activeChainsData through the same X/P-Chain exclusion + active filter
-        const activeIds = new Set(
-          activeChainsData
-            .filter(chain => {
-              const name = chain.chainName.toLowerCase();
-              return !name.includes('x-chain') && !name.includes('p-chain');
-            })
-            .filter(isChainActive)
-            .map(c => c.platformChainId || c.chainName)
-        );
-        filteredChains = filteredChains.filter(chain => !activeIds.has(chain.platformChainId || chain.chainName));
+        filteredChains = filteredChains.filter(chain => !chain.isActive);
       }
-      // If validatorFilter === 'all', include all chains (no validator filter)
+      // If validatorFilter === 'all', include all chains (no filter)
 
       // Sort chains: C-Chain first, then alphabetically
       const sortedChains = filteredChains.sort((a, b) => {

@@ -293,7 +293,7 @@ export const ChainTableView = memo(function ChainTableView({
 
                   {/* Status */}
                   <td className="px-4 py-3.5">
-                    {validatorCount >= 1 ? (
+                    {chain.isActive ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-green-500/10 text-green-500 dark:text-[#30d158]">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-[#30d158]"></span>
                         Active

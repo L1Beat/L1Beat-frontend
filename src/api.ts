@@ -322,6 +322,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             platformChainId: chain.chain_id || '',
             evmChainId: chain.evm_chain_id || undefined,
             isL1: chain.chain_type === 'l1',
+            isActive: chain.is_active ?? false,
             sybilResistanceType: chain.sybil_resistance_type || '',
             network: chain.network || 'mainnet',
             rpcUrl: chain.rpc_url || '',

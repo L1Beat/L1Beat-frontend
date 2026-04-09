@@ -19,6 +19,7 @@ export interface Chain {
     value: number;
     timestamp: number;
   } | null;
+  isActive?: boolean;
   validatorCount?: number;
   cumulativeTxCount?: {
     value: number;
