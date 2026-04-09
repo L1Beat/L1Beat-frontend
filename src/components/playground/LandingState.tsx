@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { FEATURED_QUERIES, REST_ENDPOINTS, WS_ENDPOINTS, isWsEndpoint } from './endpointCatalog';
+import { PLAYGROUND_API_BASE } from './constants';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Blocks,
@@ -48,7 +49,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
   const [copied, setCopied] = useState(false);
 
   const copyBaseUrl = useCallback(() => {
-    navigator.clipboard.writeText('https://api.l1beat.io').then(() => {
+    navigator.clipboard.writeText(PLAYGROUND_API_BASE).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -69,7 +70,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
         <div className="flex items-center gap-2 mt-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border">
             <span className="font-mono text-sm text-foreground">
-              https://api.l1beat.io
+              {PLAYGROUND_API_BASE}
             </span>
             <button
               onClick={copyBaseUrl}

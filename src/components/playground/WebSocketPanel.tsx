@@ -81,17 +81,20 @@ export function WebSocketPanel({
   const [viewMode, setViewMode] = useState<'cards' | 'raw'>('cards');
   const [rawMessages, setRawMessages] = useState<RawMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const isUserConnectedRef = useRef(false);
 
   const chainId = params.chainId || '43114';
   const wsUrl = `${PLAYGROUND_WS_BASE}/ws/blocks/${chainId}`;
 
   const disconnect = useCallback(() => {
+    isUserConnectedRef.current = false;
     wsRef.current?.close();
     wsRef.current = null;
     setStatus('disconnected');
   }, []);
 
   const connect = useCallback(() => {
+    isUserConnectedRef.current = true;
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -179,7 +182,7 @@ export function WebSocketPanel({
     };
 
     wsRef.current = socket;
-  }, [params.chainId, wsUrl]);
+  }, [wsUrl]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -187,6 +190,13 @@ export function WebSocketPanel({
       wsRef.current?.close();
     };
   }, []);
+
+  // Auto-reconnect when the chain changes while the user is connected
+  useEffect(() => {
+    if (isUserConnectedRef.current) {
+      connect();
+    }
+  }, [connect]);
 
   const latestBlock = blocks[0];
 

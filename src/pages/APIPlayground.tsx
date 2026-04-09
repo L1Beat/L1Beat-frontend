@@ -430,6 +430,7 @@ export function APIPlayground() {
 
   const handleLoadNextPage = useCallback(async () => {
     if (!selectedId || isWsEndpoint(selectedId)) return;
+    if (isLoading) return;
     const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
     if (!endpoint) return;
     const meta = (response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
@@ -460,7 +461,7 @@ export function APIPlayground() {
     } finally {
       setIsLoading(false);
     }
-  }, [response, params, selectedId]);
+  }, [response, params, selectedId, isLoading]);
 
   const handleRetryAfter = useCallback(() => {
     handleExecute();

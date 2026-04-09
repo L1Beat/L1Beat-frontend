@@ -40,6 +40,8 @@ function RateLimitCard({
 }) {
   const [seconds, setSeconds] = useState(retryAfter);
   const cancelledRef = useRef(false);
+  const onRetryRef = useRef(onRetry);
+  useEffect(() => { onRetryRef.current = onRetry; });
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -50,12 +52,12 @@ function RateLimitCard({
 
   useEffect(() => {
     if (seconds <= 0) {
-      if (!cancelledRef.current) onRetry();
+      if (!cancelledRef.current) onRetryRef.current();
       return;
     }
     const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [seconds, onRetry]);
+  }, [seconds]);
 
   return (
     <div className="m-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">

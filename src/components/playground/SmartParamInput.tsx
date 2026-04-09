@@ -30,7 +30,7 @@ function ChainIdInput() {
 }
 
 export function SmartParamInput(props: SmartParamInputProps) {
-  const { param, value, onChange, chains, hasError } = props;
+  const { param, value, onChange, hasError } = props;
 
   const errorClass = hasError
     ? 'border-red-500 ring-1 ring-red-500'
