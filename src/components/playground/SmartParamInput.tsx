@@ -1,12 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ParamDef } from './endpointCatalog';
 import { Switch } from '../branding/ui/switch';
+import { getChains } from '../../api';
 
 interface SmartParamInputProps {
   param: ParamDef;
   value: string;
   onChange: (value: string) => void;
   hasError: boolean;
+}
+
+const PRIMARY_SUBNET = { value: '11111111111111111111111111111111LpoYY', label: 'Primary Network' };
+
+interface SubnetIdInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  required: boolean;
+  errorClass: string;
+}
+
+function SubnetIdInput({ value, onChange, required, errorClass }: SubnetIdInputProps) {
+  const [options, setOptions] = useState<{ value: string; label: string }[]>([PRIMARY_SUBNET]);
+
+  useEffect(() => {
+    getChains().then((chains) => {
+      const seen = new Set<string>();
+      seen.add(PRIMARY_SUBNET.value);
+      const extras: { value: string; label: string }[] = [];
+      for (const chain of chains) {
+        if (chain.subnetId && !seen.has(chain.subnetId)) {
+          seen.add(chain.subnetId);
+          extras.push({ value: chain.subnetId, label: chain.chainName });
+        }
+      }
+      if (extras.length > 0) {
+        setOptions([PRIMARY_SUBNET, ...extras]);
+      }
+    }).catch(() => {/* keep defaults */});
+  }, []);
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`w-full px-3 py-2 rounded-lg bg-muted border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] ${errorClass}`}
+    >
+      {!required && <option value="">— any —</option>}
+      {options.map((s) => (
+        <option key={s.value} value={s.value}>
+          {s.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function ChainIdInput() {
@@ -53,6 +99,16 @@ export function SmartParamInput(props: SmartParamInputProps) {
           </select>
         );
       }
+
+      case 'subnetId':
+        return (
+          <SubnetIdInput
+            value={value}
+            onChange={onChange}
+            required={param.required}
+            errorClass={errorClass}
+          />
+        );
 
       case 'boolean': {
         const isOn = value === 'true';

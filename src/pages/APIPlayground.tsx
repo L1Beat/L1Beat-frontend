@@ -683,11 +683,11 @@ export function APIPlayground() {
             {/* Main content */}
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
               {!selectedId ? (
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
                   <LandingState onSelect={handleFeaturedSelect} />
                 </div>
               ) : isWsEndpoint(selectedId) ? (
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
                   {wsEndpoint && (
                     <WebSocketPanel
                       endpoint={wsEndpoint}
@@ -761,11 +761,11 @@ export function APIPlayground() {
         /* ── Mobile: stacked layout with tabs ── */
         <>
           {!selectedId ? (
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
               <LandingState onSelect={handleFeaturedSelect} />
             </div>
           ) : isWsEndpoint(selectedId) ? (
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
               {wsEndpoint && (
                 <WebSocketPanel
                   endpoint={wsEndpoint}
@@ -810,7 +810,7 @@ export function APIPlayground() {
               {/* Tab content */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 {mobileTab === 'request' ? (
-                  <div className="h-full overflow-y-auto">
+                  <div className="h-full overflow-y-auto scrollbar-hide">
                     <RequestPanel
                       endpoint={currentEndpoint}
                       params={params}

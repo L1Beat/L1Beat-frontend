@@ -1,5 +1,5 @@
 export type ParamKind = 'path' | 'query';
-export type ParamType = 'string' | 'int' | 'boolean' | 'enum' | 'date' | 'chainId';
+export type ParamType = 'string' | 'int' | 'boolean' | 'enum' | 'date' | 'chainId' | 'subnetId';
 
 export interface ParamDef {
   name: string;
@@ -318,10 +318,9 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnet_id',
         kind: 'query',
-        type: 'string',
+        type: 'subnetId',
         required: false,
         default: '',
-        placeholder: '2ABC...xyz',
         description: 'Filter by subnet ID (CB58 format)',
       },
       limitParam(100),
@@ -373,10 +372,9 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnetId',
         kind: 'path',
-        type: 'string',
+        type: 'subnetId',
         required: true,
-        default: '',
-        placeholder: '2ABC...xyz',
+        default: '11111111111111111111111111111111LpoYY',
         description: 'Subnet ID in CB58 format',
       },
     ],
@@ -436,10 +434,9 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnet_id',
         kind: 'query',
-        type: 'string',
+        type: 'subnetId',
         required: false,
         default: '',
-        placeholder: '2ABC...xyz',
         description: 'Filter by subnet ID (CB58)',
       },
       {
@@ -477,7 +474,7 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnet_id',
         kind: 'query',
-        type: 'string',
+        type: 'subnetId',
         required: false,
         default: '',
         description: 'Required when a node validates multiple subnets',
@@ -521,10 +518,9 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnet_id',
         kind: 'query',
-        type: 'string',
+        type: 'subnetId',
         required: false,
         default: '',
-        placeholder: '2ABC...xyz',
         description: 'Filter by subnet ID',
       },
       limitParam(100),
@@ -545,10 +541,9 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'subnet_id',
         kind: 'query',
-        type: 'string',
+        type: 'subnetId',
         required: true,
-        default: '',
-        placeholder: '2ABC...xyz',
+        default: '11111111111111111111111111111111LpoYY',
         description: 'Subnet ID — required',
       },
       {

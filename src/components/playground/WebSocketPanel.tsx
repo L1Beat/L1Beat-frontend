@@ -376,7 +376,7 @@ export function WebSocketPanel({
                 </span>
                 <span className="text-[#60a5fa]">{msg.type}</span>
               </div>
-              <pre className="text-foreground overflow-x-auto whitespace-pre-wrap break-all text-[11px]">
+              <pre className="text-foreground overflow-x-auto scrollbar-hide whitespace-pre-wrap break-all text-[11px]">
                 {JSON.stringify(msg.data, null, 2)}
               </pre>
             </div>

@@ -64,7 +64,7 @@ function CodeBlock({ label, content }: { label: string; content: string }) {
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <CopyButton text={content} />
       </div>
-      <div className="font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto border border-border">
+      <div className="font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto scrollbar-hide border border-border">
         <pre className="whitespace-pre-wrap break-all text-foreground">{content}</pre>
       </div>
     </div>
@@ -82,7 +82,7 @@ function UrlBlock({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="block font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto border border-border hover:border-[#ef4444]/40 transition-colors group"
+        className="block font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto scrollbar-hide border border-border hover:border-[#ef4444]/40 transition-colors group"
       >
         <pre className="whitespace-pre-wrap break-all text-foreground group-hover:text-[#ef4444]/70 transition-colors duration-150">{url}</pre>
       </a>
