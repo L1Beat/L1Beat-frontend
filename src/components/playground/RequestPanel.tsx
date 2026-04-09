@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Play, Loader2, Copy, Check } from 'lucide-react';
+import { Play, Loader2, Copy, Check, Bookmark, BookmarkCheck } from 'lucide-react';
 import { EndpointDef, ParamDef } from './endpointCatalog';
-import { SmartParamInput, ChainOption } from './SmartParamInput';
+import { SmartParamInput } from './SmartParamInput';
 
 interface RequestPanelProps {
   endpoint: EndpointDef;
@@ -11,9 +11,12 @@ interface RequestPanelProps {
   isLoading: boolean;
   constructedUrl: string;
   curlSnippet: string;
-  chains: ChainOption[];
+  jsSnippet: string;
+  pythonSnippet: string;
   hasValidationErrors: boolean;
   validationErrors?: Record<string, boolean>;
+  onBookmark: () => void;
+  isBookmarked: boolean;
   scrollable?: boolean;
 }
 
@@ -91,6 +94,8 @@ const isMac =
   typeof navigator !== 'undefined' &&
   (navigator.platform.includes('Mac') || navigator.userAgent.includes('Mac'));
 
+const SNIPPET_TAB_KEY = 'l1beat_playground_snippet_tab';
+
 export function RequestPanel({
   endpoint,
   params,
@@ -99,11 +104,26 @@ export function RequestPanel({
   isLoading,
   constructedUrl,
   curlSnippet,
-  chains,
+  jsSnippet,
+  pythonSnippet,
   hasValidationErrors,
   validationErrors = {},
+  onBookmark,
+  isBookmarked,
   scrollable = true,
 }: RequestPanelProps) {
+  const [snippetTab, setSnippetTab] = React.useState<'curl' | 'js' | 'python'>(() => {
+    try {
+      const saved = localStorage.getItem(SNIPPET_TAB_KEY);
+      if (saved === 'js' || saved === 'python') return saved;
+    } catch { /* ignore */ }
+    return 'curl';
+  });
+
+  const handleSnippetTab = (tab: 'curl' | 'js' | 'python') => {
+    setSnippetTab(tab);
+    try { localStorage.setItem(SNIPPET_TAB_KEY, tab); } catch { /* ignore */ }
+  };
   const pathParams: ParamDef[] = endpoint.params.filter((p) => p.kind === 'path');
   const queryParams: ParamDef[] = endpoint.params.filter((p) => p.kind === 'query');
 
@@ -120,9 +140,18 @@ export function RequestPanel({
             <span className="bg-green-500/15 text-green-600 dark:text-green-400 text-xs font-mono px-1.5 py-0.5 rounded">
               GET
             </span>
-            <code className="text-sm font-mono text-foreground break-all">
+            <code className="text-sm font-mono text-foreground break-all flex-1">
               {endpoint.path}
             </code>
+            <button
+              onClick={onBookmark}
+              title={isBookmarked ? 'Bookmarked' : 'Save bookmark'}
+              className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isBookmarked
+                ? <BookmarkCheck className="w-4 h-4 text-[#ef4444]" />
+                : <Bookmark className="w-4 h-4" />}
+            </button>
           </div>
           <p className="text-sm text-muted-foreground">{endpoint.description}</p>
           {endpoint.notes && endpoint.notes.length > 0 && (
@@ -152,7 +181,6 @@ export function RequestPanel({
                 param={param}
                 value={params[param.name] ?? param.default ?? ''}
                 onChange={(v) => onParamChange(param.name, v)}
-                chains={chains}
                 hasError={validationErrors[param.name] ?? false}
               />
             ))}
@@ -177,7 +205,6 @@ export function RequestPanel({
                 param={param}
                 value={params[param.name] ?? param.default ?? ''}
                 onChange={(v) => onParamChange(param.name, v)}
-                chains={chains}
                 hasError={validationErrors[param.name] ?? false}
               />
             ))}
@@ -193,7 +220,27 @@ export function RequestPanel({
             <div className="flex-1 h-px bg-border" />
           </div>
           <UrlBlock url={constructedUrl} />
-          <CodeBlock label="curl" content={curlSnippet} />
+          {/* Snippet tab toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              {(['curl', 'js', 'python'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => handleSnippetTab(tab)}
+                  className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                    snippetTab === tab
+                      ? 'bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/30'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent'
+                  }`}
+                >
+                  {tab === 'js' ? 'fetch' : tab}
+                </button>
+              ))}
+            </div>
+            {snippetTab === 'curl' && <CodeBlock label="curl" content={curlSnippet} />}
+            {snippetTab === 'js' && <CodeBlock label="javascript" content={jsSnippet} />}
+            {snippetTab === 'python' && <CodeBlock label="python" content={pythonSnippet} />}
+          </div>
         </div>
 
         {/* Execute button */}

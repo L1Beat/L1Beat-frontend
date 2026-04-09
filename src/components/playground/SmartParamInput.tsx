@@ -2,17 +2,10 @@ import React from 'react';
 import { ParamDef } from './endpointCatalog';
 import { Switch } from '../branding/ui/switch';
 
-export interface ChainOption {
-  evmChainId: number;
-  name: string;
-  logoUrl?: string;
-}
-
 interface SmartParamInputProps {
   param: ParamDef;
   value: string;
   onChange: (value: string) => void;
-  chains: ChainOption[];
   hasError: boolean;
 }
 
@@ -77,20 +70,31 @@ export function SmartParamInput(props: SmartParamInputProps) {
         );
       }
 
-      case 'int':
+      case 'int': {
+        const hasRange = param.min !== undefined || param.max !== undefined;
+        const rangeHint = hasRange
+          ? [param.min !== undefined ? `min ${param.min}` : '', param.max !== undefined ? `max ${param.max}` : '']
+              .filter(Boolean).join(', ')
+          : '';
         return (
-          <input
-            type="text"
-            inputMode="numeric"
-            value={value}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === '' || /^-?\d*$/.test(v)) onChange(v);
-            }}
-            placeholder={param.placeholder ?? (param.default ?? '')}
-            className={baseInputClass}
-          />
+          <>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={value}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^-?\d*$/.test(v)) onChange(v);
+              }}
+              placeholder={param.placeholder ?? (param.default ?? '')}
+              className={baseInputClass}
+            />
+            {hasRange && (
+              <span className="text-xs text-muted-foreground">{rangeHint}</span>
+            )}
+          </>
         );
+      }
 
       case 'date':
         return (

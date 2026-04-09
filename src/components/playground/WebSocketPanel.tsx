@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WsEndpointDef } from './endpointCatalog';
-import { SmartParamInput, ChainOption } from './SmartParamInput';
+import { SmartParamInput } from './SmartParamInput';
 import { PLAYGROUND_WS_BASE } from './constants';
 
 type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -32,7 +32,6 @@ interface WebSocketPanelProps {
   endpoint: WsEndpointDef;
   params: Record<string, string>;
   onParamChange: (name: string, value: string) => void;
-  chains: ChainOption[];
 }
 
 function StatusDot({ status }: { status: WsStatus }) {
@@ -72,7 +71,6 @@ export function WebSocketPanel({
   endpoint,
   params,
   onParamChange,
-  chains,
 }: WebSocketPanelProps) {
   const [status, setStatus] = useState<WsStatus>('disconnected');
   const [blocks, setBlocks] = useState<WsBlock[]>([]);
@@ -222,7 +220,6 @@ export function WebSocketPanel({
               param={param}
               value={params[param.name] ?? param.default ?? ''}
               onChange={(v) => onParamChange(param.name, v)}
-              chains={chains}
               hasError={false}
             />
           ))}

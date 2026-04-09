@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Terminal, AlertCircle, Copy, ChevronRight, ChevronDown } from 'lucide-react';
+import { Terminal, AlertCircle, Copy, ChevronRight, ChevronDown, Link } from 'lucide-react';
 import { Skeleton } from '../branding/ui/skeleton';
 import { EndpointDef } from './endpointCatalog';
 
@@ -241,6 +241,30 @@ function JsonNode({ value, depth }: JsonNodeProps) {
   return <span className="text-muted-foreground">{String(value)}</span>;
 }
 
+// ─── Copy Link Button ────────────────────────────────────────────────────────
+
+function CopyLinkButton() {
+  const [copied, setCopied] = React.useState(false);
+  const handleCopy = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('autorun', '1');
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+      title="Copy shareable link"
+    >
+      <Link className="w-3.5 h-3.5" />
+      {copied ? 'Copied!' : 'Copy link'}
+    </button>
+  );
+}
+
 // ─── ResponsePanel ────────────────────────────────────────────────────────────
 
 interface ResponsePanelProps {
@@ -358,6 +382,7 @@ export function ResponsePanel({
       typeof body?.retry_after === 'number' ? body.retry_after : 10;
     return (
       <RateLimitCard
+        key={retryAfter}
         retryAfter={retryAfter}
         onRetry={() => onRetryAfter(retryAfter)}
       />
@@ -446,6 +471,7 @@ export function ResponsePanel({
           >
             Collapse all
           </button>
+          <CopyLinkButton />
           <button
             onClick={copyJson}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"

@@ -17,14 +17,30 @@ import { RequestPanel } from '../components/playground/RequestPanel';
 import { ResponsePanel } from '../components/playground/ResponsePanel';
 import { WebSocketPanel } from '../components/playground/WebSocketPanel';
 import { HistoryBar, HistoryEntry } from '../components/playground/HistoryBar';
-import { ChainOption } from '../components/playground/SmartParamInput';
+import { BookmarkBar, Bookmark } from '../components/playground/BookmarkBar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { PLAYGROUND_API_BASE } from '../components/playground/constants';
 
 const BASE_URL = PLAYGROUND_API_BASE;
 const HISTORY_STORAGE_KEY = 'l1beat_playground_history';
+const BOOKMARKS_STORAGE_KEY = 'l1beat_playground_bookmarks';
 const MAX_HISTORY = 20;
 const CARRY_OVER_PARAMS = ['chainId', 'limit', 'offset', 'subnet_id'];
+
+function loadBookmarks(): Bookmark[] {
+  try {
+    const stored = localStorage.getItem(BOOKMARKS_STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as Bookmark[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBookmarks(entries: Bookmark[]) {
+  try {
+    localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(entries));
+  } catch { /* ignore */ }
+}
 
 // ─── Drag-to-resize hook ──────────────────────────────────────────────────────
 
@@ -98,7 +114,7 @@ function DragHandle({
 
 function loadHistory(): HistoryEntry[] {
   try {
-    const stored = sessionStorage.getItem(HISTORY_STORAGE_KEY);
+    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
     return stored ? (JSON.parse(stored) as HistoryEntry[]) : [];
   } catch {
     return [];
@@ -107,18 +123,30 @@ function loadHistory(): HistoryEntry[] {
 
 function saveHistory(entries: HistoryEntry[]) {
   try {
-    sessionStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries));
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries));
   } catch { /* ignore */ }
 }
 
 function buildUrl(endpointPath: string, params: Record<string, string>): string {
+  // Substitute path params first — independent of catalog lookup
+  const pathKeys = new Set([...endpointPath.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]));
   let path = endpointPath;
   path = path.replace(/\{([^}]+)\}/g, (_, key: string) => {
     const val = params[key];
     return val ? encodeURIComponent(val) : `{${key}}`;
   });
+
   const endpoint = REST_ENDPOINTS.find((e) => e.path === endpointPath);
-  if (!endpoint) return BASE_URL + path;
+  if (!endpoint) {
+    // Fallback: treat non-path params as query params
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (!pathKeys.has(k) && v) qs.append(k, v);
+    }
+    const queryString = qs.toString();
+    return BASE_URL + path + (queryString ? `?${queryString}` : '');
+  }
+
   const queryParams = endpoint.params.filter((p) => p.kind === 'query');
   const qs = new URLSearchParams();
   for (const param of queryParams) {
@@ -133,6 +161,17 @@ function buildCurl(url: string): string {
   return `curl "${url}"`;
 }
 
+function buildFetchSnippet(url: string): string {
+  return `const res = await fetch('${url}');
+const data = await res.json();
+console.log(data);`;
+}
+
+function buildPythonSnippet(url: string): string {
+  return `import requests
+r = requests.get('${url}')
+print(r.json())`;
+}
 
 function getValidationErrors(
   endpoint: EndpointDef,
@@ -142,6 +181,13 @@ function getValidationErrors(
   for (const param of endpoint.params) {
     if (param.required && !params[param.name]) {
       errors[param.name] = true;
+    }
+    if (param.type === 'int' && params[param.name]) {
+      const n = Number(params[param.name]);
+      if (!isNaN(n)) {
+        if (param.min !== undefined && n < param.min) errors[param.name] = true;
+        if (param.max !== undefined && n > param.max) errors[param.name] = true;
+      }
     }
   }
   return errors;
@@ -178,8 +224,8 @@ export function APIPlayground() {
   const [durationMs, setDurationMs] = useState<number | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [chains, setChains] = useState<ChainOption[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'request' | 'response'>('request');
 
@@ -198,27 +244,6 @@ export function APIPlayground() {
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  // Fetch available chains
-  useEffect(() => {
-    fetch(`${BASE_URL}/api/v1/data/chains?chain_type=l1&active=true&limit=100`)
-      .then((r) => r.json())
-      .then((data: { data: Array<{ evm_chain_id?: number; name?: string; logo_url?: string }> }) => {
-        const opts: ChainOption[] = data.data
-          .filter((c) => c.evm_chain_id != null)
-          .map((c) => ({
-            evmChainId: c.evm_chain_id!,
-            name: c.name ?? String(c.evm_chain_id),
-            logoUrl: c.logo_url,
-          }));
-        if (!opts.find((o) => o.evmChainId === 43114)) {
-          opts.unshift({ evmChainId: 43114, name: 'Avalanche C-Chain' });
-        }
-        setChains(opts);
-      })
-      .catch(() => {
-        setChains([{ evmChainId: 43114, name: 'Avalanche C-Chain' }]);
-      });
-  }, []);
 
   // Switch to response tab on mobile when response arrives
   useEffect(() => {
@@ -226,6 +251,22 @@ export function APIPlayground() {
       setMobileTab('response');
     }
   }, [response, isLoading]);
+
+  // Autorun on load if ?autorun=1 is present (shared link)
+  const autoranRef = useRef(false);
+  useEffect(() => {
+    if (autoranRef.current) return;
+    if (searchParams.get('autorun') === '1' && selectedId && !isWsEndpoint(selectedId)) {
+      autoranRef.current = true;
+      // Strip autorun from URL immediately, then execute
+      const cleaned = new URLSearchParams(searchParams);
+      cleaned.delete('autorun');
+      setSearchParams(cleaned, { replace: true });
+      setTimeout(() => handleExecuteRef.current(), 50);
+    }
+  // Only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync URL (debounced)
   useEffect(() => {
@@ -434,9 +475,18 @@ export function APIPlayground() {
     const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
     if (!endpoint) return;
     const meta = (response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
-    if (!meta?.next_cursor) return;
+    if (!meta?.next_cursor && !meta?.has_more) return;
 
-    const newParams = { ...params, cursor: String(meta.next_cursor) };
+    // Determine pagination mode: cursor or offset
+    let newParams: Record<string, string>;
+    if (meta?.next_cursor) {
+      newParams = { ...params, cursor: String(meta.next_cursor) };
+    } else {
+      // Offset pagination: increment offset by limit
+      const currentOffset = parseInt(params.offset || '0', 10);
+      const currentLimit = parseInt(params.limit || '5', 10);
+      newParams = { ...params, offset: String(currentOffset + currentLimit) };
+    }
     setParams(newParams);
     const url = buildUrl(endpoint.path, newParams);
     setIsLoading(true);
@@ -450,7 +500,6 @@ export function APIPlayground() {
         ? (json as Record<string, unknown>).data as unknown[]
         : [];
       setCumulativeData((prev) => [...prev, ...newItems]);
-      // Update response meta/cursor but keep cumulative data as the displayed data
       setResponse(json);
       setStatus(res.status);
       setDurationMs(elapsed);
@@ -467,6 +516,61 @@ export function APIPlayground() {
     handleExecute();
   }, [handleExecute]);
 
+  // Bookmark handlers
+  const isBookmarked = bookmarks.some(
+    (b) => b.endpointId === selectedId && JSON.stringify(b.params) === JSON.stringify(params)
+  );
+
+  const handleBookmarkToggle = useCallback(() => {
+    if (!selectedId || isWsEndpoint(selectedId)) return;
+    const existing = bookmarks.find(
+      (b) => b.endpointId === selectedId && JSON.stringify(b.params) === JSON.stringify(params)
+    );
+    if (existing) {
+      setBookmarks((prev) => {
+        const next = prev.filter((b) => b.id !== existing.id);
+        saveBookmarks(next);
+        return next;
+      });
+    } else {
+      const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
+      if (!endpoint) return;
+      const entry: Bookmark = {
+        id: crypto.randomUUID(),
+        label: endpoint.title,
+        endpointId: selectedId,
+        params: { ...params },
+        savedAt: Date.now(),
+      };
+      setBookmarks((prev) => {
+        const next = [entry, ...prev];
+        saveBookmarks(next);
+        return next;
+      });
+    }
+  }, [selectedId, params, bookmarks]);
+
+  const handleBookmarkDelete = useCallback((id: string) => {
+    setBookmarks((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      saveBookmarks(next);
+      return next;
+    });
+  }, []);
+
+  const handleBookmarkSelect = useCallback((bm: Bookmark) => {
+    const endpoint = getEndpointById(bm.endpointId);
+    if (!endpoint) return;
+    setSelectedId(bm.endpointId);
+    setParams(bm.params);
+    setResponse(null);
+    setCumulativeData([]);
+    setStatus(null);
+    setDurationMs(null);
+    setNetworkError(null);
+    setMobileTab('request');
+  }, []);
+
   // Merge cumulative data into the display response so the JSON viewer shows all loaded items
   const displayResponse: unknown = (() => {
     if (!response || cumulativeData.length === 0) return response;
@@ -479,16 +583,18 @@ export function APIPlayground() {
   const currentEndpoint = selectedId ? REST_ENDPOINTS.find((e) => e.id === selectedId) : null;
   const constructedUrl = currentEndpoint ? buildUrl(currentEndpoint.path, params) : '';
   const curlSnippet = constructedUrl ? buildCurl(constructedUrl) : '';
+  const jsSnippet = constructedUrl ? buildFetchSnippet(constructedUrl) : '';
+  const pythonSnippet = constructedUrl ? buildPythonSnippet(constructedUrl) : '';
   const validationErrors = currentEndpoint ? getValidationErrors(currentEndpoint, params) : {};
   const hasValidationErrors = Object.keys(validationErrors).length > 0;
   const suggestedNext: EndpointDef[] = currentEndpoint?.suggestedNext
     ? currentEndpoint.suggestedNext.map((id) => REST_ENDPOINTS.find((e) => e.id === id)).filter((e): e is EndpointDef => e != null)
     : [];
-  const hasNextPage = (() => {
-    if (!response) return false;
-    const meta = (response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
-    return Boolean(meta?.next_cursor);
-  })();
+  const responseMeta = response
+    ? ((response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined)
+    : undefined;
+  const hasNextPage = Boolean(responseMeta?.next_cursor) ||
+    (Boolean(responseMeta?.has_more) && !responseMeta?.next_cursor);
 
   const wsEndpoint = selectedId ? WS_ENDPOINTS.find((e) => e.id === selectedId) : undefined;
 
@@ -572,7 +678,6 @@ export function APIPlayground() {
                       endpoint={wsEndpoint}
                       params={params}
                       onParamChange={handleParamChange}
-                      chains={chains}
                     />
                   )}
                 </div>
@@ -591,10 +696,12 @@ export function APIPlayground() {
                       isLoading={isLoading}
                       constructedUrl={constructedUrl}
                       curlSnippet={curlSnippet}
-
-                      chains={chains}
+                      jsSnippet={jsSnippet}
+                      pythonSnippet={pythonSnippet}
                       hasValidationErrors={hasValidationErrors}
                       validationErrors={validationErrors}
+                      onBookmark={handleBookmarkToggle}
+                      isBookmarked={isBookmarked}
                     />
                   </div>
 
@@ -624,6 +731,11 @@ export function APIPlayground() {
             </div>
           </div>
 
+          <BookmarkBar
+            bookmarks={bookmarks}
+            onSelect={handleBookmarkSelect}
+            onDelete={handleBookmarkDelete}
+          />
           <HistoryBar
             history={history}
             onSelect={handleHistorySelect}
@@ -644,7 +756,6 @@ export function APIPlayground() {
                   endpoint={wsEndpoint}
                   params={params}
                   onParamChange={handleParamChange}
-                  chains={chains}
                 />
               )}
             </div>
@@ -693,10 +804,12 @@ export function APIPlayground() {
                       isLoading={isLoading}
                       constructedUrl={constructedUrl}
                       curlSnippet={curlSnippet}
-
-                      chains={chains}
+                      jsSnippet={jsSnippet}
+                      pythonSnippet={pythonSnippet}
                       hasValidationErrors={hasValidationErrors}
                       validationErrors={validationErrors}
+                      onBookmark={handleBookmarkToggle}
+                      isBookmarked={isBookmarked}
                       scrollable={false}
                     />
                   </div>
@@ -719,6 +832,11 @@ export function APIPlayground() {
             </div>
           ) : null}
 
+          <BookmarkBar
+            bookmarks={bookmarks}
+            onSelect={handleBookmarkSelect}
+            onDelete={handleBookmarkDelete}
+          />
           <HistoryBar
             history={history}
             onSelect={handleHistorySelect}
