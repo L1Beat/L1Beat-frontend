@@ -70,9 +70,9 @@ export function BookmarkBar({ bookmarks, onSelect, onDelete }: BookmarkBarProps)
             </span>
             <span className="ml-auto">
               {open ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
                 <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
               )}
             </span>
           </button>

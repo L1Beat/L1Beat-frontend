@@ -184,7 +184,9 @@ function getValidationErrors(
     }
     if (param.type === 'int' && params[param.name]) {
       const n = Number(params[param.name]);
-      if (!isNaN(n)) {
+      if (isNaN(n)) {
+        errors[param.name] = true;
+      } else {
         if (param.min !== undefined && n < param.min) errors[param.name] = true;
         if (param.max !== undefined && n > param.max) errors[param.name] = true;
       }
@@ -323,13 +325,19 @@ export function APIPlayground() {
       if (!selectedId || isWsEndpoint(selectedId)) return;
       const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
       if (!endpoint) return;
-      // Strip cursor so a fresh execute always starts from page 1
+      // Strip cursor and reset offset so a fresh execute always starts from page 1
       const cleanParams = { ...overrideParams };
       delete cleanParams['cursor'];
+      if (cleanParams['offset']) cleanParams['offset'] = '0';
       if (Object.keys(getValidationErrors(endpoint, cleanParams)).length > 0) return;
 
       const url = buildUrl(endpoint.path, cleanParams);
-      setParams((prev) => { const p = { ...prev }; delete p['cursor']; return p; });
+      setParams((prev) => {
+        const p = { ...prev };
+        delete p['cursor'];
+        if (p['offset']) p['offset'] = '0';
+        return p;
+      });
       setIsLoading(true);
       setNetworkError(null);
       setResponse(null);
@@ -516,15 +524,22 @@ export function APIPlayground() {
     handleExecute();
   }, [handleExecute]);
 
-  // Bookmark handlers
+  // Bookmark handlers — strip ephemeral pagination keys before comparing
+  const EPHEMERAL_PARAMS = ['cursor', 'offset'];
+  const stableParams = (p: Record<string, string>) => {
+    const copy = { ...p };
+    for (const k of EPHEMERAL_PARAMS) delete copy[k];
+    return JSON.stringify(copy);
+  };
+
   const isBookmarked = bookmarks.some(
-    (b) => b.endpointId === selectedId && JSON.stringify(b.params) === JSON.stringify(params)
+    (b) => b.endpointId === selectedId && stableParams(b.params) === stableParams(params)
   );
 
   const handleBookmarkToggle = useCallback(() => {
     if (!selectedId || isWsEndpoint(selectedId)) return;
     const existing = bookmarks.find(
-      (b) => b.endpointId === selectedId && JSON.stringify(b.params) === JSON.stringify(params)
+      (b) => b.endpointId === selectedId && stableParams(b.params) === stableParams(params)
     );
     if (existing) {
       setBookmarks((prev) => {

@@ -382,7 +382,7 @@ export function ResponsePanel({
       typeof body?.retry_after === 'number' ? body.retry_after : 10;
     return (
       <RateLimitCard
-        key={retryAfter}
+        key={`${retryAfter}-${durationMs}`}
         retryAfter={retryAfter}
         onRetry={() => onRetryAfter(retryAfter)}
       />
