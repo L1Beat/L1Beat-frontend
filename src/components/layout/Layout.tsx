@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -9,22 +8,13 @@ import {
   BookOpen,
   Code,
 } from 'lucide-react';
-import { getHealth } from '../../api';
-import { HealthStatus } from '../../types';
+import { useHealth } from '../../hooks/useHealth';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
 export function Layout() {
   const { pathname } = useLocation();
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-
-  useEffect(() => {
-    getHealth().then(setHealth).catch(() => {});
-    const interval = setInterval(() => {
-      getHealth().then(setHealth).catch(() => {});
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const health = useHealth();
 
   if (pathname === '/brand') {
     return <Outlet />;
