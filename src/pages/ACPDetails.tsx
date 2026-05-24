@@ -1,6 +1,6 @@
 // src/pages/ACPDetails.tsx
 import mermaid from 'mermaid';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,16 +8,17 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
 import 'katex/dist/katex.min.css';
-import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   ArrowLeft,
+  ArrowUpCircle,
   ExternalLink,
   Users,
   Tag,
   Clock,
   Github,
   Link as LinkIcon,
+  List,
   Copy,
   Check,
   CheckCircle,
@@ -28,6 +29,53 @@ import {
   Info
 } from 'lucide-react';
 import { acpService, LocalACP } from '../services/acpService';
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+interface TocItem {
+  id: string;
+  title: string;
+  level: 2 | 3;
+}
+
+function extractTocHeadings(content: string): TocItem[] {
+  if (!content) return [];
+  const lines = content.split('\n');
+  let inFence = false;
+  const out: TocItem[] = [];
+  const seen = new Set<string>();
+  for (const raw of lines) {
+    const line = raw.replace(/\r$/, '');
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = line.match(/^(#{2,3})\s+(.+?)\s*#*\s*$/);
+    if (!match) continue;
+    const level = match[1].length as 2 | 3;
+    const title = match[2].trim();
+    if (!title) continue;
+    let id = slugify(title);
+    if (!id) continue;
+    let n = 2;
+    const base = id;
+    while (seen.has(id)) {
+      id = `${base}-${n++}`;
+    }
+    seen.add(id);
+    out.push({ id, title, level });
+  }
+  return out;
+}
 const preprocessContent = (content: string) => {
   return content
     // Remove metadata table at the start of the document
@@ -56,6 +104,9 @@ export default function ACPDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [activeTocId, setActiveTocId] = useState<string>('');
+
+  const tocItems = useMemo(() => extractTocHeadings(acp?.content || ''), [acp?.content]);
 
   // Dynamically load syntax highlighter only on client side
   const [SyntaxHighlighter, setSyntaxHighlighter] = useState<any>(null);
@@ -110,11 +161,49 @@ export default function ACPDetails() {
     }
 
     fetchACP();
-    
+
     return () => {
       mounted = false;
     };
   }, [acpNumber]);
+
+  useEffect(() => {
+    if (tocItems.length === 0) return;
+
+    const TOP_OFFSET = 96;
+
+    const update = () => {
+      let active = tocItems[0]?.id || '';
+      for (const item of tocItems) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - TOP_OFFSET <= 0) {
+          active = item.id;
+        } else {
+          break;
+        }
+      }
+      setActiveTocId(active);
+    };
+
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
+
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [tocItems, acp?.number]);
 
   const copyToClipboard = async () => {
     try {
@@ -125,6 +214,7 @@ export default function ACPDetails() {
       console.error('Failed to copy:', err);
     }
   };
+
 
 // code blocks and mermaid diagrams 
 
@@ -499,14 +589,13 @@ export default function ACPDetails() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <div className="flex-1">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="bg-background text-foreground">
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-5">
             <button
               onClick={() => navigate('/acps')}
-              className="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors"
+              className="inline-flex items-center px-3 h-9 border border-border text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to ACPs
@@ -514,14 +603,12 @@ export default function ACPDetails() {
           </div>
 
           {/* ACP Header */}
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.35)] mb-8">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card mb-5">
             <div aria-hidden className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#ef4444]/15 blur-3xl" />
-              <div className="absolute -bottom-28 -left-28 h-72 w-72 rounded-full bg-[#ef4444]/10 blur-3xl" />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/5 dark:to-white/5" />
+              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/10 blur-3xl" />
             </div>
 
-            <div className="relative p-8">
+            <div className="relative p-6 sm:p-7">
               <div className="flex flex-col gap-6">
                 {/* Top Row: ID and Status */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
@@ -547,7 +634,7 @@ export default function ACPDetails() {
                   </div>
                 </div>
 
-                <h1 className="text-4xl font-semibold tracking-tight text-foreground leading-tight">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground leading-tight">
                   <ReactMarkdown>{acp.title}</ReactMarkdown>
                 </h1>
 
@@ -631,10 +718,11 @@ export default function ACPDetails() {
             </div>
           </div>
 
-          {/* Content with ReactMarkdown */}
-          <div className="bg-card rounded-2xl shadow-sm border border-border p-8 overflow-hidden">
+          {/* Content + right rail */}
+          <div className="lg:flex lg:gap-8 lg:items-start">
+          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 flex-1 min-w-0">
             <div className="max-w-none break-words">
-            <ReactMarkdown 
+            <ReactMarkdown
   remarkPlugins={[remarkGfm, remarkMath]}
   rehypePlugins={[rehypeKatex]}
   components={{
@@ -654,16 +742,38 @@ export default function ACPDetails() {
         {children}
       </h1>
     ),
-    h2: ({ children, ...props }) => (
-      <h2 {...props} className="mt-10 mb-4 text-2xl font-semibold tracking-tight text-foreground">
-        {children}
-      </h2>
-    ),
-    h3: ({ children, ...props }) => (
-      <h3 {...props} className="mt-8 mb-3 text-xl font-semibold text-foreground">
-        {children}
-      </h3>
-    ),
+    h2: ({ children, ...props }) => {
+      const text = React.Children.toArray(children)
+        .map((c) => (typeof c === 'string' ? c : ''))
+        .join('')
+        .trim();
+      const id = slugify(text);
+      return (
+        <h2
+          {...props}
+          id={id || undefined}
+          className="mt-10 mb-4 text-2xl font-semibold tracking-tight text-foreground scroll-mt-24"
+        >
+          {children}
+        </h2>
+      );
+    },
+    h3: ({ children, ...props }) => {
+      const text = React.Children.toArray(children)
+        .map((c) => (typeof c === 'string' ? c : ''))
+        .join('')
+        .trim();
+      const id = slugify(text);
+      return (
+        <h3
+          {...props}
+          id={id || undefined}
+          className="mt-8 mb-3 text-xl font-semibold text-foreground scroll-mt-24"
+        >
+          {children}
+        </h3>
+      );
+    },
     h4: ({ children, ...props }) => (
       <h4 {...props} className="mt-6 mb-3 text-lg font-semibold text-foreground">
         {children}
@@ -782,9 +892,76 @@ export default function ACPDetails() {
 </ReactMarkdown>
             </div>
           </div>
-        </div>
+            <ACPSideRail
+              tocItems={tocItems}
+              activeTocId={activeTocId}
+              onActivate={setActiveTocId}
+            />
+          </div>
       </div>
-      <Footer />
     </div>
+  );
+}
+
+function ACPSideRail({
+  tocItems,
+  activeTocId,
+  onActivate,
+}: {
+  tocItems: TocItem[];
+  activeTocId: string;
+  onActivate: (id: string) => void;
+}) {
+  if (tocItems.length === 0) return null;
+  return (
+    <aside className="hidden lg:block w-64 shrink-0 self-start sticky top-20">
+      <div className="max-h-[calc(100vh-6rem)] overflow-y-auto pr-1 -mr-1">
+        <div className="flex items-center gap-2 text-[13px] font-medium text-foreground mb-3">
+          <List className="w-3.5 h-3.5 text-muted-foreground" />
+          On this page
+        </div>
+        <ul className="relative border-l border-border">
+          {tocItems.map(({ id, title, level }) => {
+            const active = id === activeTocId;
+            return (
+              <li key={id} className="relative">
+                <a
+                  href={`#${id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onActivate(id);
+                    const el = document.getElementById(id);
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      history.replaceState(null, '', `#${id}`);
+                    }
+                  }}
+                  className={`block py-1.5 text-[12px] transition-colors leading-snug ${
+                    level === 3 ? 'pl-7' : 'pl-4'
+                  } ${
+                    active
+                      ? 'text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {title}
+                </a>
+                {active && (
+                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-[#ef4444]" />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="mt-6 flex items-center gap-2 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowUpCircle className="w-3.5 h-3.5" />
+          Back to top
+        </button>
+      </div>
+    </aside>
   );
 }
