@@ -24,12 +24,14 @@ interface AuthorCardProps {
   authorName: string;
   authorProfiles?: AuthorProfile[];
   className?: string;
+  hideAvatar?: boolean;
 }
 
-export function AuthorCard({ 
-  authorName, 
+export function AuthorCard({
+  authorName,
   authorProfiles = [],
-  className = ""
+  className = "",
+  hideAvatar = false,
 }: AuthorCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const triggerRef = useRef<HTMLSpanElement>(null);
@@ -98,18 +100,20 @@ export function AuthorCard({
         e.stopPropagation(); // Stop bubbling
         openModal();
       }}
-      className={`group inline-flex items-center gap-1 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:text-[#ef4444] ${className}`}
+      className={`group inline-flex items-center gap-1 cursor-pointer hover:text-[#ef4444] transition-colors ${className}`}
     >
-      {displayAuthor.avatar ? (
-        <img 
-          src={displayAuthor.avatar} 
-          alt={displayAuthor.name}
-          className="w-4 h-4 rounded-full border border-border transition-transform duration-300 group-hover:scale-110 group-hover:shadow-sm"
-        />
-      ) : (
-        <User className="w-4 h-4 transition-all duration-300 group-hover:scale-110 group-hover:rotate-12" />
+      {!hideAvatar && (
+        displayAuthor.avatar ? (
+          <img
+            src={displayAuthor.avatar}
+            alt={displayAuthor.name}
+            className="w-4 h-4 rounded-full border border-border"
+          />
+        ) : (
+          <User className="w-4 h-4" />
+        )
       )}
-      <span className="font-medium transition-all duration-300 group-hover:tracking-wide">{displayAuthor.name}</span>
+      <span className="font-medium">{displayAuthor.name}</span>
     </span>
   );
 
