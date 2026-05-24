@@ -789,26 +789,26 @@ export function AvalancheNetworkMetrics() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart3 className="w-5 h-5 text-[#ef4444]" />
-              <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
+              <h2 className="text-base sm:text-lg font-semibold text-foreground">Network metrics</h2>
             </div>
-            <p className="text-sm text-muted-foreground export-hide">
+            <p className="text-xs text-muted-foreground export-hide">
               Compare multiple metrics across the Avalanche network
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 export-hide">
             {/* Timeframe Selector */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {[7, 30, 90, 360].map((days) => (
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
                     timeframe === days
-                      ? 'bg-[#ef4444] text-white shadow-sm'
-                      : 'bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20'
+                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {days === 360 ? '1Y' : `${days}D`}
