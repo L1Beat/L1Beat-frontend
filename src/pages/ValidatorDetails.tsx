@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import { getL1BeatValidator, getL1BeatValidatorDeposits, getChainBySubnetId, getL1BeatSubnetType } from '../api';
 import type { L1BeatValidator } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
-import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
 
@@ -107,28 +106,26 @@ export function ValidatorDetails() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <div className="flex-1 flex items-center justify-center">
-          <LoadingSpinner size="xl" />
-        </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+        <LoadingSpinner size="xl" />
       </div>
     );
   }
 
   if (error || !validator) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6">
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
-          </button>
-          <div className="bg-card rounded-xl border border-border p-8 text-center">
-            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">Error</h2>
-            <p className="text-muted-foreground">{error || 'Validator not found'}</p>
-          </div>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-[#ef4444]" />
         </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Validator not found'}</h2>
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Go back
+        </button>
       </div>
     );
   }
@@ -181,88 +178,98 @@ export function ValidatorDetails() {
   }[kind];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        {/* Back navigation */}
-        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}>
-          <button
-            onClick={() => chain ? navigate(`/chain/${chain.chainId}`) : navigate(-1)}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>{backLabel}</span>
-          </button>
-        </motion.div>
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <button
+        onClick={() => (chain ? navigate(`/chain/${chain.chainId}`) : navigate(-1))}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        {backLabel}
+      </button>
 
-        {/* ── Header Card ── */}
-        <motion.div
-          className="bg-card rounded-xl border border-border p-6 mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <div className="flex flex-col gap-4">
-            {/* Top row: badges + explorer */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-2.5 h-2.5 rounded-full ${validator.active ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`} />
-                <span className={`text-sm font-medium ${validator.active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {validator.active ? 'Active' : 'Inactive'}
-                </span>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${kindConfig.badgeBg} ${kindConfig.badgeText}`}>
-                  {kindConfig.label}
-                </span>
-                {chain && (
-                  <button
-                    onClick={() => navigate(`/chain/${chain.chainId}`)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted hover:bg-accent transition-colors border border-border"
-                  >
-                    {chain.chainLogoUri && (
-                      <img src={chain.chainLogoUri} alt="" className="w-3.5 h-3.5 rounded-full" />
-                    )}
-                    {chain.chainName}
-                  </button>
-                )}
+      <header className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
+        </div>
+        <div className="relative p-6 sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center shrink-0">
+                <Shield className="w-7 h-7 text-[#ef4444]" />
               </div>
-              <a
-                href={`https://subnets.avax.network/validators/${validator.node_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-muted text-muted-foreground hover:text-foreground transition-colors border border-border"
-              >
-                Explorer <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            {/* Node ID + Validation ID */}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-base sm:text-lg font-semibold text-foreground truncate font-mono">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {validator.active ? (
+                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
+                      <span className="w-1 h-1 rounded-full bg-green-500" />
+                      ACTIVE
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
+                      INACTIVE
+                    </span>
+                  )}
+                  <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-[#ef4444]/15 text-[#ef4444]">
+                    {kindConfig.label.toUpperCase()}
+                  </span>
+                  {chain && (
+                    <button
+                      onClick={() => navigate(`/chain/${chain.chainId}`)}
+                      className="inline-flex items-center gap-1.5 h-5 px-2 rounded-full text-[11px] font-medium bg-background/40 hover:bg-background/70 transition-colors"
+                    >
+                      {chain.chainLogoUri && (
+                        <img src={chain.chainLogoUri} alt="" className="w-3 h-3 rounded-full" />
+                      )}
+                      {chain.chainName}
+                    </button>
+                  )}
+                </div>
+                <h1 className="text-lg sm:text-xl font-semibold font-mono text-foreground tracking-tight break-all">
                   {validator.node_id}
+                  <button
+                    onClick={() => copyToClipboard(validator.node_id, 'node')}
+                    className="ml-2 align-middle inline-flex text-muted-foreground hover:text-foreground transition-colors"
+                    title="Copy Node ID"
+                  >
+                    {copied === 'node' ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </h1>
-                <button
-                  onClick={() => copyToClipboard(validator.node_id, 'node')}
-                  className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                  title="Copy Node ID"
-                >
-                  {copied === 'node' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-mono truncate">
-                  {validator.validation_id}
-                </span>
-                <button
-                  onClick={() => copyToClipboard(validator.validation_id, 'validation')}
-                  className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                  title="Copy Validation ID"
-                >
-                  {copied === 'validation' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                </button>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+                    Validation ID
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(validator.validation_id, 'validation')}
+                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors text-[11px] font-mono text-foreground"
+                    title={validator.validation_id}
+                  >
+                    <span>
+                      {validator.validation_id.slice(0, 6)}…{validator.validation_id.slice(-4)}
+                    </span>
+                    {copied === 'validation' ? (
+                      <Check className="w-2.5 h-2.5 text-green-500" />
+                    ) : (
+                      <Copy className="w-2.5 h-2.5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
+            <a
+              href={`https://subnets.avax.network/validators/${validator.node_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
+            >
+              Explorer <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
-        </motion.div>
+        </div>
+      </header>
 
         {/* ── Hero Metrics ── */}
         <motion.div
@@ -620,8 +627,6 @@ export function ValidatorDetails() {
             )}
           </motion.div>
         )}
-      </div>
-      <Footer />
     </div>
   );
 }
