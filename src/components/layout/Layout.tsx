@@ -1,4 +1,4 @@
-import { Outlet, useLocation, Link } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
   LayoutGrid,
@@ -8,24 +8,16 @@ import {
   BookOpen,
   Code,
 } from 'lucide-react';
-import { useHealth } from '../../hooks/useHealth';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
 export function Layout() {
-  const { pathname } = useLocation();
-  const health = useHealth();
-
-  if (pathname === '/brand') {
-    return <Outlet />;
-  }
-
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <div className="flex flex-1 flex-col min-w-0">
         <AlphaBanner />
-        <TopBar health={health} />
+        <TopBar />
         <main className="flex-1">
           <Outlet />
         </main>

@@ -1,4 +1,5 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
   BarChart3,
@@ -6,10 +7,11 @@ import {
   FileText,
   BookOpen,
   Code,
-  Activity,
-  Search,
   Palette,
 } from 'lucide-react';
+import { L1BeatLogo } from '../L1BeatLogo';
+import { ThemeToggle } from '../ThemeToggle';
+import { useTheme } from '../../hooks/useTheme';
 
 interface NavItem {
   id: string;
@@ -37,28 +39,35 @@ function isActive(pathname: string, path: string) {
 
 export function Sidebar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const [isBeating, setIsBeating] = useState(false);
+
+  const handleLogoClick = () => {
+    if (!isBeating) {
+      setIsBeating(true);
+      setTimeout(() => setIsBeating(false), 1000);
+    }
+    navigate('/');
+  };
 
   return (
     <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-border bg-background sticky top-0 self-start h-screen">
-      <Link to="/" className="flex items-center gap-2.5 px-5 py-4">
-        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/15 flex items-center justify-center">
-          <Activity className="w-4 h-4 text-[#ef4444]" />
-        </div>
-        <span className="text-[17px] font-semibold text-foreground tracking-tight">L1Beat</span>
-      </Link>
-
-      <div className="px-4 pb-3">
-        <button
-          type="button"
-          className="w-full flex items-center gap-2 h-9 px-3 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span className="text-[13px] flex-1 text-left">Search…</span>
-          <kbd className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-            ⌘K
-          </kbd>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={handleLogoClick}
+        className="relative flex items-center px-4 py-4 focus:outline-none group"
+        aria-label="L1Beat home"
+      >
+        <span
+          className={`absolute inset-2 rounded-lg bg-[#ef4444]/25 blur-xl pointer-events-none transition-opacity duration-500 ${
+            isBeating ? 'animate-heartbeat-glow' : 'opacity-0'
+          }`}
+        />
+        <span className={`relative ${isBeating ? 'animate-heartbeat' : ''}`}>
+          <L1BeatLogo size="small" theme={theme} variant="header" />
+        </span>
+      </button>
 
       <nav className="flex-1 px-3">
         <ul className="space-y-0.5">
@@ -90,7 +99,7 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="px-3 py-3 border-t border-border">
+      <div className="px-3 py-3 border-t border-border space-y-0.5">
         <Link
           to="/brand"
           className={`flex items-center gap-2.5 h-8 px-2.5 rounded-lg transition-colors ${
@@ -102,6 +111,7 @@ export function Sidebar() {
           <Palette className="w-3.5 h-3.5" />
           <span className="text-[12px] font-medium">Brand</span>
         </Link>
+        <ThemeToggle variant="sidebar" />
       </div>
     </aside>
   );
