@@ -1,19 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Activity,
-  ArrowRight,
-  GitFork,
-  Send,
-  Timer,
-  Users,
-} from 'lucide-react';
-import { getTeleporterMessages } from '../api';
+import { ArrowRight, ChevronLeft, ChevronRight, GitFork, Send, Timer, Users } from 'lucide-react';
+import { getChains, getTeleporterMessages } from '../api';
 import type { TeleporterMessageData } from '../types';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-
-type Range = '24H' | '7D' | '30D' | 'ALL';
-const RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
 
 interface Corridor {
   source: string;
@@ -36,23 +26,67 @@ function formatChainName(name: string): string {
 }
 
 function chainColor(name: string): string {
-  const palette = ['#ef4444', '#a855f7', '#22d3ee', '#f97316', '#22c55e', '#3b82f6', '#eab308', '#ec4899'];
+  const lower = name.toLowerCase();
+  if (lower.includes('c-chain') || lower === 'avalanche' || lower.includes('cchain')) {
+    return '#ef4444';
+  }
+  const palette = ['#a855f7', '#22d3ee', '#f97316', '#22c55e', '#3b82f6', '#eab308', '#ec4899'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
   return palette[Math.abs(hash) % palette.length];
 }
 
+function isFallbackLogo(uri: string): boolean {
+  if (!uri) return true;
+  return /icon-(dark|light)-?animated/i.test(uri) || /l1beat.*logo/i.test(uri);
+}
+
+function normalize(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .replace(/(evm|chain|l1|subnet)$/, '');
+}
+
+function findLogo(name: string, map: Map<string, string>): string | undefined {
+  const lower = name.toLowerCase().trim();
+  if (map.has(lower)) return map.get(lower);
+  const norm = normalize(name);
+  if (!norm) return undefined;
+  if (map.has(norm)) return map.get(norm);
+  for (const [key, value] of map) {
+    if (key === norm) return value;
+    if (norm.length >= 4 && (key.includes(norm) || norm.includes(key))) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 export function Flows() {
   const [data, setData] = useState<TeleporterMessageData | null>(null);
+  const [logoByChain, setLogoByChain] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<Range>('24H');
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    getTeleporterMessages()
-      .then((res) => {
-        if (active) setData(res);
+    Promise.all([
+      getTeleporterMessages(),
+      getChains({ includeInactive: true }).catch(() => []),
+    ])
+      .then(([tele, chains]) => {
+        if (!active) return;
+        setData(tele);
+        const map = new Map<string, string>();
+        for (const c of chains) {
+          if (!c.chainLogoUri || isFallbackLogo(c.chainLogoUri)) continue;
+          const lower = c.chainName.toLowerCase().trim();
+          map.set(lower, c.chainLogoUri);
+          const norm = normalize(c.chainName);
+          if (norm && !map.has(norm)) map.set(norm, c.chainLogoUri);
+        }
+        setLogoByChain(map);
       })
       .catch(() => {})
       .finally(() => {
@@ -85,7 +119,7 @@ export function Flows() {
     };
   }, [data]);
 
-  const corridors = useMemo((): Corridor[] => {
+  const allCorridors = useMemo((): Corridor[] => {
     if (!data?.messages?.length) return [];
     const map = new Map<string, Corridor>();
     for (const m of data.messages) {
@@ -97,89 +131,126 @@ export function Flows() {
         map.set(key, { source: m.source, target: m.target, count: m.value });
       }
     }
-    return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+    return [...map.values()].sort((a, b) => b.count - a.count);
   }, [data]);
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
-            INTERCHAIN MESSAGING
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-            What's moving between L1s?
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-            Teleporter &amp; ICM messages, live across active L1 subnets.
-          </p>
+      <header>
+        <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
+          INTERCHAIN MESSAGING
         </div>
-        <div className="flex items-center gap-1.5">
-          {RANGES.map((r) => {
-            const active = r === range;
-            return (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`h-8 px-3 rounded-lg text-xs font-medium transition-colors border ${
-                  active
-                    ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
-                    : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {r}
-              </button>
-            );
-          })}
-        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+          What's moving between L1s?
+        </h1>
+        <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+          Teleporter &amp; ICM messages, live across active L1 subnets.
+        </p>
       </header>
 
       <KpiStrip stats={stats} />
 
-      <section className="rounded-xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40 overflow-hidden">
-        <header className="flex items-center justify-between gap-4 px-5 pt-5 pb-2">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <GitFork className="w-4 h-4 text-[#ef4444]" />
-              <h2 className="text-[15px] font-semibold text-foreground">Cross-chain message flows</h2>
-              <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Teleporter &amp; ICM corridors · drag the nodes to explore
-            </p>
-          </div>
-        </header>
-        <div className="px-2 pb-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:items-stretch">
+        <div className="lg:col-span-2 min-w-0">
           <TeleporterSankeyDiagram />
         </div>
-      </section>
-
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <header className="flex items-center justify-between gap-4 px-4 sm:px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-semibold text-foreground">Top corridors</h2>
-            <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
-            </div>
-          </div>
-        </header>
-        {loading ? (
-          <div className="px-6 py-16 flex items-center justify-center">
-            <LoadingSpinner size="md" />
-          </div>
-        ) : corridors.length === 0 ? (
-          <div className="px-6 py-16 text-center text-muted-foreground text-sm">
-            No corridors active in this window.
-          </div>
-        ) : (
-          <CorridorTable corridors={corridors} totalCount={stats.total} />
-        )}
-      </section>
+        <CorridorRail
+          corridors={allCorridors}
+          totalCount={stats.total}
+          totalCorridors={stats.corridors}
+          logoByChain={logoByChain}
+          loading={loading}
+        />
+      </div>
     </div>
+  );
+}
+
+function CorridorRail({
+  corridors,
+  totalCount,
+  totalCorridors,
+  logoByChain,
+  loading,
+}: {
+  corridors: Corridor[];
+  totalCount: number;
+  totalCorridors: number;
+  logoByChain: Map<string, string>;
+  loading: boolean;
+}) {
+  const PAGE_SIZE = 8;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(corridors.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * PAGE_SIZE;
+  const visible = corridors.slice(start, start + PAGE_SIZE);
+  const top = corridors[0]?.count || 1;
+
+  return (
+    <aside className="rounded-xl border border-border bg-card overflow-hidden flex flex-col">
+      <header className="flex items-center justify-between gap-4 px-4 py-3.5 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[14px] font-semibold text-foreground">Top corridors</h2>
+          <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
+          </div>
+        </div>
+        <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
+          {corridors.length || totalCorridors}
+        </span>
+      </header>
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center px-6 py-16">
+          <LoadingSpinner size="md" />
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center px-6 py-16 text-center text-muted-foreground text-sm">
+          No corridors active in this window.
+        </div>
+      ) : (
+        <>
+          <div className="flex-1">
+            <CorridorList
+              corridors={visible}
+              totalCount={totalCount}
+              logoByChain={logoByChain}
+              top={top}
+              startIndex={start}
+            />
+          </div>
+          {totalPages > 1 && (
+            <footer className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-border shrink-0">
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {start + 1}–{Math.min(start + PAGE_SIZE, corridors.length)} of {corridors.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Previous"
+                >
+                  <ChevronLeft className="w-3 h-3" />
+                </button>
+                <span className="text-[10px] font-semibold tabular-nums text-foreground w-7 text-center">
+                  {safePage + 1}/{totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage === totalPages - 1}
+                  className="inline-flex items-center justify-center w-6 h-6 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Next"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </footer>
+          )}
+        </>
+      )}
+    </aside>
   );
 }
 
@@ -227,90 +298,105 @@ function KpiStrip({
   );
 }
 
-function CorridorTable({ corridors, totalCount }: { corridors: Corridor[]; totalCount: number }) {
+function CorridorList({
+  corridors,
+  totalCount,
+  logoByChain,
+  top,
+  startIndex = 0,
+}: {
+  corridors: Corridor[];
+  totalCount: number;
+  logoByChain: Map<string, string>;
+  top?: number;
+  startIndex?: number;
+}) {
+  const maxCount = top ?? corridors[0]?.count ?? 1;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-muted/40 border-b border-border">
-            <Th className="pl-5">Corridor</Th>
-            <Th align="right">Messages</Th>
-            <Th align="right">Share</Th>
-            <Th align="right" className="pr-5">
-              <span className="sr-only">Open</span>
-            </Th>
-          </tr>
-        </thead>
-        <tbody>
-          {corridors.map((c, idx) => {
-            const share = totalCount > 0 ? (c.count / totalCount) * 100 : 0;
-            const isLast = idx === corridors.length - 1;
-            return (
-              <tr
-                key={`${c.source}-${c.target}`}
-                className={`group transition-colors hover:bg-[#ef4444]/[0.04] ${
-                  isLast ? '' : 'border-b border-border/60'
-                }`}
-              >
-                <td className="py-3 pl-5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex shrink-0">
-                      <span
-                        className="w-6 h-6 rounded-full ring-2 ring-card"
-                        style={{ background: chainColor(c.source) }}
-                        title={formatChainName(c.source)}
-                      />
-                      <span
-                        className="w-6 h-6 rounded-full ring-2 ring-card -ml-2"
-                        style={{ background: chainColor(c.target) }}
-                        title={formatChainName(c.target)}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[13px] font-semibold text-foreground truncate">
-                        {formatChainName(c.source)}
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                      <span className="text-[13px] font-semibold text-foreground truncate">
-                        {formatChainName(c.target)}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3 text-right tabular-nums text-[13px] font-medium text-foreground">
+    <ul className="divide-y divide-border/60">
+      {corridors.map((c, idx) => {
+        const share = totalCount > 0 ? (c.count / totalCount) * 100 : 0;
+        const barWidth = Math.max(2, (c.count / maxCount) * 100);
+        const sourceColor = chainColor(c.source);
+        const targetColor = chainColor(c.target);
+        const rank = startIndex + idx + 1;
+        return (
+          <li
+            key={`${c.source}-${c.target}`}
+            className="group px-4 py-3 hover:bg-[#ef4444]/[0.04] transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] font-bold tabular-nums text-muted-foreground w-4">
+                  {rank}
+                </span>
+                <div className="flex shrink-0">
+                  <ChainAvatar name={c.source} logoByChain={logoByChain} />
+                  <ChainAvatar name={c.target} logoByChain={logoByChain} stacked />
+                </div>
+                <div className="flex items-center gap-1 min-w-0 text-[12px] font-semibold text-foreground">
+                  <span className="truncate">{formatChainName(c.source)}</span>
+                  <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <span className="truncate">{formatChainName(c.target)}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[12px] font-bold tabular-nums text-foreground">
                   {formatCount(c.count)}
-                </td>
-                <td className="py-3 text-right tabular-nums text-[12px] text-muted-foreground">
+                </div>
+                <div className="text-[10px] tabular-nums text-muted-foreground">
                   {share >= 0.1 ? `${share.toFixed(1)}%` : '<0.1%'}
-                </td>
-                <td className="py-3 pr-5 text-right">
-                  <Activity className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                </div>
+              </div>
+            </div>
+            <div className="h-1 rounded-full bg-muted/40 overflow-hidden ml-6">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${barWidth}%`,
+                  background: `linear-gradient(to right, ${sourceColor}, ${targetColor})`,
+                }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function Th({
-  children,
-  align = 'left',
-  className = '',
+function ChainAvatar({
+  name,
+  logoByChain,
+  stacked,
 }: {
-  children: React.ReactNode;
-  align?: 'left' | 'right';
-  className?: string;
+  name: string;
+  logoByChain: Map<string, string>;
+  stacked?: boolean;
 }) {
+  const display = formatChainName(name);
+  const logo = findLogo(name, logoByChain) || findLogo(display, logoByChain);
+  const cls = `w-6 h-6 rounded-full ring-2 ring-card overflow-hidden bg-muted shrink-0 ${stacked ? '-ml-2' : ''}`;
+  if (logo) {
+    return (
+      <img
+        src={logo}
+        alt=""
+        title={display}
+        className={`${cls} object-cover`}
+        loading="lazy"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  }
   return (
-    <th
-      className={`py-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground ${
-        align === 'right' ? 'text-right' : 'text-left'
-      } ${className}`}
-    >
-      {children}
-    </th>
+    <span
+      className={cls}
+      style={{ background: chainColor(name) }}
+      title={display}
+    />
   );
 }
+

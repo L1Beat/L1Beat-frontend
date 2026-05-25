@@ -21,16 +21,14 @@ export function Layout() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <AlphaBanner />
-      <div className="flex flex-1 min-h-0">
-        <Sidebar />
-        <div className="flex flex-1 flex-col min-w-0">
-          <TopBar health={health} />
-          <main className="flex-1">
-            <Outlet />
-          </main>
-        </div>
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <div className="flex flex-1 flex-col min-w-0">
+        <AlphaBanner />
+        <TopBar health={health} />
+        <main className="flex-1">
+          <Outlet />
+        </main>
       </div>
       <MobileDock />
     </div>
