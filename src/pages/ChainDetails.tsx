@@ -7,7 +7,6 @@ import {
   Activity,
   ArrowLeft,
   Search,
-  CheckCircle,
   Info,
   Copy,
   Check,
@@ -27,7 +26,6 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip);
-import { Footer } from '../components/Footer';
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTheme } from '../hooks/useTheme';
@@ -288,12 +286,10 @@ export function ChainDetails() {
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <LoadingSpinner size="lg" />
-            <p className="mt-4 text-muted-foreground">Loading chain details...</p>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Loading chain details…</p>
         </div>
       </div>
     );
@@ -301,20 +297,18 @@ export function ChainDetails() {
 
   if (error || !chain) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-md w-full text-center">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-4">{error}</h2>
-            <button
-              onClick={() => navigate('/')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </button>
-          </div>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-[#ef4444]" />
         </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Chain not found'}</h2>
+        <button
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Overview
+        </button>
       </div>
     );
   }
@@ -360,311 +354,216 @@ export function ChainDetails() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <div className="flex-1">
-        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <button
-              onClick={() => navigate('/')}
-              className="inline-flex items-center px-3 sm:px-4 py-2 border border-border shadow-sm text-xs sm:text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
-              Back to Dashboard
-            </button>
-            <div className="flex items-center gap-2 sm:gap-3">
-              {chain.network && (
-                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
-                  chain.network === 'mainnet'
-                    ? 'bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20'
-                    : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border border-yellow-500/20'
-                }`}>
-                  {chain.network === 'mainnet' ? 'Mainnet' : 'Fuji Testnet'}
-                </span>
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <button
+        onClick={() => navigate('/')}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        All chains
+      </button>
+
+      <header className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
+        </div>
+        <div className="relative p-6 sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="relative shrink-0">
+                <img
+                  src={chain.chainLogoUri || '/icon-dark-animated.svg'}
+                  alt=""
+                  className="w-14 h-14 rounded-2xl bg-background/40 p-1.5 ring-1 ring-white/[0.08]"
+                  onError={(e) => {
+                    e.currentTarget.src = '/icon-dark-animated.svg';
+                    e.currentTarget.onerror = null;
+                  }}
+                />
+                <div
+                  className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#1c1c1e] ${
+                    chain.validators.some((v) => v.active) ? 'bg-green-500' : 'bg-muted'
+                  }`}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight truncate">
+                    {chain.chainName}
+                  </h1>
+                  {chain.network === 'mainnet' && (
+                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-[#ef4444]/15 text-[#ef4444]">
+                      MAINNET
+                    </span>
+                  )}
+                  {chain.network === 'fuji' && (
+                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-yellow-500/15 text-yellow-500">
+                      TESTNET
+                    </span>
+                  )}
+                  {chain.validators.some((v) => v.active) ? (
+                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
+                      <span className="w-1 h-1 rounded-full bg-green-500" />
+                      ACTIVE
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
+                      INACTIVE
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  {chain.networkToken?.symbol && (
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                      {chain.networkToken.logoUri && (
+                        <img
+                          src={chain.networkToken.logoUri}
+                          alt=""
+                          className="w-3.5 h-3.5 rounded-full"
+                        />
+                      )}
+                      {chain.networkToken.symbol}
+                    </span>
+                  )}
+                  {chain.networkToken?.name &&
+                    chain.networkToken.name !== chain.networkToken.symbol && (
+                      <>
+                        <span>·</span>
+                        <span>{chain.networkToken.name}</span>
+                      </>
+                    )}
+                  {chain.originalChainId && (
+                    <>
+                      <span>·</span>
+                      <span>EVM {chain.originalChainId}</span>
+                    </>
+                  )}
+                  {chain.subnetId && (
+                    <>
+                      <span>·</span>
+                      <button
+                        onClick={() => handleCopy('subnetId', chain.subnetId)}
+                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors font-mono"
+                        title={chain.subnetId}
+                      >
+                        <span>
+                          {chain.subnetId.slice(0, 6)}…{chain.subnetId.slice(-4)}
+                        </span>
+                        {copied === 'subnetId' ? (
+                          <Check className="w-2.5 h-2.5 text-green-500" />
+                        ) : (
+                          <Copy className="w-2.5 h-2.5" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                  {chain.rpcUrls && chain.rpcUrls.length > 0 && (
+                    <>
+                      <span>·</span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(chain.rpcUrls?.[0] || '')}
+                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors"
+                        title={chain.rpcUrls[0]}
+                      >
+                        <span>RPC</span>
+                        <Copy className="w-2.5 h-2.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                {chain.description && (
+                  <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed mt-3 max-w-2xl line-clamp-3">
+                    {chain.description}
+                  </p>
+                )}
+                {chain.categories && chain.categories.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                    {chain.categories.map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center px-2 h-5 rounded text-[10px] font-semibold bg-[#ef4444]/10 text-[#ef4444]"
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {chain.website && (
+                <a
+                  href={chain.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                  title="Website"
+                >
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                </a>
               )}
               {chain.explorerUrl && (
                 <a
                   href={chain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-2 sm:px-3 py-1 border border-border rounded-lg text-xs sm:text-sm font-medium text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                  title="Explorer"
                 >
-                  <ExternalLink className="w-3 h-3 mr-1.5" />
-                  <span className="hidden sm:inline">Explorer</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                 </a>
               )}
+              {chain.socials?.slice(0, 3).map((social, index) => {
+                const Icon = getSocialIcon(social.name);
+                return (
+                  <a
+                    key={index}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                    title={social.name}
+                  >
+                    <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                  </a>
+                );
+              })}
+              <AddToMetaMask chain={chain} variant="compact" />
             </div>
           </div>
+        </div>
+      </header>
 
-          {/* Compact Chain Header Card */}
-          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-border bg-card shadow-[0_18px_60px_-30px_rgba(239,68,68,0.45)] mb-4 sm:mb-6">
-            {/* Decorative background */}
-            <div aria-hidden className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-[#ef4444]/15 blur-3xl" />
-              <div className="absolute -bottom-28 -left-28 h-72 w-72 rounded-full bg-[#ef4444]/10 blur-3xl" />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/5 dark:to-white/5" />
-            </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <KpiCard label="Current TPS" value={tpsValue} valueClassName={tpsColor} icon={Activity} />
+        <KpiCard
+          label="Active Validators"
+          value={(chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString()}
+          icon={Users}
+        />
+        <KpiCard
+          label="Type"
+          value={(() => {
+            const name = (chain.chainName || '').toLowerCase();
+            const evmId = String(chain.originalChainId || '');
+            const isCC = name.includes('c-chain') || evmId === '43114';
+            if (isCC) return 'Primary Network';
+            return chain.isL1 ? 'L1' : 'Legacy Subnet';
+          })()}
+          icon={Globe}
+        />
+        <KpiCard
+          label="Sybil resistance"
+          value={chain.sybilResistanceType || 'N/A'}
+          icon={Shield}
+        />
+      </div>
 
-            <div className="relative p-4 sm:p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-                {/* Left Column: Chain Info */}
-                <div className="flex flex-col gap-4 sm:gap-6">
-                  <div className="flex items-start gap-3 sm:gap-5">
-                    {chain.chainLogoUri ? (
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={chain.chainLogoUri}
-                          alt={`${chain.chainName} logo`}
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
-                          onError={(e) => {
-                            e.currentTarget.src = "/icon-dark-animated.svg";
-                            e.currentTarget.onerror = null;
-                          }}
-                        />
-                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 ${chain.validators.some(v => v.active) ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center border-2 border-card`}>
-                          {chain.validators.some(v => v.active) ? (
-                            <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                          ) : (
-                            <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src="/icon-dark-animated.svg"
-                          alt={`${chain.chainName} logo`}
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl shadow-md bg-background/40 p-2 ring-1 ring-border"
-                        />
-                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 ${chain.validators.some(v => v.active) ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center border-2 border-card`}>
-                          {chain.validators.some(v => v.active) ? (
-                            <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                          ) : (
-                            <AlertTriangle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                        <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-foreground">{chain.chainName}</h1>
-                        {chain.validators.some(v => v.active) ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-500 dark:text-[#30d158] border border-green-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-[#30d158]"></span>
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-500 border border-red-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Inactive
-                          </span>
-                        )}
-                        {chain.networkToken && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 text-xs font-medium text-foreground border border-border">
-                            {chain.networkToken.logoUri && (
-                              <img
-                                src={chain.networkToken.logoUri}
-                                alt={chain.networkToken.symbol}
-                                className="w-3.5 h-3.5 rounded-full"
-                              />
-                            )}
-                            {chain.networkToken.symbol}
-                          </span>
-                        )}
-                      </div>
-
-                      {chain.description && (
-                        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-3 sm:mb-4 line-clamp-2">
-                          {chain.description}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        {chain.categories?.map(category => (
-                          <span
-                            key={category}
-                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20"
-                          >
-                            {category}
-                          </span>
-                        ))}
-                        {chain.assets?.map((asset, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-2.5 py-1 bg-muted/50 rounded-md text-xs font-medium text-muted-foreground border border-border"
-                          >
-                            {asset.symbol}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 border-t border-border pt-3 sm:pt-4">
-                    {chain.website && (
-                      <a
-                        href={chain.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium border border-border bg-muted/40 hover:bg-muted/70 text-foreground transition-colors"
-                      >
-                        <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        <span className="hidden sm:inline">Website</span>
-                      </a>
-                    )}
-                    <div className="hidden sm:block h-8 w-px bg-border mx-1"></div>
-                    {chain.socials?.map((social, index) => {
-                      const Icon = getSocialIcon(social.name);
-                      return (
-                        <a
-                          key={index}
-                          href={social.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 sm:p-2 rounded-lg border border-transparent text-muted-foreground hover:text-[#ef4444] hover:bg-[#ef4444]/10 hover:border-[#ef4444]/15 transition-all"
-                          title={social.name}
-                        >
-                          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </a>
-                      );
-                    })}
-                    <div className="ml-auto">
-                      <AddToMetaMask chain={chain} variant="compact" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Compact Metrics Grid */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
-                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                      <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">TPS</span>
-                    </div>
-                    <p className={`text-lg sm:text-xl font-bold ${tpsColor}`}>{tpsValue}</p>
-                  </div>
-
-                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
-                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Active Validators</span>
-                    </div>
-                    <p className="text-lg sm:text-xl font-bold text-[#ef4444]">{chain.validatorCount || chain.validators.filter(v => v.active).length}</p>
-                  </div>
-
-                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
-                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                      <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Type</span>
-                    </div>
-                    <p className="text-base sm:text-xl font-bold text-[#ef4444]">
-                      {(() => {
-                        const name = (chain.chainName || '').toLowerCase();
-                        const evmId = String(chain.originalChainId || '');
-                        const isAvalancheCChain = name.includes('c-chain') || evmId === '43114';
-                        if (isAvalancheCChain) return 'Primary Network';
-                        return chain.isL1 ? 'L1' : 'Legacy Subnet';
-                      })()}
-                    </p>
-                  </div>
-
-                  <div className="relative overflow-hidden rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-[#ef4444]/20 bg-card">
-                    <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ef4444]/12 via-transparent to-transparent" />
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                      <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
-                      <span className="text-xs font-medium text-[#ef4444]">Sybil resistance</span>
-                    </div>
-                    <p className="text-sm sm:text-xl font-bold text-[#ef4444] truncate" title={chain.sybilResistanceType || 'N/A'}>
-                      {chain.sybilResistanceType || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Compact Technical Details Grid */}
-            <div className="border-t border-border bg-muted/20 p-4 sm:p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
-                  <span className="text-xs font-medium text-muted-foreground mb-1">EVM Chain ID</span>
-                  <div className="flex items-center justify-between">
-                    <code className="text-xs sm:text-sm font-mono font-semibold text-foreground">{chain.originalChainId || chain.chainId}</code>
-                    <button
-                      onClick={() => handleCopy('chainId', chain.originalChainId || chain.chainId)}
-                      className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted"
-                    >
-                      {copied === 'chainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {chain.subnetId && (
-                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
-                    <span className="text-xs font-medium text-muted-foreground mb-1">Subnet ID</span>
-                    <div className="flex items-center justify-between">
-                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.subnetId}>
-                        {chain.subnetId.slice(0, 8)}...{chain.subnetId.slice(-8)}
-                      </code>
-                      <button
-                        onClick={() => handleCopy('subnetId', chain.subnetId)}
-                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
-                      >
-                        {copied === 'subnetId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {chain.platformChainId && (
-                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
-                    <span className="text-xs font-medium text-muted-foreground mb-1">Blockchain ID</span>
-                    <div className="flex items-center justify-between">
-                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.platformChainId}>
-                        {chain.platformChainId.slice(0, 8)}...{chain.platformChainId.slice(-8)}
-                      </code>
-                      <button
-                        onClick={() => handleCopy('platformChainId', chain.platformChainId)}
-                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
-                      >
-                        {copied === 'platformChainId' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {chain.rpcUrls && chain.rpcUrls.length > 0 && (
-                  <div className="flex flex-col p-2.5 sm:p-3 bg-card rounded-lg border border-border">
-                    <span className="text-xs font-medium text-muted-foreground mb-1">RPC URL</span>
-                    <div className="flex items-center justify-between">
-                      <code className="text-xs sm:text-sm font-mono text-foreground truncate mr-2" title={chain.rpcUrls[0]}>
-                        {chain.rpcUrls[0].replace('https://', '')}
-                      </code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(chain.rpcUrls?.[0] || '')}
-                        className="text-muted-foreground hover:text-[#ef4444] transition-colors p-1 rounded hover:bg-muted shrink-0"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {lastUpdate && (
-                <div className="mt-3 sm:mt-4 flex justify-end">
-                  <span className="text-xs text-muted-foreground">
-                    Last updated: {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
-                  </span>
-                </div>
-              )}
-            </div>
-
-          </div>
+      {lastUpdate && (
+        <div className="text-[11px] text-muted-foreground -mt-2">
+          Last updated {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
+        </div>
+      )}
 
             {/* Tab Navigation */}
             <div className="mb-4 sm:mb-6">
@@ -1295,10 +1194,32 @@ export function ChainDetails() {
                 </div>
               )}
             </div>
-          </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  valueClassName,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  valueClassName?: string;
+  icon: typeof Activity;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">{label}</span>
+        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
+          <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
         </div>
-      
-      <Footer />
+      </div>
+      <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
+        {value}
+      </div>
     </div>
   );
 }
