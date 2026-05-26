@@ -608,17 +608,6 @@ export function TeleporterSankeyDiagram() {
         });
       // DO NOT TOUCH
       
-      // Add a title
-      svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', -5)
-        .attr('class', 'diagram-title')
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .attr('fill', 'rgba(255, 255, 255, 0.7)')
-        .text(`Total: ${data.metadata.totalMessages.toLocaleString()} messages`);
-      
       svg.on('click', () => {
         if (selectedChain) {
           setSelectedChain(null);
@@ -719,45 +708,44 @@ export function TeleporterSankeyDiagram() {
   }
 
   return (
-    <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <h3 className="text-base sm:text-lg font-semibold text-foreground">
+          <h3 className="text-[14px] font-semibold text-foreground">
             Avalanche Interchain Messages (ICM)
           </h3>
-        </div>
-        
-        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          {/* Toggle switch for daily/weekly data */}
-          <div className="bg-muted rounded-full p-1 flex items-center">
-            <button
-              onClick={() => setTimeframe('daily')}
-              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                timeframe === 'daily'
-                  ? 'bg-[#ef4444] text-white'
-                  : 'text-muted-foreground hover:bg-accent'
-              }`}
-            >
-              Daily
-            </button>
-            <button
-              onClick={() => setTimeframe('weekly')}
-              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                timeframe === 'weekly'
-                  ? 'bg-[#ef4444] text-white'
-                  : 'text-muted-foreground hover:bg-accent'
-              }`}
-            >
-              Weekly
-            </button>
+          <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
           </div>
-          
-          <button 
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-1">
+            {(['daily', 'weekly'] as const).map((tf) => {
+              const active = timeframe === tf;
+              return (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`h-7 px-3 rounded-md text-[11px] font-medium border transition-colors ${
+                    active
+                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {tf === 'daily' ? 'Daily' : 'Weekly'}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
             onClick={fetchData}
-            className="p-1.5 rounded-full bg-muted text-muted-foreground hover:bg-accent transition-colors"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             title="Refresh data"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -773,29 +761,11 @@ export function TeleporterSankeyDiagram() {
         </div>
       )}
       
-      <div 
-        ref={containerRef} 
-        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[300px] sm:h-[400px] overflow-hidden"
+      <div
+        ref={containerRef}
+        className="relative bg-[#1c1c1e] h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden"
       >
-        {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div 
-              key={`star-${i}`}
-              className="absolute rounded-full bg-white"
-              style={{
-                width: `${Math.random() * 1.5 + 0.5}px`,
-                height: `${Math.random() * 1.5 + 0.5}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                willChange: 'opacity',
-                animation: `twinkle ${Math.random() * 8 + 6}s ease-in-out infinite`,
-                animationDelay: `-${Math.random() * 8}s`,
-              }}
-            />
-          ))}
-        </div>
-        
+
         {/* SVG for the Sankey diagram */}
         <svg 
           ref={svgRef} 

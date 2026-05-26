@@ -1608,7 +1608,7 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
       );
       return allValidators.map((v) => ({
         address: v.node_id,
-        active: v.active,
+        active: v.active === true || (v.active as unknown) === 'true' || v.active === 1,
         uptime: v.primary_uptime ?? v.uptime_percentage,
         weight: String(v.weight),
         stakeUnit: 'weight' as const,
