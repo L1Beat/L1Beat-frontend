@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, FileText, Layers, LayoutGrid, Search, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, FileText, Flame, Layers, LayoutGrid, Search, X } from 'lucide-react';
 import { getChains } from '../../api';
 import type { Chain } from '../../types';
 import { acpService } from '../../services/acpService';
@@ -15,6 +15,33 @@ interface Result {
   title: string;
   subtitle?: string;
   to: string;
+}
+
+const RECENT_STORAGE_KEY = 'searchPalette:recents';
+const RECENT_MAX = 5;
+
+function loadRecents(): Result[] {
+  try {
+    const raw = localStorage.getItem(RECENT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((r): r is Result =>
+      r && typeof r.id === 'string' && typeof r.type === 'string' && typeof r.title === 'string' && typeof r.to === 'string'
+    ).slice(0, RECENT_MAX);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(result: Result) {
+  try {
+    const current = loadRecents().filter(r => r.id !== result.id);
+    const next = [result, ...current].slice(0, RECENT_MAX);
+    localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // localStorage may be full or unavailable; silent fail is fine here
+  }
 }
 
 interface SearchPaletteProps {
@@ -54,11 +81,13 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const [chains, setChains] = useState<Chain[]>([]);
   const [acps, setAcps] = useState<EnhancedACP[]>([]);
   const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [recents, setRecents] = useState<Result[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setQuery('');
     setActive(0);
+    setRecents(loadRecents());
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
 
@@ -80,44 +109,85 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
     };
   }, [open]);
 
-  const results = useMemo<Result[]>(() => {
+  const chainResults = useMemo<Result[]>(
+    () =>
+      chains.map((c) => ({
+        id: `chain-${c.chainId}`,
+        type: 'chain',
+        title: c.chainName,
+        subtitle: [c.networkToken?.symbol, c.originalChainId && `EVM ${c.originalChainId}`]
+          .filter(Boolean)
+          .join(' · '),
+        to: `/chain/${c.chainId}`,
+      })),
+    [chains],
+  );
+  const acpResults = useMemo<Result[]>(
+    () =>
+      acps.map((a) => ({
+        id: `acp-${a.number}`,
+        type: 'acp',
+        title: `ACP-${a.number} · ${a.title}`,
+        subtitle: [a.status, a.track].filter(Boolean).join(' · '),
+        to: `/acps/${a.number}`,
+      })),
+    [acps],
+  );
+  const postResults = useMemo<Result[]>(
+    () =>
+      posts.map((p) => ({
+        id: `post-${p._id}`,
+        type: 'post',
+        title: p.title,
+        subtitle: p.author || p.tags?.[0],
+        to: `/blog/${p.slug}`,
+      })),
+    [posts],
+  );
+
+  const topChains = useMemo<Result[]>(() => {
+    return chains
+      .filter((c) => c.network !== 'fuji' && (c.tps?.value ?? 0) >= 0.05)
+      .sort((a, b) => (b.tps?.value ?? 0) - (a.tps?.value ?? 0))
+      .slice(0, 5)
+      .map((c) => ({
+        id: `chain-${c.chainId}`,
+        type: 'chain' as const,
+        title: c.chainName,
+        subtitle: c.tps?.value
+          ? `${c.tps.value.toFixed(2)} TPS${c.networkToken?.symbol ? ` · ${c.networkToken.symbol}` : ''}`
+          : c.networkToken?.symbol,
+        to: `/chain/${c.chainId}`,
+      }));
+  }, [chains]);
+
+  const sections = useMemo<{ label: string; icon: typeof Clock; items: Result[] }[]>(() => {
     const q = query.trim().toLowerCase();
-    const chainResults: Result[] = chains.map((c) => ({
-      id: `chain-${c.chainId}`,
-      type: 'chain',
-      title: c.chainName,
-      subtitle: [c.networkToken?.symbol, c.originalChainId && `EVM ${c.originalChainId}`]
-        .filter(Boolean)
-        .join(' · '),
-      to: `/chain/${c.chainId}`,
-    }));
-    const acpResults: Result[] = acps.map((a) => ({
-      id: `acp-${a.number}`,
-      type: 'acp',
-      title: `ACP-${a.number} · ${a.title}`,
-      subtitle: [a.status, a.track].filter(Boolean).join(' · '),
-      to: `/acps/${a.number}`,
-    }));
-    const postResults: Result[] = posts.map((p) => ({
-      id: `post-${p._id}`,
-      type: 'post',
-      title: p.title,
-      subtitle: p.author || p.tags?.[0],
-      to: `/blog/${p.slug}`,
-    }));
-    const all = [...PAGES, ...chainResults, ...acpResults, ...postResults];
-    if (!q) return all.slice(0, 8);
-    return all
-      .filter((r) => {
-        const haystack = `${r.title} ${r.subtitle ?? ''}`.toLowerCase();
-        return haystack.includes(q);
-      })
-      .slice(0, 30);
-  }, [query, chains, acps, posts]);
+    if (q) {
+      const all = [...PAGES, ...chainResults, ...acpResults, ...postResults];
+      const filtered = all
+        .filter((r) => `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q))
+        .slice(0, 30);
+      return [{ label: 'Results', icon: Search, items: filtered }];
+    }
+    const out: { label: string; icon: typeof Clock; items: Result[] }[] = [];
+    if (recents.length > 0) out.push({ label: 'Recent', icon: Clock, items: recents });
+    if (topChains.length > 0) out.push({ label: 'Top chains', icon: Flame, items: topChains });
+    out.push({ label: 'Pages', icon: LayoutGrid, items: PAGES });
+    return out;
+  }, [query, chainResults, acpResults, postResults, recents, topChains]);
+
+  const flatResults = useMemo<Result[]>(() => sections.flatMap((s) => s.items), [sections]);
 
   useEffect(() => {
     setActive(0);
   }, [query]);
+
+  const handleSelect = (r: Result) => {
+    saveRecent(r);
+    navigate(r.to);
+    onClose();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -128,22 +198,20 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActive((i) => Math.min(results.length - 1, i + 1));
+        setActive((i) => Math.min(flatResults.length - 1, i + 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActive((i) => Math.max(0, i - 1));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        const r = results[active];
-        if (r) {
-          navigate(r.to);
-          onClose();
-        }
+        const r = flatResults[active];
+        if (r) handleSelect(r);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, results, active, navigate, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, flatResults, active, navigate, onClose]);
 
   if (!open) return null;
 
@@ -176,54 +244,69 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
           </button>
         </div>
         <div className="max-h-[60vh] overflow-y-auto py-1.5">
-          {results.length === 0 ? (
+          {flatResults.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">
               No matches for &quot;{query}&quot;
             </div>
           ) : (
-            <ul>
-              {results.map((r, idx) => {
-                const Icon = TYPE_ICON[r.type];
-                const isActive = idx === active;
+            (() => {
+              let cursor = 0;
+              return sections.map((section) => {
+                const SectionIcon = section.icon;
                 return (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActive(idx)}
-                      onClick={() => {
-                        navigate(r.to);
-                        onClose();
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                        isActive ? 'bg-[#ef4444]/10' : 'hover:bg-accent'
-                      }`}
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
-                          isActive ? 'bg-[#ef4444]/15 text-[#ef4444]' : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold text-foreground truncate">
-                          {r.title}
-                        </div>
-                        {r.subtitle && (
-                          <div className="text-[11px] text-muted-foreground truncate">{r.subtitle}</div>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-bold tracking-wider text-muted-foreground shrink-0">
-                        {TYPE_LABEL[r.type].toUpperCase()}
+                  <div key={section.label} className="mb-1 last:mb-0">
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                      <SectionIcon className="w-3 h-3" />
+                      <span>{section.label}</span>
+                      <span className="text-muted-foreground/60 font-medium normal-case tracking-normal">
+                        ({section.items.length})
                       </span>
-                      {isActive && (
-                        <ArrowRight className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
-                      )}
-                    </button>
-                  </li>
+                    </div>
+                    <ul>
+                      {section.items.map((r) => {
+                        const idx = cursor++;
+                        const Icon = TYPE_ICON[r.type];
+                        const isActive = idx === active;
+                        return (
+                          <li key={r.id}>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setActive(idx)}
+                              onClick={() => handleSelect(r)}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                                isActive ? 'bg-[#ef4444]/10' : 'hover:bg-accent'
+                              }`}
+                            >
+                              <div
+                                className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+                                  isActive ? 'bg-[#ef4444]/15 text-[#ef4444]' : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[13px] font-semibold text-foreground truncate">
+                                  {r.title}
+                                </div>
+                                {r.subtitle && (
+                                  <div className="text-[11px] text-muted-foreground truncate">{r.subtitle}</div>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold tracking-wider text-muted-foreground shrink-0">
+                                {TYPE_LABEL[r.type].toUpperCase()}
+                              </span>
+                              {isActive && (
+                                <ArrowRight className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 );
-              })}
-            </ul>
+              });
+            })()
           )}
         </div>
         <div className="flex items-center justify-between gap-3 px-4 h-9 border-t border-border text-[10px] text-muted-foreground">
@@ -238,7 +321,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
               to open
             </span>
           </div>
-          <span>{results.length} results</span>
+          <span>{flatResults.length} results</span>
         </div>
       </div>
     </div>

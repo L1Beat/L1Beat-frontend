@@ -22,7 +22,7 @@ import {
 } from '../api';
 import type { Chain } from '../types';
 import { FilterModal } from '../components/FilterModal';
-import { LoadingPage, LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 
 type Range = '24H' | '7D' | '30D' | 'ALL';
 type ScreenerTab = 'active' | 'all' | 'inactive' | 'watchlist';
@@ -426,7 +426,7 @@ export function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paginatedChains]);
 
-  if (loading) return <LoadingPage />;
+  if (loading) return <DashboardSkeleton />;
 
   if (error) {
     return (
@@ -846,9 +846,9 @@ function ScreenerTable({
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="right">Δ 24h</Th>
-            <Th align="right">Share</Th>
-            <Th align="right">{rangeTrendLabel(range)}</Th>
+            <Th align="right" className="hidden md:table-cell">Δ 24h</Th>
+            <Th align="right" className="hidden lg:table-cell">Share</Th>
+            <Th align="right" className="hidden sm:table-cell">{rangeTrendLabel(range)}</Th>
             <SortableTh
               align="right"
               label="Validators"
@@ -857,7 +857,7 @@ function ScreenerTable({
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="left" className="pl-8">
+            <Th align="left" className="pl-8 hidden lg:table-cell">
               Category
             </Th>
             <Th align="right" className="pr-5">
@@ -961,10 +961,10 @@ function ScreenerTable({
                 >
                   {formatTps(chain.tps?.value)}
                 </td>
-                <td className="py-3 text-right">
+                <td className="py-3 text-right hidden md:table-cell">
                   <DeltaCell history={history} loaded={chain.chainId in historyByChain} />
                 </td>
-                <td className="py-3 text-right tabular-nums text-[12px] text-muted-foreground">
+                <td className="py-3 text-right tabular-nums text-[12px] text-muted-foreground hidden lg:table-cell">
                   {(() => {
                     const share = totalTps > 0 ? ((chain.tps?.value ?? 0) / totalTps) * 100 : 0;
                     if (share < 0.05) return '<0.05%';
@@ -972,7 +972,7 @@ function ScreenerTable({
                     return `${share.toFixed(1)}%`;
                   })()}
                 </td>
-                <td className="py-3">
+                <td className="py-3 hidden sm:table-cell">
                   <div className="flex justify-end pr-1">
                     <Sparkline values={history} range={range} loaded={chain.chainId in historyByChain} />
                   </div>
@@ -980,7 +980,7 @@ function ScreenerTable({
                 <td className="py-3 text-right tabular-nums text-[13px] font-medium text-foreground">
                   {chain.validatorCount?.toLocaleString() ?? '—'}
                 </td>
-                <td className="py-3 pl-8">
+                <td className="py-3 pl-8 hidden lg:table-cell">
                   {category ? (
                     <span
                       className={`inline-flex items-center px-2 h-5 rounded-full text-[10px] font-semibold tracking-wide ${categoryClass(
@@ -996,7 +996,7 @@ function ScreenerTable({
                 <td className="py-3 pr-5">
                   <div className="flex items-center justify-end gap-2">
                     <StatusPill active={chain.isActive ?? false} />
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground hidden group-hover:inline-block" />
                   </div>
                 </td>
               </tr>
@@ -1261,6 +1261,76 @@ function ScreenerPagination({
           Next
         </button>
       </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      {/* Hero */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2.5">
+          <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
+          <div className="h-8 w-64 rounded bg-white/[0.04] animate-pulse" />
+          <div className="h-4 w-80 rounded bg-white/[0.04] animate-pulse" />
+        </div>
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-card border border-border h-9 w-44 animate-pulse" />
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
+              <div className="w-7 h-7 rounded-lg bg-white/[0.04] animate-pulse" />
+            </div>
+            <div className="h-8 w-24 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-3 w-32 rounded bg-white/[0.04] animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Screener */}
+      <section className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-7 w-24 rounded-md bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+        <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
+          <div className="flex-1 h-9 rounded-lg bg-white/[0.04] animate-pulse" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-7 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+        <div className="px-2 sm:px-0">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 px-3 sm:px-5 py-3 border-b border-border/60 last:border-b-0"
+            >
+              <div className="w-4 h-4 rounded bg-white/[0.04] animate-pulse" />
+              <div className="w-4 h-4 rounded bg-white/[0.04] animate-pulse" />
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-8 h-8 rounded-full bg-white/[0.04] animate-pulse" />
+                <div className="space-y-1.5">
+                  <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
+                  <div className="h-2.5 w-16 rounded bg-white/[0.04] animate-pulse" />
+                </div>
+              </div>
+              <div className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
+              <div className="hidden md:block h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
+              <div className="hidden lg:block h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
+              <div className="hidden sm:block h-6 w-20 rounded bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
+              <div className="hidden lg:block h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+              <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

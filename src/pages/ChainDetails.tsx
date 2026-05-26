@@ -40,7 +40,8 @@ export function ChainDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showAllValidators, setShowAllValidators] = useState(false);
+  const [validatorStatus, setValidatorStatus] = useState<'all' | 'active' | 'inactive'>('active');
+  const [validatorPage, setValidatorPage] = useState(1);
   const [sortBy, setSortBy] = useState<'stake' | 'uptime' | 'address'>('stake');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
@@ -55,7 +56,6 @@ export function ChainDetails() {
   const [availableChains, setAvailableChains] = useState<Chain[]>([]);
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
-  const [showInactive, setShowInactive] = useState(false);
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
   const [allTimeFeesBurned, setAllTimeFeesBurned] = useState<number>(0);
   const [feeBurnTimeframe, setFeeBurnTimeframe] = useState<0 | 7 | 30 | 90>(0);
@@ -85,19 +85,20 @@ export function ChainDetails() {
         const foundChain = chains.find(c => c.chainId === chainId);
 
         if (foundChain) {
-          // Fetch subnet type and active validators in parallel
+          // Fetch subnet type and all validators (active + inactive) in parallel
+          // so the Active/Inactive/All counts are stable from first paint.
           let validators: import('../types').Validator[] = [];
           if (foundChain.subnetId) {
             const [vals, sType] = await Promise.all([
-              getL1BeatValidators(foundChain.subnetId, true),
+              getL1BeatValidators(foundChain.subnetId, false),
               getL1BeatSubnetType(foundChain.subnetId),
             ]);
             validators = vals;
             setSubnetType(sType);
-            // If no active validators found, fetch all (including inactive)
-            if (validators.length === 0) {
-              validators = await getL1BeatValidators(foundChain.subnetId, false);
-              setShowInactive(true);
+            // If there are no active validators at all, default the tab to "All"
+            // so the user immediately sees the inactive history instead of an empty table.
+            if (!validators.some(v => v.active === true)) {
+              setValidatorStatus('all');
             }
           }
           const chainWithValidators = {
@@ -135,19 +136,11 @@ export function ChainDetails() {
     fetchData();
   }, [chainId]);
 
-  // Lazy-load inactive validators when user toggles "Show Inactive"
+  // Reset to page 1 when filters / search / sort change
   useEffect(() => {
-    if (!showInactive || !chain?.subnetId) return;
-    // If we only have active validators, fetch all to include inactive
-    const hasInactive = chain.validators.some(v => !v.active);
-    if (hasInactive) return;
+    setValidatorPage(1);
+  }, [validatorStatus, searchTerm, sortBy, sortOrder]);
 
-    getL1BeatValidators(chain.subnetId, false).then((allVals) => {
-      if (allVals.length > chain.validators.length) {
-        setChain(prev => prev ? { ...prev, validators: allVals } : prev);
-      }
-    });
-  }, [showInactive, chain?.subnetId]);
 
   // Filter fee burn data by timeframe for display
   const filteredFeeBurn = useMemo(() => {
@@ -196,10 +189,11 @@ export function ChainDetails() {
 
   const getStakeBaseUnits = (v: { weight: string }) => parseBaseUnits(v.weight) ?? 0n;
 
-  const filteredValidators = chain?.validators.filter(validator =>
-    (showInactive || validator.active) &&
-    validator.address.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => {
+  const filteredValidators = chain?.validators.filter(validator => {
+    if (validatorStatus === 'active' && validator.active !== true) return false;
+    if (validatorStatus === 'inactive' && validator.active === true) return false;
+    return validator.address.toLowerCase().includes(searchTerm.toLowerCase());
+  }).sort((a, b) => {
     let comparison = 0;
     
     switch (sortBy) {
@@ -225,9 +219,13 @@ export function ChainDetails() {
     return sortOrder === 'desc' ? -comparison : comparison;
   }) || [];
 
-  const displayedValidators = showAllValidators 
-    ? filteredValidators 
-    : filteredValidators.slice(0, 10);
+  const VALIDATORS_PER_PAGE = 15;
+  const totalValidatorPages = Math.max(1, Math.ceil(filteredValidators.length / VALIDATORS_PER_PAGE));
+  const safeValidatorPage = Math.min(validatorPage, totalValidatorPages);
+  const displayedValidators = filteredValidators.slice(
+    (safeValidatorPage - 1) * VALIDATORS_PER_PAGE,
+    safeValidatorPage * VALIDATORS_PER_PAGE,
+  );
 
   const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
   // L1 subnets use continuous fees — show remaining balance column.
@@ -285,14 +283,7 @@ export function ChainDetails() {
   };
   
   if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Loading chain details…</p>
-        </div>
-      </div>
-    );
+    return <ChainDetailsSkeleton />;
   }
 
   if (error || !chain) {
@@ -565,59 +556,53 @@ export function ChainDetails() {
         </div>
       )}
 
-            {/* Tab Navigation */}
-            <div className="mb-4 sm:mb-6">
-              <div className="border-b border-border overflow-x-auto">
-                <nav className="flex space-x-4 sm:space-x-8 min-w-max" aria-label="Tabs">
-                  {[
-                    { id: 'validators', name: 'Validators', icon: Users, disabled: false },
-                    { id: 'compare', name: 'Compare', icon: BarChart3, disabled: false },
-                    { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: false },
-                    { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
-                    { id: 'social', name: 'Social', icon: MessageCircle, disabled: true }
-                  ].map((tab) => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <div key={tab.id} className="relative">
-                        <button
-                          onClick={() => !tab.disabled && setActiveTab(tab.id as 'validators' | 'compare' | 'economics')}
-                          onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
-                          onMouseLeave={() => setHoveredTab(null)}
-                          disabled={tab.disabled}
-                          className={`
-                            group inline-flex items-center py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm transition-all whitespace-nowrap
-                            ${isActive
-                              ? 'border-[#ef4444] text-[#ef4444]'
-                              : tab.disabled
-                                ? 'border-transparent text-muted-foreground cursor-not-allowed opacity-50'
-                                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border cursor-pointer'
-                            }
-                          `}
-                        >
-                          <Icon className={`
-                            -ml-0.5 mr-1.5 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5
-                            ${isActive
-                              ? 'text-[#ef4444]'
-                              : tab.disabled
-                                ? 'text-muted-foreground'
-                                : 'text-muted-foreground group-hover:text-foreground'
-                            }
-                          `} />
-                          {tab.name}
-                        </button>
-                        {tab.disabled && hoveredTab === tab.id && (
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-1.5 bg-popover text-popover-foreground text-xs rounded-lg shadow-lg whitespace-nowrap z-10 border border-border">
-                            Coming soon
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-popover"></div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </nav>
+            {/* Tab Navigation — sticky pill bar matching Metrics section nav */}
+            <nav
+              className="sticky top-14 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md border-b border-border"
+              aria-label="Tabs"
+            >
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {[
+                  { id: 'validators', name: 'Validators', icon: Users, disabled: false },
+                  { id: 'compare', name: 'Compare', icon: BarChart3, disabled: false },
+                  { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: false },
+                  { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
+                  { id: 'social', name: 'Social', icon: MessageCircle, disabled: true },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <div key={tab.id} className="relative shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          !tab.disabled &&
+                          setActiveTab(tab.id as 'validators' | 'compare' | 'economics')
+                        }
+                        onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
+                        onMouseLeave={() => setHoveredTab(null)}
+                        disabled={tab.disabled}
+                        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold tracking-wide transition-colors ${
+                          isActive
+                            ? 'bg-[#ef4444]/12 text-[#ef4444]'
+                            : tab.disabled
+                            ? 'text-muted-foreground/50 cursor-not-allowed'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {tab.name}
+                      </button>
+                      {tab.disabled && hoveredTab === tab.id && (
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2.5 py-1 bg-popover text-popover-foreground text-[11px] rounded-md shadow-lg whitespace-nowrap z-10 border border-border">
+                          Coming soon
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            </nav>
 
             <div className="space-y-4 sm:space-y-6">
               {/* Compare Tab */}
@@ -629,7 +614,42 @@ export function ChainDetails() {
               </div>)}
 
               {/* Economics Tab */}
-              {activeTab === 'economics' && (
+              {activeTab === 'economics' && (() => {
+                const evmId = (chain.originalChainId || '').toString();
+                const lcName = (chain.chainName || '').toLowerCase();
+                const isPrimaryNetwork = lcName.includes('c-chain') || evmId === '43114';
+                const isLegacySubnet = subnetType === 'legacy';
+                const notApplicable = isPrimaryNetwork || isLegacySubnet;
+                if (notApplicable) {
+                  return (
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="bg-card rounded-xl border border-border p-8 sm:p-10 text-center max-w-2xl mx-auto">
+                        <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                          <TrendingUp className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-base font-semibold text-foreground mb-2">
+                          Fee burn doesn’t apply to this chain
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {isPrimaryNetwork ? (
+                            <>
+                              The Primary Network is the host chain — its validators secure the
+                              Avalanche network directly and don’t pay continuous validation fees
+                              to the P-Chain. Look at AVAX staking and rewards instead.
+                            </>
+                          ) : (
+                            <>
+                              This is a legacy subnet that hasn’t converted to an L1 via ACP-77.
+                              Only converted L1s pay continuous validation fees to the P-Chain, so
+                              there’s no fee burn to report.
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
                 <div className="space-y-4 sm:space-y-6">
                   {dailyFeeBurn.length > 0 ? (() => {
                     const allTimeBurnedAvax = allTimeFeesBurned / 1_000_000_000;
@@ -884,7 +904,8 @@ export function ChainDetails() {
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Validators Tab */}
               {activeTab === 'validators' && (
@@ -914,23 +935,40 @@ export function ChainDetails() {
                   <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                     {/* Validators Header & Search */}
                     <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                        <div className="flex items-center gap-4">
+                      <div className="flex flex-col gap-3 sm:gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                           <h3 className="text-lg sm:text-xl font-semibold text-foreground">
-                            Active Validators
+                            Validators
                             <span className="ml-2 text-base font-normal text-muted-foreground">
-                              ({chain.validatorCount || chain.validators.filter(v => v.active).length})
+                              ({filteredValidators.length})
                             </span>
                           </h3>
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={showInactive}
-                              onChange={(e) => setShowInactive(e.target.checked)}
-                              className="w-4 h-4 rounded border-border text-[#ef4444] focus:ring-[#ef4444] accent-[#ef4444] cursor-pointer"
-                            />
-                            <span className="text-sm text-muted-foreground">Include inactive</span>
-                          </label>
+                          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-card border border-border self-start sm:self-auto">
+                            {(['active', 'inactive', 'all'] as const).map((s) => {
+                              const total = chain.validators.length;
+                              const activeCount = chain.validators.filter(v => v.active === true).length;
+                              const count =
+                                s === 'all' ? total : s === 'active' ? activeCount : total - activeCount;
+                              const isActive = validatorStatus === s;
+                              return (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => setValidatorStatus(s)}
+                                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-semibold tracking-wide capitalize transition-colors ${
+                                    isActive
+                                      ? 'bg-[#ef4444]/12 text-[#ef4444]'
+                                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                                  }`}
+                                >
+                                  {s}
+                                  <span className="text-[10px] font-medium text-muted-foreground/70 tabular-nums">
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                         <div className="relative w-full sm:w-72">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1170,16 +1208,15 @@ export function ChainDetails() {
                       </table>
                     </div>
 
-                    {/* Show More Button */}
-                    {filteredValidators.length > 10 && !showAllValidators && (
-                      <div className="px-4 sm:px-6 py-3 sm:py-4 bg-muted/20 border-t border-border">
-                        <button
-                          onClick={() => setShowAllValidators(true)}
-                          className="w-full text-center text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] text-xs sm:text-sm font-medium py-2 transition-colors"
-                        >
-                          Show All Validators ({filteredValidators.length})
-                        </button>
-                      </div>
+                    {/* Pagination */}
+                    {filteredValidators.length > VALIDATORS_PER_PAGE && (
+                      <ValidatorPagination
+                        currentPage={safeValidatorPage}
+                        totalPages={totalValidatorPages}
+                        totalItems={filteredValidators.length}
+                        pageSize={VALIDATORS_PER_PAGE}
+                        onChange={setValidatorPage}
+                      />
                     )}
 
                     {/* No Results */}
@@ -1219,6 +1256,157 @@ function KpiCard({
       </div>
       <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function ValidatorPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onChange: (page: number) => void;
+}) {
+  const startIdx = (currentPage - 1) * pageSize + 1;
+  const endIdx = Math.min(currentPage * pageSize, totalItems);
+
+  const pages: (number | 'ellipsis')[] = [];
+  const add = (p: number | 'ellipsis') => pages.push(p);
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) add(i);
+  } else {
+    add(1);
+    if (currentPage > 3) add('ellipsis');
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) add(i);
+    if (currentPage < totalPages - 2) add('ellipsis');
+    add(totalPages);
+  }
+
+  return (
+    <div className="px-4 sm:px-6 py-3 bg-muted/20 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
+      <span className="text-[11px] text-muted-foreground tabular-nums">
+        Showing <span className="text-foreground font-medium">{startIdx}–{endIdx}</span> of{' '}
+        <span className="text-foreground font-medium">{totalItems}</span>
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Prev
+        </button>
+        {pages.map((p, idx) =>
+          p === 'ellipsis' ? (
+            <span key={`e-${idx}`} className="px-1 text-xs text-muted-foreground">
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onChange(p)}
+              className={`px-2.5 h-7 text-xs border rounded-md transition-colors ${
+                currentPage === p
+                  ? 'bg-[#ef4444] border-[#ef4444] text-white'
+                  : 'border-border bg-card hover:bg-muted'
+              }`}
+            >
+              {p}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChainDetailsSkeleton() {
+  return (
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <div className="h-4 w-24 rounded bg-white/[0.04] animate-pulse" />
+
+      {/* Header card */}
+      <div className="rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40 p-6 sm:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/[0.04] animate-pulse" />
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-48 rounded bg-white/[0.04] animate-pulse" />
+                <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+                <div className="h-5 w-14 rounded-full bg-white/[0.04] animate-pulse" />
+              </div>
+              <div className="h-3 w-64 rounded bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-80 max-w-full rounded bg-white/[0.04] animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky tab nav skeleton */}
+      <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-border">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-8 w-24 rounded-lg bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
+              <div className="w-7 h-7 rounded-lg bg-white/[0.04] animate-pulse" />
+            </div>
+            <div className="h-7 w-24 rounded bg-white/[0.04] animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* Content body — generic validator table placeholder */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="h-5 w-40 rounded bg-white/[0.04] animate-pulse" />
+          <div className="h-9 w-64 rounded-lg bg-white/[0.04] animate-pulse" />
+        </div>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-4 px-4 sm:px-6 py-4 border-b border-border/60 last:border-b-0"
+          >
+            <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-9 h-9 rounded-lg bg-white/[0.04] animate-pulse" />
+              <div className="space-y-1.5">
+                <div className="h-3 w-40 rounded bg-white/[0.04] animate-pulse" />
+                <div className="h-2.5 w-24 rounded bg-white/[0.04] animate-pulse" />
+              </div>
+            </div>
+            <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
+          </div>
+        ))}
       </div>
     </div>
   );

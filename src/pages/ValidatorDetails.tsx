@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Copy, Check, ExternalLink, Clock, AlertTriangle, Shield, Coins, Timer, TrendingUp } from 'lucide-react';
@@ -309,16 +309,16 @@ export function ValidatorDetails() {
                 label={kind === 'legacy' ? 'Primary Network Stake' : 'Staked Amount'}
                 value={`${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`}
               />
-              <div className={`bg-card rounded-xl border border-border p-5`}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-lg bg-muted">
-                    <Shield className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm text-muted-foreground font-medium">
+              <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+                <div className="flex items-center justify-between mb-3 gap-2">
+                  <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
                     {kind === 'legacy' ? 'Primary Uptime' : 'Uptime'}
-                  </p>
+                  </span>
+                  <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center shrink-0">
+                    <Shield className="w-3.5 h-3.5 text-[#ef4444]" />
+                  </div>
                 </div>
-                <p className={`text-2xl font-bold mb-2 ${
+                <p className={`text-2xl font-bold tracking-tight mb-2 ${
                   uptimeValue >= 80 ? 'text-green-500' : uptimeValue >= 50 ? 'text-yellow-500' : 'text-red-500'
                 }`}>
                   {uptimeValue.toFixed(2)}%
@@ -641,20 +641,25 @@ function HeroCard({ icon, label, value, valueColor, subtitle, warning }: {
   subtitle?: string;
   warning?: boolean;
 }) {
+  const sizedIcon = isValidElement(icon)
+    ? cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-3.5 h-3.5 text-[#ef4444]' })
+    : icon;
   return (
-    <div className={`bg-card rounded-xl border p-5 ${warning ? 'border-red-500/40' : 'border-border'}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-1.5 rounded-lg bg-muted">
-          {icon}
+    <div className={`rounded-xl border p-4 sm:p-5 bg-card ${warning ? 'border-red-500/40' : 'border-border'}`}>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <span className="text-[11px] font-medium tracking-wide text-muted-foreground truncate">{label}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {warning && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
+          <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
+            {sizedIcon}
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground font-medium">{label}</p>
-        {warning && <AlertTriangle className="w-3.5 h-3.5 text-red-500 ml-auto" />}
       </div>
-      <p className={`text-2xl font-bold ${valueColor || 'text-foreground'}`}>
+      <p className={`text-2xl font-bold tracking-tight ${valueColor || 'text-foreground'}`}>
         {value}
       </p>
       {subtitle && (
-        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        <p className="text-[11px] text-muted-foreground mt-1">{subtitle}</p>
       )}
     </div>
   );
@@ -669,14 +674,14 @@ function StakingPeriodCard({ period, active }: {
   const textColor = !active ? 'text-muted-foreground' : daysLeft > 30 ? 'text-green-500' : daysLeft > 7 ? 'text-yellow-500' : 'text-red-500';
 
   return (
-    <div className="bg-card rounded-xl border border-border p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-1.5 rounded-lg bg-muted">
-          <Timer className="w-5 h-5 text-muted-foreground" />
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">Staking Period</span>
+        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center shrink-0">
+          <Timer className="w-3.5 h-3.5 text-[#ef4444]" />
         </div>
-        <p className="text-sm text-muted-foreground font-medium">Staking Period</p>
       </div>
-      <p className={`text-2xl font-bold mb-2 ${textColor}`}>
+      <p className={`text-2xl font-bold tracking-tight mb-2 ${textColor}`}>
         {active ? `${daysLeft} days left` : 'Ended'}
       </p>
       <div className="h-2 bg-muted rounded-full overflow-hidden mb-1.5">
@@ -685,7 +690,7 @@ function StakingPeriodCard({ period, active }: {
           style={{ width: `${period.progress}%` }}
         />
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         {Math.floor(period.progress)}% complete — {Math.floor(period.totalDays)} day term
       </p>
     </div>
