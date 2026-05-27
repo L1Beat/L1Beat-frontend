@@ -3,6 +3,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToasterProvider } from './components/Toaster';
 import App from './App.tsx';
 import './index.css';
 
@@ -18,8 +19,10 @@ const AppWrapper = () => (
     <StrictMode>
       <ThemeProvider>
         <HelmetProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <App />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <ToasterProvider>
+              <App />
+            </ToasterProvider>
           </BrowserRouter>
         </HelmetProvider>
       </ThemeProvider>

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
 import {
   FileText,
   ExternalLink,
@@ -361,6 +362,11 @@ export default function ACPs() {
   }
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <SEO
+        title="Avalanche Community Proposals"
+        description="Browse, filter, and track every ACP — Avalanche Community Proposals — from draft through final, with status, track, and authors."
+        url="/acps"
+      />
       <div className="flex-1">
         <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}

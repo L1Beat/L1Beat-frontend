@@ -3,6 +3,7 @@ import ReactDOMServer from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { HelmetProvider } from 'react-helmet-async';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToasterProvider } from './components/Toaster';
 import App from './App';
 
 export function render(url: string, context: any) {
@@ -13,7 +14,9 @@ export function render(url: string, context: any) {
       <ThemeProvider>
         <HelmetProvider context={helmetContext}>
           <StaticRouter location={url}>
-            <App />
+            <ToasterProvider>
+              <App />
+            </ToasterProvider>
           </StaticRouter>
         </HelmetProvider>
       </ThemeProvider>

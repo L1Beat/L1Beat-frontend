@@ -9,6 +9,7 @@ import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../hooks/useTheme';
 import 'katex/dist/katex.min.css';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
 import {
   ArrowLeft,
   ArrowUpCircle,
@@ -590,6 +591,11 @@ export default function ACPDetails() {
 
   return (
     <div className="bg-background text-foreground">
+      <SEO
+        title={`ACP-${acp.number} · ${acp.title}`}
+        description={`${acp.status ? `${acp.status} · ` : ''}${acp.track ? `${acp.track} track · ` : ''}Avalanche Community Proposal ${acp.number}.`}
+        url={`/acps/${acp.number}`}
+      />
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
