@@ -7,6 +7,8 @@ import { getL1BeatValidator, getL1BeatValidatorDeposits, getChainBySubnetId, get
 import type { L1BeatValidator } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
+import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 
 const PRIMARY_NETWORK_SUBNET_ID = '11111111111111111111111111111111LpoYY';
@@ -50,6 +52,7 @@ export function ValidatorDetails() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { theme: _ } = useTheme();
+  const { toast } = useToast();
 
   const subnetId = searchParams.get('subnet') || undefined;
 
@@ -98,10 +101,14 @@ export function ValidatorDetails() {
     });
   }, [validatorId, subnetId]);
 
-  const copyToClipboard = (text: string, type: 'node' | 'validation' | 'bls' | 'owner' | 'tx') => {
-    navigator.clipboard.writeText(text);
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
+  const copyToClipboard = async (text: string, type: 'node' | 'validation' | 'bls' | 'owner' | 'tx') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast('Failed to copy to clipboard', 'error');
+    }
   };
 
   if (loading) {
@@ -177,8 +184,14 @@ export function ValidatorDetails() {
     legacy: { label: 'Legacy Subnet', badgeBg: 'bg-orange-100 dark:bg-orange-900/40', badgeText: 'text-orange-700 dark:text-orange-300' },
   }[kind];
 
+  const nodeShort = `${validator.node_id.slice(0, 10)}…${validator.node_id.slice(-6)}`;
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title={`${nodeShort} · Validator`}
+        description={`${chain ? `${chain.chainName} validator ` : 'Avalanche validator '}${nodeShort} — balance, uptime, deposit history, and validation record.`}
+        url={`/validator/${validator.node_id}`}
+      />
       <button
         onClick={() => (chain ? navigate(`/chain/${chain.chainId}`) : navigate(-1))}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -187,7 +200,7 @@ export function ValidatorDetails() {
         {backLabel}
       </button>
 
-      <header className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+      <header className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
         </div>
@@ -263,7 +276,7 @@ export function ValidatorDetails() {
               href={`https://subnets.avax.network/validators/${validator.node_id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
             >
               Explorer <ExternalLink className="w-3 h-3" />
             </a>

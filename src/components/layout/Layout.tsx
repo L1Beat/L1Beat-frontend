@@ -58,7 +58,7 @@ function MobileDock() {
   };
 
   return (
-    <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2 rounded-2xl bg-[#1c1c1e]/90 dark:bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 shadow-2xl">
+    <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2 rounded-2xl bg-card/90 dark:bg-card/95 backdrop-blur-xl border border-border shadow-2xl">
       {dockItems.map(({ id, path, icon: Icon, label }) => {
         const active = isActive(path);
         return (

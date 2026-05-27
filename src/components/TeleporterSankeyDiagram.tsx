@@ -99,21 +99,20 @@ export function TeleporterSankeyDiagram() {
   const isVisibleRef = useRef(true);
   const activeParticlesRef = useRef<d3.Selection<SVGCircleElement, unknown, null, undefined>[]>([]);
   
-  // Force text colors to always be white for dark background
+  // Theme-aware text colors so labels remain legible against the card bg.
   const forceTextColors = useCallback(() => {
-    // Always use white text since we have a dark background
-    const textColor = '#ffffff';
-    const secondaryTextColor = 'rgba(255, 255, 255, 0.7)';
-    
-    // Force direct DOM updates to ensure color consistency
+    const isDark = theme === 'dark';
+    const textColor = isDark ? '#ffffff' : '#0f172a';
+    const secondaryTextColor = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.65)';
+
     document.querySelectorAll('.node-label').forEach(el => {
-    (el as HTMLElement).style.setProperty('fill', textColor, 'important');
+      (el as HTMLElement).style.setProperty('fill', textColor, 'important');
     });
-    
+
     document.querySelectorAll('.value-label, .diagram-title').forEach(el => {
       (el as HTMLElement).style.setProperty('fill', secondaryTextColor, 'important');
     });
-  }, []);
+  }, [theme]);
   
   
   // Apply text colors when the diagram is first drawn or redrawn
@@ -569,7 +568,7 @@ export function TeleporterSankeyDiagram() {
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
         .attr('class', 'node-label')
         .text(d => d.displayName)
-        .attr('fill', '#ffffff')
+        .attr('fill', theme === 'dark' ? '#ffffff' : '#0f172a')
         .attr('font-weight', 'bold')
         .attr('font-size', '12px')
         .attr('pointer-events', 'none');
@@ -582,7 +581,7 @@ export function TeleporterSankeyDiagram() {
         .attr('class', 'value-label')
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
         .text(d => `${d.value.toLocaleString()} msgs`)
-        .attr('fill', 'rgba(255, 255, 255, 0.7)')
+        .attr('fill', theme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.65)')
         .attr('font-size', '10px')
         .attr('pointer-events', 'none')
         .attr('opacity', 0) // Hide by default
@@ -624,7 +623,7 @@ export function TeleporterSankeyDiagram() {
         .attr('fill', errorTextColor)
         .text('Error rendering diagram. Please try again.');
     }
-  }, [data, getChainColor, selectedChain, navigate, handleNodeClick]);
+  }, [data, getChainColor, selectedChain, navigate, handleNodeClick, theme]);
 
   // Handle window resize
   useEffect(() => {
@@ -763,7 +762,7 @@ export function TeleporterSankeyDiagram() {
       
       <div
         ref={containerRef}
-        className="relative bg-[#1c1c1e] h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden"
+        className="relative bg-card h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden"
       >
 
         {/* SVG for the Sankey diagram */}

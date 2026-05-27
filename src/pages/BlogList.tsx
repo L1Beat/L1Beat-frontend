@@ -5,6 +5,7 @@ import { AlertCircle, RefreshCw, Search, X } from 'lucide-react';
 import { BlogPost, BlogTag, getBlogPosts, getBlogTags } from '../api/blogApi';
 import { BlogCard } from '../components/BlogCard';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
 
 const POSTS_PER_PAGE = 12;
 
@@ -110,6 +111,11 @@ export function BlogList() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Blog"
+        description="Insights, research, and deep-dives on Avalanche L1s — performance, economics, and the people building them."
+        url="/blog"
+      />
       <Hero
         totalArticles={posts.length}
         latestUpdate={latestUpdate}

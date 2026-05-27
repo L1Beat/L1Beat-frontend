@@ -16,6 +16,7 @@ import { LandingState } from '../components/playground/LandingState';
 import { RequestPanel } from '../components/playground/RequestPanel';
 import { ResponsePanel } from '../components/playground/ResponsePanel';
 import { WebSocketPanel } from '../components/playground/WebSocketPanel';
+import { SEO } from '../components/SEO';
 import { HistoryBar, HistoryEntry } from '../components/playground/HistoryBar';
 import { BookmarkBar, Bookmark } from '../components/playground/BookmarkBar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -621,6 +622,11 @@ export function APIPlayground() {
       ref={wrapperRef}
       className="flex flex-col bg-background text-foreground overflow-hidden"
     >
+      <SEO
+        title="API Playground"
+        description="Test the L1Beat REST and WebSocket APIs live — endpoint catalog, smart params, bookmarks, and history."
+        url="/api"
+      />
       {/* Mobile sidebar drawer */}
       <AnimatePresence>
         {isMobileSidebarOpen && (

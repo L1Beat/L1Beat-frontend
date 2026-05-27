@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, Clock, FileText, Flame, Layers, LayoutGrid, Search, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, Command, Copy, FileText, Flame, Layers, LayoutGrid, Moon, Search, Sun, Trash2, X } from 'lucide-react';
 import { getChains } from '../../api';
 import type { Chain } from '../../types';
 import { acpService } from '../../services/acpService';
 import type { EnhancedACP } from '../../types';
 import { getBlogPosts, BlogPost } from '../../api/blogApi';
+import { useTheme } from '../../hooks/useTheme';
+import { useToast } from '../Toaster';
 
-type ResultType = 'page' | 'chain' | 'acp' | 'post';
+type ResultType = 'page' | 'chain' | 'acp' | 'post' | 'command';
 
 interface Result {
   id: string;
   type: ResultType;
   title: string;
   subtitle?: string;
-  to: string;
+  to?: string;
+  action?: () => void | Promise<void>;
+  keywords?: string;
+  icon?: typeof Command;
+  closeAfter?: boolean;
 }
 
 const RECENT_STORAGE_KEY = 'searchPalette:recents';
@@ -35,12 +42,29 @@ function loadRecents(): Result[] {
 }
 
 function saveRecent(result: Result) {
+  // Only persist navigable results, not one-off commands.
+  if (result.type === 'command' || !result.to) return;
   try {
     const current = loadRecents().filter(r => r.id !== result.id);
-    const next = [result, ...current].slice(0, RECENT_MAX);
+    const stripped: Result = {
+      id: result.id,
+      type: result.type,
+      title: result.title,
+      subtitle: result.subtitle,
+      to: result.to,
+    };
+    const next = [stripped, ...current].slice(0, RECENT_MAX);
     localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // localStorage may be full or unavailable; silent fail is fine here
+  }
+}
+
+function clearRecents() {
+  try {
+    localStorage.removeItem(RECENT_STORAGE_KEY);
+  } catch {
+    // silent fail
   }
 }
 
@@ -64,6 +88,7 @@ const TYPE_ICON: Record<ResultType, typeof LayoutGrid> = {
   chain: Layers,
   acp: FileText,
   post: BookOpen,
+  command: Command,
 };
 
 const TYPE_LABEL: Record<ResultType, string> = {
@@ -71,10 +96,13 @@ const TYPE_LABEL: Record<ResultType, string> = {
   chain: 'Chain',
   acp: 'ACP',
   post: 'Article',
+  command: 'Cmd',
 };
 
 export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -82,6 +110,51 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const [acps, setAcps] = useState<EnhancedACP[]>([]);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [recents, setRecents] = useState<Result[]>([]);
+
+  const commands = useMemo<Result[]>(() => {
+    const isDark = theme === 'dark';
+    return [
+      {
+        id: 'cmd-theme',
+        type: 'command',
+        title: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+        subtitle: 'Toggle theme',
+        keywords: 'theme dark light mode toggle appearance',
+        icon: isDark ? Sun : Moon,
+        action: () => toggleTheme(),
+        closeAfter: true,
+      },
+      {
+        id: 'cmd-copy-url',
+        type: 'command',
+        title: 'Copy current URL',
+        subtitle: 'Share this page',
+        keywords: 'copy url link share clipboard',
+        icon: Copy,
+        action: async () => {
+          try {
+            await navigator.clipboard.writeText(window.location.href);
+            toast('URL copied to clipboard', 'success');
+          } catch {
+            toast('Failed to copy URL', 'error');
+          }
+        },
+      },
+      {
+        id: 'cmd-clear-recents',
+        type: 'command',
+        title: 'Clear recent searches',
+        subtitle: 'Wipe ⌘K history on this device',
+        keywords: 'clear recents history wipe reset',
+        icon: Trash2,
+        action: () => {
+          clearRecents();
+          setRecents([]);
+          toast('Recent searches cleared', 'success');
+        },
+      },
+    ];
+  }, [theme, toggleTheme]);
 
   useEffect(() => {
     if (!open) return;
@@ -164,18 +237,21 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const sections = useMemo<{ label: string; icon: typeof Clock; items: Result[] }[]>(() => {
     const q = query.trim().toLowerCase();
     if (q) {
-      const all = [...PAGES, ...chainResults, ...acpResults, ...postResults];
+      const all = [...commands, ...PAGES, ...chainResults, ...acpResults, ...postResults];
       const filtered = all
-        .filter((r) => `${r.title} ${r.subtitle ?? ''}`.toLowerCase().includes(q))
+        .filter((r) =>
+          `${r.title} ${r.subtitle ?? ''} ${r.keywords ?? ''}`.toLowerCase().includes(q),
+        )
         .slice(0, 30);
       return [{ label: 'Results', icon: Search, items: filtered }];
     }
     const out: { label: string; icon: typeof Clock; items: Result[] }[] = [];
+    out.push({ label: 'Commands', icon: Command, items: commands });
     if (recents.length > 0) out.push({ label: 'Recent', icon: Clock, items: recents });
     if (topChains.length > 0) out.push({ label: 'Top chains', icon: Flame, items: topChains });
     out.push({ label: 'Pages', icon: LayoutGrid, items: PAGES });
     return out;
-  }, [query, chainResults, acpResults, postResults, recents, topChains]);
+  }, [query, commands, chainResults, acpResults, postResults, recents, topChains]);
 
   const flatResults = useMemo<Result[]>(() => sections.flatMap((s) => s.items), [sections]);
 
@@ -183,10 +259,17 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
     setActive(0);
   }, [query]);
 
-  const handleSelect = (r: Result) => {
+  const handleSelect = async (r: Result) => {
+    if (r.type === 'command') {
+      await r.action?.();
+      if (r.closeAfter) onClose();
+      return;
+    }
     saveRecent(r);
-    navigate(r.to);
-    onClose();
+    if (r.to) {
+      navigate(r.to);
+      onClose();
+    }
   };
 
   useEffect(() => {
@@ -215,13 +298,13 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[12vh] px-4">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 dark:bg-black/60 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-xl rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-2xl shadow-black/60 overflow-hidden">
+      <div className="relative w-full max-w-xl rounded-2xl border border-border bg-popover shadow-2xl shadow-black/40 dark:shadow-black/60 overflow-hidden">
         <div className="flex items-center gap-3 px-4 h-12 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
@@ -265,7 +348,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                     <ul>
                       {section.items.map((r) => {
                         const idx = cursor++;
-                        const Icon = TYPE_ICON[r.type];
+                        const Icon = r.icon ?? TYPE_ICON[r.type];
                         const isActive = idx === active;
                         return (
                           <li key={r.id}>
@@ -324,7 +407,8 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
           <span>{flatResults.length} results</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

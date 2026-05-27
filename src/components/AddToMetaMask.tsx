@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Chain } from '../types';
-import { isCoreInstalled, addNetworkToWallet } from '../utils/metamask';
+import { isCoreInstalled, addNetworkToWallet, switchToNetwork } from '../utils/metamask';
+import { useToast } from './Toaster';
 
 interface AddToMetaMaskProps {
   chain: Chain;
@@ -13,16 +14,19 @@ interface AddToMetaMaskProps {
 export function AddToMetaMask({ chain, variant = 'default', className = '' }: AddToMetaMaskProps) {
   const [status, setStatus] = useState<'idle' | 'adding' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  
+  const { toast } = useToast();
+
   const handleAddToWallet = async () => {
     if (!isCoreInstalled()) {
       window.open('https://core.app/', '_blank', 'noopener,noreferrer');
+      toast('Install CORE wallet, then try again', 'info');
       return;
     }
 
     if (!chain.networkToken) {
       setStatus('error');
       setErrorMessage('Network token information is not available');
+      toast('Network token info is missing for this chain', 'error');
       setTimeout(() => setStatus('idle'), 3000);
       return;
     }
@@ -31,19 +35,30 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     setErrorMessage('');
 
     try {
-      console.log('Attempting to add network to wallet:', {
-        chainId: chain.chainId,
-        chainName: chain.chainName,
-        networkToken: chain.networkToken
-      });
-
       await addNetworkToWallet(chain);
       setStatus('success');
+      toast(`${chain.chainName} is ready in your wallet`, 'success');
+
+      // If the chain was already in the wallet, the add call is a silent no-op.
+      // Follow up with a switch so the wallet popup actually opens and the user
+      // gets visible feedback. Don't surface an error if this part fails — the
+      // network is already there either way.
+      const evmId = (typeof chain.evmChainId === 'number'
+        ? String(chain.evmChainId)
+        : chain.originalChainId) || '';
+      if (evmId) {
+        switchToNetwork(evmId).catch(() => {
+          // user rejected, already on chain, or some other minor wallet quirk
+        });
+      }
+
       setTimeout(() => setStatus('idle'), 3000);
     } catch (error) {
       console.error('Wallet add network error:', error);
+      const msg = error instanceof Error ? error.message : 'Failed to add network';
       setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to add network');
+      setErrorMessage(msg);
+      toast(msg, 'error');
       setTimeout(() => setStatus('idle'), 5000);
     }
   };

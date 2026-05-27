@@ -557,7 +557,7 @@ export const ComparisonView = memo(function ComparisonView({
                           <TooltipContent
                             side="top"
                             align="end"
-                            className="max-w-[260px] bg-[#1c1c1e] border border-white/[0.08] text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl shadow-black/40 [&>span]:hidden"
+                            className="max-w-[260px] bg-popover border border-border text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
                           >
                             This chain is a legacy subnet, not a converted L1. It doesn’t pay continuous validation fees to the P-Chain, so no fee burn is reported. Only chains converted via ACP-77 report this metric.
                           </TooltipContent>

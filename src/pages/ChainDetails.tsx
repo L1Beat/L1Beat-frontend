@@ -28,6 +28,9 @@ import { StakeDistributionChart, getValidatorColor } from '../components/StakeDi
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
+import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
+import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 import { ComparisonView } from '../components/comparison/ComparisonView';
@@ -35,6 +38,7 @@ import { ComparisonView } from '../components/comparison/ComparisonView';
 export function ChainDetails() {
   const { chainId } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [chain, setChain] = useState<Chain | null>(null);
   const [tpsHistory, setTPSHistory] = useState<TPSHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,14 +153,14 @@ export function ChainDetails() {
   }, [dailyFeeBurn, feeBurnTimeframe]);
 
   const handleCopy = async (type: 'chainId' | 'subnetId' | 'platformChainId', value?: string) => {
-    if (value) {
-      try {
-        await navigator.clipboard.writeText(value);
-        setCopied(type);
-        setTimeout(() => setCopied(null), 2000);
-      } catch (err) {
-        console.error('Failed to copy:', err);
-      }
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      toast('Failed to copy to clipboard', 'error');
     }
   };
 
@@ -346,6 +350,15 @@ export function ChainDetails() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title={chain.chainName}
+        description={
+          chain.description?.slice(0, 200) ||
+          `${chain.chainName} on Avalanche — current TPS, validators, economics, and a side-by-side compare against other L1s.`
+        }
+        image={chain.chainLogoUri}
+        url={`/chain/${chain.chainId}`}
+      />
       <button
         onClick={() => navigate('/')}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -354,7 +367,7 @@ export function ChainDetails() {
         All chains
       </button>
 
-      <header className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+      <header className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
         </div>
@@ -452,7 +465,14 @@ export function ChainDetails() {
                     <>
                       <span>·</span>
                       <button
-                        onClick={() => navigator.clipboard.writeText(chain.rpcUrls?.[0] || '')}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(chain.rpcUrls?.[0] || '');
+                            toast('RPC URL copied', 'success');
+                          } catch {
+                            toast('Failed to copy RPC URL', 'error');
+                          }
+                        }}
                         className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors"
                         title={chain.rpcUrls[0]}
                       >
@@ -487,7 +507,7 @@ export function ChainDetails() {
                   href={chain.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
                   title="Website"
                 >
                   <Globe className="w-3.5 h-3.5 text-muted-foreground" />
@@ -498,7 +518,7 @@ export function ChainDetails() {
                   href={chain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
                   title="Explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
@@ -512,7 +532,7 @@ export function ChainDetails() {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/[0.08] bg-background/40 hover:bg-background/70 transition-colors"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
                     title={social.name}
                   >
                     <Icon className="w-3.5 h-3.5 text-muted-foreground" />
@@ -607,14 +627,18 @@ export function ChainDetails() {
             <div className="space-y-4 sm:space-y-6">
               {/* Compare Tab */}
               {activeTab === 'compare' && chain && (<div ref={compareRef}>
-                <ComparisonView
-                  currentChain={chain}
-                  validatorCountBySubnet={validatorCountBySubnet}
-                />
+                <SectionErrorBoundary label="chain comparison">
+                  <ComparisonView
+                    currentChain={chain}
+                    validatorCountBySubnet={validatorCountBySubnet}
+                  />
+                </SectionErrorBoundary>
               </div>)}
 
               {/* Economics Tab */}
-              {activeTab === 'economics' && (() => {
+              {activeTab === 'economics' && (
+                <SectionErrorBoundary label="economics">
+                  {(() => {
                 const evmId = (chain.originalChainId || '').toString();
                 const lcName = (chain.chainName || '').toLowerCase();
                 const isPrimaryNetwork = lcName.includes('c-chain') || evmId === '43114';
@@ -906,9 +930,12 @@ export function ChainDetails() {
                 </div>
                 );
               })()}
+                </SectionErrorBoundary>
+              )}
 
               {/* Validators Tab */}
               {activeTab === 'validators' && (
+                <SectionErrorBoundary label="validators">
                 <div className="space-y-4 sm:space-y-6">
                   {/* No active validators warning */}
                   {chain.validators.length > 0 && !chain.validators.some(v => v.active) && (
@@ -1229,6 +1256,7 @@ export function ChainDetails() {
                     )}
                   </div>
                 </div>
+                </SectionErrorBoundary>
               )}
             </div>
     </div>
@@ -1342,21 +1370,21 @@ function ValidatorPagination({
 function ChainDetailsSkeleton() {
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <div className="h-4 w-24 rounded bg-white/[0.04] animate-pulse" />
+      <div className="h-4 w-24 rounded bg-muted animate-pulse" />
 
       {/* Header card */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40 p-6 sm:p-7">
+      <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-white/[0.04] animate-pulse" />
+            <div className="w-14 h-14 rounded-2xl bg-muted animate-pulse" />
             <div className="space-y-2.5">
               <div className="flex items-center gap-2">
-                <div className="h-7 w-48 rounded bg-white/[0.04] animate-pulse" />
-                <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
-                <div className="h-5 w-14 rounded-full bg-white/[0.04] animate-pulse" />
+                <div className="h-7 w-48 rounded bg-muted animate-pulse" />
+                <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+                <div className="h-5 w-14 rounded-full bg-muted animate-pulse" />
               </div>
-              <div className="h-3 w-64 rounded bg-white/[0.04] animate-pulse" />
-              <div className="h-3 w-80 max-w-full rounded bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-64 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-80 max-w-full rounded bg-muted animate-pulse" />
             </div>
           </div>
         </div>
@@ -1366,7 +1394,7 @@ function ChainDetailsSkeleton() {
       <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-border">
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-8 w-24 rounded-lg bg-white/[0.04] animate-pulse" />
+            <div key={i} className="h-8 w-24 rounded-lg bg-muted animate-pulse" />
           ))}
         </div>
       </div>
@@ -1376,10 +1404,10 @@ function ChainDetailsSkeleton() {
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
-              <div className="w-7 h-7 rounded-lg bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+              <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
             </div>
-            <div className="h-7 w-24 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-7 w-24 rounded bg-muted animate-pulse" />
           </div>
         ))}
       </div>
@@ -1387,24 +1415,24 @@ function ChainDetailsSkeleton() {
       {/* Content body — generic validator table placeholder */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between">
-          <div className="h-5 w-40 rounded bg-white/[0.04] animate-pulse" />
-          <div className="h-9 w-64 rounded-lg bg-white/[0.04] animate-pulse" />
+          <div className="h-5 w-40 rounded bg-muted animate-pulse" />
+          <div className="h-9 w-64 rounded-lg bg-muted animate-pulse" />
         </div>
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
             className="flex items-center gap-4 px-4 sm:px-6 py-4 border-b border-border/60 last:border-b-0"
           >
-            <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+            <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
             <div className="flex items-center gap-3 flex-1">
-              <div className="w-9 h-9 rounded-lg bg-white/[0.04] animate-pulse" />
+              <div className="w-9 h-9 rounded-lg bg-muted animate-pulse" />
               <div className="space-y-1.5">
-                <div className="h-3 w-40 rounded bg-white/[0.04] animate-pulse" />
-                <div className="h-2.5 w-24 rounded bg-white/[0.04] animate-pulse" />
+                <div className="h-3 w-40 rounded bg-muted animate-pulse" />
+                <div className="h-2.5 w-24 rounded bg-muted animate-pulse" />
               </div>
             </div>
-            <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
-            <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+            <div className="h-3 w-24 rounded bg-muted animate-pulse" />
           </div>
         ))}
       </div>

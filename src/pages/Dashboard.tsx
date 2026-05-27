@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SEO } from '../components/SEO';
 import {
   Activity,
   ChevronRight,
@@ -452,6 +453,11 @@ export function Dashboard() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Overview"
+        description="Live screener for every Avalanche L1 — current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
+        url="/"
+      />
       <Hero range={range} onRangeChange={setRange} />
       <KpiCards metrics={metrics} activeChains={activeCount} range={range} />
 
@@ -528,7 +534,7 @@ export function Dashboard() {
       />
 
       {selected.size > 0 && (
-        <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 items-center gap-2 px-2.5 py-2 rounded-xl border border-white/[0.08] bg-[#1c1c1e] shadow-2xl shadow-black/60">
+        <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 items-center gap-2 px-2.5 py-2 rounded-xl border border-border bg-card shadow-2xl">
           <span className="text-[12px] text-muted-foreground pl-1.5">
             <span className="text-foreground font-semibold">{selected.size}</span> selected
             {selected.size >= MAX_COMPARE && (
@@ -1271,9 +1277,9 @@ function DashboardSkeleton() {
       {/* Hero */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2.5">
-          <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
-          <div className="h-8 w-64 rounded bg-white/[0.04] animate-pulse" />
-          <div className="h-4 w-80 rounded bg-white/[0.04] animate-pulse" />
+          <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+          <div className="h-8 w-64 rounded bg-muted animate-pulse" />
+          <div className="h-4 w-80 rounded bg-muted animate-pulse" />
         </div>
         <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-card border border-border h-9 w-44 animate-pulse" />
       </div>
@@ -1283,11 +1289,11 @@ function DashboardSkeleton() {
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="h-3 w-20 rounded bg-white/[0.04] animate-pulse" />
-              <div className="w-7 h-7 rounded-lg bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+              <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
             </div>
-            <div className="h-8 w-24 rounded bg-white/[0.04] animate-pulse" />
-            <div className="h-3 w-32 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-8 w-24 rounded bg-muted animate-pulse" />
+            <div className="h-3 w-32 rounded bg-muted animate-pulse" />
           </div>
         ))}
       </div>
@@ -1296,13 +1302,13 @@ function DashboardSkeleton() {
       <section className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-7 w-24 rounded-md bg-white/[0.04] animate-pulse" />
+            <div key={i} className="h-7 w-24 rounded-md bg-muted animate-pulse" />
           ))}
         </div>
         <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
-          <div className="flex-1 h-9 rounded-lg bg-white/[0.04] animate-pulse" />
+          <div className="flex-1 h-9 rounded-lg bg-muted animate-pulse" />
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-7 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+            <div key={i} className="h-7 w-16 rounded-full bg-muted animate-pulse" />
           ))}
         </div>
         <div className="px-2 sm:px-0">
@@ -1311,22 +1317,22 @@ function DashboardSkeleton() {
               key={i}
               className="flex items-center gap-4 px-3 sm:px-5 py-3 border-b border-border/60 last:border-b-0"
             >
-              <div className="w-4 h-4 rounded bg-white/[0.04] animate-pulse" />
-              <div className="w-4 h-4 rounded bg-white/[0.04] animate-pulse" />
+              <div className="w-4 h-4 rounded bg-muted animate-pulse" />
+              <div className="w-4 h-4 rounded bg-muted animate-pulse" />
               <div className="flex items-center gap-3 flex-1">
-                <div className="w-8 h-8 rounded-full bg-white/[0.04] animate-pulse" />
+                <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
                 <div className="space-y-1.5">
-                  <div className="h-3 w-24 rounded bg-white/[0.04] animate-pulse" />
-                  <div className="h-2.5 w-16 rounded bg-white/[0.04] animate-pulse" />
+                  <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                  <div className="h-2.5 w-16 rounded bg-muted animate-pulse" />
                 </div>
               </div>
-              <div className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
-              <div className="hidden md:block h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
-              <div className="hidden lg:block h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
-              <div className="hidden sm:block h-6 w-20 rounded bg-white/[0.04] animate-pulse" />
-              <div className="h-3 w-12 rounded bg-white/[0.04] animate-pulse" />
-              <div className="hidden lg:block h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
-              <div className="h-5 w-16 rounded-full bg-white/[0.04] animate-pulse" />
+              <div className="h-3 w-12 rounded bg-muted animate-pulse" />
+              <div className="hidden md:block h-3 w-12 rounded bg-muted animate-pulse" />
+              <div className="hidden lg:block h-3 w-12 rounded bg-muted animate-pulse" />
+              <div className="hidden sm:block h-6 w-20 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-12 rounded bg-muted animate-pulse" />
+              <div className="hidden lg:block h-5 w-16 rounded-full bg-muted animate-pulse" />
+              <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
             </div>
           ))}
         </div>

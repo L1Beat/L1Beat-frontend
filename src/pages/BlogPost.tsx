@@ -290,7 +290,7 @@ export function BlogPost() {
 
       <div className="lg:flex lg:gap-10 lg:items-start">
         <article className="flex-1 min-w-0 space-y-6">
-          <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
             <div aria-hidden className="pointer-events-none absolute inset-0">
               <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
             </div>
@@ -338,7 +338,7 @@ export function BlogPost() {
             />
           )}
 
-          <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 sm:p-7 shadow-xl shadow-black/40">
+          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 shadow-xl">
             <div ref={contentRef} className="prose-content max-w-none">
               {renderMainContent(post.mainContent || post.content)}
             </div>

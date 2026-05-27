@@ -4,6 +4,8 @@ import { getChains, getTeleporterMessages } from '../api';
 import type { TeleporterMessageData } from '../types';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
+import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 
 interface Corridor {
   source: string;
@@ -136,6 +138,11 @@ export function Flows() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Cross-chain Flows"
+        description="ICM and Teleporter activity across Avalanche L1s — sender/receiver Sankey, top corridors, and live message volume."
+        url="/flows"
+      />
       <header>
         <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
           INTERCHAIN MESSAGING
@@ -152,15 +159,19 @@ export function Flows() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:items-stretch">
         <div className="lg:col-span-2 min-w-0">
-          <TeleporterSankeyDiagram />
+          <SectionErrorBoundary label="the Sankey diagram">
+            <TeleporterSankeyDiagram />
+          </SectionErrorBoundary>
         </div>
-        <CorridorRail
-          corridors={allCorridors}
-          totalCount={stats.total}
-          totalCorridors={stats.corridors}
-          logoByChain={logoByChain}
-          loading={loading}
-        />
+        <SectionErrorBoundary label="top corridors">
+          <CorridorRail
+            corridors={allCorridors}
+            totalCount={stats.total}
+            totalCorridors={stats.corridors}
+            logoByChain={logoByChain}
+            loading={loading}
+          />
+        </SectionErrorBoundary>
       </div>
     </div>
   );

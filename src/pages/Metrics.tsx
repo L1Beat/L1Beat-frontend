@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, ArrowDownRight, ArrowUpRight, GitCompareArrows, Info, TrendingUp, Users, Zap } from 'lucide-react';
+import { SEO } from '../components/SEO';
+import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
 import { ComparisonView } from '../components/comparison';
@@ -267,6 +269,11 @@ export function Metrics() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Network Metrics"
+        description="Aggregate Avalanche L1 metrics — cross-chain TPS, transactions, validators, gas, fees, and a side-by-side compare tool."
+        url="/metrics"
+      />
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
@@ -320,13 +327,19 @@ export function Metrics() {
       </section>
 
       <section id="network" className="scroll-mt-28">
-        <AvalancheNetworkMetrics />
+        <SectionErrorBoundary label="Network charts">
+          <AvalancheNetworkMetrics />
+        </SectionErrorBoundary>
       </section>
       <section id="chains" className="scroll-mt-28">
-        <ChainSpecificMetrics />
+        <SectionErrorBoundary label="chain metrics">
+          <ChainSpecificMetrics />
+        </SectionErrorBoundary>
       </section>
       <section id="compare" ref={comparisonRef} className="scroll-mt-28">
-        <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
+        <SectionErrorBoundary label="chain comparison">
+          <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
+        </SectionErrorBoundary>
       </section>
 
       <button
@@ -382,7 +395,7 @@ function KpiStrip({ kpis, range }: { kpis: Kpi[] | null; range: Range }) {
                     <TooltipContent
                       side="top"
                       align="start"
-                      className="max-w-[240px] bg-[#1c1c1e] border border-white/[0.08] text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl shadow-black/40 [&>span]:hidden"
+                      className="max-w-[240px] bg-popover border border-border text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
                     >
                       {tooltip}
                     </TooltipContent>

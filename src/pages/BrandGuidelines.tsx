@@ -8,6 +8,7 @@ import { UsageGuidelines } from '../components/branding/UsageGuidelines';
 import { DownloadAssets } from '../components/branding/DownloadAssets';
 import { ExampleApplications } from '../components/branding/ExampleApplications';
 import { useTheme } from '../hooks/useTheme';
+import { SEO } from '../components/SEO';
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: LayoutIcon },
@@ -27,6 +28,11 @@ export function BrandGuidelines() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Brand Guidelines"
+        description="L1Beat brand kit — logo, colors, typography, usage rules, and downloadable assets."
+        url="/brand"
+      />
       <header>
         <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
           BRAND GUIDELINES
@@ -65,7 +71,7 @@ export function BrandGuidelines() {
 
       {activeSection === 'overview' && (
         <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e] shadow-xl shadow-black/40">
+          <section className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
             <div aria-hidden className="pointer-events-none absolute inset-0">
               <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
             </div>
