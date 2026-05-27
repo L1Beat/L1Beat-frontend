@@ -449,3 +449,21 @@ export interface ACPSearchResponse extends ACPListResponse {
   suggestions?: string[];
 }
 
+export interface Stablecoin {
+  token: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  peg: string;
+  issuer?: string;
+  bridged: boolean;
+  supply: string;
+  holders: number;
+  volume_24h: string;
+  transfers_24h: number;
+}
+
+export interface StablecoinsResponse {
+  data: Stablecoin[];
+}
+

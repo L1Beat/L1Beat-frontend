@@ -12,6 +12,7 @@ import { BrandGuidelines } from './pages/BrandGuidelines';
 import { NotFound } from './pages/NotFound';
 import { APIPlayground } from './pages/APIPlayground';
 import { Flows } from './pages/Flows';
+import { Stablecoins } from './pages/Stablecoins';
 import { Layout } from './components/layout/Layout';
 
 function App() {
@@ -92,6 +93,7 @@ function App() {
         <Route path="/chain/:chainId" element={<ChainDetails />} />
         <Route path="/metrics" element={<Metrics />} />
         <Route path="/flows" element={<Flows />} />
+        <Route path="/stablecoins" element={<Stablecoins />} />
         <Route path="/acps" element={<ACPs />} />
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />
         <Route path="/blog" element={<BlogList />} />

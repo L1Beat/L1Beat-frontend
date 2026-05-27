@@ -77,6 +77,7 @@ const PAGES: Result[] = [
   { id: 'page-overview', type: 'page', title: 'Overview', subtitle: 'Live L1 screener', to: '/' },
   { id: 'page-metrics', type: 'page', title: 'Network Metrics', subtitle: 'Aggregate L1 metrics', to: '/metrics' },
   { id: 'page-flows', type: 'page', title: 'Cross-chain Flows', subtitle: 'ICM & Teleporter activity', to: '/flows' },
+  { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
   { id: 'page-api', type: 'page', title: 'API Playground', subtitle: 'L1Beat REST & WebSocket API', to: '/api' },

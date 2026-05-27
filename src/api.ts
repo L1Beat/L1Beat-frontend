@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -1783,4 +1783,102 @@ export async function getChainBySubnetId(subnetId: string): Promise<Chain | null
   } catch {
     return null;
   }
+}
+
+export async function getStablecoins(evmChainId: number | string = 43114): Promise<Stablecoin[]> {
+  return fetchExternalWithCache(`stablecoins-${evmChainId}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<StablecoinsResponse>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins`
+      );
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      console.error('Stablecoins fetch error:', error);
+      return [];
+    }
+  });
+}
+
+// Resolves token logos via CoinGecko's GeckoTerminal multi-token endpoint.
+// One call, up to 30 addresses, returns canonical CoinGecko image URLs.
+// Cached 24h since logos basically never change. Network slugs map to
+// GeckoTerminal's internal IDs — "avax" for Avalanche C-Chain.
+const GT_NETWORK_BY_EVM: Record<string, string> = {
+  '43114': 'avax',
+};
+
+export async function getTokenLogos(
+  addresses: string[],
+  evmChainId: number | string = 43114,
+): Promise<Record<string, string>> {
+  if (!addresses.length) return {};
+  const network = GT_NETWORK_BY_EVM[String(evmChainId)] || 'avax';
+  // Stable cache key regardless of address ordering.
+  const sorted = [...addresses].map((a) => a.toLowerCase()).sort();
+  const key = `gt-logos-${network}-${sorted.join(',')}`;
+
+  return fetchExternalWithCache(
+    key,
+    async () => {
+      const out: Record<string, string> = {};
+      // GeckoTerminal caps at 30 addresses per call. Chunk to stay under.
+      const CHUNK = 30;
+      for (let i = 0; i < sorted.length; i += CHUNK) {
+        const slice = sorted.slice(i, i + CHUNK);
+        const url = `https://api.geckoterminal.com/api/v2/networks/${network}/tokens/multi/${slice.join(
+          ',',
+        )}`;
+        try {
+          const resp = await fetchExternalWithRetry<{
+            data?: Array<{ attributes?: { address?: string; image_url?: string } }>;
+          }>(url);
+          for (const item of resp.data ?? []) {
+            const addr = item.attributes?.address?.toLowerCase();
+            const img = item.attributes?.image_url;
+            if (addr && img && !img.includes('missing.png')) {
+              out[addr] = img;
+            }
+          }
+        } catch (error) {
+          console.error('GeckoTerminal logo fetch error:', error);
+        }
+      }
+      return out;
+    },
+    24 * 60 * 60 * 1000,
+  );
+}
+
+// FX rates for non-USD pegs. Cached for ~6h since rates barely move intraday.
+// Source: frankfurter.app (ECB rates, free, no key). Falls back to a rough
+// snapshot if the call fails so the page never breaks.
+export interface FxRates {
+  EUR: number;
+  SGD: number;
+  JPY: number;
+  [code: string]: number;
+}
+
+const FX_FALLBACK: FxRates = { EUR: 1.08, SGD: 0.74, JPY: 0.0064 };
+
+export async function getFxRates(): Promise<FxRates> {
+  return fetchWithCache('fx-rates-usd', async () => {
+    try {
+      const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,SGD,JPY');
+      if (!res.ok) throw new Error(`fx http ${res.status}`);
+      const json = (await res.json()) as { rates?: Record<string, number> };
+      const rates = json.rates ?? {};
+      // frankfurter returns 1 USD = X EUR, we want 1 EUR = Y USD → invert
+      const inv = (r: number | undefined) =>
+        r && r > 0 ? 1 / r : undefined;
+      return {
+        EUR: inv(rates.EUR) ?? FX_FALLBACK.EUR,
+        SGD: inv(rates.SGD) ?? FX_FALLBACK.SGD,
+        JPY: inv(rates.JPY) ?? FX_FALLBACK.JPY,
+      };
+    } catch (error) {
+      console.error('FX rates fetch error:', error);
+      return FX_FALLBACK;
+    }
+  }, 6 * 60 * 60 * 1000);
 }

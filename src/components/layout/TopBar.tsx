@@ -7,6 +7,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/': 'Overview',
   '/metrics': 'Network Metrics',
   '/flows': 'Cross-chain Flows',
+  '/stablecoins': 'Stablecoins',
   '/acps': 'Avalanche Community Proposals',
   '/blog': 'Insights & Research',
   '/api': 'API Playground',
