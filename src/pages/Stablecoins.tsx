@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import {
   ArrowDownUp,
@@ -26,8 +26,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/branding/ui/tooltip';
-import { getStablecoins, getFxRates, getTokenLogos, type FxRates } from '../api';
-import type { Stablecoin } from '../types';
+import {
+  getStablecoins,
+  getFxRates,
+  getTokenLogos,
+  getStablecoinsTimeseries,
+  type FxRates,
+} from '../api';
+import type {
+  Stablecoin,
+  StablecoinSeries,
+  StablecoinMetric,
+  StablecoinGranularity,
+} from '../types';
 
 type SortKey =
   | 'supplyUsd'
@@ -278,6 +289,10 @@ export function Stablecoins() {
           <KpiStrip totals={totals} />
         </SectionErrorBoundary>
 
+        <SectionErrorBoundary label="the supply history chart">
+          <SupplyHistoryCard coins={coins} fx={fx} />
+        </SectionErrorBoundary>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <SectionErrorBoundary label="issuer breakdown">
             <IssuerCard
@@ -521,6 +536,467 @@ export function Stablecoins() {
         </SectionErrorBoundary>
       </div>
     </TooltipProvider>
+  );
+}
+
+// ── Supply history ───────────────────────────────────────────────────────────
+
+// Holders is intentionally omitted — total holders barely moves (~0.02% over a
+// quarter), so a time-series line carries no signal; it lives in the KPI strip
+// instead. The auto-zoom in the chart still guards any other narrow-band series.
+const METRIC_OPTIONS: { key: StablecoinMetric; label: string; monetary: boolean }[] = [
+  { key: 'supply', label: 'Supply', monetary: true },
+  { key: 'volume', label: 'Volume', monetary: true },
+  { key: 'transfers', label: 'Transfers', monetary: false },
+];
+
+// One request returns every token as a separate series; we aggregate them into
+// a single total line. `limit` is per-token data points — request generously so
+// every token has coverage, then clip the *displayed* range to `windowDays` so
+// the chart isn't skewed by tokens whose history reaches further back.
+const GRANULARITY_OPTIONS: {
+  key: StablecoinGranularity;
+  label: string;
+  limit: number;
+  windowDays: number;
+}[] = [
+  // All three show full available history (back to ~2021). limit is high enough
+  // to capture every coin's complete series (longest is ~1,800 daily points),
+  // and the window is effectively unbounded so nothing is clipped.
+  { key: 'day', label: 'Daily', limit: 5000, windowDays: 365 * 20 },
+  { key: 'week', label: 'Weekly', limit: 500, windowDays: 365 * 20 },
+  { key: 'month', label: 'Monthly', limit: 120, windowDays: 365 * 20 },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface SeriesPoint {
+  t: number; // epoch ms (bucket start, UTC)
+  v: number; // aggregated value (USD for monetary metrics, else a raw count)
+}
+
+// Chart viewBox geometry. Module-level so the useMemo deps stay stable.
+const CHART_W = 820;
+const CHART_H = 280;
+const CHART_M = { top: 16, right: 20, bottom: 28, left: 60 };
+
+// Collapse the per-token series into a single total-per-period line.
+//   • supply/holders are *snapshots* → forward-fill each token's last known
+//     value across the union of periods (a token contributes 0 before its
+//     first data point — it didn't exist yet).
+//   • volume/transfers are *flows* → each bucket stands alone; a missing
+//     bucket means no activity, i.e. 0.
+// Monetary metrics (supply, volume) are scaled by 10^decimals and converted to
+// USD via the token's peg; counts are taken as plain integers.
+function aggregateSeries(
+  series: StablecoinSeries[],
+  meta: Map<string, { decimals: number; peg: string }>,
+  metric: StablecoinMetric,
+  fx: FxRates,
+): SeriesPoint[] {
+  if (!series.length) return [];
+  const monetary = metric === 'supply' || metric === 'volume';
+  const snapshot = metric === 'supply' || metric === 'holders';
+
+  const periodSet = new Set<number>();
+  for (const s of series) {
+    for (const p of s.data) {
+      const t = Date.parse(p.period);
+      if (!Number.isNaN(t)) periodSet.add(t);
+    }
+  }
+  const periods = [...periodSet].sort((a, b) => a - b);
+  if (!periods.length) return [];
+
+  const totals = new Map<number, number>(periods.map((t) => [t, 0]));
+
+  for (const s of series) {
+    const info = meta.get(s.token.toLowerCase());
+    // Without decimals/peg we can't safely scale a monetary value — skip until
+    // the companion list endpoint has loaded.
+    if (monetary && !info) continue;
+    const decimals = info?.decimals ?? 0;
+    const peg = info?.peg ?? 'USD';
+
+    const scale = (raw: string): number => {
+      if (monetary) return pegToUsd(toUnits(raw, decimals), peg, fx);
+      try {
+        return Number(BigInt(raw));
+      } catch {
+        return 0;
+      }
+    };
+
+    const pts = s.data
+      .map((p) => ({ t: Date.parse(p.period), raw: p.value }))
+      .filter((p) => !Number.isNaN(p.t))
+      .sort((a, b) => a.t - b.t);
+    if (!pts.length) continue;
+
+    if (snapshot) {
+      let pi = 0;
+      let last = 0;
+      let started = false;
+      for (const t of periods) {
+        while (pi < pts.length && pts[pi].t <= t) {
+          last = scale(pts[pi].raw);
+          started = true;
+          pi++;
+        }
+        if (started) totals.set(t, (totals.get(t) || 0) + last);
+      }
+    } else {
+      for (const p of pts) {
+        totals.set(p.t, (totals.get(p.t) || 0) + scale(p.raw));
+      }
+    }
+  }
+
+  return periods.map((t) => ({ t, v: totals.get(t) || 0 }));
+}
+
+function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) {
+  const [metric, setMetric] = useState<StablecoinMetric>('supply');
+  const [granularity, setGranularity] = useState<StablecoinGranularity>('day');
+  const [series, setSeries] = useState<StablecoinSeries[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const monetary = metric === 'supply' || metric === 'volume';
+
+  const meta = useMemo(() => {
+    const m = new Map<string, { decimals: number; peg: string }>();
+    for (const c of coins) m.set(c.token.toLowerCase(), { decimals: c.decimals, peg: c.peg });
+    return m;
+  }, [coins]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const g = GRANULARITY_OPTIONS.find((x) => x.key === granularity)!;
+    getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: g.limit })
+      .then((s) => {
+        if (alive) setSeries(s);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [metric, granularity]);
+
+  const points = useMemo(() => {
+    const all = aggregateSeries(series, meta, metric, fx);
+    if (all.length < 2) return all;
+    // Clip to the recent window so a single deep-history token doesn't stretch
+    // the axis across years where most coins report nothing.
+    const g = GRANULARITY_OPTIONS.find((x) => x.key === granularity)!;
+    const start = all[all.length - 1].t - g.windowDays * DAY_MS;
+    const clipped = all.filter((p) => p.t >= start);
+    return clipped.length >= 2 ? clipped : all;
+  }, [series, meta, metric, fx, granularity]);
+
+  const geom = useMemo(() => {
+    if (points.length < 2) return null;
+    const vals = points.map((p) => p.v);
+    const maxV = Math.max(...vals, 0);
+    const minV = Math.min(...vals);
+    const span = maxV - minV;
+    // Some series (notably holder counts) barely move — a few hundred out of
+    // millions. Against a 0-based axis they look dead flat, so when the data
+    // sits in a narrow band well above zero we zoom in on that band instead.
+    const zoom = minV > 0 && maxV > 0 && span / maxV < 0.1;
+    let domainMin = 0;
+    let domainMax = maxV > 0 ? maxV * 1.12 : 1;
+    if (zoom) {
+      const pad = span > 0 ? span * 0.4 : Math.max(1, maxV * 0.0005);
+      domainMin = Math.max(0, minV - pad);
+      domainMax = maxV + pad;
+    }
+    const x = d3
+      .scaleUtc()
+      .domain([points[0].t, points[points.length - 1].t])
+      .range([CHART_M.left, CHART_W - CHART_M.right]);
+    const y = d3
+      .scaleLinear()
+      .domain([domainMin, domainMax])
+      .range([CHART_H - CHART_M.bottom, CHART_M.top]);
+    const baselineY = CHART_H - CHART_M.bottom; // fill from the axis floor
+    const area = d3
+      .area<SeriesPoint>()
+      .x((d) => x(d.t))
+      .y0(baselineY)
+      .y1((d) => y(d.v))
+      .curve(d3.curveMonotoneX);
+    const line = d3
+      .line<SeriesPoint>()
+      .x((d) => x(d.t))
+      .y((d) => y(d.v))
+      .curve(d3.curveMonotoneX);
+    // Adaptive x-axis labels: years for multi-year spans (otherwise every tick
+    // reads "Jan 01"), month+year for medium spans, month+day for short ones.
+    const spanDays = (points[points.length - 1].t - points[0].t) / DAY_MS;
+    const fmtTick =
+      spanDays > 730
+        ? d3.utcFormat('%Y')
+        : spanDays > 90
+          ? d3.utcFormat("%b '%y")
+          : d3.utcFormat('%b %d');
+    return {
+      x,
+      y,
+      zoom,
+      areaPath: area(points) || '',
+      linePath: line(points) || '',
+      yTicks: y.ticks(4),
+      xTicks: x.ticks(6),
+      fmtTick,
+    };
+  }, [points]);
+
+  // Axis labels: compact when the axis spans from zero, full-precision when
+  // zoomed (compact "3.18M" can't tell 3,176,235 from 3,176,824 apart).
+  const fmtY = (n: number): string => {
+    if (n <= 0) return monetary ? '$0' : '0';
+    if (geom?.zoom) return (monetary ? '$' : '') + Math.round(n).toLocaleString();
+    return monetary ? fmtUsd(n) : fmtCount(n);
+  };
+  // Tooltip always shows the exact value.
+  const fmtValue = (n: number): string =>
+    monetary ? fmtUsd(n) : Math.round(n).toLocaleString();
+
+  const fmtDate = useMemo(
+    () =>
+      granularity === 'month'
+        ? d3.utcFormat('%B %Y')
+        : granularity === 'hour'
+          ? d3.utcFormat('%b %d, %H:%M UTC')
+          : d3.utcFormat('%b %d, %Y'),
+    [granularity],
+  );
+
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!geom || !svgRef.current || points.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const vx = ((e.clientX - rect.left) / rect.width) * CHART_W;
+    const t = geom.x.invert(vx).getTime();
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.abs(points[i].t - t);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    setHover(best);
+  };
+
+  const active = hover != null && points[hover] ? points[hover] : null;
+
+  // Headline readout: the hovered point when hovering, otherwise the latest.
+  const latest = points.length ? points[points.length - 1] : null;
+  const shown = active ?? latest;
+  const peak = points.length
+    ? points.reduce((a, b) => (b.v > a.v ? b : a), points[0])
+    : null;
+
+  const COPY: Record<StablecoinMetric, { title: string; subtitle: string }> = {
+    supply: {
+      title: 'Supply history',
+      subtitle: 'USD-equivalent supply across all tracked stablecoins.',
+    },
+    volume: {
+      title: 'Volume history',
+      subtitle: 'USD-equivalent transfer volume per period, all stablecoins.',
+    },
+    holders: {
+      title: 'Holders history',
+      subtitle: 'Total holders across all stablecoins (a wallet may be counted per coin).',
+    },
+    transfers: {
+      title: 'Transfers history',
+      subtitle: 'Transfer count per period across all stablecoins.',
+    },
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-[14px] font-semibold text-foreground">{COPY[metric].title}</h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{COPY[metric].subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
+            {METRIC_OPTIONS.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setMetric(m.key)}
+                className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
+                  metric === m.key
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
+            {GRANULARITY_OPTIONS.map((g) => (
+              <button
+                key={g.key}
+                onClick={() => setGranularity(g.key)}
+                className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
+                  granularity === g.key
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {shown && (
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-4">
+          <div>
+            <div className="text-[28px] leading-none font-bold text-foreground tabular-nums tracking-tight">
+              {fmtValue(shown.v)}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1.5">
+              {active
+                ? fmtDate(new Date(active.t))
+                : latest
+                  ? `Latest · ${fmtDate(new Date(latest.t))}`
+                  : null}
+            </div>
+          </div>
+          {peak && peak !== latest && (
+            <div className="text-right">
+              <div className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
+                Peak
+              </div>
+              <div className="text-[14px] font-bold text-foreground tabular-nums">
+                {fmtValue(peak.v)}
+              </div>
+              <div className="text-[10px] text-muted-foreground tabular-nums">
+                {fmtDate(new Date(peak.t))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading && points.length === 0 ? (
+        <div className="flex items-center justify-center h-[280px]">
+          <LoadingSpinner size="md" />
+        </div>
+      ) : !geom ? (
+        <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+          No history available for this view.
+        </div>
+      ) : (
+        <div className="relative">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+            className="w-full h-auto block"
+            onMouseMove={handleMove}
+            onMouseLeave={() => setHover(null)}
+            role="img"
+            aria-label={`Stablecoin ${metric} over time`}
+          >
+            <defs>
+              <linearGradient id="sc-supply-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+
+            {geom.yTicks.map((tick) => (
+              <g key={tick}>
+                <line
+                  x1={CHART_M.left}
+                  x2={CHART_W - CHART_M.right}
+                  y1={geom.y(tick)}
+                  y2={geom.y(tick)}
+                  stroke="currentColor"
+                  strokeOpacity={0.08}
+                />
+                <text
+                  x={CHART_M.left - 8}
+                  y={geom.y(tick)}
+                  textAnchor="end"
+                  dominantBaseline="middle"
+                  className="fill-muted-foreground"
+                  fontSize={10}
+                >
+                  {fmtY(tick)}
+                </text>
+              </g>
+            ))}
+
+            {geom.xTicks.map((tick) => (
+              <text
+                key={+tick}
+                x={geom.x(tick)}
+                y={CHART_H - 8}
+                textAnchor="middle"
+                className="fill-muted-foreground"
+                fontSize={10}
+              >
+                {geom.fmtTick(tick)}
+              </text>
+            ))}
+
+            <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
+            <path
+              d={geom.linePath}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth={1.75}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            {/* Persistent marker at the latest point */}
+            {latest && !active && (
+              <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="#ef4444" />
+            )}
+
+            {active && (
+              <g>
+                <line
+                  x1={geom.x(active.t)}
+                  x2={geom.x(active.t)}
+                  y1={CHART_M.top}
+                  y2={CHART_H - CHART_M.bottom}
+                  stroke="#ef4444"
+                  strokeOpacity={0.4}
+                  strokeDasharray="3 3"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <circle
+                  cx={geom.x(active.t)}
+                  cy={geom.y(active.v)}
+                  r={4}
+                  fill="#ef4444"
+                  stroke="var(--card, #fff)"
+                  strokeWidth={2}
+                />
+              </g>
+            )}
+          </svg>
+        </div>
+      )}
+    </div>
   );
 }
 

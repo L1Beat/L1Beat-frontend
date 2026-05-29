@@ -467,3 +467,24 @@ export interface StablecoinsResponse {
   data: Stablecoin[];
 }
 
+export type StablecoinMetric = 'supply' | 'volume' | 'transfers' | 'holders';
+export type StablecoinGranularity = 'hour' | 'day' | 'week' | 'month';
+
+export interface StablecoinSeriesPoint {
+  // RFC3339 UTC timestamp marking the bucket start.
+  period: string;
+  // Raw value as a string. For supply/volume this is base units (divide by
+  // 10^decimals); for transfers/holders it's a plain integer count.
+  value: string;
+}
+
+export interface StablecoinSeries {
+  chain_id: number;
+  token: string;
+  data: StablecoinSeriesPoint[];
+}
+
+export interface StablecoinTimeseriesResponse {
+  data: StablecoinSeries[];
+}
+

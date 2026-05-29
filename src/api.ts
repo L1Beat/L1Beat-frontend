@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -1794,6 +1794,49 @@ export async function getStablecoins(evmChainId: number | string = 43114): Promi
       return Array.isArray(response?.data) ? response.data : [];
     } catch (error) {
       console.error('Stablecoins fetch error:', error);
+      return [];
+    }
+  });
+}
+
+// Historical stablecoin metrics. One series per token when `token` is omitted
+// (each ordered oldest→newest). Values are strings — supply/volume are raw base
+// units needing /10^decimals; transfers/holders are plain counts. There is no
+// `meta`/pagination envelope here, and `limit` is per-token. Cached 15min.
+export async function getStablecoinsTimeseries(opts: {
+  evmChainId?: number | string;
+  metric: StablecoinMetric;
+  granularity?: StablecoinGranularity;
+  token?: string;
+  limit?: number;
+  from?: string;
+  to?: string;
+}): Promise<StablecoinSeries[]> {
+  const {
+    evmChainId = 43114,
+    metric,
+    granularity = 'day',
+    token,
+    limit = 365,
+    from,
+    to,
+  } = opts;
+
+  const params = new URLSearchParams({ metric, granularity, limit: String(limit) });
+  if (token) params.set('token', token);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  const key = `stablecoins-ts-${evmChainId}-${metric}-${granularity}-${token ?? 'all'}-${limit}-${from ?? ''}-${to ?? ''}`;
+
+  return fetchExternalWithCache(key, async () => {
+    try {
+      const response = await fetchExternalWithRetry<StablecoinTimeseriesResponse>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins/timeseries?${params.toString()}`,
+      );
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      console.error('Stablecoins timeseries fetch error:', error);
       return [];
     }
   });
