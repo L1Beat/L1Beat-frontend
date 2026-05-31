@@ -1830,13 +1830,68 @@ function VelocityCell({ value }: { value: number }) {
   return <span className={`font-semibold ${tone}`}>{display}</span>;
 }
 
+// Hand-curated logos for permissioned/low-liquidity tokens that the automatic
+// providers (GeckoTerminal, DexScreener, DefiLlama-by-Avax-address) don't index
+// on Avalanche — e.g. RWA tokens, or coins whose only listed icon lives under a
+// different chain's canonical address. Keyed by lowercase Avalanche token
+// address; tried first so the logo is deterministic rather than dependent on
+// third-party indexing timing. The DefiLlama URLs point at the token's icon on
+// the chain where it IS indexed (mainnet/polygon) — they resolve the same image.
+const LOGO_OVERRIDES: Record<string, string> = {
+  // BUIDL (BlackRock USD Institutional Digital Liquidity) — new contract
+  '0x53fc82f14f009009b440a706e31c9021e1196a2f':
+    'https://coin-images.coingecko.com/coins/images/36291/large/blackrock.png',
+  // BENJI (Franklin OnChain U.S. Government Money Fund)
+  '0xe08b4c1005603427420e64252a8b120cace4d122':
+    'https://token-icons.llamao.fi/icons/tokens/43114/0xe08b4c1005603427420e64252a8b120cace4d122?h=48&w=48',
+  // PYUSD (PayPal USD) — icon via Ethereum canonical address
+  '0x09056fc62d9e1cff4bb5ceac4d7be6f420450647':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x6c3ea9036406852006290770bedfcaba0e23a0e8?h=48&w=48',
+  // DOLA (Inverse Finance)
+  '0x221743dc9e954be4f86844649bf19b43d6f8366d':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x865377367054516e17014ccded1e7d814edc9ce4?h=48&w=48',
+  // LUSD (Liquity USD)
+  '0xda0019e7e50ee4990440b1aa5dffcac6e27ee27b':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x5f98805a4e8be255a32880fdec7f6728c6568ba0?h=48&w=48',
+  // BOLD (Liquity v2)
+  '0x03569cc076654f82679c4ba2124d64774781b01d':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x6440f144b7e50d6a8439336510312d2f54beb01d?h=48&w=48',
+  // USX (dForce USD)
+  '0x853ea32391aaa14c112c645fd20ba389ab25c5e0':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x0a5e677a6a24b2f1a2bf4f3bffc443231d2fdec8?h=48&w=48',
+  // BRZ (Brazilian Digital · Transfero)
+  '0x05539f021b66fd01d1fb1ff8e167cdd09bf7c2d0':
+    'https://token-icons.llamao.fi/icons/tokens/1/0x420412e765bfa6d85aaac94b4f7b708c89be2e2b?h=48&w=48',
+  // USDA (Angle) — icon via Polygon canonical address
+  '0x0000206329b97db379d5e1bf586bbdb969c63274':
+    'https://token-icons.llamao.fi/icons/tokens/137/0x0000206329b97db379d5e1bf586bbdb969c63274?h=48&w=48',
+  // FUSD (FinChain Dollar, Fosun Wealth) — issuer-hosted logo
+  '0x9f6714c302ffe3c3bafaf2ccb44201ff64f6371c':
+    'https://fusd.finchain.global/images/tokens/FUSD.svg',
+  // aUSD (Stable Jack) — Trader Joe token list logo
+  '0xabe7a9dfda35230ff60d1590a929ae0644c47dc1':
+    'https://raw.githubusercontent.com/traderjoe-xyz/joe-tokenlists/main/logos/0xaBe7a9dFDA35230ff60D1590a929aE0644c47DC1/logo.png',
+  // NUSD (Synapse nUSD) — Synapse interface asset
+  '0xcfc37a6ab183dd4aed08c204d1c2773c0b1bdf46':
+    'https://raw.githubusercontent.com/synapsecns/sanguine/master/packages/synapse-interface/assets/icons/nusd.svg',
+  // BNUSD (Balanced Dollars) — Trader Joe token list logo
+  '0xdbdd50997361522495ecfe57ebb6850da0e4c699':
+    'https://raw.githubusercontent.com/traderjoe-xyz/joe-tokenlists/main/logos/0xdBDd50997361522495EcFE57EBb6850dA0E4C699/logo.png',
+};
+
 function CoinLogo({ coin, logoUrl }: { coin: EnrichedCoin; logoUrl?: string }) {
   const sources = useMemo(() => {
+    const addr = coin.token.toLowerCase();
     const list: string[] = [];
-    if (logoUrl) list.push(logoUrl);
-    // DexScreener as a backstop for tokens CoinGecko doesn't index yet
-    // (e.g. BUIDL, restricted/permissioned issues).
-    list.push(`https://dd.dexscreener.com/ds-data/tokens/avalanche/${coin.token.toLowerCase()}.png`);
+    const override = LOGO_OVERRIDES[addr];
+    if (override) list.push(override);
+    if (logoUrl && logoUrl !== override) list.push(logoUrl);
+    // DefiLlama indexes many tokens by chain+address — cheap automatic coverage
+    // for coins GeckoTerminal misses, with no per-coin maintenance.
+    list.push(`https://token-icons.llamao.fi/icons/tokens/43114/${addr}?h=48&w=48`);
+    // DexScreener as a final backstop for tokens nothing else indexes yet
+    // (e.g. restricted/permissioned issues).
+    list.push(`https://dd.dexscreener.com/ds-data/tokens/avalanche/${addr}.png`);
     return list;
   }, [coin.token, logoUrl]);
   const [idx, setIdx] = useState(0);

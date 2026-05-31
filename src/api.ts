@@ -1341,10 +1341,15 @@ export async function getHealth(): Promise<HealthStatus> {
   }, 30000); // Cache for 30 seconds
 }
 
-export async function getTeleporterMessages(): Promise<TeleporterMessageData> {
-  return fetchWithCache('teleporter-messages', async () => {
+export async function getTeleporterMessages(
+  timeframe: 'daily' | 'weekly' = 'daily'
+): Promise<TeleporterMessageData> {
+  return fetchWithCache(`teleporter-messages-${timeframe}`, async () => {
     try {
-      const response = await fetchWithRetry<any>(`${API_URL}/teleporter/messages/daily-count`);
+      const endpoint = timeframe === 'weekly'
+        ? `${API_URL}/teleporter/messages/weekly-count`
+        : `${API_URL}/teleporter/messages/daily-count`;
+      const response = await fetchWithRetry<any>(endpoint);
       
       // Handle both raw array and { data: [...] } formats
       const dataArray = Array.isArray(response) ? response : (response?.data || []);

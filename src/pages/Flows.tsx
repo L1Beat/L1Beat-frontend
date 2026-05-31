@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, GitFork, Send, Timer, Users } from 'lucide-react';
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, GitFork, Send } from 'lucide-react';
 import { getChains, getTeleporterMessages } from '../api';
 import type { TeleporterMessageData } from '../types';
 import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
@@ -69,17 +69,32 @@ export function Flows() {
   const [data, setData] = useState<TeleporterMessageData | null>(null);
   const [logoByChain, setLogoByChain] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly'>('daily');
 
+  // Refetch message data whenever the daily/weekly timeframe changes so the
+  // KPI totals and top corridors stay in sync with the Sankey diagram.
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([
-      getTeleporterMessages(),
-      getChains({ includeInactive: true }).catch(() => []),
-    ])
-      .then(([tele, chains]) => {
+    getTeleporterMessages(timeframe)
+      .then((tele) => {
+        if (active) setData(tele);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [timeframe]);
+
+  // Chain logos don't depend on the timeframe — fetch them once.
+  useEffect(() => {
+    let active = true;
+    getChains({ includeInactive: true })
+      .then((chains) => {
         if (!active) return;
-        setData(tele);
         const map = new Map<string, string>();
         for (const c of chains) {
           if (!c.chainLogoUri || isFallbackLogo(c.chainLogoUri)) continue;
@@ -90,10 +105,7 @@ export function Flows() {
         }
         setLogoByChain(map);
       })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -155,12 +167,12 @@ export function Flows() {
         </p>
       </header>
 
-      <KpiStrip stats={stats} />
+      <KpiStrip stats={stats} timeframe={timeframe} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:items-stretch">
         <div className="lg:col-span-2 min-w-0">
           <SectionErrorBoundary label="the Sankey diagram">
-            <TeleporterSankeyDiagram />
+            <TeleporterSankeyDiagram timeframe={timeframe} onTimeframeChange={setTimeframe} />
           </SectionErrorBoundary>
         </div>
         <SectionErrorBoundary label="top corridors">
@@ -170,6 +182,7 @@ export function Flows() {
             totalCorridors={stats.corridors}
             logoByChain={logoByChain}
             loading={loading}
+            timeframe={timeframe}
           />
         </SectionErrorBoundary>
       </div>
@@ -183,15 +196,20 @@ function CorridorRail({
   totalCorridors,
   logoByChain,
   loading,
+  timeframe,
 }: {
   corridors: Corridor[];
   totalCount: number;
   totalCorridors: number;
   logoByChain: Map<string, string>;
   loading: boolean;
+  timeframe: 'daily' | 'weekly';
 }) {
   const PAGE_SIZE = 8;
   const [page, setPage] = useState(0);
+  useEffect(() => {
+    setPage(0);
+  }, [timeframe]);
   const totalPages = Math.max(1, Math.ceil(corridors.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
   const start = safePage * PAGE_SIZE;
@@ -218,7 +236,7 @@ function CorridorRail({
         </div>
       ) : visible.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-6 py-16 text-center text-muted-foreground text-sm">
-          No corridors active in this window.
+          No corridors active in the last {timeframe === 'weekly' ? '7 days' : '24h'}.
         </div>
       ) : (
         <>
@@ -267,12 +285,14 @@ function CorridorRail({
 
 function KpiStrip({
   stats,
+  timeframe,
 }: {
   stats: { total: number; corridors: number; sources: number; targets: number };
+  timeframe: 'daily' | 'weekly';
 }) {
   const cards = [
     {
-      label: 'Messages (24h)',
+      label: timeframe === 'weekly' ? 'Messages (7d)' : 'Messages (24h)',
       value: stats.total > 0 ? formatCount(stats.total) : '—',
       icon: Send,
     },
@@ -282,14 +302,14 @@ function KpiStrip({
       icon: GitFork,
     },
     {
-      label: 'Unique senders',
+      label: 'Sending chains',
       value: stats.sources > 0 ? stats.sources.toLocaleString() : '—',
-      icon: Users,
+      icon: ArrowUpRight,
     },
     {
-      label: 'Destinations',
+      label: 'Receiving chains',
       value: stats.targets > 0 ? stats.targets.toLocaleString() : '—',
-      icon: Timer,
+      icon: ArrowDownLeft,
     },
   ];
   return (

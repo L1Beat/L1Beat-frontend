@@ -80,7 +80,12 @@ const findChainId = (chainName: string) => {
 // Maximum animation cycles per particle to prevent infinite loops
 const MAX_PARTICLE_CYCLES = 30;
 
-export function TeleporterSankeyDiagram() {
+interface TeleporterSankeyDiagramProps {
+  timeframe: 'daily' | 'weekly';
+  onTimeframeChange: (tf: 'daily' | 'weekly') => void;
+}
+
+export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: TeleporterSankeyDiagramProps) {
   const navigate = useNavigate();
   const [data, setData] = useState<TeleporterData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +94,6 @@ export function TeleporterSankeyDiagram() {
   const [hoveredNode, setHoveredNode] = useState<SankeyNode | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<'daily' | 'weekly'>('daily');
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
@@ -726,7 +730,7 @@ export function TeleporterSankeyDiagram() {
               return (
                 <button
                   key={tf}
-                  onClick={() => setTimeframe(tf)}
+                  onClick={() => onTimeframeChange(tf)}
                   className={`h-7 px-3 rounded-md text-[11px] font-medium border transition-colors ${
                     active
                       ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
