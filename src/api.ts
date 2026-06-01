@@ -1904,26 +1904,36 @@ export interface FxRates {
   EUR: number;
   SGD: number;
   JPY: number;
+  CHF: number;
+  GBP: number;
+  BRL: number;
+  TRY: number;
   [code: string]: number;
 }
 
-const FX_FALLBACK: FxRates = { EUR: 1.08, SGD: 0.74, JPY: 0.0064 };
+// Every non-USD peg we track needs a rate, otherwise pegToUsd leaves the value
+// in face units and badly overstates supply (e.g. 12M lira counted as $12M).
+// Rough fallbacks only — the live frankfurter call refreshes them.
+const FX_FALLBACK: FxRates = {
+  EUR: 1.08, SGD: 0.74, JPY: 0.0064, CHF: 1.25, GBP: 1.34, BRL: 0.2, TRY: 0.022,
+};
+
+const FX_CODES = ['EUR', 'SGD', 'JPY', 'CHF', 'GBP', 'BRL', 'TRY'] as const;
 
 export async function getFxRates(): Promise<FxRates> {
   return fetchWithCache('fx-rates-usd', async () => {
     try {
-      const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,SGD,JPY');
+      const res = await fetch(
+        `https://api.frankfurter.app/latest?from=USD&to=${FX_CODES.join(',')}`,
+      );
       if (!res.ok) throw new Error(`fx http ${res.status}`);
       const json = (await res.json()) as { rates?: Record<string, number> };
       const rates = json.rates ?? {};
-      // frankfurter returns 1 USD = X EUR, we want 1 EUR = Y USD → invert
-      const inv = (r: number | undefined) =>
-        r && r > 0 ? 1 / r : undefined;
-      return {
-        EUR: inv(rates.EUR) ?? FX_FALLBACK.EUR,
-        SGD: inv(rates.SGD) ?? FX_FALLBACK.SGD,
-        JPY: inv(rates.JPY) ?? FX_FALLBACK.JPY,
-      };
+      // frankfurter returns 1 USD = X EUR, we want 1 EUR = Y USD → invert.
+      const inv = (r: number | undefined) => (r && r > 0 ? 1 / r : undefined);
+      const out = { ...FX_FALLBACK };
+      for (const code of FX_CODES) out[code] = inv(rates[code]) ?? FX_FALLBACK[code];
+      return out;
     } catch (error) {
       console.error('FX rates fetch error:', error);
       return FX_FALLBACK;

@@ -3,8 +3,6 @@ import * as d3 from 'd3';
 import {
   ArrowDownUp,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ChevronUp,
   Coins,
   Copy,
@@ -12,6 +10,7 @@ import {
   ExternalLink,
   Info,
   Search,
+  TrendingDown,
   TrendingUp,
   Users,
   X,
@@ -36,6 +35,7 @@ import {
 import type {
   Stablecoin,
   StablecoinSeries,
+  StablecoinSeriesPoint,
   StablecoinMetric,
   StablecoinGranularity,
 } from '../types';
@@ -49,6 +49,14 @@ type SortKey =
   | 'transfers'
   | 'symbol';
 
+interface SupplyTrend {
+  spark: number[];   // recent daily USD supply points (oldest→newest) for a sparkline
+  change24h: number; // fractional change over the last day
+  change7d: number;  // fractional change over the last 7 days
+  prev24h: number;   // absolute USD supply 1 day ago (for aggregate totals)
+  prev7d: number;    // absolute USD supply 7 days ago
+}
+
 interface EnrichedCoin extends Stablecoin {
   supplyUnits: number;     // supply in token units (already divided by 10^decimals)
   supplyUsd: number;       // supply * fx-to-USD
@@ -57,6 +65,7 @@ interface EnrichedCoin extends Stablecoin {
   velocity: number;        // 24h volume / supply — turnover ratio
   avgHolder: number;       // supplyUsd / holders — average position size
   share: number;           // 0..1 share of total USD supply
+  trend?: SupplyTrend;     // per-token supply history; absent until timeseries loads
 }
 
 function fmtUsd(n: number): string {
@@ -72,6 +81,17 @@ function fmtCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+const EMPTY = '—';
+
+// Faint placeholder so rows with no volume/activity recede instead of reading as
+// a wall of hard dashes. Renders the value as-is when it isn't the empty marker.
+function Num({ value, className = '' }: { value: string; className?: string }) {
+  if (value === EMPTY) {
+    return <span className={`text-muted-foreground/30 ${className}`}>{EMPTY}</span>;
+  }
+  return <span className={className}>{value}</span>;
 }
 
 // Convert raw bigint-string + decimals to a JS number. Stablecoin supplies are well below
@@ -97,27 +117,60 @@ function pegToUsd(value: number, peg: string, fx: FxRates): number {
   return rate ? value * rate : value;
 }
 
+// Derive a supply trend (sparkline + 24h/7d change) from a token's daily supply
+// series. Values are raw base units → scaled to USD via decimals + peg. Returns
+// null when there aren't enough points to say anything meaningful.
+function computeTrend(
+  data: StablecoinSeriesPoint[] | undefined,
+  decimals: number,
+  peg: string,
+  fx: FxRates,
+): SupplyTrend | null {
+  if (!data || data.length < 2) return null;
+  const pts = data
+    .map((p) => ({ t: Date.parse(p.period), v: pegToUsd(toUnits(p.value, decimals), peg, fx) }))
+    .filter((p) => !Number.isNaN(p.t))
+    .sort((a, b) => a.t - b.t);
+  if (pts.length < 2) return null;
+  const vals = pts.map((p) => p.v);
+  const last = vals[vals.length - 1];
+  const prev24h = vals[vals.length - 2];
+  // 7 daily buckets back, clamped to the oldest point we have.
+  const prev7d = vals[Math.max(0, vals.length - 8)];
+  return {
+    spark: vals.slice(-30),
+    change24h: prev24h > 0 ? (last - prev24h) / prev24h : 0,
+    change7d: prev7d > 0 ? (last - prev7d) / prev7d : 0,
+    prev24h,
+    prev7d,
+  };
+}
 
-const PEGS = ['All', 'USD', 'EUR', 'SGD', 'JPY'] as const;
-type PegFilter = (typeof PEGS)[number];
 
+// Peg filter options are derived from the data at runtime (see `pegFilters`),
+// so any newly-indexed currency (CHF, TRY, BRL, GBP, …) shows up automatically.
 const ORIGIN_FILTERS = ['All', 'Native', 'Bridged'] as const;
 type OriginFilter = (typeof ORIGIN_FILTERS)[number];
 
 export function Stablecoins() {
   const [coins, setCoins] = useState<Stablecoin[]>([]);
-  const [fx, setFx] = useState<FxRates>({ EUR: 1.08, SGD: 0.74, JPY: 0.0064 });
+  const [fx, setFx] = useState<FxRates>({
+    EUR: 1.08, SGD: 0.74, JPY: 0.0064, CHF: 1.25, GBP: 1.34, BRL: 0.2, TRY: 0.022,
+  });
   const [logoMap, setLogoMap] = useState<Record<string, string>>({});
+  // Per-token daily supply history → powers per-row sparklines, change %, and
+  // top movers. Loads independently of the main list; the page renders without
+  // it and trends fill in once it arrives.
+  const [supplyHist, setSupplyHist] = useState<Map<string, StablecoinSeriesPoint[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [peg, setPeg] = useState<PegFilter>('All');
+  const [peg, setPeg] = useState<string>('All');
   const [origin, setOrigin] = useState<OriginFilter>('All');
   const [issuerFilter, setIssuerFilter] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('supplyUsd');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -149,6 +202,22 @@ export function Stablecoins() {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    // 90 daily points is plenty for a 30-pt sparkline plus 7d/24h deltas.
+    getStablecoinsTimeseries({ evmChainId: 43114, metric: 'supply', granularity: 'day', limit: 90 })
+      .then((series) => {
+        if (!alive) return;
+        const m = new Map<string, StablecoinSeriesPoint[]>();
+        for (const s of series) m.set(s.token.toLowerCase(), s.data);
+        setSupplyHist(m);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const enriched = useMemo<EnrichedCoin[]>(() => {
     if (!coins.length) return [];
     const withRates = coins.map((c) => {
@@ -165,6 +234,7 @@ export function Stablecoins() {
         velocity: supplyUsd > 0 ? volumeUsd / supplyUsd : 0,
         avgHolder: c.holders > 0 ? supplyUsd / c.holders : 0,
         share: 0,
+        trend: computeTrend(supplyHist.get(c.token.toLowerCase()), c.decimals, c.peg, fx) ?? undefined,
       };
     });
     const total = withRates.reduce((s, c) => s + c.supplyUsd, 0);
@@ -172,25 +242,38 @@ export function Stablecoins() {
       ...c,
       share: total > 0 ? c.supplyUsd / total : 0,
     }));
-  }, [coins, fx]);
+  }, [coins, fx, supplyHist]);
 
   const totals = useMemo(() => {
     if (!enriched.length) {
-      return { supply: 0, volume: 0, holders: 0, count: 0, nativeUsd: 0, bridgedUsd: 0 };
+      return {
+        supply: 0, volume: 0, holders: 0, count: 0, nativeUsd: 0, bridgedUsd: 0,
+        change7d: 0, hasTrend: false,
+      };
     }
     let supply = 0;
     let volume = 0;
     let holders = 0;
     let nativeUsd = 0;
     let bridgedUsd = 0;
+    let prev7d = 0;
+    let hasTrend = false;
     for (const c of enriched) {
       supply += c.supplyUsd;
       volume += c.volumeUsd;
       holders += c.holders || 0;
       if (c.bridged) bridgedUsd += c.supplyUsd;
       else nativeUsd += c.supplyUsd;
+      // Sum a coherent "7d ago" total: history where we have it, current
+      // supply otherwise (a coin with no history contributes no change).
+      if (c.trend) hasTrend = true;
+      prev7d += c.trend ? c.trend.prev7d : c.supplyUsd;
     }
-    return { supply, volume, holders, count: enriched.length, nativeUsd, bridgedUsd };
+    const change7d = prev7d > 0 ? (supply - prev7d) / prev7d : 0;
+    return {
+      supply, volume, holders, count: enriched.length, nativeUsd, bridgedUsd,
+      change7d, hasTrend,
+    };
   }, [enriched]);
 
   const issuerSlices = useMemo(() => {
@@ -209,6 +292,23 @@ export function Stablecoins() {
     const rest = slices.slice(TOP_N).reduce((s, x) => s + x.value, 0);
     if (rest > 0) top.push({ name: 'Others', value: rest });
     return top;
+  }, [enriched]);
+
+  // Biggest 7d supply gainers/losers. Floor at $1M supply so dust coins with
+  // jumpy percentages don't dominate the highlight strip.
+  const movers = useMemo(() => {
+    const eligible = enriched.filter(
+      (c) => c.trend && c.supplyUsd >= 1_000_000 && Number.isFinite(c.trend.change7d),
+    );
+    const gainers = [...eligible]
+      .filter((c) => c.trend!.change7d > 0.0005)
+      .sort((a, b) => b.trend!.change7d - a.trend!.change7d)
+      .slice(0, 3);
+    const losers = [...eligible]
+      .filter((c) => c.trend!.change7d < -0.0005)
+      .sort((a, b) => a.trend!.change7d - b.trend!.change7d)
+      .slice(0, 3);
+    return { gainers, losers };
   }, [enriched]);
 
   const filtered = useMemo(() => {
@@ -245,14 +345,17 @@ export function Stablecoins() {
     return rows;
   }, [enriched, peg, origin, issuerFilter, query, sortKey, sortDir]);
 
-  useEffect(() => {
-    setPage(0);
-  }, [peg, origin, issuerFilter, query, sortKey, sortDir]);
-
-  const PAGE_SIZE = 15;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages - 1);
-  const visible = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+  // Available peg filters, ordered by aggregate supply (USD first, then the
+  // larger currencies). 'All' always leads.
+  const pegFilters = useMemo(() => {
+    const sums = new Map<string, number>();
+    for (const c of enriched) {
+      const code = c.peg?.toUpperCase();
+      if (code) sums.set(code, (sums.get(code) || 0) + c.supplyUsd);
+    }
+    const codes = [...sums.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    return ['All', ...codes];
+  }, [enriched]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -310,11 +413,17 @@ export function Stablecoins() {
           </SectionErrorBoundary>
         </div>
 
+        {(movers.gainers.length > 0 || movers.losers.length > 0) && (
+          <SectionErrorBoundary label="supply flows">
+            <TopMovers gainers={movers.gainers} losers={movers.losers} logoMap={logoMap} />
+          </SectionErrorBoundary>
+        )}
+
         <SectionErrorBoundary label="the stablecoin table">
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 py-3.5 border-b border-border">
               <div className="flex items-center gap-2 flex-wrap">
-                {PEGS.map((p) => (
+                {pegFilters.map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeg(p)}
@@ -411,21 +520,21 @@ export function Stablecoins() {
 
                 {/* Mobile card stack */}
                 <ul className="md:hidden divide-y divide-border/60">
-                  {visible.map((c, idx) => (
+                  {filtered.map((c, idx) => (
                     <MobileCoinCard
                       key={c.token}
                       coin={c}
-                      rank={safePage * PAGE_SIZE + idx + 1}
+                      rank={idx + 1}
                       logoUrl={logoMap[c.token.toLowerCase()]}
                     />
                   ))}
                 </ul>
 
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
+                {/* Desktop table — own scroll context so the header can stick */}
+                <div className="hidden md:block overflow-auto max-h-[70vh]">
                   <table className="w-full text-[13px]">
-                    <thead>
-                      <tr className="border-b border-border text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+                    <thead className="sticky top-0 z-10 bg-card">
+                      <tr className="border-b border-border bg-card text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
                         <th className="text-left font-bold px-4 py-2.5 w-10">#</th>
                         <SortableTh
                           label="Stablecoin"
@@ -489,11 +598,11 @@ export function Stablecoins() {
                       </tr>
                     </thead>
                     <tbody>
-                      {visible.map((c, idx) => (
+                      {filtered.map((c, idx) => (
                         <CoinRow
                           key={c.token}
                           coin={c}
-                          rank={safePage * PAGE_SIZE + idx + 1}
+                          rank={idx + 1}
                           logoUrl={logoMap[c.token.toLowerCase()]}
                         />
                       ))}
@@ -501,35 +610,11 @@ export function Stablecoins() {
                   </table>
                 </div>
 
-                {totalPages > 1 && (
-                  <footer className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-border">
-                    <span className="text-[11px] tabular-nums text-muted-foreground">
-                      {safePage * PAGE_SIZE + 1}–
-                      {Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setPage((p) => Math.max(0, p - 1))}
-                        disabled={safePage === 0}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        title="Previous"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-[11px] font-semibold tabular-nums text-foreground px-2">
-                        {safePage + 1}/{totalPages}
-                      </span>
-                      <button
-                        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                        disabled={safePage === totalPages - 1}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        title="Next"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </footer>
-                )}
+                <footer className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-border">
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {filtered.length} stablecoin{filtered.length === 1 ? '' : 's'}
+                  </span>
+                </footer>
               </>
             )}
           </div>
@@ -661,13 +746,23 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
   const [series, setSeries] = useState<StablecoinSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [hover, setHover] = useState<number | null>(null);
+  // Stacked-by-issuer composition view. Only meaningful for the supply metric;
+  // the toggle is hidden otherwise.
+  const [stacked, setStacked] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const monetary = metric === 'supply' || metric === 'volume';
+  const stackedView = stacked && metric === 'supply';
 
   const meta = useMemo(() => {
-    const m = new Map<string, { decimals: number; peg: string }>();
-    for (const c of coins) m.set(c.token.toLowerCase(), { decimals: c.decimals, peg: c.peg });
+    const m = new Map<string, { decimals: number; peg: string; issuer: string }>();
+    for (const c of coins) {
+      m.set(c.token.toLowerCase(), {
+        decimals: c.decimals,
+        peg: c.peg,
+        issuer: c.issuer || c.symbol,
+      });
+    }
     return m;
   }, [coins]);
 
@@ -756,6 +851,68 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
     };
   }, [points]);
 
+  // Per-issuer stacked bands aligned to the same periods as `points`. Each
+  // token's supply is forward-filled (snapshot) and summed into its issuer; the
+  // running cumulative top equals the total line, so it reuses geom's 0-based
+  // y-scale. Top issuers keep their own band; the long tail folds into "Others".
+  const stack = useMemo(() => {
+    if (!stackedView || !geom || points.length < 2) return null;
+    const periods = points.map((p) => p.t);
+    const byIssuer = new Map<string, number[]>();
+    for (const s of series) {
+      const info = meta.get(s.token.toLowerCase());
+      if (!info) continue;
+      const pts = s.data
+        .map((p) => ({ t: Date.parse(p.period), v: pegToUsd(toUnits(p.value, info.decimals), info.peg, fx) }))
+        .filter((p) => !Number.isNaN(p.t))
+        .sort((a, b) => a.t - b.t);
+      if (!pts.length) continue;
+      const arr = byIssuer.get(info.issuer) ?? new Array(periods.length).fill(0);
+      let pi = 0;
+      let last = 0;
+      let started = false;
+      for (let i = 0; i < periods.length; i++) {
+        while (pi < pts.length && pts[pi].t <= periods[i]) {
+          last = pts[pi].v;
+          started = true;
+          pi++;
+        }
+        if (started) arr[i] += last;
+      }
+      byIssuer.set(info.issuer, arr);
+    }
+    if (byIssuer.size === 0) return null;
+    const lastIdx = periods.length - 1;
+    const ranked = [...byIssuer.entries()].sort((a, b) => b[1][lastIdx] - a[1][lastIdx]);
+    const TOP = 5;
+    const keys = ranked.slice(0, TOP).map(([name, values], i) => ({
+      name,
+      color: ISSUER_PALETTE[i] || ISSUER_PALETTE[ISSUER_PALETTE.length - 1],
+      values,
+    }));
+    const rest = ranked.slice(TOP);
+    if (rest.length) {
+      const others = new Array(periods.length).fill(0);
+      for (const [, v] of rest) for (let i = 0; i < periods.length; i++) others[i] += v[i];
+      keys.push({ name: 'Others', color: ISSUER_PALETTE[ISSUER_PALETTE.length - 1], values: others });
+    }
+    const baseline = new Array(periods.length).fill(0);
+    const idxArr = periods.map((_, i) => ({ i }));
+    const bands = keys.map((k) => {
+      const lower = baseline.slice();
+      const upper = baseline.map((b, i) => b + k.values[i]);
+      for (let i = 0; i < periods.length; i++) baseline[i] = upper[i];
+      const gen = d3
+        .area<{ i: number }>()
+        .x((d) => geom.x(periods[d.i]))
+        .y0((d) => geom.y(lower[d.i]))
+        .y1((d) => geom.y(upper[d.i]))
+        .curve(d3.curveMonotoneX);
+      return { name: k.name, color: k.color, path: gen(idxArr) || '' };
+    });
+    return { bands };
+  }, [stackedView, geom, points, series, meta, fx]);
+
   // Axis labels: compact when the axis spans from zero, full-precision when
   // zoomed (compact "3.18M" can't tell 3,176,235 from 3,176,824 apart).
   const fmtY = (n: number): string => {
@@ -830,6 +987,23 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
           <p className="text-[11px] text-muted-foreground mt-0.5">{COPY[metric].subtitle}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {metric === 'supply' && (
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
+              {([['total', 'Total'], ['stacked', 'By issuer']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setStacked(key === 'stacked')}
+                  className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
+                    (key === 'stacked') === stacked
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
             {METRIC_OPTIONS.map((m) => (
               <button
@@ -955,19 +1129,27 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
               </text>
             ))}
 
-            <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
-            <path
-              d={geom.linePath}
-              fill="none"
-              stroke="#ef4444"
-              strokeWidth={1.75}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
+            {stack ? (
+              stack.bands.map((b) => (
+                <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
+              ))
+            ) : (
+              <>
+                <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
+                <path
+                  d={geom.linePath}
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth={1.75}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </>
+            )}
 
             {/* Persistent marker at the latest point */}
-            {latest && !active && (
+            {!stack && latest && !active && (
               <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="#ef4444" />
             )}
 
@@ -994,6 +1176,16 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
               </g>
             )}
           </svg>
+          {stack && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
+              {stack.bands.map((b) => (
+                <div key={b.name} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
+                  <span className="text-[11px] text-muted-foreground">{b.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1003,7 +1195,14 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
 function KpiStrip({
   totals,
 }: {
-  totals: { supply: number; volume: number; holders: number; count: number };
+  totals: {
+    supply: number;
+    volume: number;
+    holders: number;
+    count: number;
+    change7d: number;
+    hasTrend: boolean;
+  };
 }) {
   const cards = [
     {
@@ -1011,6 +1210,9 @@ function KpiStrip({
       value: fmtUsd(totals.supply),
       icon: DollarSign,
       tip: 'Sum of every tracked stablecoin supply, converted to USD using ECB reference rates for non-USD pegs.',
+      // Only annotate once history has loaded and there's a real total.
+      change: totals.hasTrend && totals.supply > 0 ? totals.change7d : undefined,
+      changeLabel: '7d',
     },
     {
       label: 'Stablecoins',
@@ -1033,7 +1235,7 @@ function KpiStrip({
   ];
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      {cards.map(({ label, value, icon: Icon, tip }) => (
+      {cards.map(({ label, value, icon: Icon, tip, change, changeLabel }) => (
         <div key={label} className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1.5">
@@ -1058,9 +1260,72 @@ function KpiStrip({
               <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-foreground tracking-tight">{value}</div>
+          <div className="flex items-baseline gap-2">
+            <div className="text-2xl font-bold text-foreground tracking-tight">{value}</div>
+            {change !== undefined && (
+              <span className="flex items-baseline gap-1">
+                <ChangeBadge value={change} className="text-[12px]" />
+                <span className="text-[10px] text-muted-foreground/70">{changeLabel}</span>
+              </span>
+            )}
+          </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function TopMovers({
+  gainers,
+  losers,
+  logoMap,
+}: {
+  gainers: EnrichedCoin[];
+  losers: EnrichedCoin[];
+  logoMap: Record<string, string>;
+}) {
+  const columns: { title: string; tone: string; Icon: typeof TrendingUp; coins: EnrichedCoin[] }[] = [
+    { title: 'Inflows', tone: 'text-green-600 dark:text-green-400', Icon: TrendingUp, coins: gainers },
+    { title: 'Outflows', tone: 'text-[#ef4444]', Icon: TrendingDown, coins: losers },
+  ];
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <header className="flex items-center gap-2 px-4 py-3 border-b border-border">
+        <h2 className="text-[14px] font-semibold text-foreground">Supply flows</h2>
+        <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+          7d
+        </span>
+      </header>
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+        {columns.map(({ title, tone, Icon, coins }) => (
+          <div key={title} className="p-3 sm:p-4">
+            <div className={`flex items-center gap-1.5 mb-2 text-[11px] font-bold tracking-wider uppercase ${tone}`}>
+              <Icon className="w-3.5 h-3.5" />
+              {title}
+            </div>
+            {coins.length === 0 ? (
+              <div className="py-4 text-center text-[12px] text-muted-foreground">No {title.toLowerCase()} this week.</div>
+            ) : (
+              <ul className="space-y-0.5">
+                {coins.map((c) => (
+                  <li
+                    key={c.token}
+                    className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <CoinLogo coin={c} logoUrl={logoMap[c.token.toLowerCase()]} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-bold text-foreground truncate">{c.symbol}</div>
+                      <div className="text-[10px] text-muted-foreground tabular-nums">{fmtUsd(c.supplyUsd)}</div>
+                    </div>
+                    {c.trend && <Sparkline data={c.trend.spark} width={56} height={18} />}
+                    <ChangeBadge value={c.trend?.change7d} className="text-[12px] w-14 text-right" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1558,11 +1823,17 @@ function SortableTh({
   );
 }
 
+// Every tracked peg gets its own tint so the Peg column reads as a quick colour
+// key (currency at a glance) rather than a wall of identical gray badges.
 const PEG_TINT: Record<string, string> = {
   USD: 'bg-[#22c55e]/10 text-green-600 dark:text-green-400',
   EUR: 'bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400',
   SGD: 'bg-[#a855f7]/10 text-purple-600 dark:text-purple-400',
   JPY: 'bg-[#f97316]/10 text-orange-600 dark:text-orange-400',
+  BRL: 'bg-[#14b8a6]/10 text-teal-600 dark:text-teal-400',
+  CHF: 'bg-[#ec4899]/10 text-pink-600 dark:text-pink-400',
+  GBP: 'bg-[#6366f1]/10 text-indigo-600 dark:text-indigo-400',
+  TRY: 'bg-[#06b6d4]/10 text-cyan-600 dark:text-cyan-400',
 };
 
 function CoinRow({
@@ -1579,7 +1850,7 @@ function CoinRow({
   const shareBarWidth = Math.max(0.5, coin.share * 100);
 
   return (
-    <tr className="group border-b border-border/60 hover:bg-[#ef4444]/[0.04] transition-colors">
+    <tr className="group border-b border-border/60 even:bg-muted/[0.035] hover:bg-[#ef4444]/[0.05] transition-colors">
       <td className="px-4 py-3 text-[11px] tabular-nums text-muted-foreground align-middle">
         {rank}
       </td>
@@ -1610,13 +1881,31 @@ function CoinRow({
         </span>
       </td>
       <td className="px-3 py-3 text-right tabular-nums align-middle">
-        <div className="text-[13px] font-semibold text-foreground">{fmtUsd(coin.supplyUsd)}</div>
-        <div className="mt-1 h-1 w-24 ml-auto rounded-full bg-muted/40 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[#ef4444]"
-            style={{ width: `${shareBarWidth}%` }}
-            title={`${(coin.share * 100).toFixed(2)}% of supply`}
-          />
+        <div className="flex items-baseline justify-end gap-2">
+          <span className="text-[13px] font-semibold text-foreground">{fmtUsd(coin.supplyUsd)}</span>
+          {coin.trend && <ChangeBadge value={coin.trend.change7d} className="text-[10px]" />}
+        </div>
+        <div className="mt-1 flex items-center justify-end gap-2">
+          {coin.trend ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Sparkline data={coin.trend.spark} width={72} height={18} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                30-day supply · {fmtChange(coin.trend.change7d)} (7d)
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="h-1 w-24 rounded-full bg-muted/40 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-[#ef4444]"
+                style={{ width: `${shareBarWidth}%` }}
+                title={`${(coin.share * 100).toFixed(2)}% of supply`}
+              />
+            </div>
+          )}
         </div>
       </td>
       <td className="px-3 py-3 text-right tabular-nums text-foreground hidden sm:table-cell align-middle">
@@ -1626,13 +1915,13 @@ function CoinRow({
         <AvgHolderCell value={coin.avgHolder} />
       </td>
       <td className="px-3 py-3 text-right tabular-nums text-foreground hidden md:table-cell align-middle">
-        {coin.volumeUsd > 0 ? fmtUsd(coin.volumeUsd) : '—'}
+        <Num value={fmtUsd(coin.volumeUsd)} />
       </td>
       <td className="px-3 py-3 text-right tabular-nums hidden md:table-cell align-middle">
         <VelocityCell value={coin.velocity} />
       </td>
       <td className="px-3 py-3 text-right tabular-nums text-muted-foreground hidden lg:table-cell align-middle">
-        {fmtCount(coin.transfers_24h)}
+        <Num value={fmtCount(coin.transfers_24h)} />
       </td>
       <td className="px-3 py-3 align-middle">
         <RowActions address={coin.token} symbol={coin.symbol} />
@@ -1679,6 +1968,13 @@ function MobileCoinCard({
             {coin.name}
             {coin.issuer ? ` · ${coin.issuer}` : ''}
           </div>
+          {coin.trend && (
+            <div className="flex items-center gap-2 mt-1.5">
+              <Sparkline data={coin.trend.spark} width={64} height={16} />
+              <ChangeBadge value={coin.trend.change7d} className="text-[10px]" />
+              <span className="text-[9px] text-muted-foreground/70">7d</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1724,7 +2020,11 @@ function Stat({
       </dt>
       <dd
         className={`tabular-nums truncate text-right ${
-          accent ? 'font-bold text-foreground' : 'font-semibold text-foreground'
+          value === EMPTY
+            ? 'text-muted-foreground/30'
+            : accent
+              ? 'font-bold text-foreground'
+              : 'font-semibold text-foreground'
         }`}
       >
         {value}
@@ -1801,9 +2101,91 @@ function RowActions({ address, symbol }: { address: string; symbol: string }) {
   );
 }
 
+// Format a fractional change (0.012 → "+1.2%") with sign and sensible precision.
+function fmtChange(value: number): string {
+  const pct = Math.abs(value) * 100;
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  if (pct > 0 && pct < 0.1) return `${sign}<0.1%`;
+  return `${sign}${pct.toFixed(pct < 10 ? 1 : 0)}%`;
+}
+
+// Colored change indicator. `flat` (≈0) renders muted so a wall of unchanged
+// coins stays quiet rather than screaming green/red.
+function ChangeBadge({
+  value,
+  className = '',
+}: {
+  value: number | undefined;
+  className?: string;
+}) {
+  if (value == null || !Number.isFinite(value)) {
+    return <span className={`text-muted-foreground/40 ${className}`}>—</span>;
+  }
+  const flat = Math.abs(value) < 0.0005;
+  const tone = flat
+    ? 'text-muted-foreground'
+    : value > 0
+      ? 'text-green-600 dark:text-green-400'
+      : 'text-[#ef4444]';
+  return (
+    <span className={`tabular-nums font-semibold ${tone} ${className}`}>
+      {flat ? '0%' : fmtChange(value)}
+    </span>
+  );
+}
+
+// Minimal inline sparkline. Trend color keys off first-vs-last of the window so
+// it agrees with the longer-range change rather than the last wiggle.
+function Sparkline({
+  data,
+  width = 88,
+  height = 22,
+  className = '',
+}: {
+  data: number[];
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  if (!data || data.length < 2) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const stepX = width / (data.length - 1);
+  const pts = data
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = height - ((v - min) / range) * (height - 2) - 1;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const up = data[data.length - 1] >= data[0];
+  const color = up ? '#22c55e' : '#ef4444';
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className={className}
+      aria-hidden
+    >
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.25}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.85}
+      />
+    </svg>
+  );
+}
+
 function AvgHolderCell({ value }: { value: number }) {
   if (!Number.isFinite(value) || value <= 0) {
-    return <span className="text-muted-foreground">—</span>;
+    return <Num value={EMPTY} />;
   }
   // >= $100k avg = clearly whale/institutional concentration
   const tone =
@@ -1817,7 +2199,7 @@ function AvgHolderCell({ value }: { value: number }) {
 
 function VelocityCell({ value }: { value: number }) {
   if (!Number.isFinite(value) || value <= 0) {
-    return <span className="text-muted-foreground">—</span>;
+    return <Num value={EMPTY} />;
   }
   // 1.0× = whole supply turns over once daily — a meaningful threshold for "active"
   const tone =
