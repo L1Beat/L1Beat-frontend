@@ -28,6 +28,9 @@ export default defineConfig(async ({ mode }) => {
           manualChunks: process.env.SSR_BUILD ? undefined : {
             'react-vendor': ['react', 'react-dom', 'react-router-dom'],
             'chart-vendor': ['chart.js', 'react-chartjs-2'],
+            'd3-vendor': ['d3', 'd3-sankey'],
+            'motion-vendor': ['framer-motion'],
+            'markdown-vendor': ['react-markdown', 'remark-gfm', 'remark-math', 'rehype-katex', 'katex'],
           },
         },
       },

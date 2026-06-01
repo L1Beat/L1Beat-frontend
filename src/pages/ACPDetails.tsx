@@ -1,5 +1,4 @@
 // src/pages/ACPDetails.tsx
-import mermaid from 'mermaid';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -30,6 +29,18 @@ import {
   Info
 } from 'lucide-react';
 import { acpService, LocalACP } from '../services/acpService';
+
+// Lazy-load mermaid (and its diagram renderers + cytoscape) only when an ACP
+// actually contains a diagram. Keeps ~1MB+ out of the main bundle for every
+// other page. The import promise is cached so it only downloads once.
+type MermaidApi = typeof import('mermaid')['default'];
+let mermaidPromise: Promise<MermaidApi> | null = null;
+function loadMermaid(): Promise<MermaidApi> {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((m) => m.default);
+  }
+  return mermaidPromise;
+}
 
 function slugify(text: string): string {
   return text
@@ -321,49 +332,6 @@ export default function ACPDetails() {
       successTextColor: '#065f46',
     });
     
-    // Initialize mermaid with dynamic theme for high contrast
-    React.useEffect(() => {
-      const themeVariables = isDark ? {
-        // Dark mode - Force high contrast node colors
-        primaryColor: '#1e293b', // dark-800
-        primaryTextColor: '#ffffff', 
-        primaryBorderColor: '#94a3b8', // light gray border
-        lineColor: '#e2e8f0', // light lines
-        secondaryColor: '#334155',
-        tertiaryColor: '#475569',
-        mainBkg: '#1e293b',
-        nodeBkg: '#1e293b',
-        nodeTextColor: '#ffffff',
-      } : {
-        // Light mode - Default clear colors
-        primaryColor: '#ffffff',
-        primaryTextColor: '#0f172a',
-        primaryBorderColor: '#334155',
-        lineColor: '#334155',
-        secondaryColor: '#f1f5f9',
-        tertiaryColor: '#e2e8f0',
-        mainBkg: '#ffffff',
-        nodeBkg: '#ffffff',
-        nodeTextColor: '#0f172a',
-      };
-
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'base', // Use base theme to apply our custom variables strictly
-        securityLevel: 'loose',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        themeVariables,
-        flowchart: {
-          useMaxWidth: true,
-          htmlLabels: true,
-          curve: 'basis'
-        },
-        sequence: {
-          useMaxWidth: true,
-        }
-      });
-    }, [isDark]);
-
     // Check if this is a mermaid diagram
     const isMermaid = language === 'mermaid' || 
                     content.includes('flowchart') || 
@@ -389,8 +357,43 @@ export default function ACPDetails() {
               
               const cleanContent = content.trim();
               const uniqueId = `svg-${chartId}-${Date.now()}`;
-              
+
               try {
+                const mermaid = await loadMermaid();
+                // (Re-)initialize with the active theme before each render so
+                // diagrams pick up light/dark colors correctly.
+                const themeVariables = isDark ? {
+                  // Dark mode - Force high contrast node colors
+                  primaryColor: '#1e293b',
+                  primaryTextColor: '#ffffff',
+                  primaryBorderColor: '#94a3b8',
+                  lineColor: '#e2e8f0',
+                  secondaryColor: '#334155',
+                  tertiaryColor: '#475569',
+                  mainBkg: '#1e293b',
+                  nodeBkg: '#1e293b',
+                  nodeTextColor: '#ffffff',
+                } : {
+                  // Light mode - Default clear colors
+                  primaryColor: '#ffffff',
+                  primaryTextColor: '#0f172a',
+                  primaryBorderColor: '#334155',
+                  lineColor: '#334155',
+                  secondaryColor: '#f1f5f9',
+                  tertiaryColor: '#e2e8f0',
+                  mainBkg: '#ffffff',
+                  nodeBkg: '#ffffff',
+                  nodeTextColor: '#0f172a',
+                };
+                mermaid.initialize({
+                  startOnLoad: false,
+                  theme: 'base',
+                  securityLevel: 'loose',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  themeVariables,
+                  flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+                  sequence: { useMaxWidth: true },
+                });
                 const { svg } = await mermaid.render(uniqueId, cleanContent);
                 element.innerHTML = svg;
               } catch (renderError) {

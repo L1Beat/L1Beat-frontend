@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainValidators, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, DailyFeeBurn } from '../api';
-import { Chain, TPSHistory } from '../types';
+import { getChains, getTPSHistory, getChainValidators, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
+import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
   Activity,
   ArrowLeft,
@@ -12,7 +12,6 @@ import {
   Check,
   ExternalLink,
   Users,
-  Zap,
   TrendingUp,
   AlertTriangle,
   Shield,
@@ -21,11 +20,11 @@ import {
   Github,
   BarChart3
 } from 'lucide-react';
-import { Line } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip as ChartTooltip } from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, ChartTooltip);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
@@ -33,7 +32,15 @@ import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
-import { ComparisonView } from '../components/comparison/ComparisonView';
+
+// Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
+const NAV_SCROLL_OFFSET = 56 + 48 + 12;
+function scrollToSection(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  window.scrollTo({ top: window.scrollY + rect.top - NAV_SCROLL_OFFSET, behavior: 'smooth' });
+}
 
 export function ChainDetails() {
   const { chainId } = useParams();
@@ -42,115 +49,182 @@ export function ChainDetails() {
   const [chain, setChain] = useState<Chain | null>(null);
   const [tpsHistory, setTPSHistory] = useState<TPSHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  // Shell (header + KPIs) renders as soon as the chain is found; the heavy
+  // per-chain data (validators, TPS history, fees) streams in afterwards while
+  // detailsLoading is true and the affected sections show inline skeletons.
+  const [detailsLoading, setDetailsLoading] = useState(true);
+  // Validators load on their own track — chains like the Primary Network have
+  // 3000+ validators (paged + throttled to avoid rate limits), which would
+  // otherwise hold up the fast TPS/fees data behind it.
+  const [validatorsLoading, setValidatorsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [validatorStatus, setValidatorStatus] = useState<'all' | 'active' | 'inactive'>('active');
-  const [validatorPage, setValidatorPage] = useState(1);
   const [sortBy, setSortBy] = useState<'stake' | 'uptime' | 'address'>('stake');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
-  const [activeTab, setActiveTab] = useState<'validators' | 'compare' | 'economics'>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.has('compare') ? 'compare' : 'validators';
-  });
-  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
-  const compareRef = useRef<HTMLDivElement>(null);
-  const hasScrolledToCompare = useRef(false);
-  const [availableChains, setAvailableChains] = useState<Chain[]>([]);
-  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [activeSection, setActiveSection] = useState<string>('activity');
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
+  const [risk, setRisk] = useState<ChainRisk | null>(null);
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
+  // Full-history series used for the "All" timeframe. For L1s this is the same
+  // daily data; for C-Chain it's monthly, because daily is capped at 100 points
+  // by the API and monthly covers the whole history (2020→now).
+  const [feeBurnAllSeries, setFeeBurnAllSeries] = useState<DailyFeeBurn[]>([]);
   const [allTimeFeesBurned, setAllTimeFeesBurned] = useState<number>(0);
   const [feeBurnTimeframe, setFeeBurnTimeframe] = useState<0 | 7 | 30 | 90>(0);
-
-  // Auto-scroll to compare section when opened via shared URL
-  useEffect(() => {
-    if (hasScrolledToCompare.current || activeTab !== 'compare') return;
-    hasScrolledToCompare.current = true;
-    let attempts = 0;
-    const tryScroll = () => {
-      if (compareRef.current && attempts < 10) {
-        compareRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        attempts++;
-        setTimeout(tryScroll, 500);
-      }
-    };
-    setTimeout(tryScroll, 500);
-  }, [activeTab]);
+  // C-Chain burns base fee + priority tip (EIP-1559). This holds the all-time
+  // base-vs-tip split for the subtitle; null for L1 validation-fee burn.
+  const [feeBurnSplit, setFeeBurnSplit] = useState<{ basePct: number; priorityPct: number } | null>(null);
+  // Base/priority burn (AVAX) for the C-Chain stacked breakdown chart — daily
+  // (for 7/30/90D) and monthly (for the All view, full history).
+  const [cchainBurnDaily, setCchainBurnDaily] = useState<{ date: string; base: number; priority: number }[]>([]);
+  const [cchainBurnMonthly, setCchainBurnMonthly] = useState<{ date: string; base: number; priority: number }[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchData() {
+      // Reset for the new chain so we never flash the previous chain's data.
+      setLoading(true);
+      setDetailsLoading(true);
+      setValidatorsLoading(true);
+      setTPSHistory([]);
+      setDailyFeeBurn([]);
+      setFeeBurnAllSeries([]);
+      setAllTimeFeesBurned(0);
+      setFeeBurnSplit(null);
+      setCchainBurnDaily([]);
+      setCchainBurnMonthly([]);
+      setSubnetType(null);
+
+      // Phase 1 — find the chain and paint the shell (header + KPIs) immediately.
+      let foundChain;
       try {
-        setLoading(true);
         const chains = await getChains({ includeInactive: true });
-        // Validator counts already come from the chains endpoint (chain.validatorCount).
+        if (cancelled) return;
+        foundChain = chains.find(c => c.chainId === chainId);
+      } catch {
+        if (!cancelled) {
+          setError('Failed to load chain details');
+          setLoading(false);
+          setDetailsLoading(false);
+        }
+        return;
+      }
 
-        const foundChain = chains.find(c => c.chainId === chainId);
+      if (!foundChain) {
+        if (!cancelled) {
+          setError('Chain not found');
+          setLoading(false);
+          setDetailsLoading(false);
+        }
+        return;
+      }
 
-        if (foundChain) {
-          // Fetch subnet type and all validators (active + inactive) in parallel
-          // so the Active/Inactive/All counts are stable from first paint.
-          let validators: import('../types').Validator[] = [];
-          if (foundChain.subnetId) {
-            const [vals, sType] = await Promise.all([
-              getL1BeatValidators(foundChain.subnetId, false),
-              getL1BeatSubnetType(foundChain.subnetId),
-            ]);
-            validators = vals;
-            setSubnetType(sType);
-            // If there are no active validators at all, default the tab to "All"
-            // so the user immediately sees the inactive history instead of an empty table.
-            if (!validators.some(v => v.active === true)) {
-              setValidatorStatus('all');
-            }
-          }
-          const chainWithValidators = {
-            ...foundChain,
-            validators
-          };
+      setChain({ ...foundChain, validators: [] });
+      setError(null);
+      setLoading(false);
+      setValidatorsLoading(!!foundChain.subnetId);
 
-          setChain(chainWithValidators);
-          // Don't pass chains to comparison — let it fetch its own active-only list
-          setAvailableChains([]);
-          // Use originalChainId if available for API calls that might require the numeric ID
-          // Fallback to chainId if originalChainId is not present
-          const apiChainId = foundChain.originalChainId || foundChain.chainId;
-          const [history, feeBurnData, feeMetrics] = await Promise.all([
-            getTPSHistory(7, apiChainId),
-            foundChain.subnetId ? getL1BeatDailyFeeBurn(foundChain.subnetId) : Promise.resolve([]),
-            foundChain.subnetId ? getL1BeatFeeMetrics(foundChain.subnetId) : Promise.resolve([])
-          ]);
-          setTPSHistory(history);
+      // Use originalChainId where present (numeric ID), falling back to chainId.
+      const apiChainId = foundChain.originalChainId || foundChain.chainId;
+      const sid = foundChain.subnetId;
+
+      // Kick off the validators fetch NOW (concurrent with the batch) but await
+      // it separately — for big chains it can take ~20s, and it must not hold
+      // up the fast TPS/fees data or the rest of the shell.
+      const validatorsPromise = sid ? getL1BeatValidators(sid, false) : null;
+
+      // The Primary Network / C-Chain burns EIP-1559 base fee + priority tip on
+      // every tx (a different source than L1 validation-fee burn).
+      const isPrimary = (foundChain.originalChainId || '') === '43114'
+        || (foundChain.chainName || '').toLowerCase().includes('c-chain');
+
+      // Phase 2 — fast per-chain data (TPS / fees / subnet type). A failure here
+      // keeps the shell on screen rather than replacing the page with an error.
+      try {
+        // C-Chain: fetch daily (recent, for 7/30/90 — capped at 100 points) AND
+        // monthly (full history 2020→now, for the "All" view).
+        const [sType, history, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
+          sid ? getL1BeatSubnetType(sid) : Promise.resolve(null),
+          getTPSHistory(30, apiChainId),
+          sid && !isPrimary ? getL1BeatDailyFeeBurn(sid) : Promise.resolve([]),
+          sid && !isPrimary ? getL1BeatFeeMetrics(sid) : Promise.resolve([]),
+          isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'day', limit: 100 }) : Promise.resolve(null),
+          isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'month', limit: 1000 }) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setSubnetType(sType);
+        setTPSHistory(history);
+        if (isPrimary && cchainDaily) {
+          // Map the C-Chain burn series into the shared DailyFeeBurn shape so it
+          // reuses the same cumulative-burn chart. Daily nAVAX is well under
+          // MAX_SAFE_INTEGER; the all-time cumulative uses BigInt parsing.
+          const toDaily = (s: typeof cchainDaily.series) =>
+            s.map((p) => ({
+              date: p.period.slice(0, 10),
+              total_fees_burned: Number(BigInt(p.total_burned)),
+              active_validators: 0,
+            }));
+          setDailyFeeBurn(toDaily(cchainDaily.series));
+          setFeeBurnAllSeries(toDaily((cchainMonthly ?? cchainDaily).series));
+          const toBreakdown = (s: typeof cchainDaily.series) =>
+            s.map((p) => ({
+              date: p.period.slice(0, 10),
+              base: Number(BigInt(p.base_fee_burned)) / 1e9,
+              priority: Number(BigInt(p.priority_fee_burned)) / 1e9,
+            }));
+          setCchainBurnDaily(toBreakdown(cchainDaily.series));
+          setCchainBurnMonthly(toBreakdown(cchainMonthly?.series ?? []));
+          const total = Number(BigInt(cchainDaily.cumulative.total_burned));
+          const base = Number(BigInt(cchainDaily.cumulative.base_fee_burned));
+          setAllTimeFeesBurned(total);
+          setFeeBurnSplit(total > 0 ? { basePct: (base / total) * 100, priorityPct: 100 - (base / total) * 100 } : null);
+        } else {
           setDailyFeeBurn(feeBurnData);
+          setFeeBurnAllSeries(feeBurnData);
           if (feeMetrics.length > 0) {
             setAllTimeFeesBurned(feeMetrics[0].total_fees_paid);
           }
-          setError(null);
-        } else {
-          setError('Chain not found');
         }
       } catch {
-        setError('Failed to load chain details');
+        /* secondary data failed — keep the shell; sections show empty states */
       } finally {
-        setLoading(false);
+        if (!cancelled) setDetailsLoading(false);
+      }
+
+      // Phase 3 — validators (already in flight). Slow chains stream in here.
+      if (validatorsPromise) {
+        try {
+          const vals = await validatorsPromise;
+          if (cancelled) return;
+          // If there are no active validators at all, default the tab to "All"
+          // so the user immediately sees the inactive history.
+          if (!vals.some(v => v.active === true)) {
+            setValidatorStatus('all');
+          }
+          setChain(prev => (prev ? { ...prev, validators: vals } : prev));
+        } catch {
+          /* validators failed — table shows its empty state */
+        } finally {
+          if (!cancelled) setValidatorsLoading(false);
+        }
       }
     }
 
     fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [chainId]);
-
-  // Reset to page 1 when filters / search / sort change
-  useEffect(() => {
-    setValidatorPage(1);
-  }, [validatorStatus, searchTerm, sortBy, sortOrder]);
 
 
   // Filter fee burn data by timeframe for display
   const filteredFeeBurn = useMemo(() => {
-    if (feeBurnTimeframe === 0) return dailyFeeBurn;
+    if (feeBurnTimeframe === 0) return feeBurnAllSeries;
     return dailyFeeBurn.slice(-feeBurnTimeframe);
-  }, [dailyFeeBurn, feeBurnTimeframe]);
+  }, [dailyFeeBurn, feeBurnAllSeries, feeBurnTimeframe]);
 
   const handleCopy = async (type: 'chainId' | 'subnetId' | 'platformChainId', value?: string) => {
     if (!value) return;
@@ -223,14 +297,6 @@ export function ChainDetails() {
     return sortOrder === 'desc' ? -comparison : comparison;
   }) || [];
 
-  const VALIDATORS_PER_PAGE = 15;
-  const totalValidatorPages = Math.max(1, Math.ceil(filteredValidators.length / VALIDATORS_PER_PAGE));
-  const safeValidatorPage = Math.min(validatorPage, totalValidatorPages);
-  const displayedValidators = filteredValidators.slice(
-    (safeValidatorPage - 1) * VALIDATORS_PER_PAGE,
-    safeValidatorPage * VALIDATORS_PER_PAGE,
-  );
-
   const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
   // L1 subnets use continuous fees — show remaining balance column.
   // Legacy subnets (primary network) use staking — show uptime column.
@@ -260,6 +326,85 @@ export function ChainDetails() {
     if (!Number.isFinite(bal)) return max;
     return Math.max(max, bal);
   }, 0) ?? 0;
+
+  // Decentralization signal sourced from the backend risk endpoint, which
+  // computes the Nakamoto coefficient on the COMPLETE validator set (the client
+  // only ever sees a partial list for big chains). Falls back to the compact
+  // summary on the chains list while the detail request is in flight. The
+  // backend only emits this for chains with active L1 validators, so its
+  // presence is the gate (no client-side primary/legacy filtering needed).
+  const decentralization = useMemo(() => {
+    const dec = risk?.decentralization ?? chain?.decentralization ?? null;
+    if (!dec || dec.nakamoto_33 == null) return null;
+    // Per-validator shares for the concentration bar (detail endpoint only),
+    // capped to the top 24 + one "others" slice so huge sets don't render 1000
+    // slivers. Weights are raw strings that can exceed JS safe-int — Number()
+    // loses absolute precision but ratios are unaffected.
+    const weights = (risk?.decentralization?.weights ?? [])
+      .map((w) => Number(w))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const total = weights.reduce((a, b) => a + b, 0);
+    let shares: number[] = [];
+    if (total > 0) {
+      const head = weights.slice(0, 24).map((n) => n / total);
+      const tail = weights.slice(24).reduce((a, n) => a + n, 0) / total;
+      shares = tail > 0 ? [...head, tail] : head;
+    }
+    return {
+      count: dec.active_validator_count,
+      nak33: dec.nakamoto_33,
+      nak50: dec.nakamoto_50,
+      shares,
+      hasData: true,
+    };
+  }, [risk, chain?.decentralization]);
+
+  useEffect(() => {
+    const id = chain?.platformChainId || '';
+    if (!id) {
+      setRisk(null);
+      return;
+    }
+    let alive = true;
+    getChainRisk(id).then((r) => {
+      if (alive) setRisk(r);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chain?.platformChainId]);
+
+  // Scroll-spy sections for the sticky nav. Validators now leads with the
+  // decentralization summary, so it's a single validator-set section.
+  const sections = useMemo(
+    () => [
+      { id: 'activity', label: 'Activity' },
+      { id: 'validators', label: 'Validators' },
+      { id: 'economics', label: 'Economics' },
+    ],
+    [],
+  );
+
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const threshold = NAV_SCROLL_OFFSET + 8;
+        let next = sections[0]?.id ?? '';
+        for (const s of sections) {
+          const el = document.getElementById(s.id);
+          if (el && el.getBoundingClientRect().top <= threshold) next = s.id;
+        }
+        setActiveSection((prev) => (prev === next ? prev : next));
+        ticking = false;
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [sections]);
 
   // Validator operator cost assumption (used for remaining-balance runway coloring)
   const MONTHLY_COST_AVAX = 1.33;
@@ -311,6 +456,14 @@ export function ChainDetails() {
   const tpsValue = getCurrentTPS();
   const tpsColor = getTPSColor(tpsValue);
   const lastUpdate = tpsHistory.length > 0 ? tpsHistory[tpsHistory.length - 1].timestamp : null;
+
+  // Validators stream in after the shell. Until they arrive, derive active/
+  // inactive from the chain's validatorCount (already in the list payload) so
+  // the header badge doesn't flash INACTIVE on an active chain.
+  const validatorsLoaded = chain.validators.length > 0 || !validatorsLoading;
+  const hasActiveValidators = validatorsLoaded
+    ? chain.validators.some((v) => v.active)
+    : (chain.validatorCount ?? 0) > 0;
 
   const getSocialIcon = (name: string) => {
     const lowerName = name.toLowerCase();
@@ -386,7 +539,7 @@ export function ChainDetails() {
                 />
                 <div
                   className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#1c1c1e] ${
-                    chain.validators.some((v) => v.active) ? 'bg-green-500' : 'bg-muted'
+                    hasActiveValidators ? 'bg-green-500' : 'bg-muted'
                   }`}
                 />
               </div>
@@ -405,7 +558,7 @@ export function ChainDetails() {
                       TESTNET
                     </span>
                   )}
-                  {chain.validators.some((v) => v.active) ? (
+                  {hasActiveValidators ? (
                     <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
                       <span className="w-1 h-1 rounded-full bg-green-500" />
                       ACTIVE
@@ -413,6 +566,25 @@ export function ChainDetails() {
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
                       INACTIVE
+                    </span>
+                  )}
+                  {(() => {
+                    const name = (chain.chainName || '').toLowerCase();
+                    const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
+                    const typeLabel = isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy Subnet';
+                    return (
+                      <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
+                        {typeLabel}
+                      </span>
+                    );
+                  })()}
+                  {chain.sybilResistanceType && (
+                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
+                      {/proof of authority/i.test(chain.sybilResistanceType)
+                        ? 'PoA'
+                        : /proof of stake/i.test(chain.sybilResistanceType)
+                          ? 'PoS'
+                          : chain.sybilResistanceType}
                     </span>
                   )}
                 </div>
@@ -546,27 +718,29 @@ export function ChainDetails() {
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard label="Current TPS" value={tpsValue} valueClassName={tpsColor} icon={Activity} />
+        <KpiCard
+          label="Current TPS"
+          value={tpsValue}
+          valueClassName={tpsColor}
+          icon={Activity}
+          loading={detailsLoading && tpsHistory.length === 0}
+        />
         <KpiCard
           label="Active Validators"
           value={(chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString()}
           icon={Users}
         />
         <KpiCard
-          label="Type"
-          value={(() => {
-            const name = (chain.chainName || '').toLowerCase();
-            const evmId = String(chain.originalChainId || '');
-            const isCC = name.includes('c-chain') || evmId === '43114';
-            if (isCC) return 'Primary Network';
-            return chain.isL1 ? 'L1' : 'Legacy Subnet';
-          })()}
-          icon={Globe}
+          label="Nakamoto (33%)"
+          value={decentralization?.nak33 != null ? String(decentralization.nak33) : '—'}
+          icon={Shield}
+          loading={detailsLoading && decentralization == null}
         />
         <KpiCard
-          label="Sybil resistance"
-          value={chain.sybilResistanceType || 'N/A'}
-          icon={Shield}
+          label="Fees burned"
+          value={allTimeFeesBurned > 0 ? `${formatAvaxAmount(allTimeFeesBurned / 1_000_000_000)} AVAX` : '—'}
+          icon={TrendingUp}
+          loading={detailsLoading && allTimeFeesBurned === 0}
         />
       </div>
 
@@ -576,74 +750,51 @@ export function ChainDetails() {
         </div>
       )}
 
-            {/* Tab Navigation — sticky pill bar matching Metrics section nav */}
+            {/* Sticky section nav — scroll-spy, matching the Metrics page */}
             <nav
               className="sticky top-14 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md border-b border-border"
-              aria-label="Tabs"
+              aria-label="Sections"
             >
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                {[
-                  { id: 'validators', name: 'Validators', icon: Users, disabled: false },
-                  { id: 'compare', name: 'Compare', icon: BarChart3, disabled: false },
-                  { id: 'economics', name: 'Economics', icon: TrendingUp, disabled: false },
-                  { id: 'stage', name: 'Stage', icon: Zap, disabled: true },
-                  { id: 'social', name: 'Social', icon: MessageCircle, disabled: true },
-                ].map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
+                {sections.map((s) => {
+                  const isActive = activeSection === s.id;
                   return (
-                    <div key={tab.id} className="relative shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          !tab.disabled &&
-                          setActiveTab(tab.id as 'validators' | 'compare' | 'economics')
-                        }
-                        onMouseEnter={() => tab.disabled && setHoveredTab(tab.id)}
-                        onMouseLeave={() => setHoveredTab(null)}
-                        disabled={tab.disabled}
-                        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold tracking-wide transition-colors ${
-                          isActive
-                            ? 'bg-[#ef4444]/12 text-[#ef4444]'
-                            : tab.disabled
-                            ? 'text-muted-foreground/50 cursor-not-allowed'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        {tab.name}
-                      </button>
-                      {tab.disabled && hoveredTab === tab.id && (
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2.5 py-1 bg-popover text-popover-foreground text-[11px] rounded-md shadow-lg whitespace-nowrap z-10 border border-border">
-                          Coming soon
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => scrollToSection(s.id)}
+                      className={`shrink-0 inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-semibold tracking-wide transition-colors ${
+                        isActive
+                          ? 'bg-[#ef4444]/12 text-[#ef4444]'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
                   );
                 })}
               </div>
             </nav>
 
-            <div className="space-y-4 sm:space-y-6">
-              {/* Compare Tab */}
-              {activeTab === 'compare' && chain && (<div ref={compareRef}>
-                <SectionErrorBoundary label="chain comparison">
-                  <ComparisonView
-                    currentChain={chain}
-                    validatorCountBySubnet={validatorCountBySubnet}
-                  />
+            <div className="flex flex-col gap-4 sm:gap-6">
+              <section id="activity" className="order-1 scroll-mt-28">
+                <SectionErrorBoundary label="activity">
+                  <ChainActivityCard history={tpsHistory} loading={detailsLoading && tpsHistory.length === 0} />
                 </SectionErrorBoundary>
-              </div>)}
+              </section>
 
-              {/* Economics Tab */}
-              {activeTab === 'economics' && (
+              <section id="economics" className="order-3 scroll-mt-28">
                 <SectionErrorBoundary label="economics">
-                  {(() => {
+                  {detailsLoading ? (
+                    <EconomicsSkeleton />
+                  ) : (() => {
                 const evmId = (chain.originalChainId || '').toString();
                 const lcName = (chain.chainName || '').toLowerCase();
                 const isPrimaryNetwork = lcName.includes('c-chain') || evmId === '43114';
                 const isLegacySubnet = subnetType === 'legacy';
-                const notApplicable = isPrimaryNetwork || isLegacySubnet;
+                // The Primary Network DOES burn fees (EIP-1559 base + tip on every
+                // C-Chain tx) — only legacy subnets have no fee burn to report.
+                const notApplicable = isLegacySubnet;
                 if (notApplicable) {
                   return (
                     <div className="space-y-4 sm:space-y-6">
@@ -655,19 +806,9 @@ export function ChainDetails() {
                           Fee burn doesn’t apply to this chain
                         </h3>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                          {isPrimaryNetwork ? (
-                            <>
-                              The Primary Network is the host chain — its validators secure the
-                              Avalanche network directly and don’t pay continuous validation fees
-                              to the P-Chain. Look at AVAX staking and rewards instead.
-                            </>
-                          ) : (
-                            <>
-                              This is a legacy subnet that hasn’t converted to an L1 via ACP-77.
-                              Only converted L1s pay continuous validation fees to the P-Chain, so
-                              there’s no fee burn to report.
-                            </>
-                          )}
+                          This is a legacy subnet that hasn’t converted to an L1 via ACP-77.
+                          Only converted L1s pay continuous validation fees to the P-Chain, so
+                          there’s no fee burn to report.
                         </p>
                       </div>
                     </div>
@@ -679,52 +820,30 @@ export function ChainDetails() {
                     const allTimeBurnedAvax = allTimeFeesBurned / 1_000_000_000;
                     const latestDay = dailyFeeBurn[dailyFeeBurn.length - 1];
                     const latestDailyAvax = latestDay ? latestDay.total_fees_burned / 1_000_000_000 : 0;
-                    const latestValidators = latestDay?.active_validators ?? 0;
                     const visibleBurnedAvax = filteredFeeBurn.reduce((sum, d) => sum + d.total_fees_burned, 0) / 1_000_000_000;
                     const avgDailyAvax = visibleBurnedAvax / filteredFeeBurn.length;
-                    const formatAvaxValue = (v: number) => {
-                      if (v >= 1000) return `${(v / 1000).toFixed(2)}K`;
-                      if (v >= 1) return v.toFixed(2);
-                      if (v >= 0.01) return v.toFixed(4);
-                      return v.toFixed(6);
-                    };
+                    const formatAvaxValue = formatAvaxAmount;
 
                     return (
                       <>
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div className="bg-card rounded-xl p-4 border border-[#ef4444]/20">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Activity className="w-4 h-4 text-[#ef4444]" />
-                              <span className="text-xs font-medium text-[#ef4444]">Total Burned</span>
-                            </div>
-                            <p className="text-xl font-bold text-[#ef4444]">{formatAvaxValue(allTimeBurnedAvax)}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">AVAX (all time)</p>
-                          </div>
-                          <div className="bg-card rounded-xl p-4 border border-border">
-                            <div className="flex items-center gap-2 mb-2">
-                              <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-xs font-medium text-foreground">Today's Burn</span>
-                            </div>
-                            <p className="text-xl font-bold text-foreground">{formatAvaxValue(latestDailyAvax)}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">AVAX</p>
-                          </div>
-                          <div className="bg-card rounded-xl p-4 border border-border">
-                            <div className="flex items-center gap-2 mb-2">
-                              <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-xs font-medium text-foreground">Avg Daily Burn</span>
-                            </div>
-                            <p className="text-xl font-bold text-foreground">{formatAvaxValue(avgDailyAvax)}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">AVAX / day</p>
-                          </div>
-                          <div className="bg-card rounded-xl p-4 border border-border">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Users className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-xs font-medium text-foreground">Active Validators</span>
-                            </div>
-                            <p className="text-xl font-bold text-foreground">{latestValidators}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">current</p>
-                          </div>
+                        {/* Summary Cards — shared KpiCard style for page consistency */}
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                          <KpiCard
+                            label="Total burned (AVAX)"
+                            value={formatAvaxValue(allTimeBurnedAvax)}
+                            valueClassName="text-[#ef4444]"
+                            icon={Activity}
+                          />
+                          <KpiCard
+                            label="Today's burn (AVAX)"
+                            value={formatAvaxValue(latestDailyAvax)}
+                            icon={TrendingUp}
+                          />
+                          <KpiCard
+                            label="Avg daily burn (AVAX)"
+                            value={formatAvaxValue(avgDailyAvax)}
+                            icon={BarChart3}
+                          />
                         </div>
 
                         {/* Cumulative Fee Burn Chart */}
@@ -732,7 +851,13 @@ export function ChainDetails() {
                           <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                               <h3 className="text-base sm:text-lg font-bold text-foreground">Cumulative Fee Burn</h3>
-                              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Total AVAX burned to P-Chain over time</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                                {isPrimaryNetwork
+                                  ? feeBurnSplit
+                                    ? `AVAX burned via EIP-1559 — ${feeBurnSplit.basePct.toFixed(1)}% base fee · ${feeBurnSplit.priorityPct.toFixed(1)}% priority tip`
+                                    : 'Total AVAX burned via EIP-1559 base fee + priority tip'
+                                  : 'Total AVAX burned to P-Chain over time'}
+                              </p>
                             </div>
                             <div className="flex gap-1.5">
                               {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
@@ -753,7 +878,8 @@ export function ChainDetails() {
                           <div className="px-2 sm:px-4 pb-4 sm:pb-6">
                             <div className="h-[300px] sm:h-[400px]">
                               {(() => {
-                                // For "All" view, start from 0. For filtered views, offset so the end matches the all-time total.
+                                // "All" uses the full-history series (sums to the cumulative total), so start from 0.
+                                // Shorter views show a window, so offset the start so the line ends at the all-time total.
                                 const startOffset = feeBurnTimeframe === 0 ? 0 : (() => {
                                   const visibleSum = filteredFeeBurn.reduce((s, d) => s + d.total_fees_burned, 0) / 1_000_000_000;
                                   return allTimeBurnedAvax - visibleSum;
@@ -806,7 +932,10 @@ export function ChainDetails() {
                                     data={{
                                       labels: filteredFeeBurn.map(d => {
                                         const date = new Date(d.date + 'T00:00:00');
-                                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                        // C-Chain "All" is monthly across years — show month + year; otherwise month + day.
+                                        return feeBurnTimeframe === 0 && isPrimaryNetwork
+                                          ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                                          : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                       }),
                                       datasets: [{
                                         label: 'Cumulative Burn (AVAX)',
@@ -919,6 +1048,10 @@ export function ChainDetails() {
                             </div>
                           </div>
                         </div>
+
+                        {isPrimaryNetwork && cchainBurnDaily.length > 0 && (
+                          <CChainBurnBreakdownChart daily={cchainBurnDaily} monthly={cchainBurnMonthly} isDark={theme === 'dark'} />
+                        )}
                       </>
                     );
                   })() : (
@@ -931,12 +1064,25 @@ export function ChainDetails() {
                 );
               })()}
                 </SectionErrorBoundary>
-              )}
+              </section>
 
-              {/* Validators Tab */}
-              {activeTab === 'validators' && (
+              <section id="validators" className="order-2 scroll-mt-28">
                 <SectionErrorBoundary label="validators">
                 <div className="space-y-4 sm:space-y-6">
+                  {/* Decentralization summary — the verdict + control read that
+                      the weight distribution and table below break down. */}
+                  {decentralization && (
+                    <DecentralizationCard
+                      data={decentralization}
+                      sybil={chain.sybilResistanceType}
+                      vm={risk?.validator_manager ?? null}
+                    />
+                  )}
+
+                  {validatorsLoading && chain.validators.length === 0 ? (
+                    <ValidatorsSkeleton />
+                  ) : (
+                  <>
                   {/* No active validators warning */}
                   {chain.validators.length > 0 && !chain.validators.some(v => v.active) && (
                     <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
@@ -1012,10 +1158,12 @@ export function ChainDetails() {
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Own scroll context (max-height) so the header can stick
+                        while the rows scroll — no pagination. */}
+                    <div className="overflow-auto max-h-[70vh]">
                       <table className="min-w-full divide-y divide-border">
-                        <thead className="bg-muted/20">
-                          <tr>
+                        <thead className="sticky top-0 z-10 bg-card">
+                          <tr className="border-b border-border">
                             <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               Status
                             </th>
@@ -1092,7 +1240,7 @@ export function ChainDetails() {
                           </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
-                          {displayedValidators.map((validator, index) => {
+                          {filteredValidators.map((validator, index) => {
                             const percentage = (() => {
                               const v = unitsToNumber(validator.weight, stakeIsWeight ? 0 : stakeTokenDecimals);
                               const t = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
@@ -1235,17 +1383,6 @@ export function ChainDetails() {
                       </table>
                     </div>
 
-                    {/* Pagination */}
-                    {filteredValidators.length > VALIDATORS_PER_PAGE && (
-                      <ValidatorPagination
-                        currentPage={safeValidatorPage}
-                        totalPages={totalValidatorPages}
-                        totalItems={filteredValidators.length}
-                        pageSize={VALIDATORS_PER_PAGE}
-                        onChange={setValidatorPage}
-                      />
-                    )}
-
                     {/* No Results */}
                     {searchTerm && filteredValidators.length === 0 && (
                       <div className="px-4 sm:px-6 py-6 sm:py-8 text-center">
@@ -1255,10 +1392,599 @@ export function ChainDetails() {
                       </div>
                     )}
                   </div>
+                  </>
+                  )}
                 </div>
                 </SectionErrorBoundary>
+              </section>
+            </div>
+    </div>
+  );
+}
+
+function formatTps(value: number | undefined | null): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (value <= 0) return '0';
+  if (value < 0.01) return '<0.01';
+  if (value < 1) return value.toFixed(2);
+  if (value < 10) return value.toFixed(1);
+  return Math.round(value).toLocaleString();
+}
+
+// Inline skeletons shown while the heavy per-chain data streams in after the
+// shell has painted (progressive rendering).
+function ValidatorsSkeleton() {
+  return (
+    <>
+      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+        <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
+        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+      </div>
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
+          <div className="h-5 w-32 rounded bg-muted animate-pulse" />
+        </div>
+        <div className="divide-y divide-border">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-4 sm:px-6 py-4">
+              <div className="h-4 flex-1 rounded bg-muted animate-pulse" />
+              <div className="h-4 w-16 rounded bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function EconomicsSkeleton() {
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5">
+            <div className="h-3 w-24 rounded bg-muted animate-pulse mb-3" />
+            <div className="h-7 w-28 rounded-md bg-muted animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+        <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
+        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+// C-Chain fee burn split into base fee (bottom) + priority tip (top) as a
+// stacked bar. 7/30/90D use the daily series; All uses the monthly series
+// (full history). Hover shows each segment's AVAX and its share of that bar.
+function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
+  daily: { date: string; base: number; priority: number }[];
+  monthly: { date: string; base: number; priority: number }[];
+  isDark: boolean;
+}) {
+  const [tf, setTf] = useState<0 | 7 | 30 | 90>(30);
+  if (daily.length === 0) return null;
+
+  const isAll = tf === 0;
+  const series = isAll ? monthly : daily.slice(-tf);
+
+  const periodBase = series.reduce((s, d) => s + d.base, 0);
+  const periodTotal = series.reduce((s, d) => s + d.base + d.priority, 0);
+  const basePct = periodTotal > 0 ? (periodBase / periodTotal) * 100 : 0;
+
+  const labels = series.map((d) =>
+    new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', isAll ? { month: 'short', year: 'numeric' } : { month: 'short', day: 'numeric' }),
+  );
+  const tick = (v: unknown) => formatAvaxAmount(Number(v));
+
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
+      <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h3 className="text-base sm:text-lg font-bold text-foreground">Fee Burn — base vs priority</h3>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            {isAll ? 'All time' : `Last ${tf} days`} · {basePct.toFixed(1)}% base fee · {(100 - basePct).toFixed(1)}% priority tip
+          </p>
+        </div>
+        <div className="flex gap-1.5">
+          {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setTf(value as 0 | 7 | 30 | 90)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                tf === value ? 'bg-[#ef4444] text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="px-2 sm:px-4 pb-4 sm:pb-6">
+        <div className="h-[300px] sm:h-[360px]">
+          <Bar
+            data={{
+              labels,
+              datasets: [
+                { label: 'Base fee', data: series.map((d) => d.base), backgroundColor: 'rgba(239, 68, 68, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
+                { label: 'Priority tip', data: series.map((d) => d.priority), backgroundColor: 'rgba(245, 158, 11, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              scales: {
+                x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 8, maxRotation: 0 } },
+                y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)' }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 6, callback: tick } },
+              },
+              plugins: {
+                legend: { display: true, position: 'top', align: 'end', labels: { color: isDark ? '#e5e7eb' : '#374151', boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                tooltip: {
+                  backgroundColor: isDark ? 'rgba(10, 10, 10, 0.95)' : 'rgba(255, 255, 255, 0.97)',
+                  titleColor: isDark ? '#fafafa' : '#0a0a0a',
+                  bodyColor: isDark ? '#fafafa' : '#0a0a0a',
+                  borderColor: isDark ? 'rgba(38, 38, 38, 0.8)' : 'rgba(0, 0, 0, 0.1)',
+                  borderWidth: 1,
+                  padding: 12,
+                  callbacks: {
+                    label: (ctx: { dataset: { label?: string }; dataIndex: number; parsed: { y: number } }) => {
+                      const d = series[ctx.dataIndex];
+                      const total = d.base + d.priority;
+                      const pct = total > 0 ? (ctx.parsed.y / total) * 100 : 0;
+                      return `${ctx.dataset.label}: ${formatAvaxAmount(ctx.parsed.y)} AVAX (${pct.toFixed(1)}%)`;
+                    },
+                    footer: (items: { dataIndex: number }[]) => {
+                      const d = series[items[0].dataIndex];
+                      return `Total: ${formatAvaxAmount(d.base + d.priority)} AVAX`;
+                    },
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Headline/hover value — always 2 decimals so it matches the "Current TPS" KPI
+// card (which uses toFixed(2)). Axis ticks keep formatTps() for cleaner labels.
+function formatTpsExact(value: number | undefined | null): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (value <= 0) return '0';
+  if (value < 0.01) return '<0.01';
+  return value.toFixed(2);
+}
+
+// AVAX amount for the fee-burn headlines: full comma-separated number for large
+// values (e.g. 5,013,443), with decimals kept for small amounts.
+function formatAvaxAmount(v: number): string {
+  if (!Number.isFinite(v)) return 'N/A';
+  if (v >= 1000) return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (v >= 1) return v.toFixed(2);
+  if (v >= 0.01) return v.toFixed(4);
+  return v > 0 ? v.toFixed(6) : '0';
+}
+
+const ACT_W = 760;
+const ACT_H = 180;
+const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
+
+// Daily TPS trend — uses the history already fetched for the headline number.
+function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]; loading?: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const points = useMemo(
+    () =>
+      history
+        .map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }))
+        .filter((p) => Number.isFinite(p.t))
+        .sort((a, b) => a.t - b.t),
+    [history],
+  );
+
+  const geom = useMemo(() => {
+    if (points.length < 2) return null;
+    const xs = points.map((p) => p.t);
+    const ys = points.map((p) => p.v);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys, 0.0001);
+    const iw = ACT_W - ACT_M.left - ACT_M.right;
+    const ih = ACT_H - ACT_M.top - ACT_M.bottom;
+    const sx = (t: number) => ACT_M.left + ((t - minX) / (maxX - minX || 1)) * iw;
+    const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
+    const line = points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.t).toFixed(1)},${sy(p.v).toFixed(1)}`).join(' ');
+    const floor = ACT_M.top + ih;
+    const area = `${line} L${sx(maxX).toFixed(1)},${floor} L${sx(minX).toFixed(1)},${floor} Z`;
+    const yTicks = Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
+    return { sx, sy, line, area, yTicks, floor };
+  }, [points]);
+
+  const latest = points.length ? points[points.length - 1] : null;
+  const active = hover != null && points[hover] ? points[hover] : null;
+  const shown = active ?? latest;
+  const first = points[0];
+  const delta = first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
+  const positive = delta != null && delta >= 0;
+
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!geom || !svgRef.current || points.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const vx = ((e.clientX - rect.left) / rect.width) * ACT_W;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.abs(geom.sx(points[i].t) - vx);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    setHover(best);
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <header className="flex items-end justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last 30 days</p>
+          </div>
+          <div className="h-7 w-16 rounded-md bg-muted animate-pulse" />
+        </header>
+        <div className="h-[180px] rounded-lg bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <header className="flex items-end justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last {points.length} days</p>
+        </div>
+        {shown && (
+          <div className="text-right">
+            <div className="text-2xl font-bold text-foreground tabular-nums leading-none">{formatTpsExact(shown.v)}</div>
+            <div className="text-[11px] mt-1">
+              {active ? (
+                <span className="text-muted-foreground">{format(new Date(active.t * 1000), 'MMM d')}</span>
+              ) : delta != null ? (
+                <span className={positive ? 'text-green-500' : 'text-[#ef4444]'}>
+                  {positive ? '▲' : '▼'} {Math.abs(delta).toFixed(0)}% · 30d
+                </span>
+              ) : (
+                <span className="text-muted-foreground">latest</span>
               )}
             </div>
+          </div>
+        )}
+      </header>
+      {!geom ? (
+        <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">
+          Not enough activity data to chart.
+        </div>
+      ) : (
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${ACT_W} ${ACT_H}`}
+          className="w-full h-auto block"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHover(null)}
+          role="img"
+          aria-label="TPS over time"
+        >
+          <defs>
+            <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {geom.yTicks.map((tick, i) => (
+            <g key={i}>
+              <line x1={ACT_M.left} x2={ACT_W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
+              <text x={ACT_M.left - 8} y={geom.sy(tick)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
+                {formatTps(tick)}
+              </text>
+            </g>
+          ))}
+          <path d={geom.area} fill="url(#chain-tps-fill)" />
+          <path d={geom.line} fill="none" stroke="#ef4444" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="#ef4444" />}
+          {active && (
+            <g>
+              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="#ef4444" strokeOpacity={0.4} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="#ef4444" stroke="var(--card, #fff)" strokeWidth={2} />
+            </g>
+          )}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+type ValidatorManager = NonNullable<ChainRisk['validator_manager']>;
+
+function shortAddr(a?: string): string {
+  if (!a) return '—';
+  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+function formatDelay(seconds: number): string {
+  if (seconds <= 0) return 'instant';
+  const d = Math.floor(seconds / 86400);
+  if (d >= 1) return `${d}d delay`;
+  const h = Math.floor(seconds / 3600);
+  if (h >= 1) return `${h}h delay`;
+  const m = Math.floor(seconds / 60);
+  if (m >= 1) return `${m}m delay`;
+  return `${seconds}s delay`;
+}
+
+// Turn the ValidatorManager control/proxy data into a plain-English risk read.
+// Mirrors the backend guidance: a single EOA + instant-upgrade proxy is the
+// worst (and most common) case; shared control and/or upgrade delays are better.
+// Churn limits only count when upgrades aren't instant (else they're bypassable).
+function controlAssessment(vm: ValidatorManager | null | undefined) {
+  if (!vm || (!vm.owner && !vm.proxy)) {
+    return {
+      chip: 'Unresolved',
+      chipTone: 'text-muted-foreground bg-muted/50',
+      headline: 'No on-chain validator manager resolved (placeholder or legacy chain).',
+      rows: [] as { label: string; value: string; tone: string; sub?: string }[],
+    };
+  }
+  const kind = vm.owner?.kind;
+  const ms = vm.owner?.multisig;
+  const isProxy = !!vm.proxy?.is_proxy;
+  const delay = vm.proxy?.upgrade_delay_seconds ?? 0;
+  const instant = isProxy && delay === 0;
+  const singleKey = kind === 'eoa';
+  const shared = kind === 'multisig' || kind === 'timelock' || kind === 'dao';
+
+  const ownerLabel = singleKey
+    ? 'Single key (EOA)'
+    : kind === 'multisig'
+      ? `Multisig${ms ? ` (${ms.threshold} of ${ms.owners})` : ''}`
+      : kind === 'timelock'
+        ? 'Timelock'
+        : kind === 'dao'
+          ? 'DAO'
+          : kind === 'contract'
+            ? 'Contract'
+            : 'Unknown';
+  const ownerTone = singleKey
+    ? 'text-[#ef4444]'
+    : shared
+      ? 'text-green-600 dark:text-green-400'
+      : 'text-foreground';
+
+  const upgradeLabel = !isProxy ? 'Immutable' : instant ? 'Instant upgrade' : formatDelay(delay);
+  const upgradeTone = !isProxy
+    ? 'text-green-600 dark:text-green-400'
+    : instant
+      ? 'text-[#ef4444]'
+      : 'text-yellow-600 dark:text-yellow-400';
+
+  let chip: string;
+  let chipTone: string;
+  let headline: string;
+  if (singleKey && (instant || !isProxy)) {
+    chip = 'Single-key control';
+    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
+    headline = instant
+      ? 'A single key can instantly upgrade the manager and replace the validator set.'
+      : 'A single key directly controls the validator set.';
+  } else if (instant) {
+    chip = 'Instantly upgradeable';
+    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
+    headline = 'The manager can be upgraded instantly by its admin — control can be changed at any time.';
+  } else if (shared && !isProxy) {
+    chip = 'Shared control';
+    chipTone = 'text-green-600 dark:text-green-400 bg-green-500/10';
+    headline = 'Control is shared and the manager is not upgradeable.';
+  } else {
+    chip = 'Partial safeguards';
+    chipTone = 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10';
+    headline = 'Some safeguards on control or upgrades.';
+  }
+
+  const churnValue = vm.churn?.max_churn_percentage;
+  const rows = [
+    { label: 'Validator-set control', value: ownerLabel, tone: ownerTone, sub: shortAddr(vm.owner?.address) },
+    { label: 'Upgradeable', value: upgradeLabel, tone: upgradeTone, sub: isProxy ? shortAddr(vm.proxy?.proxy_admin_owner) : undefined },
+    {
+      label: 'Churn limit',
+      value: churnValue != null ? `${churnValue}% / window` : '—',
+      tone: 'text-foreground',
+      sub: churnValue != null && instant ? 'bypassable via upgrade' : undefined,
+    },
+  ];
+  return { chip, chipTone, headline, rows };
+}
+
+// Where the ValidatorManager is deployed — a liveness/recoverability axis,
+// separate from who controls it. "self" = no recovery path if the L1 halts.
+function recoverability(deployedOn?: string) {
+  if (deployedOn === 'self')
+    return {
+      tone: 'text-yellow-600 dark:text-yellow-400',
+      text: 'Validator manager runs on this L1 — if the chain halts, its validator set can’t be changed (no recovery path).',
+    };
+  if (deployedOn === 'c-chain')
+    return {
+      tone: 'text-green-600 dark:text-green-400',
+      text: 'Validator manager runs on the C-Chain — the validator set stays changeable even if this L1 halts.',
+    };
+  return null;
+}
+
+const PERMISSIONED = {
+  label: 'Permissioned',
+  text: 'text-orange-500',
+  ring: 'bg-orange-500/10',
+  dot: 'bg-orange-500',
+  note: 'The chain operator controls who can validate (PoA).',
+};
+const PERMISSIONLESS = {
+  label: 'Permissionless',
+  text: 'text-green-600 dark:text-green-400',
+  ring: 'bg-green-500/10',
+  dot: 'bg-green-500',
+  note: 'Anyone meeting the stake requirement can validate (PoS).',
+};
+
+// The one control fact we can derive today: PoA = permissioned validator set
+// (operator picks the validators), PoS = permissionless (stake to join). Prefer
+// the indexer's ValidatorManager type; fall back to the chain's sybil-resistance
+// label while that's still "unknown". We show this instead of a fabricated
+// "decentralization grade", which would mislead — a PoA chain can have well-
+// spread stake yet be entirely operator-controlled.
+function permissionModel(managerType?: string, sybil?: string) {
+  const t = (managerType || '').toLowerCase();
+  if (t === 'poa') return PERMISSIONED;
+  if (t.startsWith('pos')) return PERMISSIONLESS;
+  const s = (sybil || '').toLowerCase();
+  if (s.includes('authority')) return PERMISSIONED;
+  if (s.includes('stake')) return PERMISSIONLESS;
+  return null;
+}
+
+function DecentralizationCard({
+  data,
+  sybil,
+  vm,
+}: {
+  data: { count: number; nak33: number | null; nak50: number | null; shares: number[]; hasData: boolean };
+  sybil?: string;
+  vm?: ValidatorManager | null;
+}) {
+  const perm = permissionModel(vm?.type, sybil);
+  const control = controlAssessment(vm);
+  const stats: { value: string; label: string; title?: string }[] = [
+    {
+      value: data.nak33 != null ? String(data.nak33) : '—',
+      label: 'Nakamoto (33%)',
+      title: 'Smallest number of validators that together control more than 33% of total stake. Higher means stake is more spread out.',
+    },
+    { value: data.nak50 != null ? String(data.nak50) : '—', label: 'to control 50%' },
+    { value: data.count.toLocaleString(), label: 'Active validators' },
+  ];
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-[#ef4444]" />
+          <h2 className="text-[14px] font-semibold text-foreground">Decentralization</h2>
+        </div>
+        {perm && (
+          <span className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold ${perm.ring} ${perm.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${perm.dot}`} />
+            {perm.label}
+          </span>
+        )}
+      </header>
+
+      <div className="p-4 sm:p-5">
+        {data.hasData ? (
+          <>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {stats.map((s) => (
+                <div key={s.label} className="rounded-lg bg-muted/30 px-2.5 py-2.5 sm:px-3" title={s.title}>
+                  <div className="text-lg sm:text-2xl font-bold text-foreground tabular-nums leading-none">
+                    {s.value}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Stake-concentration bar: the top `nak33` validators (which control
+                >33%) are highlighted; the rest are muted. Ticks mark 33% / 50%. */}
+            {data.shares.length > 0 && (
+              <div className="mt-4">
+                <div className="relative flex h-2.5 rounded-full overflow-hidden bg-muted/40">
+                  {data.shares.map((s, i) => (
+                    <div
+                      key={i}
+                      style={{ width: `${Math.max(s * 100, 0.4)}%` }}
+                      className={`h-full ${i < (data.nak33 ?? 0) ? 'bg-[#ef4444]' : 'bg-emerald-500/45'} ${
+                        i > 0 ? 'border-l border-card/70' : ''
+                      }`}
+                      title={`#${i + 1}: ${(s * 100).toFixed(1)}% of stake`}
+                    />
+                  ))}
+                  <span className="absolute inset-y-0 w-px bg-foreground/45" style={{ left: '33%' }} />
+                  <span className="absolute inset-y-0 w-px bg-foreground/25" style={{ left: '50%' }} />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm bg-[#ef4444]" />
+                    Top {data.nak33} control &gt;33% of stake
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    Remaining {Math.max(0, data.count - (data.nak33 ?? 0))}
+                    <span className="w-2 h-2 rounded-sm bg-emerald-500/45" />
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-[13px] text-muted-foreground py-2">
+            Not enough validator stake data to assess distribution.
+          </div>
+        )}
+
+        {/* Control & upgradeability — on-chain ValidatorManager reads. */}
+        <div className="mt-5 pt-4 border-t border-border/60">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
+            <div className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+              Control &amp; upgradeability
+            </div>
+            <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold ${control.chipTone}`}>
+              {control.chip}
+            </span>
+          </div>
+          <p className="text-[12px] text-foreground/90 mb-3">{control.headline}</p>
+          {control.rows.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {control.rows.map((r) => (
+                <div key={r.label} className="rounded-lg bg-muted/30 px-3 py-2">
+                  <div className="text-[10px] text-muted-foreground">{r.label}</div>
+                  <div className={`text-[13px] font-semibold ${r.tone}`}>{r.value}</div>
+                  {r.sub && (
+                    <div className="text-[10px] text-muted-foreground/70 font-mono mt-0.5 truncate">{r.sub}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const rec = recoverability(vm?.deployed_on);
+            if (!rec) return null;
+            return (
+              <div className="mt-2.5 flex items-start gap-1.5 text-[12px]">
+                <span className={`shrink-0 ${rec.tone}`}>●</span>
+                <span className="text-muted-foreground">{rec.text}</span>
+              </div>
+            );
+          })()}
+        </div>
+
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground/70">
+          A signal, not a security audit. Distribution is from on-chain stake weights; control is read
+          from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label} — ${perm.note}` : ''}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1268,11 +1994,13 @@ function KpiCard({
   value,
   valueClassName,
   icon: Icon,
+  loading = false,
 }: {
   label: string;
   value: string | number;
   valueClassName?: string;
   icon: typeof Activity;
+  loading?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
@@ -1282,87 +2010,13 @@ function KpiCard({
           <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
         </div>
       </div>
-      <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function ValidatorPagination({
-  currentPage,
-  totalPages,
-  totalItems,
-  pageSize,
-  onChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  pageSize: number;
-  onChange: (page: number) => void;
-}) {
-  const startIdx = (currentPage - 1) * pageSize + 1;
-  const endIdx = Math.min(currentPage * pageSize, totalItems);
-
-  const pages: (number | 'ellipsis')[] = [];
-  const add = (p: number | 'ellipsis') => pages.push(p);
-  if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) add(i);
-  } else {
-    add(1);
-    if (currentPage > 3) add('ellipsis');
-    const start = Math.max(2, currentPage - 1);
-    const end = Math.min(totalPages - 1, currentPage + 1);
-    for (let i = start; i <= end; i++) add(i);
-    if (currentPage < totalPages - 2) add('ellipsis');
-    add(totalPages);
-  }
-
-  return (
-    <div className="px-4 sm:px-6 py-3 bg-muted/20 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
-      <span className="text-[11px] text-muted-foreground tabular-nums">
-        Showing <span className="text-foreground font-medium">{startIdx}–{endIdx}</span> of{' '}
-        <span className="text-foreground font-medium">{totalItems}</span>
-      </span>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Prev
-        </button>
-        {pages.map((p, idx) =>
-          p === 'ellipsis' ? (
-            <span key={`e-${idx}`} className="px-1 text-xs text-muted-foreground">
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onChange(p)}
-              className={`px-2.5 h-7 text-xs border rounded-md transition-colors ${
-                currentPage === p
-                  ? 'bg-[#ef4444] border-[#ef4444] text-white'
-                  : 'border-border bg-card hover:bg-muted'
-              }`}
-            >
-              {p}
-            </button>
-          ),
-        )}
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(totalPages, currentPage + 1))}
-          disabled={currentPage === totalPages}
-          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Next
-        </button>
-      </div>
+      {loading ? (
+        <div className="h-7 sm:h-8 w-20 rounded-md bg-muted animate-pulse" />
+      ) : (
+        <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
+          {value}
+        </div>
+      )}
     </div>
   );
 }

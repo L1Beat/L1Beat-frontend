@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { Validator } from '../types';
 import { useTheme } from '../hooks/useTheme';
-import { TrendingUp, Users, Coins } from 'lucide-react';
+import { PieChart } from 'lucide-react';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 
 ChartJS.register(ArcElement, Tooltip);
@@ -28,6 +28,8 @@ interface StakeDistributionChartProps {
 export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals, onValidatorClick }: StakeDistributionChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // Hide the centre label while a slice is hovered so the tooltip doesn't collide with it.
+  const [hovering, setHovering] = useState(false);
 
   const isWeightMode =
     mode === 'weight' ? true : mode === 'tokens' ? false : validators.some(v => v.stakeUnit === 'weight');
@@ -93,11 +95,13 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: '62%',
     onHover: (_event: any, elements: any[]) => {
       const canvas = _event.native?.target as HTMLCanvasElement | undefined;
       if (canvas) {
         canvas.style.cursor = elements.length > 0 && elements[0].index < sortedTop.length ? 'pointer' : 'default';
       }
+      setHovering(elements.length > 0);
     },
     onClick: (_event: any, elements: any[]) => {
       if (!onValidatorClick || elements.length === 0) return;
@@ -135,89 +139,47 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     },
   };
 
+  const totalDisplay = isWeightMode
+    ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
+    : formatUnits(totalStakeBaseUnits, decimals, { maxFractionDigits: 2 });
+  const avgDisplay =
+    validators.length > 0
+      ? isWeightMode
+        ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
+        : formatUnits(totalStakeBaseUnits / BigInt(validators.length), decimals, { maxFractionDigits: 2 })
+      : 'N/A';
+
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-border bg-gradient-to-r from-[#ef4444]/15 via-[#ef4444]/5 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#ef4444] rounded-xl">
-            <TrendingUp className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">
-              {isWeightMode ? 'Weight Distribution' : 'Stake Distribution'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {isWeightMode ? 'Top validators by weight' : 'Top validators by stake amount'}
-            </p>
-          </div>
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <header className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
+        <div className="flex items-center gap-2">
+          <PieChart className="w-4 h-4 text-[#ef4444]" />
+          <h2 className="text-[14px] font-semibold text-foreground">
+            {isWeightMode ? 'Weight distribution' : 'Stake distribution'}
+          </h2>
         </div>
-      </div>
+        <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+          {validators.length} validators
+        </span>
+      </header>
 
-      {/* Statistics */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Chart Section */}
-          <div className="lg:col-span-2">
-            <div className="h-80 flex items-center justify-center">
-              <div className="w-full h-full max-w-sm">
-                <Pie data={data} options={options} />
-              </div>
-            </div>
+      <div className="p-4 sm:p-6">
+        <div className="relative h-64 sm:h-72 flex items-center justify-center">
+          <div className="w-full h-full max-w-[300px]">
+            <Pie data={data} options={options} />
           </div>
-
-          {/* Statistics and Top Validators */}
-          <div className="space-y-6">
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 gap-4">
-              {/* Total Stake - Primary Brand Color */}
-              <div className="bg-[#ef4444]/10 rounded-xl p-4 border border-[#ef4444]/20">
-                <div className="flex items-center gap-3 mb-2">
-                  <Coins className="w-5 h-5 text-[#ef4444]" />
-                  <span className="text-sm font-medium text-[#ef4444]">
-                    {isWeightMode ? 'Total Weight' : 'Total Stake'}
-                  </span>
-                </div>
-                <p className="text-2xl font-bold text-[#ef4444]">
-                  {isWeightMode
-                    ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
-                    : formatUnits(totalStakeBaseUnits, decimals, { maxFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-[#ef4444]/80">{unitLabel}</p>
-              </div>
-
-              {/* Validators */}
-              <div className="bg-muted/20 rounded-xl p-4 border border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <Users className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Validators</span>
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {validators.length}
-                </p>
-                <p className="text-xs text-muted-foreground">total nodes</p>
-              </div>
-
-              {/* Average Stake */}
-              <div className="bg-muted/20 rounded-xl p-4 border border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">
-                    {isWeightMode ? 'Average Weight' : 'Average Stake'}
-                  </span>
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {validators.length > 0
-                    ? (isWeightMode
-                      ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
-                      : formatUnits(totalStakeBaseUnits / BigInt(validators.length), decimals, { maxFractionDigits: 2 }))
-                    : 'N/A'}
-                </p>
-                <p className="text-xs text-muted-foreground">{unitLabel}</p>
-              </div>
+          {/* Total in the donut centre — hidden while hovering so the tooltip is readable */}
+          {!hovering && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total {unitLabel}</span>
+              <span className="text-lg font-bold text-foreground tabular-nums">{totalDisplay}</span>
             </div>
-          </div>
+          )}
         </div>
+        <p className="text-center text-[11px] text-muted-foreground mt-3">
+          {validators.length} validators · avg{' '}
+          <span className="font-semibold text-foreground tabular-nums">{avgDisplay}</span> {unitLabel} · tap a slice for detail
+        </p>
       </div>
     </div>
   );

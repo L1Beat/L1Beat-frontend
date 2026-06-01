@@ -21,6 +21,9 @@ export interface Chain {
   } | null;
   isActive?: boolean;
   validatorCount?: number;
+  // Compact decentralization summary from the chains list (present only for
+  // chains with active L1 validators). Full detail comes from getChainRisk.
+  decentralization?: ChainDecentralization;
   cumulativeTxCount?: {
     value: number;
     timestamp: number;
@@ -73,6 +76,48 @@ export interface Validator {
   remainingBalance?: number;
   explorerUrl?: string;
   validationId?: string;
+}
+
+// Risk / decentralization data (api.l1beat.io). Additive; `null` always means
+// "not assessed yet" — never fabricate a value from it.
+export interface ChainDecentralization {
+  active_validator_count: number;
+  nakamoto_33: number | null;
+  nakamoto_50: number | null;
+  total_weight: string;
+  weights?: string[]; // sorted desc, raw — detail endpoint only
+}
+
+export interface ChainRisk {
+  chain_id: string;
+  validator_manager: {
+    address: string;
+    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'unknown';
+    // Where the ValidatorManager lives — a recoverability signal independent of
+    // control: 'self' means the set can't be changed if this L1 halts.
+    deployed_on: 'c-chain' | 'self' | 'unknown';
+    owner: {
+      address: string;
+      kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
+      multisig: { threshold: number; owners: number } | null;
+    } | null;
+    proxy: {
+      is_proxy: boolean;
+      implementation: string;
+      proxy_admin: string;
+      proxy_admin_owner: string;
+      upgrade_delay_seconds: number;
+    } | null;
+    churn: { period_seconds: number; max_churn_percentage: number } | null;
+  } | null;
+  decentralization: ChainDecentralization | null;
+  economic: {
+    staking_token: { name: string; symbol: string; decimals: number } | null;
+    total_stake_raw: string;
+    total_stake_usd: number | null;
+    cost_to_control_33_usd: number | null;
+  } | null;
+  updated_at: string;
 }
 
 export interface ValidatorDeposit {

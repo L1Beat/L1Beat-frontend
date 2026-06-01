@@ -1,19 +1,27 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Layout } from './components/layout/Layout';
+import { LoadingPage } from './components/LoadingSpinner';
+
+// Eager: pages that are pre-rendered by the SSG build (scripts/ssg.js).
+// renderToString emits the Suspense *fallback* for lazy components, so these
+// must stay eager to ship real HTML for SEO / no first-paint flash.
 import { Dashboard } from './pages/Dashboard';
-import { ChainDetails } from './pages/ChainDetails';
-import ACPs from './pages/ACPs';
-import ACPDetails from './pages/ACPDetails';
 import { BlogList } from './pages/BlogList';
 import { BlogPost } from './pages/BlogPost';
-import { Metrics } from './pages/Metrics';
-import { ValidatorDetails } from './pages/ValidatorDetails';
-import { BrandGuidelines } from './pages/BrandGuidelines';
+import ACPs from './pages/ACPs';
 import { NotFound } from './pages/NotFound';
-import { APIPlayground } from './pages/APIPlayground';
-import { Flows } from './pages/Flows';
-import { Stablecoins } from './pages/Stablecoins';
-import { Layout } from './components/layout/Layout';
+
+// Lazy: client-only routes (not pre-rendered). Each becomes its own chunk, so
+// the initial bundle no longer carries mermaid, d3-sankey, charts, etc.
+const ChainDetails = lazy(() => import('./pages/ChainDetails').then(m => ({ default: m.ChainDetails })));
+const ACPDetails = lazy(() => import('./pages/ACPDetails'));
+const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
+const ValidatorDetails = lazy(() => import('./pages/ValidatorDetails').then(m => ({ default: m.ValidatorDetails })));
+const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => ({ default: m.BrandGuidelines })));
+const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ default: m.APIPlayground })));
+const Flows = lazy(() => import('./pages/Flows').then(m => ({ default: m.Flows })));
+const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 
 function App() {
   const location = useLocation();
@@ -87,7 +95,8 @@ function App() {
   }, [location.pathname, navigate]);
 
   return (
-    <Routes>
+    <Suspense fallback={<LoadingPage />}>
+      <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/chain/:chainId" element={<ChainDetails />} />
@@ -104,7 +113,8 @@ function App() {
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

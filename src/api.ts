@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity, ChainRisk } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -47,17 +47,103 @@ function sanitizeResponse(data: any): any {
 }
 
 // Add caching layer for API responses
-const cache = new Map<string, { data: any; timestamp: number }>();
+type CacheEntry = { data: any; timestamp: number };
+const cache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+// --- sessionStorage persistence -------------------------------------------
+// The in-memory Map above is wiped on every page reload, so a refresh or a
+// return visit re-fetches every metric from the network. Mirroring entries
+// into sessionStorage lets those loads render instantly from cache instead.
+// sessionStorage (not localStorage) is deliberate: it survives reloads but
+// clears when the tab closes, which bounds how stale data can get.
+// Bump PERSIST_VERSION whenever a cached response shape changes to bust old data.
+const PERSIST_VERSION = 'v1';
+const PERSIST_PREFIX = `l1beat-cache-${PERSIST_VERSION}:`;
+
+const persistAvailable = (() => {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return false;
+    const probe = `${PERSIST_PREFIX}__probe__`;
+    window.sessionStorage.setItem(probe, '1');
+    window.sessionStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+function persistGet(key: string): CacheEntry | null {
+  if (!persistAvailable) return null;
+  try {
+    const raw = window.sessionStorage.getItem(PERSIST_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.timestamp === 'number' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedCache(predicate?: (key: string) => boolean): void {
+  if (!persistAvailable) return;
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (!k || !k.startsWith(PERSIST_PREFIX)) continue;
+      if (!predicate || predicate(k.slice(PERSIST_PREFIX.length))) toRemove.push(k);
+    }
+    toRemove.forEach((k) => window.sessionStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistSet(key: string, entry: CacheEntry): void {
+  if (!persistAvailable) return;
+  const write = () => window.sessionStorage.setItem(PERSIST_PREFIX + key, JSON.stringify(entry));
+  try {
+    write();
+  } catch {
+    // Likely a quota error — drop our namespace and retry once.
+    try {
+      clearPersistedCache();
+      write();
+    } catch {
+      /* give up; the in-memory cache still works */
+    }
+  }
+}
+
+// Read a still-fresh entry from memory, falling back to sessionStorage (and
+// hydrating memory on a hit). Returns undefined on miss/expiry.
+function readCache(key: string, duration: number): any {
+  const now = Date.now();
+  const mem = cache.get(key);
+  if (mem && now - mem.timestamp < duration) return mem.data;
+  const persisted = persistGet(key);
+  if (persisted && now - persisted.timestamp < duration) {
+    cache.set(key, persisted);
+    return persisted.data;
+  }
+  return undefined;
+}
+
+function writeCache(key: string, data: any, timestamp: number): void {
+  cache.set(key, { data, timestamp });
+  persistSet(key, { data, timestamp });
+}
 
 // Export function to clear cache (for debugging/forcing refresh)
 export function clearChainsCache() {
-  // Clear all chains-related cache entries
+  // Clear all chains-related cache entries (memory + persisted)
   for (const key of cache.keys()) {
     if (key.startsWith('chains')) {
       cache.delete(key);
     }
   }
+  clearPersistedCache((key) => key.startsWith('chains'));
 }
 
 // Clear chains cache on module load to ensure fresh data after code changes
@@ -123,35 +209,36 @@ async function fetchWithCache<T>(
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const cached = cache.get(key);
   const now = Date.now();
 
-  if (cached && now - cached.timestamp < duration) {
-    return cached.data;
+  const fresh = readCache(key, duration);
+  if (fresh !== undefined) {
+    return fresh as T;
   }
-  
+
   // Check if we're rate-limited
   if (apiRequestTracker.isRateLimited) {
     console.warn(`Request to ${key} was blocked by rate limiting`);
-    
+
     // If we have cached data (even if expired), use it
-    if (cached) {
-      return cached.data;
+    const stale = cache.get(key) ?? persistGet(key);
+    if (stale) {
+      return stale.data;
     }
   }
-  
+
   // Record the request attempt
   apiRequestTracker.recordRequest();
 
   // Fetch fresh data
   const data = await fetcher();
-  
+
   // Sanitize the response data to prevent XSS
   const sanitizedData = sanitizeResponse(data);
-  
-  // Cache the sanitized data
-  cache.set(key, { data: sanitizedData, timestamp: now });
-  
+
+  // Cache the sanitized data (memory + sessionStorage)
+  writeCache(key, sanitizedData, now);
+
   return sanitizedData;
 }
 
@@ -328,6 +415,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             rpcUrl: chain.rpc_url || '',
             explorerUrl: chain.explorer_url || '',
             validatorCount: chain.active_validators ?? chain.validator_count ?? 0,
+            decentralization: chain.decentralization || undefined,
             validators: [],
             tps: null,
             cumulativeTxCount: null,
@@ -404,6 +492,28 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
       return [];
     }
   });
+}
+
+// Full per-chain risk envelope (validator-manager control, decentralization with
+// raw weights, economic). Keyed by the L1Beat chain_id (Chain.platformChainId),
+// NOT the URL slug. Returns null on 404/unknown chain. Cached 10min.
+export async function getChainRisk(chainId: string): Promise<ChainRisk | null> {
+  if (!chainId) return null;
+  return fetchExternalWithCache(
+    `chain-risk-${chainId}`,
+    async () => {
+      try {
+        const res = await fetchExternalWithRetry<{ data: ChainRisk }>(
+          `${L1BEAT_EXTERNAL_API}/api/v1/data/chains/${chainId}/risk`,
+        );
+        return res?.data ?? null;
+      } catch (error) {
+        console.error('Chain risk fetch error:', error);
+        return null;
+      }
+    },
+    10 * 60 * 1000,
+  );
 }
 
 export async function getCategories(): Promise<string[]> {
@@ -1421,14 +1531,14 @@ async function fetchExternalWithCache<T>(
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const cached = cache.get(key);
   const now = Date.now();
-  if (cached && now - cached.timestamp < duration) {
-    return cached.data;
+  const fresh = readCache(key, duration);
+  if (fresh !== undefined) {
+    return fresh as T;
   }
   const data = await fetcher();
   const sanitizedData = sanitizeResponse(data);
-  cache.set(key, { data: sanitizedData, timestamp: now });
+  writeCache(key, sanitizedData, now);
   return sanitizedData;
 }
 
@@ -1482,21 +1592,37 @@ async function fetchExternalWithRetry<T>(
 // stuck has_more=true from a misbehaving API).
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
-  extraParams: Record<string, string> = {}
+  extraParams: Record<string, string> = {},
+  opts: { throttleMs?: number; maxPages?: number } = {}
 ): Promise<T[]> {
+  // throttleMs: pause between pages to stay under the API's rate limit on
+  //   endpoints with many pages (e.g. the Primary Network has 3000+ validators).
+  // maxPages: hard safety bound on the number of requests.
+  const { throttleMs = 0, maxPages = Infinity } = opts;
   const all: T[] = [];
   let offset = 0;
   const limit = 100;
+  let page = 0;
 
-  while (true) {
+  while (page < maxPages) {
     const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
-    const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
-      `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
-    );
+    let response: { data: T[]; meta: { has_more: boolean } };
+    try {
+      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+        `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
+      );
+    } catch (error) {
+      // A later page failing (e.g. a 429 mid-pagination) must NOT discard the
+      // pages we already have — return the partial set instead of throwing.
+      console.warn(`fetchAllL1BeatPages: stopped early for ${endpoint} at offset ${offset}:`, error);
+      break;
+    }
     const chunk = response.data ?? [];
     all.push(...chunk);
+    page += 1;
     if (chunk.length === 0 || !response.meta?.has_more) break;
     offset += limit;
+    if (throttleMs > 0) await new Promise((r) => setTimeout(r, throttleMs));
   }
 
   // Deduplicate — the API can return overlapping items across pages
@@ -1607,9 +1733,13 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
     try {
       const params: Record<string, string> = { subnet_id: subnetId };
       if (activeOnly) params['active'] = 'true';
+      // Chains like the Primary Network have 3000+ validators (31 pages). Throttle
+      // between pages so we don't trip the API rate limit (429) mid-pagination,
+      // and cap the page count as a safety bound.
       const allValidators = await fetchAllL1BeatPages<L1BeatValidator>(
         '/api/v1/data/validators',
-        params
+        params,
+        { throttleMs: 200, maxPages: 60 }
       );
       return allValidators.map((v) => ({
         address: v.node_id,
@@ -1688,6 +1818,60 @@ export async function getL1BeatDailyFeeBurn(subnetId: string, options?: { days?:
     } catch (error) {
       console.error(`L1Beat daily fee burn fetch error (${subnetId}):`, error);
       return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
+// --- EVM (C-Chain) base + priority fee burn -------------------------------
+// Unlike L1 validation-fee burn, every C-Chain transaction burns its EIP-1559
+// base fee AND priority tip. Amounts are nAVAX as decimal strings — they can
+// exceed Number.MAX_SAFE_INTEGER, so parse with BigInt before dividing.
+export interface FeeBurnAmounts {
+  total_burned: string;        // nAVAX
+  base_fee_burned: string;     // nAVAX
+  priority_fee_burned: string; // nAVAX = total - base
+}
+export interface FeeBurnPoint extends FeeBurnAmounts {
+  period: string; // ISO8601 UTC
+}
+export interface FeeBurnResponse {
+  chain_id: number;
+  granularity: 'hour' | 'day' | 'week' | 'month';
+  unit: 'nAVAX';
+  cumulative: FeeBurnAmounts; // all-time, ignores from/to/granularity
+  series: FeeBurnPoint[];      // oldest-first
+}
+
+// Convert an nAVAX decimal string to AVAX. BigInt keeps the integer exact; the
+// AVAX result is small enough for a JS number.
+export function nAvaxToAvax(n: string | undefined | null): number {
+  if (!n) return 0;
+  try {
+    return Number(BigInt(n)) / 1e9;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getEvmFeesBurned(
+  chainId: number | string,
+  options?: { granularity?: 'hour' | 'day' | 'week' | 'month'; limit?: number; from?: string; to?: string },
+): Promise<FeeBurnResponse | null> {
+  const granularity = options?.granularity ?? 'day';
+  const cacheKey = `evm-fees-burned-${chainId}-${granularity}-${options?.limit ?? ''}-${options?.from ?? ''}-${options?.to ?? ''}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams({ granularity });
+      if (options?.limit) params.set('limit', String(options.limit));
+      if (options?.from) params.set('from', options.from);
+      if (options?.to) params.set('to', options.to);
+      const response = await fetchExternalWithRetry<{ data: FeeBurnResponse }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/evm/${chainId}/fees/burned?${params.toString()}`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`EVM fees burned fetch error (${chainId}):`, error);
+      return null;
     }
   }, 5 * 60 * 1000);
 }
