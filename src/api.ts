@@ -1876,6 +1876,29 @@ export async function getEvmFeesBurned(
   }, 5 * 60 * 1000);
 }
 
+// Network-wide all-time AVAX burned (nAVAX strings). The authoritative cumulative
+// for the live burn page; the websocket layers new-block deltas on top.
+export interface BurnedTotal {
+  unit: string;
+  total_burned: string; // nAVAX
+  by_chain: { p_chain: string | null; x_chain: string | null; c_chain: string | null };
+  updated_at: string;
+}
+
+export async function getBurnedTotal(): Promise<BurnedTotal | null> {
+  return fetchExternalWithCache('burned-total', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: BurnedTotal }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/burned/total`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Burned total fetch error:', error);
+      return null;
+    }
+  }, 60 * 1000);
+}
+
 // Aggregate daily fee burn across all L1 subnets for network-wide chart
 export async function getNetworkDailyFeeBurn(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
   const cacheKey = `l1beat-network-daily-fees-${days}`;

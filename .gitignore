@@ -30,3 +30,5 @@ CLAUDE.md
 SEO_IMPLEMENTATION.md
 .docs
 .serena
+# internal indexer specs — keep local, do not publish
+docs/

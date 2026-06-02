@@ -22,6 +22,7 @@ const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => (
 const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ default: m.APIPlayground })));
 const Flows = lazy(() => import('./pages/Flows').then(m => ({ default: m.Flows })));
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
+const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 
 function App() {
   const location = useLocation();
@@ -103,6 +104,7 @@ function App() {
         <Route path="/metrics" element={<Metrics />} />
         <Route path="/flows" element={<Flows />} />
         <Route path="/stablecoins" element={<Stablecoins />} />
+        <Route path="/burn" element={<Burn />} />
         <Route path="/acps" element={<ACPs />} />
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />
         <Route path="/blog" element={<BlogList />} />

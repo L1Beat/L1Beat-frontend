@@ -8,6 +8,7 @@ import {
   FileText,
   BookOpen,
   Code,
+  Flame,
 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -44,6 +45,7 @@ const dockItems = [
   { id: 'metrics', path: '/metrics', icon: BarChart3, label: 'Metrics' },
   { id: 'flows', path: '/flows', icon: GitFork, label: 'Flows' },
   { id: 'stablecoins', path: '/stablecoins', icon: DollarSign, label: 'Stablecoins' },
+  { id: 'burn', path: '/burn', icon: Flame, label: 'Burn' },
   { id: 'acps', path: '/acps', icon: FileText, label: 'ACPs' },
   { id: 'blog', path: '/blog', icon: BookOpen, label: 'Blog' },
   { id: 'api', path: '/api', icon: Code, label: 'API' },

@@ -9,6 +9,7 @@ import {
   BookOpen,
   Code,
   Palette,
+  Flame,
 } from 'lucide-react';
 import { L1BeatLogo } from '../L1BeatLogo';
 import { ThemeToggle } from '../ThemeToggle';
@@ -27,6 +28,7 @@ const primaryNav: NavItem[] = [
   { id: 'metrics', label: 'Metrics', path: '/metrics', icon: BarChart3 },
   { id: 'flows', label: 'Flows', path: '/flows', icon: GitFork, badge: 'NEW' },
   { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', icon: DollarSign, badge: 'NEW' },
+  { id: 'burn', label: 'Burn', path: '/burn', icon: Flame, badge: 'NEW' },
   { id: 'acps', label: 'ACPs', path: '/acps', icon: FileText },
   { id: 'blog', label: 'Blog', path: '/blog', icon: BookOpen },
   { id: 'api', label: 'API', path: '/api', icon: Code },
