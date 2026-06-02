@@ -73,6 +73,26 @@ function useFireplaceSound() {
   const [enabled, setEnabled] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeRef = useRef<ReturnType<typeof setInterval>>();
+  const watchdogRef = useRef<ReturnType<typeof setInterval>>();
+  const wantPlayingRef = useRef(false);
+
+  const ensureAudio = () => {
+    if (!audioRef.current) {
+      const audio = new Audio(FIRE_SRC);
+      audio.loop = true;
+      audio.preload = 'auto';
+      // Some browsers don't honor `loop` for every encoding and let the clip end
+      // once. Restart it ourselves as a fallback.
+      audio.addEventListener('ended', () => {
+        if (wantPlayingRef.current) {
+          audio.currentTime = 0;
+          void audio.play().catch(() => {});
+        }
+      });
+      audioRef.current = audio;
+    }
+    return audioRef.current;
+  };
 
   const fadeTo = (target: number, onDone?: () => void) => {
     const audio = audioRef.current;
@@ -91,18 +111,22 @@ function useFireplaceSound() {
   };
 
   const start = () => {
-    let audio = audioRef.current;
-    if (!audio) {
-      audio = new Audio(FIRE_SRC);
-      audio.loop = true;
-      audioRef.current = audio;
-    }
+    const audio = ensureAudio();
+    wantPlayingRef.current = true;
     audio.volume = 0;
     void audio.play().catch(() => {});
     fadeTo(FIRE_VOLUME);
+    // Watchdog: if the clip ever stalls or stops while we want it on, nudge it back.
+    if (watchdogRef.current) clearInterval(watchdogRef.current);
+    watchdogRef.current = setInterval(() => {
+      const a = audioRef.current;
+      if (wantPlayingRef.current && a && a.paused) void a.play().catch(() => {});
+    }, 2000);
   };
 
   const stop = () => {
+    wantPlayingRef.current = false;
+    if (watchdogRef.current) clearInterval(watchdogRef.current);
     const audio = audioRef.current;
     if (!audio) return;
     fadeTo(0, () => audio.pause());
@@ -111,7 +135,9 @@ function useFireplaceSound() {
   const toggle = () => setEnabled((e) => { e ? stop() : start(); return !e; });
 
   useEffect(() => () => {
+    wantPlayingRef.current = false;
     if (fadeRef.current) clearInterval(fadeRef.current);
+    if (watchdogRef.current) clearInterval(watchdogRef.current);
     audioRef.current?.pause();
   }, []);
 
