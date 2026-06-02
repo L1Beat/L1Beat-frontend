@@ -364,7 +364,7 @@ export default function ACPs() {
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <SEO
         title="Avalanche Community Proposals"
-        description="Browse, filter, and track every ACP — Avalanche Community Proposals — from draft through final, with status, track, and authors."
+        description="Browse, filter, and track every ACP (Avalanche Community Proposals) from draft through final, with status, track, and authors."
         url="/acps"
       />
       <div className="flex-1">

@@ -455,7 +455,7 @@ export function Dashboard() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title="Overview"
-        description="Live screener for every Avalanche L1 — current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
+        description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
         url="/"
       />
       <Hero range={range} onRangeChange={setRange} />

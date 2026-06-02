@@ -507,7 +507,7 @@ export function ChainDetails() {
         title={chain.chainName}
         description={
           chain.description?.slice(0, 200) ||
-          `${chain.chainName} on Avalanche — current TPS, validators, economics, and a side-by-side compare against other L1s.`
+          `${chain.chainName} on Avalanche: current TPS, validators, economics, and a side-by-side compare against other L1s.`
         }
         image={chain.chainLogoUri}
         url={`/chain/${chain.chainId}`}
@@ -854,7 +854,7 @@ export function ChainDetails() {
                               <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                                 {isPrimaryNetwork
                                   ? feeBurnSplit
-                                    ? `AVAX burned via EIP-1559 — ${feeBurnSplit.basePct.toFixed(1)}% base fee · ${feeBurnSplit.priorityPct.toFixed(1)}% priority tip`
+                                    ? `AVAX burned via EIP-1559 · ${feeBurnSplit.basePct.toFixed(1)}% base fee · ${feeBurnSplit.priorityPct.toFixed(1)}% priority tip`
                                     : 'Total AVAX burned via EIP-1559 base fee + priority tip'
                                   : 'Total AVAX burned to P-Chain over time'}
                               </p>
@@ -1483,7 +1483,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
     <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
       <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-base sm:text-lg font-bold text-foreground">Fee Burn — base vs priority</h3>
+          <h3 className="text-base sm:text-lg font-bold text-foreground">Fee Burn: base vs priority</h3>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {isAll ? 'All time' : `Last ${tf} days`} · {basePct.toFixed(1)}% base fee · {(100 - basePct).toFixed(1)}% priority tip
           </p>
@@ -1786,7 +1786,7 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
   } else if (instant) {
     chip = 'Instantly upgradeable';
     chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
-    headline = 'The manager can be upgraded instantly by its admin — control can be changed at any time.';
+    headline = 'The manager can be upgraded instantly by its admin, so control can be changed at any time.';
   } else if (shared && !isProxy) {
     chip = 'Shared control';
     chipTone = 'text-green-600 dark:text-green-400 bg-green-500/10';
@@ -1817,12 +1817,12 @@ function recoverability(deployedOn?: string) {
   if (deployedOn === 'self')
     return {
       tone: 'text-yellow-600 dark:text-yellow-400',
-      text: 'Validator manager runs on this L1 — if the chain halts, its validator set can’t be changed (no recovery path).',
+      text: 'Validator manager runs on this L1, so if the chain halts its validator set can’t be changed (no recovery path).',
     };
   if (deployedOn === 'c-chain')
     return {
       tone: 'text-green-600 dark:text-green-400',
-      text: 'Validator manager runs on the C-Chain — the validator set stays changeable even if this L1 halts.',
+      text: 'Validator manager runs on the C-Chain, so the validator set stays changeable even if this L1 halts.',
     };
   return null;
 }
@@ -1982,7 +1982,7 @@ function DecentralizationCard({
 
         <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground/70">
           A signal, not a security audit. Distribution is from on-chain stake weights; control is read
-          from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label} — ${perm.note}` : ''}
+          from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label}: ${perm.note}` : ''}
         </p>
       </div>
     </div>

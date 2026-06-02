@@ -152,7 +152,7 @@ export function Flows() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title="Cross-chain Flows"
-        description="ICM and Teleporter activity across Avalanche L1s — sender/receiver Sankey, top corridors, and live message volume."
+        description="ICM and Teleporter activity across Avalanche L1s: sender/receiver Sankey, top corridors, and live message volume."
         url="/flows"
       />
       <header>

@@ -68,7 +68,7 @@ function DropdownSelect({
           errorClass,
         ].join(' ')}
       >
-        <SelectValue placeholder={placeholder ?? '— select —'} />
+        <SelectValue placeholder={placeholder ?? 'Select…'} />
         {/* Custom chevron — rotates via data-[state=open] on the trigger (group) */}
         <ChevronDown
           className={[
@@ -101,7 +101,7 @@ function DropdownSelect({
               'data-[state=checked]:bg-[#ef4444]/10 data-[state=checked]:text-foreground',
             ].join(' ')}
           >
-            — any —
+            Any
           </SelectItem>
         )}
         {options.map((opt) => (

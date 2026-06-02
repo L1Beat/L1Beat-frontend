@@ -30,7 +30,7 @@ export function BrandGuidelines() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title="Brand Guidelines"
-        description="L1Beat brand kit — logo, colors, typography, usage rules, and downloadable assets."
+        description="L1Beat brand kit: logo, colors, typography, usage rules, and downloadable assets."
         url="/brand"
       />
       <header>
@@ -97,7 +97,7 @@ export function BrandGuidelines() {
           <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <PrincipleCard
               title="Heartbeat & Pulse"
-              description="The logo represents the living network — constantly monitoring and analyzing L1 activity."
+              description="The logo represents the living network, constantly monitoring and analyzing L1 activity."
               icon={
                 <div className="w-3.5 h-3.5 rounded-full bg-[#ef4444]" />
               }

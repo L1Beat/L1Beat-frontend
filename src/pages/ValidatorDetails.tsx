@@ -189,7 +189,7 @@ export function ValidatorDetails() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title={`${nodeShort} · Validator`}
-        description={`${chain ? `${chain.chainName} validator ` : 'Avalanche validator '}${nodeShort} — balance, uptime, deposit history, and validation record.`}
+        description={`${chain ? `${chain.chainName} validator ` : 'Avalanche validator '}${nodeShort}: balance, uptime, deposit history, and validation record.`}
         url={`/validator/${validator.node_id}`}
       />
       <button
@@ -704,7 +704,7 @@ function StakingPeriodCard({ period, active }: {
         />
       </div>
       <p className="text-[11px] text-muted-foreground">
-        {Math.floor(period.progress)}% complete — {Math.floor(period.totalDays)} day term
+        {Math.floor(period.progress)}% complete · {Math.floor(period.totalDays)} day term
       </p>
     </div>
   );

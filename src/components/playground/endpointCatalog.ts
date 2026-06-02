@@ -70,7 +70,7 @@ const cursorParam: ParamDef = {
   type: 'string',
   required: false,
   default: '',
-  description: 'Cursor for keyset pagination — use next_cursor from previous response',
+  description: 'Cursor for keyset pagination; use next_cursor from previous response',
   placeholder: '',
 };
 
@@ -412,7 +412,7 @@ export const REST_ENDPOINTS: EndpointDef[] = [
         required: false,
         default: '',
         placeholder: 'DeFi',
-        description: 'Filter by category (e.g. DeFi, Gaming) — case-insensitive',
+        description: 'Filter by category (e.g. DeFi, Gaming), case-insensitive',
       },
       limitParam(100),
       offsetParam,
@@ -527,7 +527,7 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       offsetParam,
       countParam,
     ],
-    notes: ['summary field always present — aggregated totals across ALL L1 subnets'],
+    notes: ['summary field always present; aggregated totals across ALL L1 subnets'],
     suggestedNext: ['metrics-fees-daily', 'validators'],
   },
   {
@@ -544,7 +544,7 @@ export const REST_ENDPOINTS: EndpointDef[] = [
         type: 'subnetId',
         required: true,
         default: '11111111111111111111111111111111LpoYY',
-        description: 'Subnet ID — required',
+        description: 'Subnet ID (required)',
       },
       {
         name: 'days',
@@ -733,7 +733,7 @@ export const FEATURED_QUERIES: FeaturedQuery[] = [
   },
   {
     title: 'Live Block Stream',
-    description: 'Real-time blocks via WebSocket — connects immediately',
+    description: 'Real-time blocks via WebSocket; connects immediately',
     endpointId: 'ws-blocks',
     params: { chainId: '43114' },
     icon: 'Radio',

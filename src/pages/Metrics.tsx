@@ -215,7 +215,7 @@ export function Metrics() {
         deltaSuffix: 'current',
         icon: Users,
         tooltip:
-          'Total active validators across all Avalanche L1s, including the Primary Network. Range-independent — always shows the current count.',
+          'Total active validators across all Avalanche L1s, including the Primary Network. Range-independent; always shows the current count.',
       },
     ];
   }, [history, range]);
@@ -271,7 +271,7 @@ export function Metrics() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title="Network Metrics"
-        description="Aggregate Avalanche L1 metrics — cross-chain TPS, transactions, validators, gas, fees, and a side-by-side compare tool."
+        description="Aggregate Avalanche L1 metrics: cross-chain TPS, transactions, validators, gas, fees, and a side-by-side compare tool."
         url="/metrics"
       />
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

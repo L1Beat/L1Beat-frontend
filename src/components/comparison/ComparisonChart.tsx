@@ -215,7 +215,7 @@ export const ComparisonChart = memo(function ComparisonChart({
             if (raw == null) return `${label}: No data`;
             const formattedRaw = `${formatValue(raw, metricType)} ${valueLabel}`;
             if (viewMode === 'normalized' && context.parsed.y != null) {
-              return `${label}: ${context.parsed.y.toFixed(0)}% — ${formattedRaw}`;
+              return `${label}: ${context.parsed.y.toFixed(0)}% · ${formattedRaw}`;
             }
             return `${label}: ${formattedRaw}`;
           }

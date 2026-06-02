@@ -624,7 +624,7 @@ export function APIPlayground() {
     >
       <SEO
         title="API Playground"
-        description="Test the L1Beat REST and WebSocket APIs live — endpoint catalog, smart params, bookmarks, and history."
+        description="Test the L1Beat REST and WebSocket APIs live: endpoint catalog, smart params, bookmarks, and history."
         url="/api"
       />
       {/* Mobile sidebar drawer */}

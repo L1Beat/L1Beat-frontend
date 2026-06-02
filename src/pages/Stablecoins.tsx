@@ -371,7 +371,7 @@ export function Stablecoins() {
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <SEO
           title="Stablecoins on Avalanche"
-          description="Live supply, holders, and 24h activity for every major stablecoin on Avalanche C-Chain — USDC, USDT, AUSD, BUIDL, EURC and more."
+          description="Live supply, holders, and 24h activity for every major stablecoin on Avalanche C-Chain: USDC, USDT, AUSD, BUIDL, EURC and more."
           url="/stablecoins"
         />
 
@@ -1603,7 +1603,7 @@ function SupplyTreemap({
             onClick={() => onSelect(issuer)}
           >
             <title>
-              {coin.symbol} ({issuer}) — {fmtUsd(coin.supplyUsd)} · {pct.toFixed(2)}%
+              {coin.symbol} ({issuer}) · {fmtUsd(coin.supplyUsd)} · {pct.toFixed(2)}%
             </title>
             <rect
               width={w}

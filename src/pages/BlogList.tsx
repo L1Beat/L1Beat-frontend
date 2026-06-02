@@ -113,7 +113,7 @@ export function BlogList() {
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
         title="Blog"
-        description="Insights, research, and deep-dives on Avalanche L1s — performance, economics, and the people building them."
+        description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
         url="/blog"
       />
       <Hero
