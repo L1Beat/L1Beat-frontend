@@ -16,7 +16,8 @@ interface WsBlock {
 type WsMessage = { type: 'initial'; data: WsBlock[] } | { type: 'new_block'; data: WsBlock };
 
 const WS_URL = 'wss://api.l1beat.io/ws/blocks/43114';
-const FEED_CAP = 50;
+const FEED_CAP = 50; // internal buffer kept for the burn-rate stat
+const FEED_VISIBLE = 10; // rows actually shown in the live feed
 const NAVAX = 1e9; // 1 AVAX = 1e9 nAVAX
 
 const navaxToAvax = (n: string | bigint): number => Number(typeof n === 'bigint' ? n : BigInt(n)) / NAVAX;
@@ -425,14 +426,15 @@ export function Burn() {
     return sum; // already a per-minute window
   }, [blocks, now]);
 
-  // Average burn per block across the blocks currently in the feed.
+  // Average burn per block across the blocks shown in the feed.
   const avgPerBlock = useMemo(() => {
-    if (blocks.length === 0) return 0;
+    const shown = blocks.slice(0, FEED_VISIBLE);
+    if (shown.length === 0) return 0;
     let sum = 0n;
-    for (const b of blocks) {
+    for (const b of shown) {
       try { sum += BigInt(b.burned.total); } catch { /* ignore */ }
     }
-    return Number(sum) / NAVAX / blocks.length;
+    return Number(sum) / NAVAX / shown.length;
   }, [blocks]);
 
   return (
@@ -501,7 +503,7 @@ export function Burn() {
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard icon={Zap} label="Burn rate" value={`${ratePerMin.toFixed(6)}`} sub="AVAX / min" />
         <SessionStat navax={sessionNavax} reduced={reduced} />
-        <StatCard icon={Gauge} label="Avg burn / block" value={avgPerBlock > 0 ? avgPerBlock.toFixed(8) : '—'} sub={blocks.length ? `last ${blocks.length} blocks` : 'AVAX'} />
+        <StatCard icon={Gauge} label="Avg burn / block" value={avgPerBlock > 0 ? avgPerBlock.toFixed(8) : '—'} sub={blocks.length ? `last ${Math.min(blocks.length, FEED_VISIBLE)} blocks` : 'AVAX'} />
       </div>
 
       {/* Live feed */}
@@ -524,7 +526,7 @@ export function Burn() {
           </div>
         ) : (
           <div>
-            {blocks.map((b, i) => (
+            {blocks.slice(0, FEED_VISIBLE).map((b, i) => (
               <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} />
             ))}
           </div>
