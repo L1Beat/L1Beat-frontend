@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Zap, Activity, Gauge, Volume2, VolumeX } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { getBurnedTotal } from '../api';
@@ -15,12 +15,26 @@ interface WsBlock {
 }
 type WsMessage = { type: 'initial'; data: WsBlock[] } | { type: 'new_block'; data: WsBlock };
 
+// A block with its derived numbers computed once at ingest, so render-time
+// (and the per-second feed tick) never re-parses BigInt/Date for every row.
+interface FeedBlock extends WsBlock {
+  avax: number; // burned.total in AVAX
+  navaxNum: number; // burned.total as a plain number (nAVAX)
+  tsMs: number; // block_time parsed to epoch ms
+}
+
 const WS_URL = 'wss://api.l1beat.io/ws/blocks/43114';
 const FEED_CAP = 50; // internal buffer kept for the burn-rate stat
 const FEED_VISIBLE = 10; // rows actually shown in the live feed
 const NAVAX = 1e9; // 1 AVAX = 1e9 nAVAX
 
 const navaxToAvax = (n: string | bigint): number => Number(typeof n === 'bigint' ? n : BigInt(n)) / NAVAX;
+
+function toFeedBlock(b: WsBlock): FeedBlock {
+  let navaxNum = 0;
+  try { navaxNum = Number(BigInt(b.burned.total)); } catch { /* ignore */ }
+  return { ...b, avax: navaxNum / NAVAX, navaxNum, tsMs: new Date(b.block_time).getTime() };
+}
 
 // --- reduced-motion --------------------------------------------------------
 function usePrefersReducedMotion() {
@@ -147,11 +161,11 @@ function useFireplaceSound() {
 
 // --- live stream hook ------------------------------------------------------
 function useBurnStream() {
-  const [blocks, setBlocks] = useState<WsBlock[]>([]);
+  const [blocks, setBlocks] = useState<FeedBlock[]>([]);
   const [totalNavax, setTotalNavax] = useState<bigint | null>(null); // REST seed + new-block deltas
   const [sessionNavax, setSessionNavax] = useState<bigint>(0n);
   const [connected, setConnected] = useState(false);
-  const [lastBlock, setLastBlock] = useState<WsBlock | null>(null);
+  const [lastBlock, setLastBlock] = useState<FeedBlock | null>(null);
 
   const seedRef = useRef<bigint | null>(null);
   const deltaRef = useRef<bigint>(0n);
@@ -178,11 +192,11 @@ function useBurnStream() {
 
     const ingest = (incoming: WsBlock[], isNew: boolean) => {
       // De-dup by block_number; only new_block events advance the counter.
-      const fresh: WsBlock[] = [];
+      const fresh: FeedBlock[] = [];
       for (const b of incoming) {
         if (seenRef.current.has(b.block_number)) continue;
         seenRef.current.add(b.block_number);
-        fresh.push(b);
+        fresh.push(toFeedBlock(b));
         if (isNew) {
           try {
             const v = BigInt(b.burned.total);
@@ -196,7 +210,7 @@ function useBurnStream() {
       if (seenRef.current.size > 4000) {
         seenRef.current = new Set([...seenRef.current].slice(-2000));
       }
-      setBlocks((prev) => [...fresh].concat(prev).sort((a, b) => b.block_number - a.block_number).slice(0, FEED_CAP));
+      setBlocks((prev) => fresh.concat(prev).sort((a, b) => b.block_number - a.block_number).slice(0, FEED_CAP));
       if (isNew) {
         setLastBlock(fresh[fresh.length - 1]);
         if (seedRef.current != null) setTotalNavax(seedRef.current + deltaRef.current);
@@ -234,9 +248,36 @@ function useBurnStream() {
 }
 
 // --- ember particle canvas -------------------------------------------------
-interface Ember { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number; }
+interface Ember { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; bucket: number; }
 
-function EmberCanvas({ burst, reduced }: { burst: WsBlock | null; reduced: boolean }) {
+// Pre-rendered glow sprites, one per hue bucket. Baking the soft glow into an
+// offscreen canvas once lets the loop draw each ember with a single drawImage
+// instead of a per-frame shadowBlur + radial gradient (both very expensive).
+const SPRITE_SIZE = 32;
+const HUE_MIN = 12;
+const HUE_SPAN = 32;
+const HUE_BUCKETS = 8;
+let emberSprites: HTMLCanvasElement[] | null = null;
+function getEmberSprites(): HTMLCanvasElement[] {
+  if (emberSprites) return emberSprites;
+  emberSprites = Array.from({ length: HUE_BUCKETS }, (_, i) => {
+    const hue = HUE_MIN + (HUE_SPAN * i) / (HUE_BUCKETS - 1);
+    const c = document.createElement('canvas');
+    c.width = c.height = SPRITE_SIZE;
+    const g = c.getContext('2d')!;
+    const r = SPRITE_SIZE / 2;
+    const grad = g.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, `hsla(${hue}, 100%, 65%, 1)`);
+    grad.addColorStop(0.4, `hsla(${hue}, 100%, 55%, 0.55)`);
+    grad.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+    return c;
+  });
+  return emberSprites;
+}
+
+function EmberCanvas({ burst, reduced }: { burst: FeedBlock | null; reduced: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const embers = useRef<Ember[]>([]);
   const size = useRef({ w: 0, h: 0, dpr: 1 });
@@ -254,17 +295,16 @@ function EmberCanvas({ burst, reduced }: { burst: WsBlock | null; reduced: boole
         life: 0,
         max,
         size: 1 + Math.random() * 2.5,
-        hue: 12 + Math.random() * 32,
+        bucket: Math.floor(Math.random() * HUE_BUCKETS),
       });
     }
-    if (embers.current.length > 320) embers.current = embers.current.slice(-320);
+    if (embers.current.length > 240) embers.current = embers.current.slice(-240);
   };
 
   // Burst on each new block, sized by burn magnitude (log scale — burns are tiny).
   useEffect(() => {
     if (reduced || !burst) return;
-    const navax = Number(BigInt(burst.burned.total)) || 0;
-    const n = 6 + Math.min(34, Math.round(Math.log10(navax + 10) * 5));
+    const n = 6 + Math.min(34, Math.round(Math.log10(burst.navaxNum + 10) * 5));
     spawn(n);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [burst?.block_number, reduced]);
@@ -275,6 +315,7 @@ function EmberCanvas({ burst, reduced }: { burst: WsBlock | null; reduced: boole
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const sprites = getEmberSprites();
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -289,6 +330,7 @@ function EmberCanvas({ burst, reduced }: { burst: WsBlock | null; reduced: boole
     ro.observe(canvas);
 
     let raf = 0;
+    let running = false;
     let last = performance.now();
     let spawnAcc = 0;
     const loop = (now: number) => {
@@ -309,21 +351,35 @@ function EmberCanvas({ burst, reduced }: { burst: WsBlock | null; reduced: boole
         e.vy -= 0.0006 * dt; // buoyancy
         e.x += e.vx * dt * 0.06;
         e.y += e.vy * dt * 0.06;
-        const alpha = (1 - t) * 0.85;
-        const r = e.size * (1 + t * 0.6);
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = `hsla(${e.hue}, 100%, 55%, ${alpha})`;
-        ctx.fillStyle = `hsla(${e.hue}, 100%, ${60 - t * 20}%, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.globalAlpha = (1 - t) * 0.85;
+        const d = e.size * (1 + t * 0.6) * 6; // glow diameter
+        ctx.drawImage(sprites[e.bucket], e.x - d / 2, e.y - d / 2, d, d);
       }
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-      ctx.shadowBlur = 0;
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+
+    // Only burn CPU while the hero is on-screen and the tab is visible.
+    const startLoop = () => { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); };
+    const stopLoop = () => { running = false; cancelAnimationFrame(raf); };
+    const sync = (onScreen: boolean) => {
+      if (onScreen && !document.hidden) startLoop();
+      else stopLoop();
+    };
+
+    let visible = true;
+    const io = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(visible); }, { threshold: 0 });
+    io.observe(canvas);
+    const onVisibility = () => sync(visible);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stopLoop();
+      ro.disconnect();
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [reduced]);
 
   if (reduced) return null;
@@ -368,18 +424,18 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Flame; label
 }
 
 // --- live feed -------------------------------------------------------------
-function timeAgo(iso: string, now: number): string {
-  const s = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
+function timeAgo(tsMs: number, now: number): string {
+  const s = Math.max(0, Math.floor((now - tsMs) / 1000));
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   return `${Math.floor(s / 3600)}h ago`;
 }
 
-function BlockRow({ block, now, reduced, isNewest }: { block: WsBlock; now: number; reduced: boolean; isNewest: boolean }) {
-  const avax = navaxToAvax(block.burned.total);
+// memo: with the clock isolated to LiveFeed, a per-second tick only re-renders
+// rows whose `now` bucket actually changed the label (props are otherwise stable).
+const BlockRow = memo(function BlockRow({ block, now, reduced, isNewest }: { block: FeedBlock; now: number; reduced: boolean; isNewest: boolean }) {
   // Flash intensity scales (log) with burn size; newest row gets the ignite flash.
-  const navax = Number(BigInt(block.burned.total)) || 0;
-  const heat = Math.min(1, Math.log10(navax + 10) / 7);
+  const heat = Math.min(1, Math.log10(block.navaxNum + 10) / 7);
   return (
     <div
       className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border/50 last:border-0"
@@ -388,7 +444,7 @@ function BlockRow({ block, now, reduced, isNewest }: { block: WsBlock; now: numb
       <div className="min-w-0">
         <div className="text-sm font-semibold text-foreground tabular-nums">Block {block.block_number.toLocaleString('en-US')}</div>
         <div className="text-[11px] text-muted-foreground">
-          {timeAgo(block.block_time, now)} · {block.tx_count} tx
+          {timeAgo(block.tsMs, now)} · {block.tx_count} tx
         </div>
       </div>
       <div
@@ -396,9 +452,47 @@ function BlockRow({ block, now, reduced, isNewest }: { block: WsBlock; now: numb
         style={{ background: `rgba(239,68,68,${0.08 + heat * 0.22})` }}
       >
         <Flame className="w-3.5 h-3.5 text-[#ef4444]" />
-        {avax.toFixed(8)}
+        {block.avax.toFixed(8)}
       </div>
     </div>
+  );
+});
+
+// Owns the 1s clock so the "Xs ago" labels stay live without re-rendering the
+// hero, counter, ember canvas or stat cards every second.
+function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <section className="mt-8 rounded-2xl border border-border bg-card overflow-hidden">
+      <header className="flex items-center gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
+        <Flame className="w-4 h-4 text-[#ef4444]" />
+        <h2 className="text-sm font-bold tracking-wide uppercase text-foreground">Live C-Chain Block Burns</h2>
+      </header>
+      {blocks.length === 0 ? (
+        <div className="divide-y divide-border/50">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between px-4 sm:px-5 py-3">
+              <div className="space-y-1.5">
+                <div className="h-3.5 w-28 rounded bg-muted animate-pulse" />
+                <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
+              </div>
+              <div className="h-6 w-24 rounded-full bg-muted animate-pulse" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div>
+          {blocks.slice(0, FEED_VISIBLE).map((b, i) => (
+            <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -407,34 +501,27 @@ export function Burn() {
   const reduced = usePrefersReducedMotion();
   const { blocks, totalNavax, sessionNavax, connected, lastBlock } = useBurnStream();
   const sound = useFireplaceSound();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const totalAvax = totalNavax != null ? navaxToAvax(totalNavax) : 0;
 
-  // Burn rate over blocks in the last 60s → AVAX/min.
+  // Burn rate over blocks in the last 60s → AVAX/min. Recomputed when blocks
+  // change (new C-Chain block every ~2s), not on a separate 1s clock.
   const ratePerMin = useMemo(() => {
-    const cutoff = now - 60_000;
+    const cutoff = Date.now() - 60_000;
     let sum = 0;
     for (const b of blocks) {
-      if (new Date(b.block_time).getTime() >= cutoff) sum += navaxToAvax(b.burned.total);
+      if (b.tsMs >= cutoff) sum += b.avax;
     }
     return sum; // already a per-minute window
-  }, [blocks, now]);
+  }, [blocks]);
 
   // Average burn per block across the blocks shown in the feed.
   const avgPerBlock = useMemo(() => {
     const shown = blocks.slice(0, FEED_VISIBLE);
     if (shown.length === 0) return 0;
-    let sum = 0n;
-    for (const b of shown) {
-      try { sum += BigInt(b.burned.total); } catch { /* ignore */ }
-    }
-    return Number(sum) / NAVAX / shown.length;
+    let sum = 0;
+    for (const b of shown) sum += b.avax;
+    return sum / shown.length;
   }, [blocks]);
 
   return (
@@ -507,31 +594,7 @@ export function Burn() {
       </div>
 
       {/* Live feed */}
-      <section className="mt-8 rounded-2xl border border-border bg-card overflow-hidden">
-        <header className="flex items-center gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
-          <Flame className="w-4 h-4 text-[#ef4444]" />
-          <h2 className="text-sm font-bold tracking-wide uppercase text-foreground">Live C-Chain Block Burns</h2>
-        </header>
-        {blocks.length === 0 ? (
-          <div className="divide-y divide-border/50">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center justify-between px-4 sm:px-5 py-3">
-                <div className="space-y-1.5">
-                  <div className="h-3.5 w-28 rounded bg-muted animate-pulse" />
-                  <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
-                </div>
-                <div className="h-6 w-24 rounded-full bg-muted animate-pulse" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div>
-            {blocks.slice(0, FEED_VISIBLE).map((b, i) => (
-              <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} />
-            ))}
-          </div>
-        )}
-      </section>
+      <LiveFeed blocks={blocks} reduced={reduced} />
     </div>
   );
 }
