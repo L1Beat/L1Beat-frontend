@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainValidators, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
@@ -81,6 +82,9 @@ export function ChainDetails() {
   // (for 7/30/90D) and monthly (for the All view, full history).
   const [cchainBurnDaily, setCchainBurnDaily] = useState<{ date: string; base: number; priority: number }[]>([]);
   const [cchainBurnMonthly, setCchainBurnMonthly] = useState<{ date: string; base: number; priority: number }[]>([]);
+  // Scroll container for the virtualized validator table (chains like the
+  // Primary Network have 3000+ validators — rendering them all kills scroll/paint).
+  const validatorScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +300,15 @@ export function ChainDetails() {
     
     return sortOrder === 'desc' ? -comparison : comparison;
   }) || [];
+
+  // Only the rows in (and near) the viewport are mounted. measureElement keeps
+  // the total height accurate so the scrollbar is correct even for 3000+ rows.
+  const rowVirtualizer = useVirtualizer({
+    count: filteredValidators.length,
+    getScrollElement: () => validatorScrollRef.current,
+    estimateSize: () => 69,
+    overscan: 12,
+  });
 
   const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
   // L1 subnets use continuous fees — show remaining balance column.
@@ -1160,7 +1173,7 @@ export function ChainDetails() {
 
                     {/* Own scroll context (max-height) so the header can stick
                         while the rows scroll — no pagination. */}
-                    <div className="overflow-auto max-h-[70vh]">
+                    <div ref={validatorScrollRef} className="overflow-auto max-h-[70vh]">
                       <table className="min-w-full divide-y divide-border">
                         <thead className="sticky top-0 z-10 bg-card">
                           <tr className="border-b border-border">
@@ -1240,7 +1253,23 @@ export function ChainDetails() {
                           </tr>
                         </thead>
                         <tbody className="bg-card divide-y divide-border">
-                          {filteredValidators.map((validator, index) => {
+                          {(() => {
+                            const virtualRows = rowVirtualizer.getVirtualItems();
+                            const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+                            const paddingBottom =
+                              virtualRows.length > 0
+                                ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+                                : 0;
+                            return (
+                              <>
+                                {paddingTop > 0 && (
+                                  <tr aria-hidden>
+                                    <td colSpan={4} style={{ height: paddingTop, padding: 0, border: 0 }} />
+                                  </tr>
+                                )}
+                                {virtualRows.map((virtualRow) => {
+                            const index = virtualRow.index;
+                            const validator = filteredValidators[index];
                             const percentage = (() => {
                               const v = unitsToNumber(validator.weight, stakeIsWeight ? 0 : stakeTokenDecimals);
                               const t = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
@@ -1248,8 +1277,10 @@ export function ChainDetails() {
                               return ((v / t) * 100).toFixed(2);
                             })();
                             return (
-                              <tr 
-                                key={validator.address} 
+                              <tr
+                                key={validator.address}
+                                data-index={index}
+                                ref={rowVirtualizer.measureElement}
                                 className="hover:bg-muted/30 transition-colors cursor-pointer"
                                 onClick={() => {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
@@ -1378,7 +1409,15 @@ export function ChainDetails() {
                                 </td>
                               </tr>
                             );
-                          })}
+                                })}
+                                {paddingBottom > 0 && (
+                                  <tr aria-hidden>
+                                    <td colSpan={4} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+                                  </tr>
+                                )}
+                              </>
+                            );
+                          })()}
                         </tbody>
                       </table>
                     </div>
