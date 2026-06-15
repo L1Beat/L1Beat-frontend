@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SEO } from '../components/SEO';
@@ -40,6 +40,7 @@ const RANGE_DAYS: Record<Range, number> = {
 };
 const VALID_RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
 const CHAINS_PER_PAGE = 25;
+const MAX_COMPARE = 4;
 const WATCHLIST_STORAGE_KEY = 'dashboardWatchlist';
 
 const VALID_TABS: ScreenerTab[] = ['active', 'all', 'watchlist', 'inactive'];
@@ -185,9 +186,9 @@ export function Dashboard() {
   );
   const [watchlist, setWatchlist] = useState<Set<string>>(loadWatchlist);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const MAX_COMPARE = 4;
-
-  const toggleWatchlist = (chainId: string) => {
+  // Stable identities so the memoized ScreenerTable doesn't re-render on every
+  // parent state change (e.g. each search keystroke).
+  const toggleWatchlist = useCallback((chainId: string) => {
     setWatchlist((prev) => {
       const next = new Set(prev);
       if (next.has(chainId)) next.delete(chainId);
@@ -195,9 +196,9 @@ export function Dashboard() {
       saveWatchlist(next);
       return next;
     });
-  };
+  }, []);
 
-  const toggleSelection = (chainId: string) => {
+  const toggleSelection = useCallback((chainId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(chainId)) {
@@ -207,7 +208,7 @@ export function Dashboard() {
       }
       return next;
     });
-  };
+  }, []);
 
   const clearSelection = () => setSelected(new Set());
 
@@ -216,14 +217,17 @@ export function Dashboard() {
     navigate(`/metrics?compare=${[...selected].join(',')}`);
   };
 
-  const toggleSort = (key: SortKey) => {
-    if (key === sortBy) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortBy(key);
-      setSortDir(key === 'name' ? 'asc' : 'desc');
-    }
-  };
+  const toggleSort = useCallback(
+    (key: SortKey) => {
+      if (key === sortBy) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortBy(key);
+        setSortDir(key === 'name' ? 'asc' : 'desc');
+      }
+    },
+    [sortBy],
+  );
 
   const [metrics, setMetrics] = useState<NetworkMetrics>({
     tpsHistory: [],
@@ -308,10 +312,24 @@ export function Dashboard() {
         const txHistory: HistoryPoint[] = (txRaw || [])
           .map((p) => ({ timestamp: p.timestamp, value: Number(p.value) || 0 }))
           .sort((a, b) => a.timestamp - b.timestamp);
-        setMetrics({
-          tpsHistory,
-          txHistory,
-          validators: validatorTotal?.totalValidators ?? null,
+        const validators = validatorTotal?.totalValidators ?? null;
+        setMetrics((prev) => {
+          // Skip the state update (and the re-render it triggers) when the poll
+          // returns the same data — compare length + latest point of each series.
+          const sameSeries = (a: HistoryPoint[], b: HistoryPoint[]) => {
+            if (a.length !== b.length) return false;
+            const la = a[a.length - 1];
+            const lb = b[b.length - 1];
+            return !la || !lb || (la.timestamp === lb.timestamp && la.value === lb.value);
+          };
+          if (
+            prev.validators === validators &&
+            sameSeries(prev.tpsHistory, tpsHistory) &&
+            sameSeries(prev.txHistory, txHistory)
+          ) {
+            return prev;
+          }
+          return { tpsHistory, txHistory, validators };
         });
       } catch {
         // KPI strip is decorative; ignore failures
@@ -354,43 +372,56 @@ export function Dashboard() {
     }
   }, [loading]);
 
-  const activeCount = chains.filter((c) => c.isActive).length;
-  const watchlistCount = chains.filter((c) => watchlist.has(c.chainId)).length;
-  const totalNetworkTps = chains.reduce((sum, c) => sum + (c.tps?.value ?? 0), 0);
-  const tabCounts: Record<ScreenerTab, number> = {
-    active: activeCount,
-    all: chains.length,
-    inactive: chains.length - activeCount,
-    watchlist: watchlistCount,
-  };
+  const activeCount = useMemo(() => chains.filter((c) => c.isActive).length, [chains]);
+  const watchlistCount = useMemo(
+    () => chains.filter((c) => watchlist.has(c.chainId)).length,
+    [chains, watchlist],
+  );
+  const totalNetworkTps = useMemo(
+    () => chains.reduce((sum, c) => sum + (c.tps?.value ?? 0), 0),
+    [chains],
+  );
+  const tabCounts: Record<ScreenerTab, number> = useMemo(
+    () => ({
+      active: activeCount,
+      all: chains.length,
+      inactive: chains.length - activeCount,
+      watchlist: watchlistCount,
+    }),
+    [activeCount, watchlistCount, chains.length],
+  );
 
-  const filteredChains = chains
-    .filter((chain) => {
-      if (validatorFilter === 'active') return chain.isActive;
-      if (validatorFilter === 'inactive') return !chain.isActive;
-      if (validatorFilter === 'watchlist') return watchlist.has(chain.chainId);
-      return true;
-    })
-    .filter(
-      (chain) =>
-        chain.chainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chain.chainId.toLowerCase().includes(searchTerm.toLowerCase()),
-    )
-    .sort((a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
-      const isCa = a.chainName.toLowerCase().includes('c-chain');
-      const isCb = b.chainName.toLowerCase().includes('c-chain');
-      if (isCa && !isCb) return -1;
-      if (!isCa && isCb) return 1;
-      if (sortBy === 'name') return a.chainName.localeCompare(b.chainName) * dir;
-      if (sortBy === 'tps') return ((a.tps?.value ?? -1) - (b.tps?.value ?? -1)) * dir;
-      if (sortBy === 'validators') return ((a.validatorCount ?? 0) - (b.validatorCount ?? 0)) * dir;
-      return 0;
-    });
+  const filteredChains = useMemo(
+    () =>
+      chains
+        .filter((chain) => {
+          if (validatorFilter === 'active') return chain.isActive;
+          if (validatorFilter === 'inactive') return !chain.isActive;
+          if (validatorFilter === 'watchlist') return watchlist.has(chain.chainId);
+          return true;
+        })
+        .filter(
+          (chain) =>
+            chain.chainName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            chain.chainId.toLowerCase().includes(searchTerm.toLowerCase()),
+        )
+        .sort((a, b) => {
+          const dir = sortDir === 'asc' ? 1 : -1;
+          const isCa = a.chainName.toLowerCase().includes('c-chain');
+          const isCb = b.chainName.toLowerCase().includes('c-chain');
+          if (isCa && !isCb) return -1;
+          if (!isCa && isCb) return 1;
+          if (sortBy === 'name') return a.chainName.localeCompare(b.chainName) * dir;
+          if (sortBy === 'tps') return ((a.tps?.value ?? -1) - (b.tps?.value ?? -1)) * dir;
+          if (sortBy === 'validators') return ((a.validatorCount ?? 0) - (b.validatorCount ?? 0)) * dir;
+          return 0;
+        }),
+    [chains, validatorFilter, watchlist, searchTerm, sortBy, sortDir],
+  );
   const totalPages = Math.ceil(filteredChains.length / CHAINS_PER_PAGE);
-  const paginatedChains = filteredChains.slice(
-    (currentPage - 1) * CHAINS_PER_PAGE,
-    currentPage * CHAINS_PER_PAGE,
+  const paginatedChains = useMemo(
+    () => filteredChains.slice((currentPage - 1) * CHAINS_PER_PAGE, currentPage * CHAINS_PER_PAGE),
+    [filteredChains, currentPage],
   );
 
   useEffect(() => {
@@ -563,7 +594,19 @@ export function Dashboard() {
   );
 }
 
-function Hero({ range, onRangeChange }: { range: Range; onRangeChange: (r: Range) => void }) {
+// Memoized so a parent re-render (e.g. each search keystroke) only re-renders
+// the components whose props actually changed. The per-row Sparkline/DeltaCell
+// matter most: they skip path/percentage recompute for unchanged rows.
+const Hero = memo(HeroImpl);
+const KpiCards = memo(KpiCardsImpl);
+const ScreenerHeader = memo(ScreenerHeaderImpl);
+const ScreenerTable = memo(ScreenerTableImpl);
+const DeltaCell = memo(DeltaCellImpl);
+const Sparkline = memo(SparklineImpl);
+const ChainAvatar = memo(ChainAvatarImpl);
+const StatusPill = memo(StatusPillImpl);
+
+function HeroImpl({ range, onRangeChange }: { range: Range; onRangeChange: (r: Range) => void }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -596,7 +639,7 @@ function Hero({ range, onRangeChange }: { range: Range; onRangeChange: (r: Range
   );
 }
 
-function KpiCards({
+function KpiCardsImpl({
   metrics,
   activeChains,
   range,
@@ -674,7 +717,7 @@ function KpiCards({
   );
 }
 
-function ScreenerHeader({
+function ScreenerHeaderImpl({
   activeTab,
   onTabChange,
   counts,
@@ -801,7 +844,7 @@ function ScreenerToolbar({
   );
 }
 
-function ScreenerTable({
+function ScreenerTableImpl({
   chains,
   historyByChain,
   range,
@@ -1051,7 +1094,7 @@ function SortableTh({
   );
 }
 
-function DeltaCell({ history, loaded }: { history?: number[]; loaded?: boolean }) {
+function DeltaCellImpl({ history, loaded }: { history?: number[]; loaded?: boolean }) {
   if (!loaded) {
     return <span className="text-[11px] text-muted-foreground">—</span>;
   }
@@ -1086,7 +1129,7 @@ function rangeTrendLabel(r: Range): string {
   return 'Trend';
 }
 
-function Sparkline({
+function SparklineImpl({
   values,
   range,
   loaded,
@@ -1167,7 +1210,7 @@ function Th({
   );
 }
 
-function ChainAvatar({ chain }: { chain: Chain }) {
+function ChainAvatarImpl({ chain }: { chain: Chain }) {
   if (chain.chainLogoUri) {
     return (
       <img
@@ -1186,7 +1229,7 @@ function ChainAvatar({ chain }: { chain: Chain }) {
   );
 }
 
-function StatusPill({ active }: { active: boolean }) {
+function StatusPillImpl({ active }: { active: boolean }) {
   return (
     <div
       className={`inline-flex items-center gap-1.5 px-2 h-5 rounded-full ${
