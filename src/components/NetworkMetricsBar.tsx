@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { getTPSHistory, getNetworkMaxTPSHistory, getNetworkTxCountHistory, getTeleporterMessages, getNetworkValidatorTotal } from '../api';
+import { usePolling } from '../hooks/usePolling';
 import { NetworkTPS, MaxTPSLatest, DailyTxCountLatest, TeleporterMessageData, NetworkValidatorTotal } from '../types';
 import { Activity, BarChart3, TrendingUp, MessageSquare, Users } from 'lucide-react';
 
@@ -11,7 +12,7 @@ export function NetworkMetricsBar() {
   const [validatorTotal, setValidatorTotal] = useState<NetworkValidatorTotal | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePolling(() => {
     async function fetchData() {
       try {
         // Fetch last 2 days of history to compare today vs yesterday
@@ -98,9 +99,7 @@ export function NetworkMetricsBar() {
     }
 
     fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  }, 15000);
 
   const formatTPS = (tpsValue: number): string => {
     return Math.round(tpsValue).toString();

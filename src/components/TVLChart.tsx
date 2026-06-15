@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Line } from 'react-chartjs-2';
+import { usePolling } from '../hooks/usePolling';
 import { format } from 'date-fns';
 import {
   Chart as ChartJS,
@@ -80,27 +81,10 @@ export function TVLChart() {
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      try {
-        await fetchData();
-      } catch (err) {
-        if (mounted) {
-          setError('Failed to load TVL data');
-        }
-      }
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 5 * 60 * 1000); // Refresh every 5 minutes
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  // Refresh every 5 minutes (paused while the tab is hidden).
+  usePolling(() => {
+    fetchData().catch(() => setError('Failed to load TVL data'));
+  }, 5 * 60 * 1000);
 
   if (loading) {
     return (

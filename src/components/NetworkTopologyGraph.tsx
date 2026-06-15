@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { getAllChainsTPSLatest, getChains } from '../api';
 import { Chain } from '../types';
 import { AlertTriangle, RefreshCw, Zap } from 'lucide-react';
@@ -47,7 +48,7 @@ export function NetworkTopologyGraph() {
   const MAX_BULLETS = 25;
   const BULLET_SPAWN_RATE = 0.94;
 
-  useEffect(() => {
+  usePolling(() => {
     async function fetchData() {
       try {
         setLoading(true);
@@ -100,12 +101,7 @@ export function NetworkTopologyGraph() {
     }
 
     fetchData();
-    
-    // Refresh data every 15 minutes
-    const interval = setInterval(fetchData, 15 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  }, 15 * 60 * 1000);
 
   // Find C-Chain for highlighting
   const cChain = useMemo(() => chains.find(chain => 

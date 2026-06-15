@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { format } from 'date-fns';
+import { usePolling } from '../hooks/usePolling';
 import { TPSHistory, CumulativeTxCount, DailyActiveAddresses } from '../types';
 import { getTPSHistory, getCumulativeTxCount, getDailyActiveAddresses } from '../api';
 import { Activity, TrendingUp, Users } from 'lucide-react';
@@ -21,9 +22,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
   const [error, setError] = useState({ tps: null as string | null, tx: null as string | null, addresses: null as string | null });
   const [timeframe, setTimeframe] = useState<TimeframeOption>(7);
 
-  useEffect(() => {
-    let mounted = true;
-
+  usePolling((alive) => {
     async function fetchData() {
       try {
         setLoading({ tps: true, tx: true, addresses: true });
@@ -35,7 +34,7 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
           getDailyActiveAddresses(evmChainId || chainId, timeframe),
         ]);
 
-        if (mounted) {
+        if (alive()) {
           if (tpsData.status === 'fulfilled') {
             setTpsHistory(tpsData.value.sort((a, b) => a.timestamp - b.timestamp));
             setLoading(prev => ({ ...prev, tps: false }));
@@ -62,20 +61,14 @@ export function SeparateMetricsCharts({ chainId, chainName, evmChainId }: Separa
         }
       } catch (err) {
         console.error('Error fetching metrics:', err);
-        if (mounted) {
+        if (alive()) {
           setLoading({ tps: false, tx: false, addresses: false });
         }
       }
     }
 
     fetchData();
-    const interval = setInterval(fetchData, 15 * 60 * 1000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [chainId, evmChainId, timeframe]);
+  }, 15 * 60 * 1000, [chainId, evmChainId, timeframe]);
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
     setTimeframe(newTimeframe);

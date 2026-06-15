@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { format } from 'date-fns';
@@ -294,17 +295,15 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
     };
   };
 
+  // Reset selected chain when changing timeframe.
   useEffect(() => {
-    fetchData();
-    
-    // Reset selected chain when changing timeframe
     setSelectedChain(null);
-    
-    // Refresh data every 15 minutes
-    const interval = setInterval(fetchData, 15 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, [fetchData, timeframe]);
+  }, [timeframe]);
+
+  // Fetch, then refresh every 15 minutes (paused while the tab is hidden).
+  usePolling(() => {
+    fetchData();
+  }, 15 * 60 * 1000, [fetchData, timeframe]);
 
   // Handle node click to focus on chain connections
   const handleNodeClick = useCallback((node: SankeyNode) => {

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { format } from 'date-fns';
 import { TPSHistory, NetworkTPS, CumulativeTxCount, DailyActiveAddresses, DailyTxCount, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../types';
 import { getTPSHistory, getNetworkTPS, getCumulativeTxCount, getDailyActiveAddresses, getNetworkTxCountHistory, getChainTxCountHistory, getChainMaxTPSHistory, getNetworkMaxTPSHistory, getNetworkGasUsedHistory, getChainGasUsedHistory, getNetworkAvgGasPriceHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getNetworkFeesPaidHistory } from '../api';
@@ -117,9 +118,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId, tokenSymbol }: 
     }));
   };
 
-  useEffect(() => {
-    let mounted = true;
-
+  usePolling((alive) => {
     async function fetchData() {
       try {
         setLoading(true);
@@ -173,7 +172,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId, tokenSymbol }: 
 
         const results = await Promise.all(promises);
 
-        if (mounted) {
+        if (alive()) {
           // Use fallback data if API returns empty arrays
           const tpsData = results[0] && results[0].length > 0
             ? results[0].sort((a, b) => a.timestamp - b.timestamp)
@@ -259,7 +258,7 @@ export function L1MetricsChart({ chainId, chainName, evmChainId, tokenSymbol }: 
         }
       } catch (err) {
         console.error('Error fetching data:', err);
-        if (mounted) {
+        if (alive()) {
           // Use fallback data on error instead of showing error state
           setTpsHistory(generateFallbackData(timeframe));
           if (chainId) {
@@ -300,20 +299,14 @@ export function L1MetricsChart({ chainId, chainName, evmChainId, tokenSymbol }: 
           setError(null); // Don't show error, just use 0 values
         }
       } finally {
-        if (mounted) {
+        if (alive()) {
           setLoading(false);
         }
       }
     }
 
     fetchData();
-    const interval = setInterval(fetchData, 15 * 60 * 1000);
-    
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [chainId, evmChainId, timeframe, selectedMetric]);
+  }, 15 * 60 * 1000, [chainId, evmChainId, timeframe, selectedMetric]);
 
   const formatValue = (value: number): string => {
     if (selectedMetric === 'tps') {

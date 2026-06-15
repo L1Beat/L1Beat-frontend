@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { useSearchParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
@@ -519,22 +520,10 @@ export function AvalancheNetworkMetrics() {
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      if (!mounted) return;
-      await fetchAllMetrics();
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 15 * 60 * 1000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [timeframe, selectedMetrics.join(',')]); // Re-fetch when metrics change
+  // Re-fetch when metrics change; polling pauses while the tab is hidden.
+  usePolling(() => {
+    fetchAllMetrics();
+  }, 15 * 60 * 1000, [timeframe, selectedMetrics.join(',')]);
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
     updateUrl(newTimeframe, undefined);
