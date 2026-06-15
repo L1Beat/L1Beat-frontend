@@ -159,12 +159,26 @@ export function Metrics() {
         const sortDesc = <T extends { timestamp: number }>(xs: T[]) =>
           [...xs].sort((a, b) => b.timestamp - a.timestamp);
 
-        setHistory({
+        const next: HistoryStore = {
           tps: sortDesc(tps),
           tx: sortDesc(tx),
           maxTps: sortDesc(maxTps),
           validatorTotal: valTotal?.totalValidators ?? null,
-        });
+        };
+
+        // Skip the state update (and the Chart.js re-render it triggers) when an
+        // unchanged poll returns the same data — compare length + latest point.
+        const sameSeries = (a: { timestamp: number }[], b: { timestamp: number }[]) =>
+          a.length === b.length && (a.length === 0 || a[0].timestamp === b[0].timestamp);
+        setHistory((prev) =>
+          prev &&
+          prev.validatorTotal === next.validatorTotal &&
+          sameSeries(prev.tps, next.tps) &&
+          sameSeries(prev.tx, next.tx) &&
+          sameSeries(prev.maxTps, next.maxTps)
+            ? prev
+            : next,
+        );
       } catch {
         // KPIs are decorative
       }

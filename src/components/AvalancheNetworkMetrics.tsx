@@ -502,7 +502,23 @@ export function AvalancheNetworkMetrics() {
         })
       );
 
-      setMetricsData(results);
+      // Skip the state update (and Chart.js re-render) when an unchanged poll
+      // returns the same series — compare keys + each series' length + latest point.
+      setMetricsData((prev) => {
+        const nextKeys = Object.keys(results);
+        const same =
+          Object.keys(prev).length === nextKeys.length &&
+          nextKeys.every((k) => {
+            const a = prev[k];
+            const b = results[k];
+            return (
+              a !== undefined &&
+              a.length === b.length &&
+              (a.length === 0 || a[a.length - 1].timestamp === b[b.length - 1].timestamp)
+            );
+          });
+        return same ? prev : results;
+      });
 
       // Check if any metric has data
       const hasData = Object.values(results).some(arr => arr.length > 0);
