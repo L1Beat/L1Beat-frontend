@@ -105,6 +105,9 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Index data is fetched once for the palette's lifetime (the underlying
+  // calls are cached too); no need to refetch every time it opens.
+  const loadedRef = useRef(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [chains, setChains] = useState<Chain[]>([]);
@@ -166,7 +169,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || loadedRef.current) return;
     let active = true;
     Promise.all([
       getChains({ includeInactive: true }).catch(() => [] as Chain[]),
@@ -174,6 +177,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
       getBlogPosts(40, 0).then((r) => r.data).catch(() => [] as BlogPost[]),
     ]).then(([c, a, p]) => {
       if (!active) return;
+      loadedRef.current = true;
       setChains(c);
       setAcps(a);
       setPosts(p);

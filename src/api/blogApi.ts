@@ -1,5 +1,35 @@
 import { config } from '../config';
 
+// --- lightweight response cache -------------------------------------------
+// Blog content changes rarely, but getBlogPosts/getRelatedPosts/getBlogTags
+// were called on every mount (BlogList, BlogPost, RelatedArticles, the search
+// palette on every open) with no caching. Cache successful responses for a few
+// minutes and dedupe concurrent in-flight requests for the same key.
+const BLOG_CACHE_TTL = 5 * 60 * 1000;
+interface BlogCacheEntry<T> { ts: number; data: T; }
+const blogCache = new Map<string, BlogCacheEntry<unknown>>();
+const blogInflight = new Map<string, Promise<unknown>>();
+
+async function cachedBlogFetch<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const hit = blogCache.get(key);
+    if (hit && Date.now() - hit.ts < BLOG_CACHE_TTL) {
+        return hit.data as T;
+    }
+    const pending = blogInflight.get(key);
+    if (pending) return pending as Promise<T>;
+
+    const promise = (async () => {
+        const data = await fetcher();
+        blogCache.set(key, { ts: Date.now(), data });
+        return data;
+    })().finally(() => {
+        blogInflight.delete(key);
+    });
+
+    blogInflight.set(key, promise);
+    return promise as Promise<T>;
+}
+
 export interface BlogPost {
     _id: string;
     title: string;
@@ -48,23 +78,25 @@ export interface RelatedPostsResponse {
 }
 
 export async function getRelatedPosts(slug: string, limit: number = 4): Promise<RelatedPostsResponse> {
-    try {
-        const response = await fetch(`${config.apiBaseUrl}/api/blog/posts/${slug}/related?limit=${limit}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+    return cachedBlogFetch(`related:${slug}:${limit}`, async () => {
+        try {
+            const response = await fetch(`${config.apiBaseUrl}/api/blog/posts/${slug}/related?limit=${limit}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error(`Error fetching related posts for ${slug}:`, error);
+            throw error;
         }
-
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching related posts for ${slug}:`, error);
-        throw error;
-    }
+    });
 }
 export interface BlogPostsResponse {
     success: boolean;
@@ -174,55 +206,59 @@ export async function getBlogPosts(
     offset: number = 0,
     tag?: string
 ): Promise<BlogPostsResponse> {
-    try {
-        const params = new URLSearchParams({
-            limit: limit.toString(),
-            offset: offset.toString(),
-        });
+    return cachedBlogFetch(`posts:${limit}:${offset}:${tag ?? ''}`, async () => {
+        try {
+            const params = new URLSearchParams({
+                limit: limit.toString(),
+                offset: offset.toString(),
+            });
 
-        if (tag) {
-            params.append('tag', tag);
+            if (tag) {
+                params.append('tag', tag);
+            }
+
+            const response = await fetch(`${config.apiBaseUrl}/api/blog/posts?${params}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching blog posts:', error);
+            throw new Error('Failed to fetch blog posts');
         }
-
-        const response = await fetch(`${config.apiBaseUrl}/api/blog/posts?${params}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error fetching blog posts:', error);
-        throw new Error('Failed to fetch blog posts');
-    }
+    });
 }
 
 export async function getBlogPost(slug: string): Promise<BlogPostResponse> {
-    try {
-        const response = await fetch(`${config.apiBaseUrl}/api/blog/posts/${slug}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+    return cachedBlogFetch(`post:${slug}`, async () => {
+        try {
+            const response = await fetch(`${config.apiBaseUrl}/api/blog/posts/${slug}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
-        if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('Blog post not found');
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('Blog post not found');
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
 
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching blog post ${slug}:`, error);
-        throw error;
-    }
+            return await response.json();
+        } catch (error) {
+            console.error(`Error fetching blog post ${slug}:`, error);
+            throw error;
+        }
+    });
 }
 
 export async function getBlogHealth(): Promise<BlogHealthResponse> {
@@ -246,23 +282,25 @@ export async function getBlogHealth(): Promise<BlogHealthResponse> {
 }
 
 export async function getBlogTags(): Promise<BlogTagsResponse> {
-    try {
-        const response = await fetch(`${config.apiBaseUrl}/api/blog/tags`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+    return cachedBlogFetch('tags', async () => {
+        try {
+            const response = await fetch(`${config.apiBaseUrl}/api/blog/tags`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching blog tags:', error);
+            throw new Error('Failed to fetch blog tags');
         }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error fetching blog tags:', error);
-        throw new Error('Failed to fetch blog tags');
-    }
+    });
 }
 
 export function calculateReadTime(content: string): number {
