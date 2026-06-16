@@ -6,6 +6,7 @@ import {
   Activity,
   ChevronRight,
   GitCompareArrows,
+  Info,
   LayoutGrid,
   Search,
   Star,
@@ -895,9 +896,9 @@ function ScreenerTableImpl({
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="right" className="hidden md:table-cell">Δ 24h</Th>
-            <Th align="right" className="hidden lg:table-cell">Share</Th>
-            <Th align="right" className="hidden sm:table-cell">{rangeTrendLabel(range)}</Th>
+            <Th align="right" className="hidden md:table-cell" info="Change in TPS (transactions per second), not token price.">Δ 24h</Th>
+            <Th align="right" className="hidden lg:table-cell" info="This L1's share of total network TPS.">Share</Th>
+            <Th align="right" className="hidden sm:table-cell" info="TPS over time, not a price chart.">{rangeTrendLabel(range)}</Th>
             <SortableTh
               align="right"
               label="Validators"
@@ -1194,10 +1195,12 @@ function Th({
   children,
   align = 'left',
   className = '',
+  info,
 }: {
   children: React.ReactNode;
   align?: 'left' | 'right';
   className?: string;
+  info?: string;
 }) {
   return (
     <th
@@ -1205,7 +1208,16 @@ function Th({
         align === 'right' ? 'text-right' : 'text-left'
       } ${className}`}
     >
-      {children}
+      {info ? (
+        <span className="inline-flex items-center gap-1">
+          {children}
+          <span className="cursor-help text-muted-foreground/60" title={info} aria-label={info}>
+            <Info className="w-3 h-3" />
+          </span>
+        </span>
+      ) : (
+        children
+      )}
     </th>
   );
 }
