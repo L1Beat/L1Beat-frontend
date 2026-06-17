@@ -21,11 +21,11 @@ export function BrandColors({ theme }: BrandColorsProps) {
   ];
 
   const neutrals = [
-    { name: 'Pure White', hex: '#ffffff', rgb: 'rgb(255, 255, 255)', usage: 'Light mode backgrounds' },
-    { name: 'Slate 50', hex: '#f8fafc', rgb: 'rgb(248, 250, 252)', usage: 'Light mode surfaces' },
-    { name: 'Slate 900', hex: '#0f172a', rgb: 'rgb(15, 23, 42)', usage: 'Dark text on light' },
-    { name: 'Dark Background', hex: '#0a0a0a', rgb: 'rgb(10, 10, 10)', usage: 'Dark mode background' },
-    { name: 'Muted Gray', hex: '#71717a', rgb: 'rgb(113, 113, 122)', usage: 'Secondary text' },
+    { name: 'White', hex: '#ffffff', rgb: 'rgb(255, 255, 255)', usage: 'Light mode background' },
+    { name: 'Black', hex: '#000000', rgb: 'rgb(0, 0, 0)', usage: 'Dark mode background, light-mode text' },
+    { name: 'Surface (Light)', hex: '#f2f2f7', rgb: 'rgb(242, 242, 247)', usage: 'Light mode cards & surfaces' },
+    { name: 'Surface (Dark)', hex: '#1c1c1e', rgb: 'rgb(28, 28, 30)', usage: 'Dark mode cards & surfaces' },
+    { name: 'System Gray', hex: '#8e8e93', rgb: 'rgb(142, 142, 147)', usage: 'Secondary / muted text' },
   ];
 
   const ColorCard = ({ name, hex, rgb, usage }: typeof primaryColors[0]) => (
@@ -122,7 +122,7 @@ export function BrandColors({ theme }: BrandColorsProps) {
               </h4>
               <ul className="space-y-2 text-muted-foreground">
                 <li>• Don't use off-brand reds or modify the primary color</li>
-                <li>• Avoid using red for destructive actions (use system red)</li>
+                <li>• Don't rely on color alone — pair red status with an icon or label</li>
                 <li>• Don't place red text on red backgrounds</li>
                 <li>• Avoid oversaturating the design with too much red</li>
                 <li>• Don't use the brand colors for unrelated purposes</li>
@@ -139,25 +139,25 @@ export function BrandColors({ theme }: BrandColorsProps) {
           <div>
             <h4 className="mb-2">Dark Mode</h4>
             <p className="text-muted-foreground mb-3">
-              Primary red (#ef4444) on dark background (#0a0a0a) provides excellent contrast with a ratio of 8.2:1
+              Primary red (#ef4444) on the dark background (#000000) meets WCAG AA with a contrast ratio of ~5.6:1
             </p>
             <div className="flex items-center gap-3">
-              <div className="px-4 py-2 rounded-lg" style={{ backgroundColor: '#0a0a0a', color: '#ef4444' }}>
+              <div className="px-4 py-2 rounded-lg" style={{ backgroundColor: '#000000', color: '#ef4444' }}>
                 Sample Text
               </div>
-              <span className="text-sm text-muted-foreground">Contrast: 8.2:1 (AAA)</span>
+              <span className="text-sm text-muted-foreground">Contrast: ~5.6:1 (AA)</span>
             </div>
           </div>
           <div>
             <h4 className="mb-2">Light Mode</h4>
             <p className="text-muted-foreground mb-3">
-              Dark red (#dc2626) on white background provides a contrast ratio of 6.4:1
+              Dark red (#dc2626) on white background provides a contrast ratio of ~4.8:1
             </p>
             <div className="flex items-center gap-3">
               <div className="px-4 py-2 rounded-lg border border-border" style={{ backgroundColor: '#ffffff', color: '#dc2626' }}>
                 Sample Text
               </div>
-              <span className="text-sm text-muted-foreground">Contrast: 6.4:1 (AA)</span>
+              <span className="text-sm text-muted-foreground">Contrast: ~4.8:1 (AA)</span>
             </div>
           </div>
         </div>
