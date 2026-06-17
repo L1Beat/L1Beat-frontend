@@ -21,6 +21,7 @@ interface NavItem {
   path: string;
   icon: typeof LayoutGrid;
   badge?: string;
+  disabled?: boolean;
 }
 
 const primaryNav: NavItem[] = [
@@ -31,7 +32,7 @@ const primaryNav: NavItem[] = [
   { id: 'burn', label: 'Burn', path: '/burn', icon: Flame, badge: 'NEW' },
   { id: 'acps', label: 'ACPs', path: '/acps', icon: FileText },
   { id: 'blog', label: 'Blog', path: '/blog', icon: BookOpen },
-  { id: 'api', label: 'API', path: '/api', icon: Code },
+  { id: 'api', label: 'API', path: '/api', icon: Code, disabled: true },
 ];
 
 function isActive(pathname: string, path: string) {
@@ -75,8 +76,25 @@ export function Sidebar() {
 
       <nav className="flex-1 px-3">
         <ul className="space-y-0.5">
-          {primaryNav.map(({ id, label, path, icon: Icon, badge }) => {
+          {primaryNav.map(({ id, label, path, icon: Icon, badge, disabled }) => {
             const active = isActive(pathname, path);
+            if (disabled) {
+              return (
+                <li key={id}>
+                  <div
+                    title="Coming soon"
+                    aria-disabled="true"
+                    className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-muted-foreground/40 cursor-not-allowed select-none"
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-[13px] flex-1 font-medium">{label}</span>
+                    <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      SOON
+                    </span>
+                  </div>
+                </li>
+              );
+            }
             return (
               <li key={id}>
                 <Link

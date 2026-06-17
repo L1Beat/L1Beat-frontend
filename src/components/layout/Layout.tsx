@@ -40,7 +40,7 @@ function AlphaBanner() {
   );
 }
 
-const dockItems = [
+const dockItems: { id: string; path: string; icon: typeof LayoutGrid; label: string; disabled?: boolean }[] = [
   { id: 'overview', path: '/', icon: LayoutGrid, label: 'Overview' },
   { id: 'metrics', path: '/metrics', icon: BarChart3, label: 'Metrics' },
   { id: 'flows', path: '/flows', icon: GitFork, label: 'Flows' },
@@ -48,7 +48,7 @@ const dockItems = [
   { id: 'burn', path: '/burn', icon: Flame, label: 'Burn' },
   { id: 'acps', path: '/acps', icon: FileText, label: 'ACPs' },
   { id: 'blog', path: '/blog', icon: BookOpen, label: 'Blog' },
-  { id: 'api', path: '/api', icon: Code, label: 'API' },
+  { id: 'api', path: '/api', icon: Code, label: 'API', disabled: true },
 ];
 
 function MobileDock() {
@@ -63,8 +63,20 @@ function MobileDock() {
 
   return (
     <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-2 rounded-2xl bg-card/90 dark:bg-card/95 backdrop-blur-xl border border-border shadow-2xl">
-      {dockItems.map(({ id, path, icon: Icon, label }) => {
+      {dockItems.map(({ id, path, icon: Icon, label, disabled }) => {
         const active = isActive(path);
+        if (disabled) {
+          return (
+            <span
+              key={id}
+              title="Coming soon"
+              aria-disabled="true"
+              className="flex items-center px-3 py-2 rounded-xl text-white/25 cursor-not-allowed"
+            >
+              <Icon className="w-4 h-4" />
+            </span>
+          );
+        }
         return (
           <Link
             key={id}
