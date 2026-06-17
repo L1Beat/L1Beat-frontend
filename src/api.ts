@@ -1705,7 +1705,7 @@ export interface L1BeatValidator {
 
   // L1 registration info (detail endpoint only)
   tx_hash?: string;
-  tx_type?: string;  // 'RegisterL1ValidatorTx' | 'ConvertSubnetToL1Tx'
+  tx_type?: string;  // 'RegisterL1Validator' | 'ConvertSubnetToL1' (P-Chain type name, no Tx suffix)
   created_block?: number;
   created_time?: string;
   bls_public_key?: string;

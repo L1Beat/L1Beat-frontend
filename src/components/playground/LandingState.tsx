@@ -94,7 +94,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
           <span className="text-border">·</span>
           <span>Open CORS</span>
           <span className="text-border">·</span>
-          <span>100 req/s</span>
+          <span>60 req/min (burst 10)</span>
         </div>
       </div>
 
