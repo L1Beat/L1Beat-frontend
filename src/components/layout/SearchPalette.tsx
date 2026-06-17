@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, Clock, Command, Copy, FileText, Flame, Layers, LayoutGrid, Moon, Search, Sun, Trash2, X } from 'lucide-react';
-import { getChains } from '../../api';
+import { ArrowRight, BookOpen, Clock, Command, Copy, FileText, Flame, Layers, LayoutGrid, Moon, Search, Server, Sun, Trash2, X } from 'lucide-react';
+import { getChains, getL1BeatValidator } from '../../api';
 import type { Chain } from '../../types';
 import { acpService } from '../../services/acpService';
 import type { EnhancedACP } from '../../types';
@@ -10,7 +10,11 @@ import { getBlogPosts, BlogPost } from '../../api/blogApi';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../Toaster';
 
-type ResultType = 'page' | 'chain' | 'acp' | 'post' | 'command';
+type ResultType = 'page' | 'chain' | 'acp' | 'post' | 'command' | 'validator';
+
+// Avalanche node IDs look like "NodeID-" + base58. Only resolve a validator
+// when the query is a full node ID — the API has no partial/prefix search.
+const NODE_ID_RE = /^NodeID-[A-Za-z0-9]{10,}$/i;
 
 interface Result {
   id: string;
@@ -90,6 +94,7 @@ const TYPE_ICON: Record<ResultType, typeof LayoutGrid> = {
   acp: FileText,
   post: BookOpen,
   command: Command,
+  validator: Server,
 };
 
 const TYPE_LABEL: Record<ResultType, string> = {
@@ -98,6 +103,7 @@ const TYPE_LABEL: Record<ResultType, string> = {
   acp: 'ACP',
   post: 'Article',
   command: 'Cmd',
+  validator: 'Validator',
 };
 
 export function SearchPalette({ open, onClose }: SearchPaletteProps) {
@@ -114,6 +120,40 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
   const [acps, setAcps] = useState<EnhancedACP[]>([]);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [recents, setRecents] = useState<Result[]>([]);
+  // Resolved when the query is a full validator node ID (exact lookup; no
+  // server-side prefix search exists).
+  const [validatorResult, setValidatorResult] = useState<Result | null>(null);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!open || !NODE_ID_RE.test(q)) {
+      setValidatorResult(null);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      getL1BeatValidator(q)
+        .then((v) => {
+          if (!alive) return;
+          setValidatorResult(
+            v?.node_id
+              ? {
+                  id: `validator-${v.node_id}`,
+                  type: 'validator',
+                  title: `${v.node_id.slice(0, 14)}…${v.node_id.slice(-6)}`,
+                  subtitle: 'Open validator page',
+                  to: `/validator/${encodeURIComponent(v.node_id)}${v.subnet_id ? `?subnet=${encodeURIComponent(v.subnet_id)}` : ''}`,
+                }
+              : null,
+          );
+        })
+        .catch(() => alive && setValidatorResult(null));
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [query, open]);
 
   const commands = useMemo<Result[]>(() => {
     const isDark = theme === 'dark';
@@ -248,7 +288,9 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
           `${r.title} ${r.subtitle ?? ''} ${r.keywords ?? ''}`.toLowerCase().includes(q),
         )
         .slice(0, 30);
-      return [{ label: 'Results', icon: Search, items: filtered }];
+      // A matched validator (full node-ID lookup) leads the results.
+      const items = validatorResult ? [validatorResult, ...filtered] : filtered;
+      return [{ label: 'Results', icon: Search, items }];
     }
     const out: { label: string; icon: typeof Clock; items: Result[] }[] = [];
     out.push({ label: 'Commands', icon: Command, items: commands });
@@ -256,7 +298,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
     if (topChains.length > 0) out.push({ label: 'Top chains', icon: Flame, items: topChains });
     out.push({ label: 'Pages', icon: LayoutGrid, items: PAGES });
     return out;
-  }, [query, commands, chainResults, acpResults, postResults, recents, topChains]);
+  }, [query, commands, chainResults, acpResults, postResults, recents, topChains, validatorResult]);
 
   const flatResults = useMemo<Result[]>(() => sections.flatMap((s) => s.items), [sections]);
 
@@ -317,7 +359,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chains, ACPs, articles…"
+            placeholder="Search chains, ACPs, articles, validator node ID…"
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder-muted-foreground"
           />
           <kbd className="hidden sm:inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">

@@ -49,7 +49,7 @@ export function TopBar() {
         className="hidden sm:flex flex-1 items-center gap-2 h-9 w-full max-w-2xl px-3 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
       >
         <Search className="w-3.5 h-3.5" />
-        <span className="text-[13px] flex-1 text-left">Search chains, ACPs, articles…</span>
+        <span className="text-[13px] flex-1 text-left">Search chains, ACPs, articles, validators…</span>
         <kbd className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
           ⌘K
         </kbd>
