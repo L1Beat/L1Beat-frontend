@@ -6,6 +6,7 @@ import {
   Activity,
   ChevronRight,
   GitCompareArrows,
+  Info,
   LayoutGrid,
   Search,
   Star,
@@ -13,6 +14,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/branding/ui/tooltip';
 import {
   getAllChainsTPSLatest,
   getCategories,
@@ -873,6 +875,7 @@ function ScreenerTableImpl({
 }) {
   const navigate = useNavigate();
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -895,9 +898,9 @@ function ScreenerTableImpl({
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="right" className="hidden md:table-cell">Δ 24h</Th>
-            <Th align="right" className="hidden lg:table-cell">Share</Th>
-            <Th align="right" className="hidden sm:table-cell">{rangeTrendLabel(range)}</Th>
+            <Th align="right" className="hidden md:table-cell" info="Change in TPS (transactions per second), not token price.">Δ 24h</Th>
+            <Th align="right" className="hidden lg:table-cell" info="This L1's share of total network TPS.">Share</Th>
+            <Th align="right" className="hidden sm:table-cell" info="TPS over time, not a price chart.">{rangeTrendLabel(range)}</Th>
             <SortableTh
               align="right"
               label="Validators"
@@ -1054,6 +1057,7 @@ function ScreenerTableImpl({
         </tbody>
       </table>
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -1194,10 +1198,12 @@ function Th({
   children,
   align = 'left',
   className = '',
+  info,
 }: {
   children: React.ReactNode;
   align?: 'left' | 'right';
   className?: string;
+  info?: string;
 }) {
   return (
     <th
@@ -1205,7 +1211,31 @@ function Th({
         align === 'right' ? 'text-right' : 'text-left'
       } ${className}`}
     >
-      {children}
+      {info ? (
+        <span className="inline-flex items-center gap-1">
+          {children}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={typeof children === 'string' ? `About ${children}` : 'More info'}
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Info className="w-3 h-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              align={align === 'right' ? 'end' : 'start'}
+              className="max-w-[240px] bg-popover border border-border text-foreground text-[11px] normal-case font-normal tracking-normal leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
+            >
+              {info}
+            </TooltipContent>
+          </Tooltip>
+        </span>
+      ) : (
+        children
+      )}
     </th>
   );
 }
