@@ -3,6 +3,7 @@ import { Line } from 'react-chartjs-2';
 import { format } from 'date-fns';
 import { DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
+import { watermarkPlugin, crosshairPlugin, chartTooltipStyle, CHART_STYLE } from '../../utils/chartConfig';
 import { AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner } from '../LoadingSpinner';
@@ -157,6 +158,7 @@ export const ComparisonChart = memo(function ComparisonChart({
   const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: { duration: CHART_STYLE.animation.duration, easing: CHART_STYLE.animation.easing },
     interaction: {
       mode: 'index' as const,
       intersect: false,
@@ -187,21 +189,8 @@ export const ComparisonChart = memo(function ComparisonChart({
         }
       },
       tooltip: {
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)',
-        titleColor: isDark ? '#f1f5f9' : '#0f172a',
-        bodyColor: isDark ? '#e2e8f0' : '#334155',
-        borderColor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.3)',
-        borderWidth: 1,
-        padding: 16,
+        ...chartTooltipStyle(isDark),
         boxPadding: 8,
-        cornerRadius: 12,
-        titleFont: {
-          size: 15,
-          weight: 'bold' as const,
-        },
-        bodyFont: {
-          size: 14,
-        },
         bodySpacing: 6,
         titleMarginBottom: 10,
         displayColors: true,
@@ -244,7 +233,7 @@ export const ComparisonChart = memo(function ComparisonChart({
           display: false,
         },
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
           drawBorder: false,
         },
         ticks: {
@@ -392,7 +381,7 @@ export const ComparisonChart = memo(function ComparisonChart({
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px]" onMouseLeave={() => onHoverChain?.(null)}>
-          <Line data={chartData} options={options} plugins={[endLabelPlugin]} />
+          <Line data={chartData} options={options} plugins={[endLabelPlugin, crosshairPlugin, watermarkPlugin]} />
         </div>
       </motion.div>
     </AnimatePresence>

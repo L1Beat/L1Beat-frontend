@@ -736,7 +736,7 @@ export function AvalancheNetworkMetrics() {
         position: 'left' as const,
         beginAtZero: true,
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
         },
         ticks: {
           color: selectedMetrics[0] ? METRICS.find(m => m.id === selectedMetrics[0])?.color.main : (isDark ? '#94a3b8' : '#64748b'),

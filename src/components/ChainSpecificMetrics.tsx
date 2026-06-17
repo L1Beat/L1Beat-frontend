@@ -589,7 +589,7 @@ export function ChainSpecificMetrics() {
         y: {
           beginAtZero: true,
           grid: {
-            color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+            color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
           },
           ticks: {
             color: metric.color.main,

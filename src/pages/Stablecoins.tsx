@@ -19,6 +19,7 @@ import { useToast } from '../components/Toaster';
 import { SEO } from '../components/SEO';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ChartWatermark } from '../components/ChartWatermark';
 import {
   Tooltip,
   TooltipContent,
@@ -1077,6 +1078,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
         </div>
       ) : (
         <div className="relative">
+          <div className="relative">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${CHART_W} ${CHART_H}`}
@@ -1162,7 +1164,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
                   y2={CHART_H - CHART_M.bottom}
                   stroke="#ef4444"
                   strokeOpacity={0.4}
-                  strokeDasharray="3 3"
+                  strokeDasharray="6 4"
                   vectorEffect="non-scaling-stroke"
                 />
                 <circle
@@ -1176,6 +1178,8 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
               </g>
             )}
           </svg>
+          <ChartWatermark />
+          </div>
           {stack && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
               {stack.bands.map((b) => (
