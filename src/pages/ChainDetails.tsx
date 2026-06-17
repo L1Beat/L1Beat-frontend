@@ -22,6 +22,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
+import { watermarkPlugin, smoothLinePath } from '../utils/chartConfig';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
@@ -30,6 +31,7 @@ import { AddToMetaMask } from '../components/AddToMetaMask';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
+import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
@@ -438,10 +440,14 @@ export function ChainDetails() {
     if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
     return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   };
-  const formatStakeDisplay = (rawBaseUnits: string, unit?: 'tokens' | 'weight') => {
-    // If this validator is in "weight" mode, treat it as a plain integer.
-    if (unit === 'weight') return formatUnits(rawBaseUnits, 0, { maxFractionDigits: 0 });
-    return formatUnits(rawBaseUnits, stakeTokenDecimals, { maxFractionDigits: 2 });
+  // PoA: the abstract voting weight as a grouped integer.
+  const formatWeight = (rawBaseUnits: string) => formatUnits(rawBaseUnits, 0, { maxFractionDigits: 0 });
+  // PoS: the API gives the real staked amount already in whole tokens (decimal
+  // string), so just group it for display.
+  const formatStakedTokens = (amount?: string): string => {
+    if (amount == null) return '—';
+    const n = Number(amount);
+    return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : amount;
   };
   
   if (loading) {
@@ -974,7 +980,7 @@ export function ChainDetails() {
                                         pointHoverBorderWidth: 2.5,
                                       }],
                                     }}
-                                    plugins={[crosshairPlugin, lineShadowPlugin]}
+                                    plugins={[crosshairPlugin, lineShadowPlugin, watermarkPlugin]}
                                     options={{
                                       responsive: true,
                                       maintainAspectRatio: false,
@@ -1321,23 +1327,25 @@ export function ChainDetails() {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="text-sm text-foreground font-medium">
-                                    {formatStakeDisplay(
-                                      validator.weight,
-                                      stakeMode === 'weight' ? 'weight' : validator.stakeUnit
-                                    )}{' '}
-                                    {(stakeMode === 'weight' ? 'weight' : validator.stakeUnit) === 'weight' ? (
-                                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                        weight
-                                        <span
-                                          className="text-muted-foreground cursor-help inline-flex"
-                                          title="A measure of voting influence of this validator when validating for the Avalanche L1"
-                                          aria-label="Weight tooltip"
-                                        >
-                                          <Info className="w-3 h-3" />
+                                    {stakeIsWeight ? (
+                                      <>
+                                        {formatWeight(validator.weight)}{' '}
+                                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                          weight
+                                          <span
+                                            className="text-muted-foreground cursor-help inline-flex"
+                                            title="A measure of voting influence of this validator when validating for the Avalanche L1"
+                                            aria-label="Weight tooltip"
+                                          >
+                                            <Info className="w-3 h-3" />
+                                          </span>
                                         </span>
-                                      </span>
+                                      </>
                                     ) : (
-                                      tokenSymbol
+                                      <>
+                                        {formatStakedTokens(validator.stakedAmount)}{' '}
+                                        <span className="text-xs text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
+                                      </>
                                     )}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
@@ -1551,6 +1559,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
                 { label: 'Priority tip', data: series.map((d) => d.priority), backgroundColor: 'rgba(245, 158, 11, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
               ],
             }}
+            plugins={[watermarkPlugin]}
             options={{
               responsive: true,
               maintainAspectRatio: false,
@@ -1638,7 +1647,7 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
     const ih = ACT_H - ACT_M.top - ACT_M.bottom;
     const sx = (t: number) => ACT_M.left + ((t - minX) / (maxX - minX || 1)) * iw;
     const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
-    const line = points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.t).toFixed(1)},${sy(p.v).toFixed(1)}`).join(' ');
+    const line = smoothLinePath(points.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
     const floor = ACT_M.top + ih;
     const area = `${line} L${sx(maxX).toFixed(1)},${floor} L${sx(minX).toFixed(1)},${floor} Z`;
     const yTicks = Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
@@ -1712,6 +1721,7 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
           Not enough activity data to chart.
         </div>
       ) : (
+        <div className="relative">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${ACT_W} ${ACT_H}`}
@@ -1723,7 +1733,7 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
         >
           <defs>
             <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.22} />
+              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
               <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
             </linearGradient>
           </defs>
@@ -1740,11 +1750,13 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
           {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="#ef4444" />}
           {active && (
             <g>
-              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="#ef4444" strokeOpacity={0.4} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="#ef4444" strokeOpacity={0.4} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
               <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="#ef4444" stroke="var(--card, #fff)" strokeWidth={2} />
             </g>
           )}
         </svg>
+        <ChartWatermark />
+        </div>
       )}
     </div>
   );

@@ -1689,6 +1689,8 @@ export interface L1BeatValidator {
   node_id: string;
   balance?: number;
   weight: number;
+  staked_amount?: string; // PoS only: staked amount in whole tokens (decimal string)
+  staked_token?: string;  // PoS only: symbol of the token actually staked
   start_time: string;
   end_time?: string;
   uptime_percentage?: number;
@@ -1741,16 +1743,23 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
         params,
         { throttleMs: 200, maxPages: 60 }
       );
-      return allValidators.map((v) => ({
-        address: v.node_id,
-        active: v.active === true || (v.active as unknown) === 'true' || v.active === 1,
-        uptime: v.primary_uptime ?? v.uptime_percentage,
-        weight: String(v.weight),
-        stakeUnit: 'weight' as const,
-        remainingBalance: v.balance,
-        explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
-        validationId: v.validation_id,
-      }));
+      return allValidators.map((v) => {
+        // PoS chains return a real staked amount + token; PoA chains omit them
+        // and we fall back to showing the raw P-Chain weight.
+        const isStaked = v.staked_amount != null;
+        return {
+          address: v.node_id,
+          active: v.active === true || (v.active as unknown) === 'true' || v.active === 1,
+          uptime: v.primary_uptime ?? v.uptime_percentage,
+          weight: String(v.weight),
+          stakeUnit: (isStaked ? 'tokens' : 'weight') as 'tokens' | 'weight',
+          stakedAmount: isStaked ? String(v.staked_amount) : undefined,
+          stakedToken: v.staked_token ?? undefined,
+          remainingBalance: v.balance,
+          explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
+          validationId: v.validation_id,
+        };
+      });
     } catch (error) {
       console.error(`L1Beat validators fetch error (${subnetId}):`, error);
       return [];

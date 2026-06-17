@@ -73,6 +73,10 @@ export interface Validator {
    */
   weight: string;
   stakeUnit?: 'tokens' | 'weight';
+  /** PoS chains only: real staked amount in whole tokens (decimal string). */
+  stakedAmount?: string;
+  /** PoS chains only: symbol of the token actually staked. */
+  stakedToken?: string;
   remainingBalance?: number;
   explorerUrl?: string;
   validationId?: string;

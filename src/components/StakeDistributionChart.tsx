@@ -3,6 +3,7 @@ import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { Validator } from '../types';
 import { useTheme } from '../hooks/useTheme';
+import { chartTooltipStyle } from '../utils/chartConfig';
 import { PieChart } from 'lucide-react';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 
@@ -37,11 +38,15 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
   const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
   const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'N/A');
 
-  const { data, totalStakeBaseUnits, baseByIndex, sortedTop } = useMemo(() => {
+  const { data, totalStakeBaseUnits, baseByIndex, sortedTop, tokensByIndex, totalTokens } = useMemo(() => {
     const getStakeBase = (v: Validator) => parseBaseUnits(v.weight) ?? 0n;
+    // PoS: the real staked amount in whole tokens (proportions still come from
+    // weight, which is equivalent since stake = weight / a constant factor).
+    const getTokens = (v: Validator) => Number(v.stakedAmount ?? '0') || 0;
 
     // Calculate total stake/weight (base units or integer if weight-mode)
     const total = validators.reduce((sum, v) => sum + getStakeBase(v), 0n);
+    const totalTok = validators.reduce((sum, v) => sum + getTokens(v), 0);
     
     // Sort validators by stake weight in descending order
     const sortedValidators = [...validators].sort((a, b) => {
@@ -55,15 +60,20 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     const othersStake = sortedValidators.slice(50).reduce((sum, v) => sum + getStakeBase(v), 0n);
 
     // Prepare data for the chart (top 50 + others)
-    const chartData: Array<{ label: string; navax: bigint }> = [
+    const chartData: Array<{ label: string; navax: bigint; tokens: number }> = [
       ...top50.map(v => ({
         label: `${v.address.slice(0, 8)}...${v.address.slice(-4)}`,
         navax: getStakeBase(v),
+        tokens: getTokens(v),
       })),
     ];
 
     if (othersStake > 0n) {
-      chartData.push({ label: 'Others', navax: othersStake });
+      chartData.push({
+        label: 'Others',
+        navax: othersStake,
+        tokens: sortedValidators.slice(50).reduce((s, v) => s + getTokens(v), 0),
+      });
     }
 
     // ChartJS needs numbers; use best-effort AVAX numbers for rendering.
@@ -89,8 +99,12 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
       totalStakeBaseUnits: total,
       baseByIndex,
       sortedTop: top50,
+      tokensByIndex: chartData.map(v => v.tokens),
+      totalTokens: totalTok,
     };
   }, [validators, isDark, isWeightMode, decimals]);
+
+  const groupTokens = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
   const options = {
     responsive: true,
@@ -115,13 +129,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
         display: false,
       },
       tooltip: {
-        // Match app surfaces (Figma: #0A0A0A bg, #262626 borders, #FAFAFA text)
-        backgroundColor: isDark ? 'rgba(10, 10, 10, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        titleColor: isDark ? '#FAFAFA' : '#0A0A0A',
-        bodyColor: isDark ? '#FAFAFA' : '#0A0A0A',
-        borderColor: isDark ? 'rgba(38, 38, 38, 0.8)' : 'rgba(0, 0, 0, 0.1)',
-        borderWidth: 1,
-        padding: 12,
+        ...chartTooltipStyle(isDark),
         boxPadding: 4,
         callbacks: {
           label: (context: any) => {
@@ -131,7 +139,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
             const percentage = total > 0n ? ((Number(base) / Number(total)) * 100).toFixed(1) : '0.0';
             const formatted = isWeightMode
               ? formatUnits(base, 0, { maxFractionDigits: 0 })
-              : formatUnits(base, decimals, { maxFractionDigits: 2 });
+              : groupTokens(tokensByIndex[idx] ?? 0);
             return `${formatted} ${unitLabel} (${percentage}%)`;
           },
         },
@@ -141,12 +149,12 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
 
   const totalDisplay = isWeightMode
     ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
-    : formatUnits(totalStakeBaseUnits, decimals, { maxFractionDigits: 2 });
+    : groupTokens(totalTokens);
   const avgDisplay =
     validators.length > 0
       ? isWeightMode
         ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
-        : formatUnits(totalStakeBaseUnits / BigInt(validators.length), decimals, { maxFractionDigits: 2 })
+        : groupTokens(totalTokens / validators.length)
       : 'N/A';
 
   return (
