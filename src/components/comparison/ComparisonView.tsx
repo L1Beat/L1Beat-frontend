@@ -1,12 +1,13 @@
 import { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Chain, DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory, L1BeatFeeMetrics } from '../../types';
-import { Plus, X, Trash2, Share2, Loader2 } from 'lucide-react';
+import { Info, Plus, X, Trash2, Share2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChainSelector } from './ChainSelector';
 import { ComparisonChart, ComparisonMetricType } from './ComparisonChart';
 import { getDailyActiveAddresses, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getChains, getL1BeatFeeMetrics } from '../../api';
 import { LoadingSpinner } from '../LoadingSpinner';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../branding/ui/tooltip';
 
 interface ComparisonViewProps {
   currentChain?: Chain;
@@ -49,6 +50,56 @@ function formatCompact(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+function getMetricSeries(data: ChainComparisonData, metric: ComparisonMetricType): number[] {
+  const points =
+    metric === 'dailyActiveAddresses'
+      ? data.dailyActiveAddresses.map(d => d.activeAddresses)
+      : metric === 'dailyTxCount'
+      ? data.dailyTxCount.map(d => d.value)
+      : metric === 'maxTPS'
+      ? data.maxTPS.map(d => d.value)
+      : metric === 'gasUsed'
+      ? data.gasUsed.map(d => d.value)
+      : metric === 'avgGasPrice'
+      ? data.avgGasPrice.map(d => d.value)
+      : data.feesPaid.map(d => d.value);
+  return points.map(v => Number(v) || 0);
+}
+
+function Sparkline({ values, colorClass }: { values: number[]; colorClass: string }) {
+  if (values.length < 2) return <div className="h-7" />;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * 100;
+      const y = 100 - ((v - min) / range) * 100;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+  const areaPath = `M 0,100 L ${points.replace(/ /g, ' L ')} L 100,100 Z`;
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className={`w-full h-7 ${colorClass}`}
+      aria-hidden="true"
+    >
+      <path d={areaPath} fill="currentColor" fillOpacity={0.15} />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
 export const ComparisonView = memo(function ComparisonView({
   currentChain,
   availableChains: providedChains,
@@ -61,6 +112,8 @@ export const ComparisonView = memo(function ComparisonView({
   const [chainsLoading, setChainsLoading] = useState(!providedChains);
   const [urlInitialized, setUrlInitialized] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hoveredChainId, setHoveredChainId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'absolute' | 'normalized'>('absolute');
 
   const metricParam = searchParams.get('metric');
   const selectedMetric: ComparisonMetricType = COMPARISON_METRICS.some(m => m.id === metricParam)
@@ -220,6 +273,56 @@ export const ComparisonView = memo(function ComparisonView({
     updateUrl([]);
   };
 
+  const handleApplyPreset = (chains: Chain[]) => {
+    const picks = chains.slice(0, 4);
+    if (picks.length === 0) return;
+    const newChains: ChainComparisonData[] = picks.map(chain => ({
+      chain,
+      dailyActiveAddresses: [],
+      dailyTxCount: [],
+      maxTPS: [],
+      gasUsed: [],
+      avgGasPrice: [],
+      feesPaid: [],
+      feeMetrics: null,
+      loading: true,
+    }));
+    setComparisonChains(newChains);
+    updateUrl(picks.map(c => c.chainId));
+    picks.forEach(chain => fetchChainData(chain));
+  };
+
+  const presets = useMemo(() => {
+    if (availableChains.length === 0) return [];
+    const byTps = [...availableChains]
+      .sort((a, b) => (b.tps?.value ?? 0) - (a.tps?.value ?? 0))
+      .slice(0, 4);
+    const byValidators = [...availableChains]
+      .sort((a, b) => (b.validatorCount ?? 0) - (a.validatorCount ?? 0))
+      .slice(0, 4);
+    const GAMING_NAMES = ['beam', 'gunz', 'henesy', 'dfk'];
+    const gaming = GAMING_NAMES
+      .map(needle => availableChains.find(c => c.chainName.toLowerCase().includes(needle)))
+      .filter((c): c is Chain => !!c)
+      .slice(0, 4);
+    const list: { id: string; label: string; chains: Chain[] }[] = [
+      { id: 'tps', label: 'Top 4 by TPS', chains: byTps },
+      { id: 'validators', label: 'Top 4 by Validators', chains: byValidators },
+    ];
+    if (gaming.length >= 2) list.push({ id: 'gaming', label: 'Gaming L1s', chains: gaming });
+    return list;
+  }, [availableChains]);
+
+  const activePresetId = useMemo(() => {
+    if (comparisonChains.length === 0) return null;
+    const currentIds = comparisonChains.map(c => c.chain.chainId).sort().join(',');
+    for (const p of presets) {
+      const presetIds = p.chains.map(c => c.chainId).sort().join(',');
+      if (presetIds === currentIds) return p.id;
+    }
+    return null;
+  }, [presets, comparisonChains]);
+
   const selectedChainIds = comparisonChains.map(c => c.chain.chainId);
   const canAddMore = comparisonChains.length < 4;
   const hasMultipleChains = comparisonChains.length >= 2;
@@ -243,13 +346,32 @@ export const ComparisonView = memo(function ComparisonView({
     const maxValidators = Math.max(...stats.map(s => s.validators), 0);
     const maxDailyTx = Math.max(...stats.map(s => s.dailyTx), 0);
     const maxFees = Math.max(...stats.map(s => s.totalFeesPaid), 0);
+
+    const minOf = (vals: number[]) => {
+      const nonZero = vals.filter(v => v > 0);
+      return nonZero.length > 0 ? Math.min(...nonZero) : 0;
+    };
+    const minTps = minOf(stats.map(s => s.maxTps));
+    const minValidators = minOf(stats.map(s => s.validators));
+    const minDailyTx = minOf(stats.map(s => s.dailyTx));
+    const minFees = minOf(stats.filter(s => s.hasFeeData).map(s => s.totalFeesPaid));
+    const canRank = stats.length >= 2;
+    const spreadTps = canRank && maxTps > minTps;
+    const spreadValidators = canRank && maxValidators > minValidators;
+    const spreadDailyTx = canRank && maxDailyTx > minDailyTx;
+    const spreadFees = canRank && maxFees > minFees && minFees > 0;
+
     return stats.map(s => ({
       ...s,
       tpsPercent: maxTps > 0 ? (s.maxTps / maxTps) * 100 : 0,
-      isBestTps: s.maxTps === maxTps && maxTps > 0,
-      isBestValidators: s.validators === maxValidators && maxValidators > 0,
-      isBestDailyTx: s.dailyTx === maxDailyTx && maxDailyTx > 0,
-      isMostFees: s.totalFeesPaid === maxFees && maxFees > 0,
+      isBestTps: s.maxTps === maxTps && maxTps > 0 && canRank,
+      isWorstTps: spreadTps && s.maxTps === minTps,
+      isBestValidators: s.validators === maxValidators && maxValidators > 0 && canRank,
+      isWorstValidators: spreadValidators && s.validators === minValidators,
+      isBestDailyTx: s.dailyTx === maxDailyTx && maxDailyTx > 0 && canRank,
+      isWorstDailyTx: spreadDailyTx && s.dailyTx === minDailyTx,
+      isMostFees: s.totalFeesPaid === maxFees && maxFees > 0 && canRank,
+      isLeastFees: spreadFees && s.hasFeeData && s.totalFeesPaid === minFees,
     }));
   }, [comparisonChains, validatorCountBySubnet]);
 
@@ -302,6 +424,33 @@ export const ComparisonView = memo(function ComparisonView({
         </div>
       </div>
 
+      {/* Quick-compare Presets */}
+      {presets.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+          <span className="shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase mr-1">
+            Quick compare
+          </span>
+          {presets.map(p => {
+            const isActive = activePresetId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleApplyPreset(p.chains)}
+                disabled={p.chains.length === 0}
+                className={`shrink-0 inline-flex items-center h-7 px-3 rounded-full text-[12px] font-semibold tracking-wide transition-colors ${
+                  isActive
+                    ? 'bg-[#ef4444] text-white shadow-sm shadow-[#ef4444]/20'
+                    : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Chain Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <AnimatePresence mode="popLayout">
@@ -313,22 +462,49 @@ export const ComparisonView = memo(function ComparisonView({
                 key={data.chain.chainId}
                 layout
                 initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
+                animate={{
+                  scale: 1,
+                  opacity: hoveredChainId != null && hoveredChainId !== data.chain.chainId ? 0.45 : 1,
+                }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 28, delay: index * 0.05 }}
-                className={`bg-card rounded-xl border ${color.border} p-4 flex flex-col gap-3.5`}
+                onMouseEnter={() => setHoveredChainId(data.chain.chainId)}
+                onMouseLeave={() => setHoveredChainId(null)}
+                className={`bg-card rounded-xl border ${color.border} p-4 flex flex-col gap-3.5 transition-shadow ${
+                  hoveredChainId === data.chain.chainId ? 'shadow-lg shadow-black/30' : ''
+                }`}
               >
                 {/* Card Header */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-2.5 h-2.5 rounded-full ${color.dot}`} />
-                    <span className="text-sm font-semibold text-foreground">{data.chain.chainName}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {data.chain.chainLogoUri ? (
+                      <img
+                        src={data.chain.chainLogoUri}
+                        alt=""
+                        className={`w-6 h-6 rounded-full object-cover bg-muted ring-2 ${color.border} shrink-0`}
+                        loading="lazy"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          const fallback = img.nextElementSibling as HTMLElement | null;
+                          img.style.display = 'none';
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`w-6 h-6 rounded-full ${color.bgFaint} ring-2 ${color.border} items-center justify-center shrink-0 ${data.chain.chainLogoUri ? 'hidden' : 'flex'}`}
+                    >
+                      <span className={`text-[10px] font-bold ${color.text}`}>
+                        {data.chain.chainName.slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-foreground truncate">{data.chain.chainName}</span>
                   </div>
                   <motion.button
                     onClick={() => handleRemoveChain(data.chain.chainId)}
                     whileHover={{ scale: 1.2, rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
-                    className="p-0.5 rounded hover:bg-muted transition-colors"
+                    className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
                   >
                     <X className="w-3.5 h-3.5 text-muted-foreground" />
                   </motion.button>
@@ -343,66 +519,110 @@ export const ComparisonView = memo(function ComparisonView({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Max TPS</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestTps ? 'text-green-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestTps ? 'text-green-500' : stats?.isWorstTps ? 'text-red-500' : 'text-foreground'}`}>
                         {stats ? (stats.maxTps < 1 && stats.maxTps > 0 ? '< 1.0' : stats.maxTps.toFixed(2)) : '–'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Validators</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestValidators ? 'text-green-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestValidators ? 'text-green-500' : stats?.isWorstValidators ? 'text-red-500' : 'text-foreground'}`}>
                         {stats?.validators.toLocaleString() ?? '–'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Daily Tx</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestDailyTx ? 'text-green-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestDailyTx ? 'text-green-500' : stats?.isWorstDailyTx ? 'text-red-500' : 'text-foreground'}`}>
                         {stats ? formatCompact(stats.dailyTx) : '–'}
                       </span>
                     </div>
-                    {stats?.hasFeeData && (
-                      <>
-                        <div className="border-t border-border/50 my-1" />
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Fees Burned 🔥</span>
-                          <span className={`text-xs font-semibold ${stats.isMostFees ? 'text-red-500' : 'text-foreground'}`}>
-                            {formatCompact(stats.totalFeesPaid)} AVAX
-                          </span>
-                        </div>
-                      </>
-                    )}
+                    <div className="border-t border-border/50 my-1" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Fees Burned 🔥</span>
+                      {stats?.hasFeeData ? (
+                        <span className={`text-xs font-semibold ${stats.isMostFees ? 'text-red-500' : 'text-foreground'}`}>
+                          {formatCompact(stats.totalFeesPaid)} AVAX
+                        </span>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Why no fee data?"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <span>—</span>
+                              <Info className="w-3 h-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            align="end"
+                            className="max-w-[260px] bg-popover border border-border text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
+                          >
+                            This chain is a legacy subnet, not a converted L1. It doesn’t pay continuous validation fees to the P-Chain, so no fee burn is reported. Only chains converted via ACP-77 report this metric.
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Activity Bar */}
-                <div className={`h-1 w-full rounded-full ${color.barTrack}`}>
-                  <motion.div
-                    className={`h-full rounded-full ${color.bg}`}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${stats?.tpsPercent ?? 0}%` }}
-                    transition={{ duration: 0.6, ease: 'easeOut', delay: 0.2 }}
-                  />
+                {/* Sparkline of selected metric */}
+                <div className="-mx-1">
+                  {stats?.loading ? (
+                    <div className={`h-7 w-full rounded ${color.bgFaint} animate-pulse`} />
+                  ) : (
+                    <Sparkline
+                      values={getMetricSeries(data, selectedMetric)}
+                      colorClass={color.text}
+                    />
+                  )}
                 </div>
               </motion.div>
             );
           })}
         </AnimatePresence>
 
-        {/* Add Chain Placeholder Card(s) */}
-        {canAddMore && (
-          <motion.button
-            onClick={() => setIsModalOpen(true)}
-            whileHover={{ scale: 1.02, borderColor: 'rgba(113,113,122,0.5)' }}
-            whileTap={{ scale: 0.98 }}
-            className="rounded-xl border border-dashed border-border p-4 flex flex-col items-center justify-center gap-2 min-h-[140px] hover:bg-muted/30 transition-all cursor-pointer"
-          >
-            <div className="w-8 h-8 rounded-full border border-border flex items-center justify-center">
-              <Plus className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <span className="text-xs font-medium text-muted-foreground">
-              {comparisonChains.length === 0 ? 'Select a chain' : `Add ${4 - comparisonChains.length === 1 ? 'last' : ''} chain`}
-            </span>
-          </motion.button>
-        )}
+        {/* Add Chain Placeholder Card(s) — fill remaining slots up to 4 */}
+        {Array.from({ length: Math.max(0, 4 - comparisonChains.length) }).map((_, i) => {
+          const slotNumber = comparisonChains.length + i + 1;
+          const isPrimary = i === 0;
+          return (
+            <motion.button
+              key={`placeholder-${slotNumber}`}
+              onClick={() => setIsModalOpen(true)}
+              whileHover={{ scale: 1.02, borderColor: 'rgba(113,113,122,0.5)' }}
+              whileTap={{ scale: 0.98 }}
+              className={`relative rounded-xl border border-dashed p-4 flex flex-col items-center justify-center gap-2 min-h-[140px] transition-all cursor-pointer ${
+                isPrimary
+                  ? 'border-border hover:bg-muted/30'
+                  : 'border-border/50 hover:bg-muted/20'
+              }`}
+            >
+              <span className="absolute top-3 right-3 text-[10px] font-semibold tracking-wider text-muted-foreground/60">
+                {slotNumber}
+              </span>
+              <div
+                className={`w-8 h-8 rounded-full border flex items-center justify-center ${
+                  isPrimary ? 'border-border' : 'border-border/60'
+                }`}
+              >
+                <Plus className={`w-4 h-4 ${isPrimary ? 'text-muted-foreground' : 'text-muted-foreground/60'}`} />
+              </div>
+              <span
+                className={`text-xs font-medium ${
+                  isPrimary ? 'text-muted-foreground' : 'text-muted-foreground/60'
+                }`}
+              >
+                {isPrimary
+                  ? comparisonChains.length === 0
+                    ? 'Select a chain'
+                    : 'Add chain'
+                  : 'Empty slot'}
+              </span>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Chart Section */}
@@ -435,6 +655,22 @@ export const ComparisonView = memo(function ComparisonView({
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                  {(['absolute', 'normalized'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      title={mode === 'normalized' ? 'Scale each chain to its own 0–100% range to compare shape, not magnitude' : 'Show raw values'}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${
+                        viewMode === mode
+                          ? 'bg-secondary text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {mode === 'absolute' ? 'Abs' : 'Norm'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
                   {([7, 30] as const).map(days => (
                     <button
                       key={days}
@@ -466,6 +702,9 @@ export const ComparisonView = memo(function ComparisonView({
                 metricType={selectedMetric}
                 title={currentMetricConfig.name}
                 valueLabel={currentMetricConfig.valueLabel}
+                hoveredChainId={hoveredChainId}
+                onHoverChain={setHoveredChainId}
+                viewMode={viewMode}
               />
             </div>
           </motion.div>

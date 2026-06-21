@@ -1,0 +1,39 @@
+{
+  "pkg": "l1beat-design-system",
+  "globalName": "L1Beat",
+  "shape": "package",
+  "projectId": "3f5d2b8a-10fa-4d60-abd3-0a33724c76f5",
+  "entry": "./.design-sync/entry.tsx",
+  "buildCmd": "npx tailwindcss -c .design-sync/tailwind.config.mjs -i .design-sync/ds-input.css -o .design-sync/ds.css --minify",
+  "cssEntry": ".design-sync/ds.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "guidelinesGlob": [],
+  "docsMap": {
+    "Select": ".design-sync/groups/Select.md",
+    "Switch": ".design-sync/groups/Switch.md",
+    "Tooltip": ".design-sync/groups/Tooltip.md",
+    "Collapsible": ".design-sync/groups/Collapsible.md",
+    "Skeleton": ".design-sync/groups/Skeleton.md",
+    "BrandColors": ".design-sync/groups/BrandColors.md",
+    "Typography": ".design-sync/groups/Typography.md",
+    "LogoShowcase": ".design-sync/groups/LogoShowcase.md",
+    "L1BeatLogo": ".design-sync/groups/L1BeatLogo.md"
+  },
+  "overrides": {
+    "Tooltip": { "cardMode": "single", "primaryStory": "Default", "viewport": "360x200" },
+    "BrandColors": { "cardMode": "column" },
+    "Typography": { "cardMode": "column" },
+    "LogoShowcase": { "cardMode": "column" }
+  },
+  "componentSrcMap": {
+    "Select": "src/components/branding/ui/select.tsx",
+    "Switch": "src/components/branding/ui/switch.tsx",
+    "Tooltip": "src/components/branding/ui/tooltip.tsx",
+    "Collapsible": "src/components/branding/ui/collapsible.tsx",
+    "Skeleton": "src/components/branding/ui/skeleton.tsx",
+    "BrandColors": "src/components/branding/BrandColors.tsx",
+    "Typography": "src/components/branding/Typography.tsx",
+    "LogoShowcase": "src/components/branding/LogoShowcase.tsx",
+    "L1BeatLogo": "src/components/L1BeatLogo.tsx"
+  }
+}

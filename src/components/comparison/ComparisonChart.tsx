@@ -3,6 +3,7 @@ import { Line } from 'react-chartjs-2';
 import { format } from 'date-fns';
 import { DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
+import { watermarkPlugin, crosshairPlugin, chartTooltipStyle, CHART_STYLE } from '../../utils/chartConfig';
 import { AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner } from '../LoadingSpinner';
@@ -29,6 +30,9 @@ interface ComparisonChartProps {
   metricType: ComparisonMetricType;
   title: string;
   valueLabel: string;
+  hoveredChainId?: string | null;
+  onHoverChain?: (chainId: string | null) => void;
+  viewMode?: 'absolute' | 'normalized';
 }
 
 const CHAIN_COLORS = [
@@ -68,11 +72,21 @@ function formatValue(value: number, metricType: ComparisonMetricType): string {
   }
 }
 
+function fadeRgb(rgb: string, alpha: number): string {
+  const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!match) return rgb;
+  const [, r, g, b] = match;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export const ComparisonChart = memo(function ComparisonChart({
   comparisonChains,
   metricType,
   title,
-  valueLabel
+  valueLabel,
+  hoveredChainId = null,
+  onHoverChain,
+  viewMode = 'absolute',
 }: ComparisonChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -97,34 +111,67 @@ export const ComparisonChart = memo(function ComparisonChart({
         dataPoints.map(item => [item.timestamp, getValue(item, metricType)])
       );
 
-      const chartValues = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
+      const rawValues = sortedTimestamps.map(ts => dataMap.get(ts) ?? null);
+      let chartValues: (number | null)[] = rawValues;
+      if (viewMode === 'normalized') {
+        const numeric = rawValues.filter((v): v is number => v != null);
+        const min = numeric.length > 0 ? Math.min(...numeric) : 0;
+        const max = numeric.length > 0 ? Math.max(...numeric) : 0;
+        const range = max - min || 1;
+        chartValues = rawValues.map(v => (v == null ? null : ((v - min) / range) * 100));
+      }
+      const isHovered = hoveredChainId === data.chain.chainId;
+      const isDimmed = hoveredChainId != null && !isHovered;
 
+      const fillTopAlpha = isDimmed ? 0.04 : isHovered ? 0.32 : 0.18;
       return {
         label: data.chain.chainName,
+        chainId: data.chain.chainId,
         data: chartValues,
-        borderColor: color.line,
-        backgroundColor: 'transparent',
-        borderWidth: isDark ? 2.5 : 2,
+        rawValues,
+        data_raw_label: valueLabel,
+        borderColor: isDimmed ? fadeRgb(color.line, 0.18) : color.line,
+        backgroundColor: (context: { chart: { ctx: CanvasRenderingContext2D; chartArea?: { top: number; bottom: number } } }) => {
+          const { ctx, chartArea } = context.chart;
+          if (!chartArea) return fadeRgb(color.line, fillTopAlpha);
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          gradient.addColorStop(0, fadeRgb(color.line, fillTopAlpha));
+          gradient.addColorStop(1, fadeRgb(color.line, 0));
+          return gradient;
+        },
+        borderWidth: isHovered ? (isDark ? 3.5 : 3) : isDark ? 2.5 : 2,
         tension: 0.35,
         pointRadius: 0,
         pointHoverRadius: 7,
         pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
         pointHoverBorderColor: color.line,
         pointHoverBorderWidth: 2.5,
-        fill: false,
-        spanGaps: true
+        fill: 'origin',
+        spanGaps: true,
+        order: isHovered ? 0 : 1,
       };
     });
 
     return { labels, datasets };
-  }, [comparisonChains, metricType, isDark]);
+  }, [comparisonChains, metricType, isDark, hoveredChainId, viewMode, valueLabel]);
 
   const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: { duration: CHART_STYLE.animation.duration, easing: CHART_STYLE.animation.easing },
     interaction: {
       mode: 'index' as const,
       intersect: false,
+    },
+    onHover: (_event: unknown, elements: Array<{ datasetIndex: number }>) => {
+      if (!onHoverChain) return;
+      if (elements.length === 0) {
+        onHoverChain(null);
+        return;
+      }
+      const idx = elements[0].datasetIndex;
+      const chain = comparisonChains[idx];
+      onHoverChain(chain?.chain.chainId ?? null);
     },
     plugins: {
       legend: {
@@ -142,21 +189,8 @@ export const ComparisonChart = memo(function ComparisonChart({
         }
       },
       tooltip: {
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)',
-        titleColor: isDark ? '#f1f5f9' : '#0f172a',
-        bodyColor: isDark ? '#e2e8f0' : '#334155',
-        borderColor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.3)',
-        borderWidth: 1,
-        padding: 16,
+        ...chartTooltipStyle(isDark),
         boxPadding: 8,
-        cornerRadius: 12,
-        titleFont: {
-          size: 15,
-          weight: 'bold' as const,
-        },
-        bodyFont: {
-          size: 14,
-        },
         bodySpacing: 6,
         titleMarginBottom: 10,
         displayColors: true,
@@ -164,11 +198,15 @@ export const ComparisonChart = memo(function ComparisonChart({
         caretSize: 8,
         caretPadding: 12,
         callbacks: {
-          label: (context: { dataset: { label?: string }; parsed: { y: number | null } }) => {
+          label: (context: { dataset: { label?: string; rawValues?: (number | null)[] }; parsed: { y: number | null }; dataIndex: number }) => {
             const label = context.dataset.label || '';
-            const value = context.parsed.y;
-            if (value === null) return `${label}: No data`;
-            return `${label}: ${formatValue(value, metricType)} ${valueLabel}`;
+            const raw = context.dataset.rawValues?.[context.dataIndex] ?? context.parsed.y;
+            if (raw == null) return `${label}: No data`;
+            const formattedRaw = `${formatValue(raw, metricType)} ${valueLabel}`;
+            if (viewMode === 'normalized' && context.parsed.y != null) {
+              return `${label}: ${context.parsed.y.toFixed(0)}% · ${formattedRaw}`;
+            }
+            return `${label}: ${formattedRaw}`;
           }
         }
       },
@@ -195,7 +233,7 @@ export const ComparisonChart = memo(function ComparisonChart({
           display: false,
         },
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
           drawBorder: false,
         },
         ticks: {
@@ -205,13 +243,78 @@ export const ComparisonChart = memo(function ComparisonChart({
           },
           callback: (value: string | number) => {
             const num = Number(value);
+            if (viewMode === 'normalized') return `${num.toFixed(0)}%`;
             return formatValue(num, metricType);
           },
           padding: 8,
         },
+        max: viewMode === 'normalized' ? 100 : undefined,
       },
     },
-  }), [isDark, metricType, valueLabel]);
+    layout: {
+      padding: {
+        right: 64,
+      },
+    },
+  }), [isDark, metricType, valueLabel, onHoverChain, comparisonChains, viewMode]);
+
+  const endLabelPlugin = useMemo(() => ({
+    id: 'endLineLabels',
+    afterDatasetsDraw(chart: {
+      ctx: CanvasRenderingContext2D;
+      data: { datasets: Array<{ data: Array<number | null>; rawValues?: Array<number | null>; borderColor?: string; label?: string }> };
+      getDatasetMeta: (idx: number) => { data: Array<{ x: number; y: number }>; hidden?: boolean };
+      chartArea: { right: number; top: number; bottom: number };
+    }) {
+      const { ctx, data, chartArea } = chart;
+      ctx.save();
+      ctx.font = '600 11px ui-sans-serif, system-ui, -apple-system';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      const placedYs: number[] = [];
+      data.datasets.forEach((dataset, idx) => {
+        const meta = chart.getDatasetMeta(idx);
+        if (meta.hidden) return;
+        let lastIdx = -1;
+        for (let i = dataset.data.length - 1; i >= 0; i--) {
+          if (dataset.data[i] != null) {
+            lastIdx = i;
+            break;
+          }
+        }
+        if (lastIdx === -1) return;
+        const point = meta.data[lastIdx];
+        if (!point) return;
+
+        const raw = dataset.rawValues?.[lastIdx] ?? dataset.data[lastIdx];
+        if (raw == null) return;
+
+        let text: string;
+        if (viewMode === 'normalized') {
+          const yPct = dataset.data[lastIdx];
+          if (yPct == null) return;
+          text = `${Math.round(yPct as number)}%`;
+        } else {
+          text = formatValue(raw as number, metricType);
+        }
+
+        const x = Math.min(point.x + 8, chartArea.right + 60);
+        let y = point.y;
+        const MIN_GAP = 14;
+        while (placedYs.some(py => Math.abs(py - y) < MIN_GAP)) {
+          y = y + (y < chartArea.top + chartArea.bottom ? -MIN_GAP : MIN_GAP);
+          if (y < chartArea.top) y = chartArea.top + 4;
+          if (y > chartArea.bottom) y = chartArea.bottom - 4;
+        }
+        placedYs.push(y);
+
+        ctx.fillStyle = (dataset.borderColor as string) || (isDark ? '#e2e8f0' : '#334155');
+        ctx.fillText(text, x, y);
+      });
+      ctx.restore();
+    },
+  }), [metricType, viewMode, isDark]);
 
   if (isLoading) {
     return (
@@ -277,8 +380,8 @@ export const ComparisonChart = memo(function ComparisonChart({
         className="bg-card border border-border rounded-xl shadow-md p-6"
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
-        <div className="h-[400px]">
-          <Line data={chartData} options={options} />
+        <div className="h-[400px]" onMouseLeave={() => onHoverChain?.(null)}>
+          <Line data={chartData} options={options} plugins={[endLabelPlugin, crosshairPlugin, watermarkPlugin]} />
         </div>
       </motion.div>
     </AnimatePresence>

@@ -748,6 +748,15 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Hide scrollbar on Radix Select viewport (used by DropdownSelect in SmartParamInput) */
+[data-slot="select-content"] [data-radix-select-viewport]::-webkit-scrollbar {
+  display: none;
+}
+[data-slot="select-content"] [data-radix-select-viewport] {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* PNG export mode: hide controls, show export header */
 .exporting .export-hide {
   display: none !important;

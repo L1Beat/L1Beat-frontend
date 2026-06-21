@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import { useSearchParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
@@ -501,7 +502,23 @@ export function AvalancheNetworkMetrics() {
         })
       );
 
-      setMetricsData(results);
+      // Skip the state update (and Chart.js re-render) when an unchanged poll
+      // returns the same series — compare keys + each series' length + latest point.
+      setMetricsData((prev) => {
+        const nextKeys = Object.keys(results);
+        const same =
+          Object.keys(prev).length === nextKeys.length &&
+          nextKeys.every((k) => {
+            const a = prev[k];
+            const b = results[k];
+            return (
+              a !== undefined &&
+              a.length === b.length &&
+              (a.length === 0 || a[a.length - 1].timestamp === b[b.length - 1].timestamp)
+            );
+          });
+        return same ? prev : results;
+      });
 
       // Check if any metric has data
       const hasData = Object.values(results).some(arr => arr.length > 0);
@@ -519,22 +536,10 @@ export function AvalancheNetworkMetrics() {
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadData = async () => {
-      if (!mounted) return;
-      await fetchAllMetrics();
-    };
-
-    loadData();
-    const interval = setInterval(loadData, 15 * 60 * 1000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [timeframe, selectedMetrics.join(',')]); // Re-fetch when metrics change
+  // Re-fetch when metrics change; polling pauses while the tab is hidden.
+  usePolling(() => {
+    fetchAllMetrics();
+  }, 15 * 60 * 1000, [timeframe, selectedMetrics.join(',')]);
 
   const handleTimeframeChange = (newTimeframe: TimeframeOption) => {
     updateUrl(newTimeframe, undefined);
@@ -731,7 +736,7 @@ export function AvalancheNetworkMetrics() {
         position: 'left' as const,
         beginAtZero: true,
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
         },
         ticks: {
           color: selectedMetrics[0] ? METRICS.find(m => m.id === selectedMetrics[0])?.color.main : (isDark ? '#94a3b8' : '#64748b'),
@@ -789,26 +794,26 @@ export function AvalancheNetworkMetrics() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart3 className="w-5 h-5 text-[#ef4444]" />
-              <h2 className="text-2xl font-semibold">Avalanche Network Metrics</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
+              <h2 className="text-base sm:text-lg font-semibold text-foreground">Network metrics</h2>
             </div>
-            <p className="text-sm text-muted-foreground export-hide">
+            <p className="text-xs text-muted-foreground export-hide">
               Compare multiple metrics across the Avalanche network
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 export-hide">
             {/* Timeframe Selector */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {[7, 30, 90, 360].map((days) => (
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
                     timeframe === days
-                      ? 'bg-[#ef4444] text-white shadow-sm'
-                      : 'bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20'
+                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {days === 360 ? '1Y' : `${days}D`}

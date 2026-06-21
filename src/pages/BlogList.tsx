@@ -1,603 +1,389 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, Tag, AlertCircle, RefreshCw, TrendingUp, Clock, Calendar, ArrowRight, Sparkles, BookOpen, Archive } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BlogPost, getBlogPosts, getBlogTags, BlogTag } from '../api/blogApi';
+import { AlertCircle, RefreshCw, Search, X } from 'lucide-react';
+import { BlogPost, BlogTag, getBlogPosts, getBlogTags } from '../api/blogApi';
 import { BlogCard } from '../components/BlogCard';
-import { Footer } from '../components/Footer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { SEO } from '../components/SEO';
+
+const POSTS_PER_PAGE = 12;
 
 export function BlogList() {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [posts, setPosts] = useState<BlogPost[]>([]);
-    const [tags, setTags] = useState<BlogTag[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-    const [selectedTag, setSelectedTag] = useState<string | null>(
-        searchParams.get('tag')
-    );
-    const [hasMore, setHasMore] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [tags, setTags] = useState<BlogTag[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [hasMore, setHasMore] = useState(false);
 
-    const POSTS_PER_PAGE = 12;
+  const selectedTag = searchParams.get('tag');
 
-    const fetchPosts = async (offset: number = 0, tag?: string, append: boolean = false) => {
-        try {
-            if (!append) setLoading(true);
-            else setLoadingMore(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-            const response = await getBlogPosts(POSTS_PER_PAGE, offset, tag || undefined);
-
-            if (append) {
-                setPosts(prev => [...prev, ...response.data]);
-            } else {
-                setPosts(response.data);
-            }
-
-            setHasMore(response.metadata.hasMore);
-            setError(null);
-        } catch (err) {
-            setError('Failed to load blog posts. Please try again.');
-            console.error('Error fetching posts:', err);
-        } finally {
-            setLoading(false);
-            setLoadingMore(false);
-        }
-    };
-
-    const fetchTags = async () => {
-        try {
-            const response = await getBlogTags();
-            setTags(response.data);
-        } catch (err) {
-            console.error('Error fetching tags:', err);
-        }
-    };
-
-    // Generate search suggestions
-    const generateSuggestions = useCallback((term: string) => {
-        if (!term.trim() || term.length < 2) return [];
-
-        const suggestions = new Set<string>();
-        const termLower = term.toLowerCase();
-
-        posts.forEach(post => {
-            // Add title words that start with the search term
-            post.title.split(' ').forEach(word => {
-                const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
-                if (cleanWord.startsWith(termLower) && cleanWord !== termLower) {
-                    suggestions.add(word);
-                }
-            });
-
-            // Add author if it matches
-            if (post.author?.toLowerCase().includes(termLower)) {
-                suggestions.add(post.author);
-            }
-
-            // Add matching tags
-            post.tags.forEach(tag => {
-                if (tag.toLowerCase().includes(termLower)) {
-                    suggestions.add(tag);
-                }
-            });
-        });
-
-        return Array.from(suggestions).slice(0, 5);
-    }, [posts]);
-
-    // Debounce search term and generate suggestions
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearchTerm(searchTerm);
-            if (searchTerm.trim() && searchTerm.length >= 2) {
-                setSearchSuggestions(generateSuggestions(searchTerm));
-                setShowSuggestions(true);
-            } else {
-                setShowSuggestions(false);
-            }
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [searchTerm, generateSuggestions]);
-
-    useEffect(() => {
-        fetchPosts(0, selectedTag || undefined);
-        fetchTags();
-    }, [selectedTag]);
-
-    const handleTagFilter = (tag: string | null) => {
-        setSelectedTag(tag);
-        if (tag) {
-            setSearchParams({ tag });
-        } else {
-            setSearchParams({});
-        }
-    };
-
-    const loadMore = () => {
-        fetchPosts(posts.length, selectedTag || undefined, true);
-    };
-
-    // Enhanced search function with relevance scoring
-    const searchPosts = useCallback((posts: BlogPost[], searchTerm: string) => {
-        if (!searchTerm.trim()) return posts;
-
-        const term = searchTerm.toLowerCase();
-
-        return posts
-            .map(post => {
-                let relevanceScore = 0;
-
-                // Title matches get highest score
-                if (post.title.toLowerCase().includes(term)) {
-                    relevanceScore += 10;
-                    if (post.title.toLowerCase().startsWith(term)) relevanceScore += 5;
-                }
-
-                // Excerpt matches
-                if (post.excerpt.toLowerCase().includes(term)) {
-                    relevanceScore += 5;
-                }
-
-                // Content matches (if available)
-                if (post.content?.toLowerCase().includes(term)) {
-                    relevanceScore += 3;
-                }
-
-                // Author matches
-                if (post.author?.toLowerCase().includes(term)) {
-                    relevanceScore += 4;
-                }
-
-                // Tag matches
-                post.tags.forEach(tag => {
-                    if (tag.toLowerCase().includes(term)) {
-                        relevanceScore += 2;
-                        if (tag.toLowerCase() === term) relevanceScore += 3;
-                    }
-                });
-
-                return relevanceScore > 0 ? { ...post, relevanceScore } : null;
-            })
-            .filter((post): post is BlogPost & { relevanceScore: number } => post !== null)
-            .sort((a, b) => b.relevanceScore - a.relevanceScore)
-            .map(({ relevanceScore, ...post }) => post);
-    }, []);
-
-    const filteredPosts = useMemo(() =>
-        searchPosts(posts, debouncedSearchTerm),
-        [posts, debouncedSearchTerm, searchPosts]
-    );
-
-    const featuredPost = filteredPosts[0];
-    const regularPosts = filteredPosts.slice(1);
-
-    if (loading && posts.length === 0) {
-        return (
-            <div className="min-h-screen bg-background text-foreground">
-                <div className="flex items-center justify-center py-20">
-                    <div className="text-center">
-                        <LoadingSpinner size="lg" />
-                        <p className="mt-4 text-muted-foreground">Loading amazing content...</p>
-                    </div>
-                </div>
-            </div>
-        );
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [postsRes, tagsRes] = await Promise.all([
+          getBlogPosts(POSTS_PER_PAGE, 0, selectedTag || undefined),
+          getBlogTags(),
+        ]);
+        if (!active) return;
+        setPosts(postsRes.data);
+        setHasMore(postsRes.metadata.hasMore);
+        setTags(tagsRes.data);
+      } catch (err) {
+        if (!active) return;
+        console.error('Error loading blog data:', err);
+        setError('Failed to load articles. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
     }
+    load();
+    return () => {
+      active = false;
+    };
+  }, [selectedTag]);
 
+  const handleTagFilter = (tag: string | null) => {
+    if (tag) setSearchParams({ tag });
+    else setSearchParams({});
+  };
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const res = await getBlogPosts(POSTS_PER_PAGE, posts.length, selectedTag || undefined);
+      setPosts((prev) => [...prev, ...res.data]);
+      setHasMore(res.metadata.hasMore);
+    } catch (err) {
+      console.error('Error loading more posts:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const filteredPosts = useMemo(() => {
+    if (!debouncedSearch.trim()) return posts;
+    const term = debouncedSearch.toLowerCase();
+    return posts.filter((p) => {
+      return (
+        p.title.toLowerCase().includes(term) ||
+        p.excerpt.toLowerCase().includes(term) ||
+        p.author?.toLowerCase().includes(term) ||
+        p.tags.some((t) => t.toLowerCase().includes(term))
+      );
+    });
+  }, [posts, debouncedSearch]);
+
+  const featuredPost = filteredPosts[0];
+  const regularPosts = filteredPosts.slice(1);
+  const latestUpdate = useMemo(() => {
+    if (posts.length === 0) return null;
+    const newest = posts.reduce((latest, p) => {
+      const lt = latest ? new Date(latest.publishedAt).getTime() : 0;
+      const pt = new Date(p.publishedAt).getTime();
+      return pt > lt ? p : latest;
+    }, null as BlogPost | null);
+    return newest?.publishedAt ?? null;
+  }, [posts]);
+
+  if (loading && posts.length === 0) {
     return (
-        <div className="min-h-screen flex flex-col bg-background text-foreground">
-            <div className="flex-1">
-                {/* Hero Section */}
-                <div className="relative bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#b91c1c] overflow-hidden">
-                    {/* Background Effects */}
-                    <div className="absolute inset-0 bg-black/10"></div>
-                    <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http://www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.03%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
-
-                    {/* Floating Elements */}
-                    <div className="absolute top-20 left-10 w-32 h-32 bg-white/10 rounded-full blur-xl animate-pulse"></div>
-                    <div className="absolute bottom-20 right-10 w-24 h-24 bg-purple-300/20 rounded-full blur-lg animate-bounce"></div>
-                    <div className="absolute top-1/2 left-1/3 w-16 h-16 bg-[#ef4444]/15 rounded-full blur-md animate-ping"></div>
-                    
-                    <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-                        <div className="text-center">
-                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                                Insights from the Avalanche Ecosystem
-                            </div>
-                            
-                            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
-                                <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-                                    L1Beat
-                                </span>
-                                <span className="block text-3xl md:text-4xl lg:text-5xl font-light text-white/90 mt-2 tracking-wide">
-                                    <span className="inline-block animate-[fadeIn_1s_ease-out_0.5s_both]">Blog</span>
-                                </span>
-                            </h1>
-                            
-                            <p className="text-xl md:text-2xl text-white/90 max-w-3xl mx-auto leading-relaxed mb-10 animate-[fadeIn_1s_ease-out_0.8s_both]">
-                                Deep dives into <span className="font-semibold text-white/90">Avalanche L1s</span>, analytics, and the <span className="font-semibold text-white/80">future of finance</span>.
-                            </p>
-
-                            {/* Stats */}
-                            <div className="flex flex-wrap justify-center gap-12 text-white/80 animate-[fadeIn_1s_ease-out_1.2s_both]">
-                                <div className="text-center group">
-                                    <div className="text-3xl font-bold text-white mb-1 group-hover:scale-110 transition-transform duration-300">{posts.length}</div>
-                                    <div className="text-sm uppercase tracking-wider text-white/70">Articles</div>
-                                </div>
-                                <div className="w-px h-12 bg-white/30"></div>
-                                <div className="text-center group">
-                                    <div className="text-3xl font-bold text-white mb-1 group-hover:scale-110 transition-transform duration-300">{tags.length}</div>
-                                    <div className="text-sm uppercase tracking-wider text-white/70">Topics</div>
-                                </div>
-                                <div className="w-px h-12 bg-white/30"></div>
-                                <div className="text-center group">
-                                    <div className="text-3xl font-bold text-white mb-1 group-hover:scale-110 transition-transform duration-300">∞</div>
-                                    <div className="text-sm uppercase tracking-wider text-white/70">Insights</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                    {/* Error State */}
-                    {error && (
-                        <div className="mb-8 p-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0" />
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-red-800 dark:text-red-200 mb-1">Unable to load content</h3>
-                                    <p className="text-red-700 dark:text-red-300">{error}</p>
-                                </div>
-                                <button
-                                    onClick={() => fetchPosts(0, selectedTag || undefined)}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-                                >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Retry
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Search and Filters Section */}
-                    <section className="mb-8">
-                        <div className="flex flex-col lg:flex-row gap-4">
-                            {/* Clean Search Bar */}
-                            <div className="flex-1">
-                                <div className="relative overflow-hidden">
-                                    {/* Search Container */}
-                                    <div className="h-10 bg-card rounded-lg border border-border focus-within:border-[#ef4444] shadow-sm focus-within:shadow-md transition-all duration-200 flex items-center relative">
-
-                                        {/* Animated Gradient Background */}
-                                        {searchTerm && (
-                                            <motion.div
-                                                className="absolute inset-0 bg-gradient-to-r from-[#ef4444]/10 via-[#dc2626]/10 to-[#b91c1c]/10 dark:from-[#ef4444]/20 dark:via-[#dc2626]/20 dark:to-[#b91c1c]/20"
-                                                animate={{
-                                                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"]
-                                                }}
-                                                transition={{
-                                                    duration: 2,
-                                                    repeat: Infinity,
-                                                    ease: "easeInOut"
-                                                }}
-                                                style={{
-                                                    backgroundSize: "200% 100%"
-                                                }}
-                                            />
-                                        )}
-
-                                        {/* Search Icon */}
-                                        <div className="flex items-center justify-center w-10 h-full relative z-10">
-                                            <Search className="w-4 h-4 text-muted-foreground" />
-                                        </div>
-
-                                        {/* Input */}
-                                        <input
-                                            type="text"
-                                            placeholder="Search articles, topics, authors..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="flex-1 h-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground text-sm font-medium px-0 relative z-10"
-                                        />
-
-                                        {/* Results and Clear */}
-                                        {(debouncedSearchTerm || selectedTag) && (
-                                            <div className="flex items-center gap-2 pr-3 relative z-10">
-                                                <span className="text-xs text-muted-foreground font-medium">
-                                                    {filteredPosts.length}
-                                                </span>
-                                                <button
-                                                    onClick={() => {
-                                                        setSearchTerm('');
-                                                        handleTagFilter(null);
-                                                    }}
-                                                    className="w-5 h-5 rounded-full bg-muted hover:bg-accent border border-border flex items-center justify-center transition-colors duration-150"
-                                                    title="Clear search"
-                                                >
-                                                    <AlertCircle className="w-3 h-3 text-muted-foreground" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Tag Filters */}
-                            {tags.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <div className="flex items-center gap-1 text-muted-foreground">
-                                        <Filter className="w-3 h-3" />
-                                        <span className="text-xs font-medium">Topics:</span>
-                                    </div>
-
-                                    <motion.button
-                                        onClick={() => handleTagFilter(null)}
-                                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${!selectedTag
-                                            ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
-                                            : 'bg-muted text-foreground hover:bg-accent border border-border'
-                                        }`}
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                    >
-                                        All
-                                    </motion.button>
-
-                                    {tags.slice(0, 6).map((tag) => (
-                                        <motion.button
-                                            key={tag.name}
-                                            onClick={() => handleTagFilter(tag.name)}
-                                            className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-300 ${selectedTag === tag.name
-                                                ? 'bg-gradient-to-r from-[#ef4444] to-[#dc2626] text-white shadow-sm'
-                                                : 'bg-muted text-foreground hover:bg-accent border border-border'
-                                            }`}
-                                            whileHover={{ scale: 1.05 }}
-                                            whileTap={{ scale: 0.95 }}
-                                        >
-                                            <Tag className="w-2.5 h-2.5" />
-                                            {tag.name}
-                                            <span className="ml-1 px-1 py-0.5 text-xs bg-white/20 rounded-full">
-                                                {tag.count}
-                                            </span>
-                                        </motion.button>
-                                    ))}
-
-                                    {tags.length > 6 && (
-                                        <span className="text-xs text-muted-foreground">
-                                            +{tags.length - 6}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </section>
-
-                    {/* Content */}
-                    {filteredPosts.length > 0 ? (
-                        <div className="space-y-8">
-                            {/* Featured Post */}
-                            {featuredPost && (
-                                <motion.section
-                                    className="mb-8"
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-                                >
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 bg-gradient-to-r from-[#ef4444] to-[#dc2626] rounded-full"></div>
-                                            <h2 className="text-2xl font-semibold text-foreground">Featured Article</h2>
-                                        </div>
-                                        <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent"></div>
-                                    </div>
-
-                                    <BlogCard post={featuredPost} featured />
-                                </motion.section>
-                            )}
-
-                            {/* Latest Posts */}
-                            {regularPosts.length > 0 && (
-                                <section>
-                                    {selectedTag && (
-                                        <div className="flex justify-end mb-8">
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-full">
-                                                <Tag className="w-4 h-4 text-[#ef4444] dark:text-[#ef4444]" />
-                                                <span className="text-sm font-medium text-[#ef4444] dark:text-[#ef4444]">
-                                                    Filtered by: {selectedTag}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    <div className="space-y-8">
-                                        {/* Section Header */}
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2.5 h-2.5 bg-gradient-to-r from-[#dc2626] to-[#ef4444] rounded-full"></div>
-                                                <h2 className="text-xl font-semibold text-foreground">Latest Articles</h2>
-                                            </div>
-                                            <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent"></div>
-                                            <span className="text-sm text-muted-foreground">{regularPosts.length} articles</span>
-                                        </div>
-
-                                        {/* Grid */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
-                                            {regularPosts.map((post, index) => (
-                                                <div
-                                                    key={post._id}
-                                                    className="opacity-0 animate-[fadeInUp_0.6s_ease-out_forwards]"
-                                                    style={{
-                                                        animationDelay: `${index * 150}ms`
-                                                    }}
-                                                >
-                                                    <BlogCard post={post} />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* Load More */}
-                            {hasMore && (
-                                <div className="text-center">
-                                    <button
-                                        onClick={loadMore}
-                                        disabled={loadingMore}
-                                        className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-[#ef4444] to-[#dc2626] hover:from-[#dc2626] hover:to-[#b91c1c] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                                    >
-                                        {loadingMore ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                                                Loading more articles...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span>Load More Articles</span>
-                                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-200" />
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        /* Enhanced Empty State */
-                        <motion.div
-                            className="text-center py-20 px-4"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-                        >
-                            <motion.div
-                                className="relative inline-block mb-8"
-                                initial={{ scale: 0.8 }}
-                                animate={{ scale: 1 }}
-                                transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
-                            >
-                                <div className="w-32 h-32 bg-gradient-to-br from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/30 dark:to-[#dc2626]/30 rounded-3xl flex items-center justify-center shadow-lg">
-                                    <Archive className="w-16 h-16 text-[#ef4444] dark:text-[#ef4444]" />
-                                </div>
-                                <motion.div
-                                    className="absolute -top-2 -right-2 w-10 h-10 bg-orange-400 rounded-full flex items-center justify-center shadow-lg"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: [0, 1.2, 1] }}
-                                    transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}
-                                >
-                                    <AlertCircle className="w-5 h-5 text-white" />
-                                </motion.div>
-                            </motion.div>
-
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.4, delay: 0.6, ease: "easeOut" }}
-                            >
-                                <h3 className="text-3xl font-semibold text-foreground mb-4">
-                                    {searchTerm && selectedTag
-                                        ? 'No articles match your search and filter'
-                                        : searchTerm
-                                        ? 'No articles found for your search'
-                                        : selectedTag
-                                        ? `No articles found in "${selectedTag}"`
-                                        : 'No articles available yet'}
-                                </h3>
-
-                                <div className="max-w-lg mx-auto space-y-4">
-                                    <p className="text-lg text-muted-foreground">
-                                        {searchTerm && selectedTag
-                                            ? `No results found for "${searchTerm}" in the "${selectedTag}" category.`
-                                            : searchTerm
-                                            ? `No articles match "${searchTerm}". Try different keywords or browse by topic.`
-                                            : selectedTag
-                                            ? `No articles are currently available in the "${selectedTag}" category.`
-                                            : 'Check back soon for fresh insights and analysis from the Avalanche ecosystem.'}
-                                    </p>
-
-                                    {(searchTerm || selectedTag) && (
-                                        <motion.div
-                                            className="flex flex-col sm:flex-row gap-3 justify-center items-center pt-4"
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.4, delay: 0.8, ease: "easeOut" }}
-                                        >
-                                            <motion.button
-                                                onClick={() => {
-                                                    setSearchTerm('');
-                                                    handleTagFilter(null);
-                                                }}
-                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ef4444] to-[#dc2626] hover:from-[#dc2626] hover:to-[#b91c1c] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                                                whileHover={{ scale: 1.05, y: -2 }}
-                                                whileTap={{ scale: 0.95 }}
-                                            >
-                                                <RefreshCw className="w-4 h-4" />
-                                                Clear All Filters
-                                            </motion.button>
-
-                                            {searchTerm && selectedTag && (
-                                                <>
-                                                    <motion.button
-                                                        onClick={() => setSearchTerm('')}
-                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-card text-foreground border border-border hover:bg-accent hover:border-[#ef4444]/20 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
-                                                        whileHover={{ scale: 1.05, y: -1 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                    >
-                                                        Clear Search Only
-                                                    </motion.button>
-                                                    <motion.button
-                                                        onClick={() => handleTagFilter(null)}
-                                                        className="inline-flex items-center gap-2 px-6 py-3 bg-card text-foreground border border-border hover:bg-accent hover:border-[#ef4444]/20 font-medium rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
-                                                        whileHover={{ scale: 1.05, y: -1 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                    >
-                                                        Clear Topic Filter
-                                                    </motion.button>
-                                                </>
-                                            )}
-                                        </motion.div>
-                                    )}
-
-                                    {/* Helpful suggestions when there are no results */}
-                                    {(searchTerm || selectedTag) && posts.length > 0 && (
-                                        <motion.div
-                                            className="mt-8 p-6 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-2xl"
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.4, delay: 1, ease: "easeOut" }}
-                                        >
-                                            <h4 className="text-lg font-semibold text-[#ef4444] dark:text-[#ef4444] mb-3">
-                                                Try browsing these popular topics:
-                                            </h4>
-                                            <div className="flex flex-wrap justify-center gap-2">
-                                                {tags.slice(0, 4).map((tag) => (
-                                                    <motion.button
-                                                        key={tag.name}
-                                                        onClick={() => {
-                                                            setSearchTerm('');
-                                                            handleTagFilter(tag.name);
-                                                        }}
-                                                        className="px-3 py-1.5 text-sm bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
-                                                        whileHover={{ scale: 1.05 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                    >
-                                                        {tag.name} ({tag.count})
-                                                    </motion.button>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </div>
-            </div>
-            <Footer />
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Loading articles…</p>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <SEO
+        title="Blog"
+        description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
+        url="/blog"
+      />
+      <Hero
+        totalArticles={posts.length}
+        latestUpdate={latestUpdate}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        resultCount={filteredPosts.length}
+        showResultCount={Boolean(debouncedSearch)}
+      />
+
+      {tags.length > 0 && (
+        <TagFilter
+          tags={tags}
+          selectedTag={selectedTag}
+          onSelect={handleTagFilter}
+          totalPosts={posts.length}
+        />
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 flex items-center gap-3">
+          <AlertCircle className="w-4 h-4 text-[#ef4444]" />
+          <span className="text-sm text-[#ef4444]">{error}</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-[#ef4444] hover:text-[#dc2626]"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Retry
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {filteredPosts.length === 0 ? (
+          <EmptyState
+            searchTerm={debouncedSearch}
+            selectedTag={selectedTag}
+            onClear={() => {
+              setSearchTerm('');
+              handleTagFilter(null);
+            }}
+          />
+        ) : (
+          <motion.div
+            key={`${selectedTag || 'all'}-${debouncedSearch}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-6"
+          >
+            {featuredPost && <BlogCard post={featuredPost} featured />}
+
+            {regularPosts.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {regularPosts.map((post) => (
+                  <BlogCard key={post._id} post={post} />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {hasMore && filteredPosts.length > 0 && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-card border border-border text-sm font-semibold text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loadingMore ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Loading…
+              </>
+            ) : (
+              'Load more articles'
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Hero({
+  totalArticles,
+  latestUpdate,
+  searchTerm,
+  onSearchChange,
+  resultCount,
+  showResultCount,
+}: {
+  totalArticles: number;
+  latestUpdate: string | null;
+  searchTerm: string;
+  onSearchChange: (v: string) => void;
+  resultCount: number;
+  showResultCount: boolean;
+}) {
+  const meta: string[] = [];
+  if (totalArticles > 0) {
+    meta.push(`${totalArticles} ${totalArticles === 1 ? 'article' : 'articles'}`);
+  }
+  if (latestUpdate) {
+    meta.push(`Updated ${formatRelative(latestUpdate)}`);
+  }
+
+  return (
+    <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
+          L1BEAT INSIGHTS
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+          Avalanche L1s, explained.
+        </h1>
+        <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+          Field notes on validator economics, cross-chain messaging, and the long arc of L1
+          adoption.
+        </p>
+        {meta.length > 0 && (
+          <div className="text-xs text-muted-foreground mt-3">{meta.join(' · ')}</div>
+        )}
+      </div>
+      <div className="lg:w-80 shrink-0 flex flex-col gap-1.5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search articles…"
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full h-10 pl-9 pr-9 rounded-lg bg-card border border-border text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]/30 focus:border-[#ef4444]/40"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        {showResultCount && (
+          <div className="text-[11px] text-muted-foreground pl-1">
+            {resultCount} {resultCount === 1 ? 'result' : 'results'}
+          </div>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!then) return '';
+  const diff = Date.now() - then;
+  const day = 1000 * 60 * 60 * 24;
+  const days = Math.floor(diff / day);
+  if (days < 1) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+function TagFilter({
+  tags,
+  selectedTag,
+  onSelect,
+  totalPosts,
+}: {
+  tags: BlogTag[];
+  selectedTag: string | null;
+  onSelect: (tag: string | null) => void;
+  totalPosts: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <FilterChip
+        label="All"
+        count={totalPosts}
+        active={!selectedTag}
+        onClick={() => onSelect(null)}
+      />
+      {tags.map((tag) => (
+        <FilterChip
+          key={tag.name}
+          label={tag.name}
+          count={tag.count}
+          active={selectedTag === tag.name}
+          onClick={() => onSelect(tag.name)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+        active
+          ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {label}
+      <span
+        className={`text-[10px] font-bold px-1.5 h-4 inline-flex items-center rounded-full ${
+          active ? 'bg-[#ef4444] text-white' : 'bg-muted text-muted-foreground'
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+
+function EmptyState({
+  searchTerm,
+  selectedTag,
+  onClear,
+}: {
+  searchTerm: string;
+  selectedTag: string | null;
+  onClear: () => void;
+}) {
+  const hasFilters = Boolean(searchTerm || selectedTag);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="rounded-2xl border border-border bg-card px-6 py-12 text-center"
+    >
+      <h3 className="text-base font-semibold text-foreground mb-2">
+        {hasFilters ? 'No articles match these filters' : 'No articles yet'}
+      </h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        {hasFilters
+          ? 'Try different keywords or browse by topic.'
+          : 'Check back soon for fresh insights from the Avalanche ecosystem.'}
+      </p>
+      {hasFilters && (
+        <button
+          onClick={onClear}
+          className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Clear filters
+        </button>
+      )}
+    </motion.div>
+  );
 }

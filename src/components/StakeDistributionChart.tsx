@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
 import { Validator } from '../types';
 import { useTheme } from '../hooks/useTheme';
-import { TrendingUp, Users, Coins } from 'lucide-react';
+import { chartTooltipStyle } from '../utils/chartConfig';
+import { PieChart } from 'lucide-react';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 
 ChartJS.register(ArcElement, Tooltip);
@@ -28,6 +29,8 @@ interface StakeDistributionChartProps {
 export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals, onValidatorClick }: StakeDistributionChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  // Hide the centre label while a slice is hovered so the tooltip doesn't collide with it.
+  const [hovering, setHovering] = useState(false);
 
   const isWeightMode =
     mode === 'weight' ? true : mode === 'tokens' ? false : validators.some(v => v.stakeUnit === 'weight');
@@ -35,11 +38,15 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
   const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
   const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'N/A');
 
-  const { data, totalStakeBaseUnits, baseByIndex, sortedTop } = useMemo(() => {
+  const { data, totalStakeBaseUnits, baseByIndex, sortedTop, tokensByIndex, totalTokens } = useMemo(() => {
     const getStakeBase = (v: Validator) => parseBaseUnits(v.weight) ?? 0n;
+    // PoS: the real staked amount in whole tokens (proportions still come from
+    // weight, which is equivalent since stake = weight / a constant factor).
+    const getTokens = (v: Validator) => Number(v.stakedAmount ?? '0') || 0;
 
     // Calculate total stake/weight (base units or integer if weight-mode)
     const total = validators.reduce((sum, v) => sum + getStakeBase(v), 0n);
+    const totalTok = validators.reduce((sum, v) => sum + getTokens(v), 0);
     
     // Sort validators by stake weight in descending order
     const sortedValidators = [...validators].sort((a, b) => {
@@ -53,15 +60,20 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     const othersStake = sortedValidators.slice(50).reduce((sum, v) => sum + getStakeBase(v), 0n);
 
     // Prepare data for the chart (top 50 + others)
-    const chartData: Array<{ label: string; navax: bigint }> = [
+    const chartData: Array<{ label: string; navax: bigint; tokens: number }> = [
       ...top50.map(v => ({
         label: `${v.address.slice(0, 8)}...${v.address.slice(-4)}`,
         navax: getStakeBase(v),
+        tokens: getTokens(v),
       })),
     ];
 
     if (othersStake > 0n) {
-      chartData.push({ label: 'Others', navax: othersStake });
+      chartData.push({
+        label: 'Others',
+        navax: othersStake,
+        tokens: sortedValidators.slice(50).reduce((s, v) => s + getTokens(v), 0),
+      });
     }
 
     // ChartJS needs numbers; use best-effort AVAX numbers for rendering.
@@ -87,17 +99,23 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
       totalStakeBaseUnits: total,
       baseByIndex,
       sortedTop: top50,
+      tokensByIndex: chartData.map(v => v.tokens),
+      totalTokens: totalTok,
     };
   }, [validators, isDark, isWeightMode, decimals]);
+
+  const groupTokens = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    cutout: '62%',
     onHover: (_event: any, elements: any[]) => {
       const canvas = _event.native?.target as HTMLCanvasElement | undefined;
       if (canvas) {
         canvas.style.cursor = elements.length > 0 && elements[0].index < sortedTop.length ? 'pointer' : 'default';
       }
+      setHovering(elements.length > 0);
     },
     onClick: (_event: any, elements: any[]) => {
       if (!onValidatorClick || elements.length === 0) return;
@@ -111,13 +129,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
         display: false,
       },
       tooltip: {
-        // Match app surfaces (Figma: #0A0A0A bg, #262626 borders, #FAFAFA text)
-        backgroundColor: isDark ? 'rgba(10, 10, 10, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        titleColor: isDark ? '#FAFAFA' : '#0A0A0A',
-        bodyColor: isDark ? '#FAFAFA' : '#0A0A0A',
-        borderColor: isDark ? 'rgba(38, 38, 38, 0.8)' : 'rgba(0, 0, 0, 0.1)',
-        borderWidth: 1,
-        padding: 12,
+        ...chartTooltipStyle(isDark),
         boxPadding: 4,
         callbacks: {
           label: (context: any) => {
@@ -127,7 +139,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
             const percentage = total > 0n ? ((Number(base) / Number(total)) * 100).toFixed(1) : '0.0';
             const formatted = isWeightMode
               ? formatUnits(base, 0, { maxFractionDigits: 0 })
-              : formatUnits(base, decimals, { maxFractionDigits: 2 });
+              : groupTokens(tokensByIndex[idx] ?? 0);
             return `${formatted} ${unitLabel} (${percentage}%)`;
           },
         },
@@ -135,89 +147,47 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     },
   };
 
+  const totalDisplay = isWeightMode
+    ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
+    : groupTokens(totalTokens);
+  const avgDisplay =
+    validators.length > 0
+      ? isWeightMode
+        ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
+        : groupTokens(totalTokens / validators.length)
+      : 'N/A';
+
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-border bg-gradient-to-r from-[#ef4444]/15 via-[#ef4444]/5 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#ef4444] rounded-xl">
-            <TrendingUp className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">
-              {isWeightMode ? 'Weight Distribution' : 'Stake Distribution'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {isWeightMode ? 'Top validators by weight' : 'Top validators by stake amount'}
-            </p>
-          </div>
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <header className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
+        <div className="flex items-center gap-2">
+          <PieChart className="w-4 h-4 text-[#ef4444]" />
+          <h2 className="text-[14px] font-semibold text-foreground">
+            {isWeightMode ? 'Weight distribution' : 'Stake distribution'}
+          </h2>
         </div>
-      </div>
+        <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+          {validators.length} validators
+        </span>
+      </header>
 
-      {/* Statistics */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Chart Section */}
-          <div className="lg:col-span-2">
-            <div className="h-80 flex items-center justify-center">
-              <div className="w-full h-full max-w-sm">
-                <Pie data={data} options={options} />
-              </div>
-            </div>
+      <div className="p-4 sm:p-6">
+        <div className="relative h-64 sm:h-72 flex items-center justify-center">
+          <div className="w-full h-full max-w-[300px]">
+            <Pie data={data} options={options} />
           </div>
-
-          {/* Statistics and Top Validators */}
-          <div className="space-y-6">
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 gap-4">
-              {/* Total Stake - Primary Brand Color */}
-              <div className="bg-[#ef4444]/10 rounded-xl p-4 border border-[#ef4444]/20">
-                <div className="flex items-center gap-3 mb-2">
-                  <Coins className="w-5 h-5 text-[#ef4444]" />
-                  <span className="text-sm font-medium text-[#ef4444]">
-                    {isWeightMode ? 'Total Weight' : 'Total Stake'}
-                  </span>
-                </div>
-                <p className="text-2xl font-bold text-[#ef4444]">
-                  {isWeightMode
-                    ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
-                    : formatUnits(totalStakeBaseUnits, decimals, { maxFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-[#ef4444]/80">{unitLabel}</p>
-              </div>
-
-              {/* Validators */}
-              <div className="bg-muted/20 rounded-xl p-4 border border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <Users className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Validators</span>
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {validators.length}
-                </p>
-                <p className="text-xs text-muted-foreground">total nodes</p>
-              </div>
-
-              {/* Average Stake */}
-              <div className="bg-muted/20 rounded-xl p-4 border border-border">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">
-                    {isWeightMode ? 'Average Weight' : 'Average Stake'}
-                  </span>
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {validators.length > 0
-                    ? (isWeightMode
-                      ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
-                      : formatUnits(totalStakeBaseUnits / BigInt(validators.length), decimals, { maxFractionDigits: 2 }))
-                    : 'N/A'}
-                </p>
-                <p className="text-xs text-muted-foreground">{unitLabel}</p>
-              </div>
+          {/* Total in the donut centre — hidden while hovering so the tooltip is readable */}
+          {!hovering && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total {unitLabel}</span>
+              <span className="text-lg font-bold text-foreground tabular-nums">{totalDisplay}</span>
             </div>
-          </div>
+          )}
         </div>
+        <p className="text-center text-[11px] text-muted-foreground mt-3">
+          {validators.length} validators · avg{' '}
+          <span className="font-semibold text-foreground tabular-nums">{avgDisplay}</span> {unitLabel} · tap a slice for detail
+        </p>
       </div>
     </div>
   );

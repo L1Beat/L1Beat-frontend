@@ -1,0 +1,5 @@
+/* design-sync CSS entry: load the brand font (Inter) the same way the app does
+   (Google Fonts), then pull in the app's real Tailwind layer + token definitions.
+   The remote @import makes designs render in Inter at runtime in the browser. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import '../src/index.css';

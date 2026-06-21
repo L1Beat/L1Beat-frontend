@@ -19,7 +19,11 @@ export interface Chain {
     value: number;
     timestamp: number;
   } | null;
+  isActive?: boolean;
   validatorCount?: number;
+  // Compact decentralization summary from the chains list (present only for
+  // chains with active L1 validators). Full detail comes from getChainRisk.
+  decentralization?: ChainDecentralization;
   cumulativeTxCount?: {
     value: number;
     timestamp: number;
@@ -69,9 +73,55 @@ export interface Validator {
    */
   weight: string;
   stakeUnit?: 'tokens' | 'weight';
+  /** PoS chains only: real staked amount in whole tokens (decimal string). */
+  stakedAmount?: string;
+  /** PoS chains only: symbol of the token actually staked. */
+  stakedToken?: string;
   remainingBalance?: number;
   explorerUrl?: string;
   validationId?: string;
+}
+
+// Risk / decentralization data (api.l1beat.io). Additive; `null` always means
+// "not assessed yet" — never fabricate a value from it.
+export interface ChainDecentralization {
+  active_validator_count: number;
+  nakamoto_33: number | null;
+  nakamoto_50: number | null;
+  total_weight: string;
+  weights?: string[]; // sorted desc, raw — detail endpoint only
+}
+
+export interface ChainRisk {
+  chain_id: string;
+  validator_manager: {
+    address: string;
+    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'unknown';
+    // Where the ValidatorManager lives — a recoverability signal independent of
+    // control: 'self' means the set can't be changed if this L1 halts.
+    deployed_on: 'c-chain' | 'self' | 'unknown';
+    owner: {
+      address: string;
+      kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
+      multisig: { threshold: number; owners: number } | null;
+    } | null;
+    proxy: {
+      is_proxy: boolean;
+      implementation: string;
+      proxy_admin: string;
+      proxy_admin_owner: string;
+      upgrade_delay_seconds: number;
+    } | null;
+    churn: { period_seconds: number; max_churn_percentage: number } | null;
+  } | null;
+  decentralization: ChainDecentralization | null;
+  economic: {
+    staking_token: { name: string; symbol: string; decimals: number } | null;
+    total_stake_raw: string;
+    total_stake_usd: number | null;
+    cost_to_control_33_usd: number | null;
+  } | null;
+  updated_at: string;
 }
 
 export interface ValidatorDeposit {
@@ -446,5 +496,49 @@ export interface ACPSearchResponse extends ACPListResponse {
   query: string;
   filters: ACPFilters;
   suggestions?: string[];
+}
+
+export interface Stablecoin {
+  token: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  peg: string;
+  issuer?: string;
+  bridged: boolean;
+  supply: string;
+  holders: number;
+  volume_24h: string;
+  transfers_24h: number;
+  // True when this coin's reserves are themselves other stablecoins already
+  // counted on-chain (e.g. avUSD backed by USDC). Summing it into the headline
+  // total would count the same dollars twice, so the net total excludes it.
+  // The exclusion list is curated backend-side; never hardcode coins here.
+  doublecounted?: boolean;
+}
+
+export interface StablecoinsResponse {
+  data: Stablecoin[];
+}
+
+export type StablecoinMetric = 'supply' | 'volume' | 'transfers' | 'holders';
+export type StablecoinGranularity = 'hour' | 'day' | 'week' | 'month';
+
+export interface StablecoinSeriesPoint {
+  // RFC3339 UTC timestamp marking the bucket start.
+  period: string;
+  // Raw value as a string. For supply/volume this is base units (divide by
+  // 10^decimals); for transfers/holders it's a plain integer count.
+  value: string;
+}
+
+export interface StablecoinSeries {
+  chain_id: number;
+  token: string;
+  data: StablecoinSeriesPoint[];
+}
+
+export interface StablecoinTimeseriesResponse {
+  data: StablecoinSeries[];
 }
 

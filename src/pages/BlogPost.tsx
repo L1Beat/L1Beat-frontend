@@ -1,610 +1,691 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import ContentRenderer from '../components/ContentRenderer';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import parse, { Element } from 'html-react-parser';
 import {
-    ArrowLeft,
-    Calendar,
-    Clock,
-    Tag,
-    Share2,
-    Twitter,
-    ExternalLink,
-    AlertCircle,
-    RefreshCw,
-    Eye,
-    Bookmark,
-    Heart,
-    MessageCircle,
-    TrendingUp,
-    Sparkles
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  List,
+  Mail,
+  RefreshCw,
 } from 'lucide-react';
-import { BlogPost as BlogPostType, getBlogPost, formatBlogDate, calculateReadTime, getRelatedPosts, RelatedPost } from '../api/blogApi';
+import {
+  BlogPost as BlogPostType,
+  calculateReadTime,
+  formatBlogDate,
+  getBlogPost,
+  getRelatedPosts,
+  RelatedPost,
+} from '../api/blogApi';
 import { getBlogPostImageUrl } from '../utils/imageExtractor';
-import { AuthorCard } from '../components/AuthorCard';
-import { Footer } from '../components/Footer';
+import { AuthorCard, AuthorProfile } from '../components/AuthorCard';
+import ContentRenderer from '../components/ContentRenderer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { RelatedArticles } from '../components/RelatedArticles';
 import { SEO } from '../components/SEO';
 
-// Enhanced Newsletter Subscription Component
-const NewsletterSubscription = () => {
-    const [email, setEmail] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSubmitted, setIsSubmitted] = useState(false);
+interface TocItem {
+  id: string;
+  title: string;
+  level: 2 | 3;
+}
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        
-        // Simulate submission delay
-        setTimeout(() => {
-            setIsSubmitted(true);
-            setIsSubmitting(false);
-            // Redirect to Substack subscription with pre-filled email
-            window.open(`https://l1beat.substack.com/subscribe?email=${encodeURIComponent(email)}`, '_blank');
-        }, 1000);
-    };
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
-    if (isSubmitted) {
-        return (
-            <div className="relative overflow-hidden bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 rounded-2xl p-8">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-green-200/30 dark:bg-green-500/10 rounded-full -translate-y-16 translate-x-16"></div>
-                <div className="relative text-center">
-                    <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Heart className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-green-900 dark:text-green-100 mb-2">
-                        Thank you for subscribing!
-                    </h3>
-                    <p className="text-green-700 dark:text-green-300">
-                        You'll be redirected to complete your subscription on Substack.
-                    </p>
-                </div>
-            </div>
-        );
-    }
+function findProfile(
+  name: string,
+  profiles?: AuthorProfile[],
+): AuthorProfile | undefined {
+  if (!profiles || profiles.length === 0) return undefined;
+  const n = name.toLowerCase();
+  return (
+    profiles.find((p) => p.name.toLowerCase() === n) ||
+    profiles.find((p) => p.name.toLowerCase().includes(n))
+  );
+}
 
-    return (
-        <div className="relative overflow-hidden bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#b91c1c] rounded-2xl p-8 lg:p-12">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-10">
-                <div className="absolute inset-0" style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                }}></div>
-            </div>
-            
-            {/* Floating Elements */}
-            <div className="absolute top-6 right-6 w-20 h-20 bg-white/10 rounded-full animate-float-subtle"></div>
-            <div className="absolute bottom-6 left-6 w-12 h-12 bg-white/5 rounded-full animate-pulse"></div>
-            
-            <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-                {/* Left side - Text content */}
-                <div className="text-center lg:text-left">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                        Join the Community
-                    </div>
-                    
-                    <h3 className="text-3xl lg:text-4xl font-bold text-white mb-4 leading-tight">
-                        Never Miss an
-                        <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-300">
-                            Insight
-                        </span>
-                    </h3>
-                    
-                    <p className="text-white/90 text-lg leading-relaxed mb-6">
-                        Get the latest analysis on Avalanche L1s, blockchain trends, and ecosystem developments delivered to your inbox.
-                    </p>
-                    
-                    <div className="flex items-center gap-6 text-white/70 text-sm">
-                        <div className="flex items-center gap-2">
-                            <span>Exclusive content</span>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Right side - Form */}
-                <div className="w-full">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="relative">
-                            <input
-                                type="email"
-                                name="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter your email address..."
-                                required
-                                className="w-full px-6 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/30 transition-all duration-200 text-lg"
-                            />
-                        </div>
-                        
-                        <button 
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full px-6 py-4 bg-white text-black/90 font-semibold rounded-xl hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-transparent transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none text-lg"
-                        >
-                            {isSubmitting ? (
-                                <div className="flex items-center justify-center gap-2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-black/70 border-t-transparent"></div>
-                                    Subscribing...
-                                </div>
-                            ) : (
-                                'Subscribe to L1Beat'
-                            )}
-                        </button>
-                    </form>
-                    
-                    <p className="text-xs text-white/60 mt-4 leading-relaxed">
-                        By subscribing you agree to{' '}
-                        <a href="https://substack.com/terms" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white underline transition-colors">
-                            Substack's Terms of Use
-                        </a>
-                        , our{' '}
-                        <a href="https://substack.com/privacy" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white underline transition-colors">
-                            Privacy Policy
-                        </a>
-                        {' '}and our{' '}
-                        <a href="https://substack.com/ccpa" target="_blank" rel="noopener noreferrer" className="text-white/80 hover:text-white underline transition-colors">
-                            Information collection notice
-                        </a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
-};
+declare global {
+  interface Window {
+    prerenderReady?: boolean;
+  }
+}
 
-// X Icon Component
 const XIcon = ({ className }: { className?: string }) => (
-    <svg 
-        viewBox="0 0 24 24" 
-        className={className}
-        fill="currentColor"
-    >
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-    </svg>
+  <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
 );
 
-// Main BlogPost Component
 export function BlogPost() {
-    const { slug } = useParams<{ slug: string }>();
-    const navigate = useNavigate();
-    const [post, setPost] = useState<BlogPostType | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [shareMenuOpen, setShareMenuOpen] = useState(false);
-    const [isBookmarked, setIsBookmarked] = useState(false);
-    const [isLiked, setIsLiked] = useState(false);
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const [post, setPost] = useState<BlogPostType | null>(null);
+  const [related, setRelated] = useState<RelatedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [activeTocId, setActiveTocId] = useState<string>('');
+  const contentRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (!slug) {
-            navigate('/blog');
-            return;
+  useEffect(() => {
+    if (!slug) {
+      navigate('/blog');
+      return;
+    }
+    window.prerenderReady = false;
+    fetchPost();
+  }, [slug, navigate]);
+
+  useEffect(() => {
+    if (!loading && (post || error)) {
+      const timer = setTimeout(() => {
+        window.prerenderReady = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, post, error]);
+
+  useEffect(() => {
+    if (!slug) return;
+    let active = true;
+    getRelatedPosts(slug, 3)
+      .then((res) => {
+        if (active) setRelated(res.data || []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  useEffect(() => {
+    if (!post) return;
+    const root = contentRef.current;
+    if (!root) return;
+
+    const walk = () => {
+      const headings = root.querySelectorAll<HTMLHeadingElement>('h2, h3');
+      const items: TocItem[] = [];
+      const seen = new Set<string>();
+      headings.forEach((h) => {
+        const text = (h.textContent || '').trim();
+        if (!text) return;
+        let id = slugify(text);
+        if (!id) return;
+        let n = 2;
+        const base = id;
+        while (seen.has(id)) id = `${base}-${n++}`;
+        seen.add(id);
+        h.id = id;
+        h.classList.add('scroll-mt-24');
+        items.push({ id, title: text, level: h.tagName === 'H3' ? 3 : 2 });
+      });
+      setTocItems((prev) => {
+        if (prev.length === items.length && prev.every((p, i) => p.id === items[i].id)) {
+          return prev;
         }
-        
-        // Reset prerenderReady
-        window.prerenderReady = false;
-        
-        fetchPost();
-    }, [slug, navigate]);
-
-    // Set prerenderReady when loading is done and content is ready
-    useEffect(() => {
-        if (!loading && (post || error)) {
-            // Give React a moment to render the SEO component
-            const timer = setTimeout(() => {
-                window.prerenderReady = true;
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [loading, post, error]);
-
-    const fetchPost = async () => {
-        if (!slug) return;
-
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await getBlogPost(slug);
-            setPost(response.data);
-        } catch (err: any) {
-            if (err.message === 'Blog post not found') {
-                setError('Post not found');
-            } else {
-                setError('Failed to load blog post. Please try again.');
-            }
-            console.error('Error fetching post:', err);
-        } finally {
-            setLoading(false);
-        }
+        return items;
+      });
     };
 
-    const sharePost = (platform: 'twitter' | 'copy') => {
-        if (!post) return;
+    walk();
+    const observer = new MutationObserver(walk);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    const stop = setTimeout(() => observer.disconnect(), 4000);
 
-        const url = window.location.href;
-        // Keep share text short for X/Twitter cards; the URL carries context.
-        const text = post.title;
-
-        switch (platform) {
-            case 'twitter':
-                window.open(
-                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
-                    '_blank'
-                );
-                break;
-            case 'copy':
-                navigator.clipboard.writeText(url).then(() => {
-                    setShareMenuOpen(false);
-                });
-                break;
-        }
+    return () => {
+      observer.disconnect();
+      clearTimeout(stop);
     };
+  }, [post]);
 
-    const renderMainContent = (content: string | undefined) => {
-        if (!content) return null;
-
-        try {
-            const blocks = JSON.parse(content);
-            return <ContentRenderer blocks={blocks} />;
-        } catch (error) {
-            let cleanContent = content.trim();
-            if (!cleanContent) return null;
-
-            // FIX: Remove DOCTYPE and extract content from <body> or <html> if present
-            cleanContent = cleanContent.replace(/<!DOCTYPE[^>]*>/i, '');
-            
-            const bodyMatch = cleanContent.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-            if (bodyMatch && bodyMatch[1]) {
-                cleanContent = bodyMatch[1];
-            } else {
-                 const htmlMatch = cleanContent.match(/<html[^>]*>([\s\S]*)<\/html>/i);
-                 if (htmlMatch && htmlMatch[1]) {
-                     cleanContent = htmlMatch[1];
-                 }
-            }
-
-            return (
-                <div className="prose-content">
-                    {parse(cleanContent, {
-                        replace: (domNode) => {
-                            // Skip <head> tags if they remain in the content
-                            if (domNode instanceof Element && domNode.tagName === 'head') {
-                                return <></>;
-                            }
-
-                            if (domNode instanceof Element) {
-                                if (domNode.tagName === 'div') {
-                                    const classNames = domNode.attribs?.class || '';
-                                    if (classNames.includes('image-controls') || 
-                                        classNames.includes('image-buttons') ||
-                                        classNames.includes('fullscreen') ||
-                                        classNames.includes('enlarge')) {
-                                        return <></>;
-                                    }
-                                }
-                                
-                                if (domNode.tagName === 'button') {
-                                    const classNames = domNode.attribs?.class || '';
-                                    const title = domNode.attribs?.title || '';
-                                    const ariaLabel = domNode.attribs?.['aria-label'] || '';
-                                    
-                                    if (classNames.includes('fullscreen') || 
-                                        classNames.includes('enlarge') || 
-                                        classNames.includes('refresh') ||
-                                        classNames.includes('zoom') ||
-                                        classNames.includes('expand') ||
-                                        classNames.includes('maximize') ||
-                                        title.toLowerCase().includes('fullscreen') ||
-                                        title.toLowerCase().includes('enlarge') ||
-                                        title.toLowerCase().includes('refresh') ||
-                                        title.toLowerCase().includes('expand') ||
-                                        title.toLowerCase().includes('maximize') ||
-                                        ariaLabel.toLowerCase().includes('fullscreen') ||
-                                        ariaLabel.toLowerCase().includes('enlarge') ||
-                                        ariaLabel.toLowerCase().includes('refresh') ||
-                                        ariaLabel.toLowerCase().includes('expand') ||
-                                        ariaLabel.toLowerCase().includes('maximize')) {
-                                        return <></>;
-                                    }
-                                }
-                                
-                                if (domNode.tagName === 'svg') {
-                                    const classNames = domNode.attribs?.class || '';
-                                    const viewBox = domNode.attribs?.viewBox || '';
-                                    
-                                    if (classNames.includes('refresh') ||
-                                        classNames.includes('fullscreen') ||
-                                        classNames.includes('expand') ||
-                                        classNames.includes('maximize') ||
-                                        viewBox.includes('24 24')) {
-                                        return <></>;
-                                    }
-                                }
-                            }
-                        }
-                    })}
-                </div>
-            );
+  useEffect(() => {
+    if (tocItems.length === 0) return;
+    const TOP_OFFSET = 96;
+    const update = () => {
+      let active = tocItems[0]?.id || '';
+      for (const item of tocItems) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - TOP_OFFSET <= 0) {
+          active = item.id;
+        } else {
+          break;
         }
+      }
+      setActiveTocId(active);
     };
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [tocItems]);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-background text-foreground">
-                <div className="flex items-center justify-center py-20">
-                    <div className="text-center">
-                        <LoadingSpinner size="lg" />
-                        <p className="mt-4 text-muted-foreground">Loading article...</p>
-                    </div>
-                </div>
-            </div>
-        );
+  const fetchPost = async () => {
+    if (!slug) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await getBlogPost(slug);
+      setPost(response.data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'Blog post not found') setError('Post not found');
+      else setError('Failed to load blog post. Please try again.');
+      console.error('Error fetching post:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    if (error) {
-        return (
-            <div className="min-h-screen bg-background text-foreground">
-                <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <div className="text-center">
-                        <div className="relative inline-block mb-8">
-                            <div className="w-24 h-24 bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-2xl flex items-center justify-center">
-                                <AlertCircle className="w-12 h-12 text-red-500" />
-                            </div>
-                            <div className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                <ExternalLink className="w-4 h-4 text-white" />
-                            </div>
-                        </div>
-                        
-                        <h1 className="text-3xl font-semibold text-foreground mb-4">
-                            {error === 'Post not found' ? 'Article Not Found' : 'Something went wrong'}
-                        </h1>
-                        <p className="text-muted-foreground mb-8 text-lg">
-                            {error === 'Post not found'
-                                ? "The article you're looking for doesn't exist or has been moved."
-                                : error
-                            }
-                        </p>
-                        <div className="flex gap-4 justify-center">
-                            <button
-                                onClick={() => navigate('/blog')}
-                                className="px-8 py-3 bg-[#ef4444] text-white rounded-xl hover:bg-[#dc2626] transition-colors font-semibold"
-                            >
-                                Back to Blog
-                            </button>
-                            {error !== 'Post not found' && (
-                                <button
-                                    onClick={fetchPost}
-                                    className="flex items-center gap-2 px-8 py-3 border border-border text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 rounded-xl transition-colors font-semibold"
-                                >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Try Again
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <Footer />
-            </div>
-        );
-    }
-
-    if (!post) return null;
-
-    const readTime = post.readTime || calculateReadTime(post.content || '');
-    const formattedDate = formatBlogDate(post.publishedAt || '');
-    const seoImage = getBlogPostImageUrl(post);
-
-    // FIX: Determine the list of authors to display
-    // Priority: 1. post.authors (array of names)
-    //           2. post.authorProfiles (array of objects)
-    //           3. post.author (single string fallback)
-    let authorsList: string[] = [];
-    if (post.authors && post.authors.length > 0) {
-        authorsList = post.authors;
-    } else if (post.authorProfiles && post.authorProfiles.length > 0) {
-        authorsList = post.authorProfiles.map(p => p.name);
-    } else if (post.author) {
-        authorsList = [post.author];
-    }
-
-    return (
-        <div className="min-h-screen bg-background text-foreground">
-            {/* SEO Meta Tags */}
-            <SEO
-                title={post.title}
-                description={post.excerpt || post.subtitle || ''}
-                image={seoImage}
-                url={`/blog/${post.slug}`}
-                type="article"
-                publishedTime={post.publishedAt}
-                modifiedTime={post.updatedAt}
-                author={post.author}
-                tags={post.tags}
-            />
-
-            {/* Article */}
-            <article className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                {/* Simple Back Button */}
-                <div className="mb-8">
-                    <Link
-                        to="/blog"
-                        className="inline-flex items-center px-4 py-2 border border-border shadow-sm text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-colors group"
-                    >
-                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" />
-                        Back to Blog
-                    </Link>
-                </div>
-
-                {/* Header */}
-                <header className="mb-12">
-                    {/* Tags */}
-                    {post.tags && post.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-3 mb-8">
-                            {post.tags.map((tag) => (
-                                <Link
-                                    key={tag}
-                                    to={`/blog?tag=${encodeURIComponent(tag)}`}
-                                    className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full border border-[#ef4444]/20 dark:border-[#ef4444]/30 hover:from-[#ef4444]/20 hover:to-[#dc2626]/20 dark:hover:from-[#ef4444]/30 dark:hover:to-[#dc2626]/30 transition-all duration-200 transform hover:scale-105"
-                                >
-                                    <Tag className="w-3 h-3" />
-                                    {tag}
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Title */}
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground mb-6 leading-tight">
-                        {post.title}
-                    </h1>
-
-                    {/* Subtitle */}
-                    {post.subtitle && post.subtitle.trim() && (
-                        <p className="text-xl md:text-2xl text-muted-foreground mb-8 leading-relaxed font-light">
-                            {post.subtitle}
-                        </p>
-                    )}
-
-                    {/* Meta Info Card */}
-                    <div className="bg-card border border-border rounded-2xl p-6 mb-8">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                            {/* Left side - Meta info */}
-                            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
-                                        <Calendar className="w-4 h-4 text-[#ef4444]" />
-                                    </div>
-                                    <span className="font-medium">{formattedDate}</span>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
-                                        <Clock className="w-4 h-4 text-[#ef4444]" />
-                                    </div>
-                                    <span className="font-medium">{readTime} min read</span>
-                                </div>
-                                
-                                {post.views && (
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 bg-[#ef4444]/10 rounded-lg flex items-center justify-center">
-                                            <Eye className="w-4 h-4 text-[#ef4444]" />
-                                        </div>
-                                        <span className="font-medium">{post.views.toLocaleString()} views</span>
-                                    </div>
-                                )}
-                                
-                                {authorsList.length > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">By</span>
-                                        <div className="flex items-center flex-wrap gap-2">
-                                            {authorsList.map((authorName, index) => {
-                                                // Find profile for this specific author name
-                                                const profile = post.authorProfiles?.find(p => 
-                                                    p.name.toLowerCase() === authorName.toLowerCase() ||
-                                                    p.name.toLowerCase().includes(authorName.toLowerCase())
-                                                );
-                                                
-                                                return (
-                                                    <React.Fragment key={authorName}>
-                                                        {index > 0 && <span className="text-muted-foreground">&</span>}
-                                        <AuthorCard 
-                                                            authorName={authorName}
-                                                            authorProfiles={profile ? [profile] : []}
-                                            className="font-medium hover:text-[#ef4444] transition-colors"
-                                        />
-                                                    </React.Fragment>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            {/* Right side - Actions */}
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => sharePost('twitter')}
-                                    className="group flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#ef4444] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 border border-[#ef4444]/20 rounded-lg transition-all duration-200 transform hover:scale-105"
-                                >
-                                    <XIcon className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200" />
-                                    Share
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </header>
-
-                {/* Featured Image */}
-                {post.imageUrl && (
-                    <div className="relative mb-12 rounded-2xl overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                        <img
-                            src={post.imageUrl}
-                            alt={post.title}
-                            className="w-full h-auto max-h-[500px] object-cover group-hover:scale-105 transition-transform duration-700"
-                        />
-                    </div>
-                )}
-
-                {/* Content */}
-                <div className="max-w-none">
-                    <div className="bg-card rounded-2xl border border-border p-8 lg:p-12 shadow-sm">
-                        {post.mainContent ? (
-                            renderMainContent(post.mainContent)
-                        ) : post.content ? (
-                            renderMainContent(post.content)
-                        ) : (
-                            <div className="text-center py-12">
-                                <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                                <p className="text-muted-foreground italic text-lg">No content available.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Original Source Link */}
-                {post.sourceUrl && (
-                    <div className="mt-8 p-6 bg-gradient-to-r from-[#ef4444]/10 to-[#dc2626]/10 dark:from-[#ef4444]/20 dark:to-[#dc2626]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-2xl">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
-                                <ExternalLink className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-semibold text-[#ef4444] dark:text-[#ef4444] mb-1">
-                                    Originally Published
-                                </p>
-                                <a
-                                    href={post.sourceUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-[#ef4444] dark:text-[#ef4444] hover:text-[#dc2626] dark:hover:text-[#dc2626] font-medium transition-colors group"
-                                >
-                                    View on Substack
-                                    <ExternalLink className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-200" />
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </article>
-
-            {/* Newsletter and Related Articles Section */}
-            <div className="bg-card border-t border-border">
-                <div className="max-w-4xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    {/* Newsletter Subscription */}
-                    <div className="mb-16">
-                        <NewsletterSubscription />
-                    </div>
-                    
-                    {/* Related Articles */}
-                    <div>
-                        <RelatedArticles currentPostSlug={post.slug} limit={2} />
-                    </div>
-                </div>
-            </div>
-
-            <Footer />
-        </div>
+  const sharePost = () => {
+    if (!post) return;
+    const url = window.location.href;
+    const text = post.title;
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank',
     );
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Loading article…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
+          <AlertCircle className="w-7 h-7 text-[#ef4444]" />
+        </div>
+        <h1 className="text-2xl font-bold text-foreground mb-2">
+          {error === 'Post not found' ? 'Article not found' : 'Something went wrong'}
+        </h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          {error === 'Post not found'
+            ? "The article you're looking for doesn't exist or has been moved."
+            : error}
+        </p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={() => navigate('/blog')}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+          >
+            Back to Blog
+          </button>
+          {error !== 'Post not found' && (
+            <button
+              onClick={fetchPost}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-card border border-border text-sm font-semibold text-foreground hover:bg-accent transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Try Again
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!post) return null;
+
+  const readTime = post.readTime || calculateReadTime(post.content || '');
+  const formattedDate = formatBlogDate(post.publishedAt || '');
+  const seoImage = getBlogPostImageUrl(post);
+
+  let authorsList: string[] = [];
+  if (post.authors && post.authors.length > 0) authorsList = post.authors;
+  else if (post.authorProfiles && post.authorProfiles.length > 0)
+    authorsList = post.authorProfiles.map((p) => p.name);
+  else if (post.author) authorsList = [post.author];
+
+  return (
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <SEO
+        title={post.title}
+        description={post.excerpt || post.subtitle || ''}
+        image={seoImage}
+        url={`/blog/${post.slug}`}
+        type="article"
+        publishedTime={post.publishedAt}
+        modifiedTime={post.updatedAt}
+        author={post.author}
+        tags={post.tags}
+      />
+
+      <Link
+        to="/blog"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground mb-5"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        All articles
+      </Link>
+
+      <div className="lg:flex lg:gap-10 lg:items-start">
+        <article className="flex-1 min-w-0 space-y-6">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
+            </div>
+            <div className="relative p-6 sm:p-7 space-y-5">
+              {post.tags && post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {post.tags.map((tag) => (
+                    <Link
+                      key={tag}
+                      to={`/blog?tag=${encodeURIComponent(tag)}`}
+                      className="inline-flex items-center px-2.5 h-6 rounded-full text-[10px] font-bold tracking-[0.1em] bg-[#ef4444]/15 text-[#ef4444] hover:bg-[#ef4444]/25 transition-colors"
+                    >
+                      {tag.toUpperCase()}
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight leading-tight">
+                {post.title}
+              </h1>
+
+              {post.subtitle && post.subtitle.trim() && (
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  {post.subtitle}
+                </p>
+              )}
+
+              <AuthorsBlock
+                authors={authorsList}
+                profiles={post.authorProfiles}
+                formattedDate={formattedDate}
+                readTime={readTime}
+                views={post.views}
+                onShare={sharePost}
+              />
+            </div>
+          </div>
+
+          {post.imageUrl && (
+            <img
+              src={post.imageUrl}
+              alt={post.title}
+              className="w-full h-auto max-h-[460px] object-cover rounded-xl"
+            />
+          )}
+
+          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 shadow-xl">
+            <div ref={contentRef} className="prose-content max-w-none">
+              {renderMainContent(post.mainContent || post.content)}
+            </div>
+          </div>
+        </article>
+
+        <aside className="hidden lg:block lg:w-80 shrink-0 self-start sticky top-20">
+          <div className="space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1 -mr-1">
+            {tocItems.length > 0 && (
+              <TocRail
+                tocItems={tocItems}
+                activeTocId={activeTocId}
+                onActivate={setActiveTocId}
+              />
+            )}
+            <NewsletterCard />
+            {related.length > 0 && <RelatedCard posts={related} />}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function TocRail({
+  tocItems,
+  activeTocId,
+  onActivate,
+}: {
+  tocItems: TocItem[];
+  activeTocId: string;
+  onActivate: (id: string) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-[13px] font-medium text-foreground mb-3">
+        <List className="w-3.5 h-3.5 text-muted-foreground" />
+        On this page
+      </div>
+      <ul className="relative border-l border-border">
+        {tocItems.map(({ id, title, level }) => {
+          const active = id === activeTocId;
+          return (
+            <li key={id} className="relative">
+              <a
+                href={`#${id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onActivate(id);
+                  const el = document.getElementById(id);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    history.replaceState(null, '', `#${id}`);
+                  }
+                }}
+                className={`block py-1.5 text-[12px] transition-colors leading-snug ${
+                  level === 3 ? 'pl-7' : 'pl-4'
+                } ${
+                  active
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {title}
+              </a>
+              {active && (
+                <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-[#ef4444]" />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AuthorsBlock({
+  authors,
+  profiles,
+  formattedDate,
+  readTime,
+  views,
+  onShare,
+}: {
+  authors: string[];
+  profiles?: AuthorProfile[];
+  formattedDate: string;
+  readTime: number;
+  views: number | undefined;
+  onShare: () => void;
+}) {
+  const items = authors.length > 0 ? authors : ['L1Beat'];
+
+  return (
+    <div className="flex items-center justify-between gap-4 pt-1">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex shrink-0">
+          {items.map((name, idx) => {
+            const profile = findProfile(name, profiles);
+            return (
+              <div
+                key={`${name}-${idx}`}
+                className={`relative ${idx > 0 ? '-ml-2' : ''}`}
+                style={{ zIndex: items.length - idx }}
+                title={name}
+              >
+                <div className="rounded-full ring-2 ring-card overflow-hidden">
+                  <AuthorAvatar name={name} profile={profile} size={32} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-foreground flex flex-wrap items-baseline gap-x-1">
+            {items.map((name, idx) => {
+              const profile = findProfile(name, profiles);
+              return (
+                <React.Fragment key={name}>
+                  {idx > 0 && (
+                    <span className="text-muted-foreground font-normal">
+                      {idx === items.length - 1 ? 'and' : ','}
+                    </span>
+                  )}
+                  <AuthorCard
+                    authorName={name}
+                    authorProfiles={profile ? [profile] : []}
+                    hideAvatar
+                    className="text-foreground"
+                  />
+                </React.Fragment>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-1.5">
+            {formattedDate && <span>{formattedDate}</span>}
+            {formattedDate && <span>·</span>}
+            <span>{readTime} min read</span>
+            {views ? (
+              <>
+                <span>·</span>
+                <span>{views.toLocaleString()} views</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={onShare}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-background/60 border border-border text-foreground hover:bg-accent transition-colors shrink-0"
+      >
+        <XIcon className="w-3.5 h-3.5" />
+        Share
+      </button>
+    </div>
+  );
+}
+
+function AuthorAvatar({
+  name,
+  profile,
+  size,
+}: {
+  name: string;
+  profile?: AuthorProfile;
+  size: number;
+}) {
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <div
+      className="relative rounded-full overflow-hidden shrink-0 bg-[#ef4444]/15"
+      style={{ width: size, height: size }}
+    >
+      {profile?.avatar ? (
+        <img
+          src={profile.avatar}
+          alt={name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-[#ef4444]">
+          {initial}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderMainContent(content: string | undefined): React.ReactNode {
+  if (!content) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+        <p className="text-muted-foreground italic">No content available.</p>
+      </div>
+    );
+  }
+
+  try {
+    const blocks = JSON.parse(content);
+    return <ContentRenderer blocks={blocks} />;
+  } catch {
+    let clean = content.trim();
+    if (!clean) return null;
+    clean = clean.replace(/<!DOCTYPE[^>]*>/i, '');
+    const bodyMatch = clean.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    if (bodyMatch && bodyMatch[1]) clean = bodyMatch[1];
+    else {
+      const htmlMatch = clean.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+      if (htmlMatch && htmlMatch[1]) clean = htmlMatch[1];
+    }
+    return (
+      <div className="prose-content">
+        {parse(clean, {
+          replace: (domNode) => {
+            if (!(domNode instanceof Element)) return undefined;
+            if (domNode.tagName === 'head') return <></>;
+            const classNames = (domNode.attribs?.class || '').toLowerCase();
+            if (
+              domNode.tagName === 'div' &&
+              (classNames.includes('image-controls') ||
+                classNames.includes('image-buttons') ||
+                classNames.includes('fullscreen') ||
+                classNames.includes('enlarge'))
+            )
+              return <></>;
+            if (domNode.tagName === 'button') {
+              const title = (domNode.attribs?.title || '').toLowerCase();
+              const aria = (domNode.attribs?.['aria-label'] || '').toLowerCase();
+              if (
+                /(fullscreen|enlarge|refresh|zoom|expand|maximize)/.test(
+                  `${classNames} ${title} ${aria}`,
+                )
+              )
+                return <></>;
+            }
+            return undefined;
+          },
+        })}
+      </div>
+    );
+  }
+}
+
+function NewsletterCard() {
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setSubmitting(true);
+    setTimeout(() => {
+      window.open(
+        `https://l1beat.substack.com/subscribe?email=${encodeURIComponent(email)}`,
+        '_blank',
+      );
+      setSubmitted(true);
+      setSubmitting(false);
+    }, 400);
+  };
+
+  if (submitted) {
+    return (
+      <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-5 text-center">
+        <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-3">
+          <Check className="w-4 h-4 text-white" />
+        </div>
+        <div className="text-sm font-semibold text-foreground mb-1">Thanks for subscribing</div>
+        <div className="text-xs text-muted-foreground">
+          Finish setup in the new Substack tab.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[#ef4444]/30 bg-card p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/15 flex items-center justify-center">
+          <Mail className="w-3.5 h-3.5 text-[#ef4444]" />
+        </div>
+        <div className="text-[13px] font-semibold text-foreground">Weekly digest</div>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+        One short email every Friday with the chart of the week.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@domain.com"
+          required
+          className="w-full h-9 px-3 rounded-lg bg-background border border-border text-xs placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]/30 focus:border-[#ef4444]/40"
+        />
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full h-9 rounded-lg bg-[#ef4444] text-white text-xs font-semibold hover:bg-[#dc2626] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? 'Subscribing…' : 'Subscribe'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function RelatedCard({ posts }: { posts: RelatedPost[] }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="text-[10px] font-bold tracking-[0.15em] text-muted-foreground mb-3">
+        RELATED
+      </div>
+      <ul className="space-y-4">
+        {posts.map((post) => {
+          const thumb = post.imageUrl;
+          return (
+            <li key={post._id}>
+              <Link to={`/blog/${post.slug}`} className="flex gap-3 group">
+                {thumb ? (
+                  <img
+                    src={thumb}
+                    alt=""
+                    className="w-14 h-14 rounded-md object-cover shrink-0 bg-muted"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-md bg-[#ef4444]/15 shrink-0 flex items-center justify-center">
+                    <ArrowUpRight className="w-4 h-4 text-[#ef4444]" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-[#ef4444] transition-colors">
+                    {post.title}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {formatBlogDate(post.publishedAt)} · {post.readTime} min
+                  </div>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }

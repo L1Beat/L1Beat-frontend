@@ -589,7 +589,7 @@ export function ChainSpecificMetrics() {
         y: {
           beginAtZero: true,
           grid: {
-            color: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+            color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
           },
           ticks: {
             color: metric.color.main,
@@ -702,19 +702,17 @@ export function ChainSpecificMetrics() {
   return (
     <div className="space-y-6">
       {/* Section Header with Chain Selector */}
-      <div className="bg-card border border-border rounded-2xl p-6">
+      <div className="bg-card border border-border rounded-xl p-5 sm:p-6">
         <div className="flex flex-col gap-5">
           {/* Top row: Title + dropdown */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ef4444] to-[#dc2626] flex items-center justify-center shadow-sm">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
               <div>
-                <h2 className="text-2xl font-bold text-foreground">
-                  Chain-Specific Metrics
+                <h2 className="text-base sm:text-lg font-semibold text-foreground">
+                  Chain-specific metrics
                 </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Detailed metrics for individual chains
                 </p>
               </div>
@@ -802,15 +800,15 @@ export function ChainSpecificMetrics() {
             )}
 
             {/* Timeframe Selector + Share */}
-            <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+            <div className="flex flex-wrap items-center gap-1.5 justify-start lg:justify-end">
               {[7, 30, 90, 360].map((days) => (
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days as TimeframeOption)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
                     timeframe === days
-                      ? 'bg-[#ef4444] text-white shadow-sm'
-                      : 'bg-muted/40 text-foreground hover:bg-muted/70 hover:border-[#ef4444]/20 border border-border'
+                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {days === 360 ? '1Y' : `${days}D`}

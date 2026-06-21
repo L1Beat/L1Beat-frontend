@@ -1,4 +1,4 @@
-import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit } from './types';
+import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity, ChainRisk } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
 
@@ -47,17 +47,103 @@ function sanitizeResponse(data: any): any {
 }
 
 // Add caching layer for API responses
-const cache = new Map<string, { data: any; timestamp: number }>();
+type CacheEntry = { data: any; timestamp: number };
+const cache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+// --- sessionStorage persistence -------------------------------------------
+// The in-memory Map above is wiped on every page reload, so a refresh or a
+// return visit re-fetches every metric from the network. Mirroring entries
+// into sessionStorage lets those loads render instantly from cache instead.
+// sessionStorage (not localStorage) is deliberate: it survives reloads but
+// clears when the tab closes, which bounds how stale data can get.
+// Bump PERSIST_VERSION whenever a cached response shape changes to bust old data.
+const PERSIST_VERSION = 'v1';
+const PERSIST_PREFIX = `l1beat-cache-${PERSIST_VERSION}:`;
+
+const persistAvailable = (() => {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return false;
+    const probe = `${PERSIST_PREFIX}__probe__`;
+    window.sessionStorage.setItem(probe, '1');
+    window.sessionStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+function persistGet(key: string): CacheEntry | null {
+  if (!persistAvailable) return null;
+  try {
+    const raw = window.sessionStorage.getItem(PERSIST_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.timestamp === 'number' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPersistedCache(predicate?: (key: string) => boolean): void {
+  if (!persistAvailable) return;
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (!k || !k.startsWith(PERSIST_PREFIX)) continue;
+      if (!predicate || predicate(k.slice(PERSIST_PREFIX.length))) toRemove.push(k);
+    }
+    toRemove.forEach((k) => window.sessionStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistSet(key: string, entry: CacheEntry): void {
+  if (!persistAvailable) return;
+  const write = () => window.sessionStorage.setItem(PERSIST_PREFIX + key, JSON.stringify(entry));
+  try {
+    write();
+  } catch {
+    // Likely a quota error — drop our namespace and retry once.
+    try {
+      clearPersistedCache();
+      write();
+    } catch {
+      /* give up; the in-memory cache still works */
+    }
+  }
+}
+
+// Read a still-fresh entry from memory, falling back to sessionStorage (and
+// hydrating memory on a hit). Returns undefined on miss/expiry.
+function readCache(key: string, duration: number): any {
+  const now = Date.now();
+  const mem = cache.get(key);
+  if (mem && now - mem.timestamp < duration) return mem.data;
+  const persisted = persistGet(key);
+  if (persisted && now - persisted.timestamp < duration) {
+    cache.set(key, persisted);
+    return persisted.data;
+  }
+  return undefined;
+}
+
+function writeCache(key: string, data: any, timestamp: number): void {
+  cache.set(key, { data, timestamp });
+  persistSet(key, { data, timestamp });
+}
 
 // Export function to clear cache (for debugging/forcing refresh)
 export function clearChainsCache() {
-  // Clear all chains-related cache entries
+  // Clear all chains-related cache entries (memory + persisted)
   for (const key of cache.keys()) {
     if (key.startsWith('chains')) {
       cache.delete(key);
     }
   }
+  clearPersistedCache((key) => key.startsWith('chains'));
 }
 
 // Clear chains cache on module load to ensure fresh data after code changes
@@ -123,35 +209,36 @@ async function fetchWithCache<T>(
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const cached = cache.get(key);
   const now = Date.now();
 
-  if (cached && now - cached.timestamp < duration) {
-    return cached.data;
+  const fresh = readCache(key, duration);
+  if (fresh !== undefined) {
+    return fresh as T;
   }
-  
+
   // Check if we're rate-limited
   if (apiRequestTracker.isRateLimited) {
     console.warn(`Request to ${key} was blocked by rate limiting`);
-    
+
     // If we have cached data (even if expired), use it
-    if (cached) {
-      return cached.data;
+    const stale = cache.get(key) ?? persistGet(key);
+    if (stale) {
+      return stale.data;
     }
   }
-  
+
   // Record the request attempt
   apiRequestTracker.recordRequest();
 
   // Fetch fresh data
   const data = await fetcher();
-  
+
   // Sanitize the response data to prevent XSS
   const sanitizedData = sanitizeResponse(data);
-  
-  // Cache the sanitized data
-  cache.set(key, { data: sanitizedData, timestamp: now });
-  
+
+  // Cache the sanitized data (memory + sessionStorage)
+  writeCache(key, sanitizedData, now);
+
   return sanitizedData;
 }
 
@@ -322,11 +409,13 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             platformChainId: chain.chain_id || '',
             evmChainId: chain.evm_chain_id || undefined,
             isL1: chain.chain_type === 'l1',
+            isActive: chain.is_active ?? false,
             sybilResistanceType: chain.sybil_resistance_type || '',
             network: chain.network || 'mainnet',
             rpcUrl: chain.rpc_url || '',
             explorerUrl: chain.explorer_url || '',
             validatorCount: chain.active_validators ?? chain.validator_count ?? 0,
+            decentralization: chain.decentralization || undefined,
             validators: [],
             tps: null,
             cumulativeTxCount: null,
@@ -403,6 +492,28 @@ export async function getChainValidators(chainId: string): Promise<Validator[]> 
       return [];
     }
   });
+}
+
+// Full per-chain risk envelope (validator-manager control, decentralization with
+// raw weights, economic). Keyed by the L1Beat chain_id (Chain.platformChainId),
+// NOT the URL slug. Returns null on 404/unknown chain. Cached 10min.
+export async function getChainRisk(chainId: string): Promise<ChainRisk | null> {
+  if (!chainId) return null;
+  return fetchExternalWithCache(
+    `chain-risk-${chainId}`,
+    async () => {
+      try {
+        const res = await fetchExternalWithRetry<{ data: ChainRisk }>(
+          `${L1BEAT_EXTERNAL_API}/api/v1/data/chains/${chainId}/risk`,
+        );
+        return res?.data ?? null;
+      } catch (error) {
+        console.error('Chain risk fetch error:', error);
+        return null;
+      }
+    },
+    10 * 60 * 1000,
+  );
 }
 
 export async function getCategories(): Promise<string[]> {
@@ -1340,10 +1451,15 @@ export async function getHealth(): Promise<HealthStatus> {
   }, 30000); // Cache for 30 seconds
 }
 
-export async function getTeleporterMessages(): Promise<TeleporterMessageData> {
-  return fetchWithCache('teleporter-messages', async () => {
+export async function getTeleporterMessages(
+  timeframe: 'daily' | 'weekly' = 'daily'
+): Promise<TeleporterMessageData> {
+  return fetchWithCache(`teleporter-messages-${timeframe}`, async () => {
     try {
-      const response = await fetchWithRetry<any>(`${API_URL}/teleporter/messages/daily-count`);
+      const endpoint = timeframe === 'weekly'
+        ? `${API_URL}/teleporter/messages/weekly-count`
+        : `${API_URL}/teleporter/messages/daily-count`;
+      const response = await fetchWithRetry<any>(endpoint);
       
       // Handle both raw array and { data: [...] } formats
       const dataArray = Array.isArray(response) ? response : (response?.data || []);
@@ -1415,14 +1531,14 @@ async function fetchExternalWithCache<T>(
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const cached = cache.get(key);
   const now = Date.now();
-  if (cached && now - cached.timestamp < duration) {
-    return cached.data;
+  const fresh = readCache(key, duration);
+  if (fresh !== undefined) {
+    return fresh as T;
   }
   const data = await fetcher();
   const sanitizedData = sanitizeResponse(data);
-  cache.set(key, { data: sanitizedData, timestamp: now });
+  writeCache(key, sanitizedData, now);
   return sanitizedData;
 }
 
@@ -1476,21 +1592,37 @@ async function fetchExternalWithRetry<T>(
 // stuck has_more=true from a misbehaving API).
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
-  extraParams: Record<string, string> = {}
+  extraParams: Record<string, string> = {},
+  opts: { throttleMs?: number; maxPages?: number } = {}
 ): Promise<T[]> {
+  // throttleMs: pause between pages to stay under the API's rate limit on
+  //   endpoints with many pages (e.g. the Primary Network has 3000+ validators).
+  // maxPages: hard safety bound on the number of requests.
+  const { throttleMs = 0, maxPages = Infinity } = opts;
   const all: T[] = [];
   let offset = 0;
   const limit = 100;
+  let page = 0;
 
-  while (true) {
+  while (page < maxPages) {
     const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
-    const response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
-      `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
-    );
+    let response: { data: T[]; meta: { has_more: boolean } };
+    try {
+      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+        `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
+      );
+    } catch (error) {
+      // A later page failing (e.g. a 429 mid-pagination) must NOT discard the
+      // pages we already have — return the partial set instead of throwing.
+      console.warn(`fetchAllL1BeatPages: stopped early for ${endpoint} at offset ${offset}:`, error);
+      break;
+    }
     const chunk = response.data ?? [];
     all.push(...chunk);
+    page += 1;
     if (chunk.length === 0 || !response.meta?.has_more) break;
     offset += limit;
+    if (throttleMs > 0) await new Promise((r) => setTimeout(r, throttleMs));
   }
 
   // Deduplicate — the API can return overlapping items across pages
@@ -1557,6 +1689,8 @@ export interface L1BeatValidator {
   node_id: string;
   balance?: number;
   weight: number;
+  staked_amount?: string; // PoS only: staked amount in whole tokens (decimal string)
+  staked_token?: string;  // PoS only: symbol of the token actually staked
   start_time: string;
   end_time?: string;
   uptime_percentage?: number;
@@ -1571,7 +1705,7 @@ export interface L1BeatValidator {
 
   // L1 registration info (detail endpoint only)
   tx_hash?: string;
-  tx_type?: string;  // 'RegisterL1ValidatorTx' | 'ConvertSubnetToL1Tx'
+  tx_type?: string;  // 'RegisterL1Validator' | 'ConvertSubnetToL1' (P-Chain type name, no Tx suffix)
   created_block?: number;
   created_time?: string;
   bls_public_key?: string;
@@ -1601,20 +1735,31 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
     try {
       const params: Record<string, string> = { subnet_id: subnetId };
       if (activeOnly) params['active'] = 'true';
+      // Chains like the Primary Network have 3000+ validators (31 pages). Throttle
+      // between pages so we don't trip the API rate limit (429) mid-pagination,
+      // and cap the page count as a safety bound.
       const allValidators = await fetchAllL1BeatPages<L1BeatValidator>(
         '/api/v1/data/validators',
-        params
+        params,
+        { throttleMs: 200, maxPages: 60 }
       );
-      return allValidators.map((v) => ({
-        address: v.node_id,
-        active: v.active,
-        uptime: v.primary_uptime ?? v.uptime_percentage,
-        weight: String(v.weight),
-        stakeUnit: 'weight' as const,
-        remainingBalance: v.balance,
-        explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
-        validationId: v.validation_id,
-      }));
+      return allValidators.map((v) => {
+        // PoS chains return a real staked amount + token; PoA chains omit them
+        // and we fall back to showing the raw P-Chain weight.
+        const isStaked = v.staked_amount != null;
+        return {
+          address: v.node_id,
+          active: v.active === true || (v.active as unknown) === 'true' || v.active === 1,
+          uptime: v.primary_uptime ?? v.uptime_percentage,
+          weight: String(v.weight),
+          stakeUnit: (isStaked ? 'tokens' : 'weight') as 'tokens' | 'weight',
+          stakedAmount: isStaked ? String(v.staked_amount) : undefined,
+          stakedToken: v.staked_token ?? undefined,
+          remainingBalance: v.balance,
+          explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
+          validationId: v.validation_id,
+        };
+      });
     } catch (error) {
       console.error(`L1Beat validators fetch error (${subnetId}):`, error);
       return [];
@@ -1684,6 +1829,83 @@ export async function getL1BeatDailyFeeBurn(subnetId: string, options?: { days?:
       return [];
     }
   }, 5 * 60 * 1000);
+}
+
+// --- EVM (C-Chain) base + priority fee burn -------------------------------
+// Unlike L1 validation-fee burn, every C-Chain transaction burns its EIP-1559
+// base fee AND priority tip. Amounts are nAVAX as decimal strings — they can
+// exceed Number.MAX_SAFE_INTEGER, so parse with BigInt before dividing.
+export interface FeeBurnAmounts {
+  total_burned: string;        // nAVAX
+  base_fee_burned: string;     // nAVAX
+  priority_fee_burned: string; // nAVAX = total - base
+}
+export interface FeeBurnPoint extends FeeBurnAmounts {
+  period: string; // ISO8601 UTC
+}
+export interface FeeBurnResponse {
+  chain_id: number;
+  granularity: 'hour' | 'day' | 'week' | 'month';
+  unit: 'nAVAX';
+  cumulative: FeeBurnAmounts; // all-time, ignores from/to/granularity
+  series: FeeBurnPoint[];      // oldest-first
+}
+
+// Convert an nAVAX decimal string to AVAX. BigInt keeps the integer exact; the
+// AVAX result is small enough for a JS number.
+export function nAvaxToAvax(n: string | undefined | null): number {
+  if (!n) return 0;
+  try {
+    return Number(BigInt(n)) / 1e9;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getEvmFeesBurned(
+  chainId: number | string,
+  options?: { granularity?: 'hour' | 'day' | 'week' | 'month'; limit?: number; from?: string; to?: string },
+): Promise<FeeBurnResponse | null> {
+  const granularity = options?.granularity ?? 'day';
+  const cacheKey = `evm-fees-burned-${chainId}-${granularity}-${options?.limit ?? ''}-${options?.from ?? ''}-${options?.to ?? ''}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      const params = new URLSearchParams({ granularity });
+      if (options?.limit) params.set('limit', String(options.limit));
+      if (options?.from) params.set('from', options.from);
+      if (options?.to) params.set('to', options.to);
+      const response = await fetchExternalWithRetry<{ data: FeeBurnResponse }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/evm/${chainId}/fees/burned?${params.toString()}`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`EVM fees burned fetch error (${chainId}):`, error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Network-wide all-time AVAX burned (nAVAX strings). The authoritative cumulative
+// for the live burn page; the websocket layers new-block deltas on top.
+export interface BurnedTotal {
+  unit: string;
+  total_burned: string; // nAVAX
+  by_chain: { p_chain: string | null; x_chain: string | null; c_chain: string | null };
+  updated_at: string;
+}
+
+export async function getBurnedTotal(): Promise<BurnedTotal | null> {
+  return fetchExternalWithCache('burned-total', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: BurnedTotal }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/burned/total`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Burned total fetch error:', error);
+      return null;
+    }
+  }, 60 * 1000);
 }
 
 // Aggregate daily fee burn across all L1 subnets for network-wide chart
@@ -1782,4 +2004,155 @@ export async function getChainBySubnetId(subnetId: string): Promise<Chain | null
   } catch {
     return null;
   }
+}
+
+export async function getStablecoins(evmChainId: number | string = 43114): Promise<Stablecoin[]> {
+  return fetchExternalWithCache(`stablecoins-${evmChainId}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<StablecoinsResponse>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins`
+      );
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      console.error('Stablecoins fetch error:', error);
+      return [];
+    }
+  });
+}
+
+// Historical stablecoin metrics. One series per token when `token` is omitted
+// (each ordered oldest→newest). Values are strings — supply/volume are raw base
+// units needing /10^decimals; transfers/holders are plain counts. There is no
+// `meta`/pagination envelope here, and `limit` is per-token. Cached 15min.
+export async function getStablecoinsTimeseries(opts: {
+  evmChainId?: number | string;
+  metric: StablecoinMetric;
+  granularity?: StablecoinGranularity;
+  token?: string;
+  limit?: number;
+  from?: string;
+  to?: string;
+}): Promise<StablecoinSeries[]> {
+  const {
+    evmChainId = 43114,
+    metric,
+    granularity = 'day',
+    token,
+    limit = 365,
+    from,
+    to,
+  } = opts;
+
+  const params = new URLSearchParams({ metric, granularity, limit: String(limit) });
+  if (token) params.set('token', token);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  const key = `stablecoins-ts-${evmChainId}-${metric}-${granularity}-${token ?? 'all'}-${limit}-${from ?? ''}-${to ?? ''}`;
+
+  return fetchExternalWithCache(key, async () => {
+    try {
+      const response = await fetchExternalWithRetry<StablecoinTimeseriesResponse>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins/timeseries?${params.toString()}`,
+      );
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      console.error('Stablecoins timeseries fetch error:', error);
+      return [];
+    }
+  });
+}
+
+// Resolves token logos via CoinGecko's GeckoTerminal multi-token endpoint.
+// One call, up to 30 addresses, returns canonical CoinGecko image URLs.
+// Cached 24h since logos basically never change. Network slugs map to
+// GeckoTerminal's internal IDs — "avax" for Avalanche C-Chain.
+const GT_NETWORK_BY_EVM: Record<string, string> = {
+  '43114': 'avax',
+};
+
+export async function getTokenLogos(
+  addresses: string[],
+  evmChainId: number | string = 43114,
+): Promise<Record<string, string>> {
+  if (!addresses.length) return {};
+  const network = GT_NETWORK_BY_EVM[String(evmChainId)] || 'avax';
+  // Stable cache key regardless of address ordering.
+  const sorted = [...addresses].map((a) => a.toLowerCase()).sort();
+  const key = `gt-logos-${network}-${sorted.join(',')}`;
+
+  return fetchExternalWithCache(
+    key,
+    async () => {
+      const out: Record<string, string> = {};
+      // GeckoTerminal caps at 30 addresses per call. Chunk to stay under.
+      const CHUNK = 30;
+      for (let i = 0; i < sorted.length; i += CHUNK) {
+        const slice = sorted.slice(i, i + CHUNK);
+        const url = `https://api.geckoterminal.com/api/v2/networks/${network}/tokens/multi/${slice.join(
+          ',',
+        )}`;
+        try {
+          const resp = await fetchExternalWithRetry<{
+            data?: Array<{ attributes?: { address?: string; image_url?: string } }>;
+          }>(url);
+          for (const item of resp.data ?? []) {
+            const addr = item.attributes?.address?.toLowerCase();
+            const img = item.attributes?.image_url;
+            if (addr && img && !img.includes('missing.png')) {
+              out[addr] = img;
+            }
+          }
+        } catch (error) {
+          console.error('GeckoTerminal logo fetch error:', error);
+        }
+      }
+      return out;
+    },
+    24 * 60 * 60 * 1000,
+  );
+}
+
+// FX rates for non-USD pegs. Cached for ~6h since rates barely move intraday.
+// Source: frankfurter.app (ECB rates, free, no key). Falls back to a rough
+// snapshot if the call fails so the page never breaks.
+export interface FxRates {
+  EUR: number;
+  SGD: number;
+  JPY: number;
+  CHF: number;
+  GBP: number;
+  BRL: number;
+  TRY: number;
+  [code: string]: number;
+}
+
+// Every non-USD peg we track needs a rate, otherwise pegToUsd leaves the value
+// in face units and badly overstates supply (e.g. 12M lira counted as $12M).
+// Rough fallbacks only — the live frankfurter call refreshes them.
+const FX_FALLBACK: FxRates = {
+  EUR: 1.08, SGD: 0.74, JPY: 0.0064, CHF: 1.25, GBP: 1.34, BRL: 0.2, TRY: 0.022,
+};
+
+const FX_CODES = ['EUR', 'SGD', 'JPY', 'CHF', 'GBP', 'BRL', 'TRY'] as const;
+
+export async function getFxRates(): Promise<FxRates> {
+  return fetchWithCache('fx-rates-usd', async () => {
+    try {
+      const res = await fetch(
+        `https://api.frankfurter.app/latest?from=USD&to=${FX_CODES.join(',')}`,
+      );
+      if (!res.ok) throw new Error(`fx http ${res.status}`);
+      const json = (await res.json()) as { rates?: Record<string, number> };
+      const rates = json.rates ?? {};
+      // frankfurter returns 1 USD = X EUR, we want 1 EUR = Y USD → invert.
+      const inv = (r: number | undefined) => (r && r > 0 ? 1 / r : undefined);
+      const out = { ...FX_FALLBACK };
+      for (const code of FX_CODES) out[code] = inv(rates[code]) ?? FX_FALLBACK[code];
+      return out;
+    } catch (error) {
+      console.error('FX rates fetch error:', error);
+      return FX_FALLBACK;
+    }
+  }, 6 * 60 * 60 * 1000);
 }

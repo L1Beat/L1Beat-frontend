@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling';
 import * as d3 from 'd3';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { format } from 'date-fns';
@@ -80,7 +81,12 @@ const findChainId = (chainName: string) => {
 // Maximum animation cycles per particle to prevent infinite loops
 const MAX_PARTICLE_CYCLES = 30;
 
-export function TeleporterSankeyDiagram() {
+interface TeleporterSankeyDiagramProps {
+  timeframe: 'daily' | 'weekly';
+  onTimeframeChange: (tf: 'daily' | 'weekly') => void;
+}
+
+export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: TeleporterSankeyDiagramProps) {
   const navigate = useNavigate();
   const [data, setData] = useState<TeleporterData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +95,6 @@ export function TeleporterSankeyDiagram() {
   const [hoveredNode, setHoveredNode] = useState<SankeyNode | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<'daily' | 'weekly'>('daily');
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
@@ -99,21 +104,20 @@ export function TeleporterSankeyDiagram() {
   const isVisibleRef = useRef(true);
   const activeParticlesRef = useRef<d3.Selection<SVGCircleElement, unknown, null, undefined>[]>([]);
   
-  // Force text colors to always be white for dark background
+  // Theme-aware text colors so labels remain legible against the card bg.
   const forceTextColors = useCallback(() => {
-    // Always use white text since we have a dark background
-    const textColor = '#ffffff';
-    const secondaryTextColor = 'rgba(255, 255, 255, 0.7)';
-    
-    // Force direct DOM updates to ensure color consistency
+    const isDark = theme === 'dark';
+    const textColor = isDark ? '#ffffff' : '#0f172a';
+    const secondaryTextColor = isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.65)';
+
     document.querySelectorAll('.node-label').forEach(el => {
-    (el as HTMLElement).style.setProperty('fill', textColor, 'important');
+      (el as HTMLElement).style.setProperty('fill', textColor, 'important');
     });
-    
+
     document.querySelectorAll('.value-label, .diagram-title').forEach(el => {
       (el as HTMLElement).style.setProperty('fill', secondaryTextColor, 'important');
     });
-  }, []);
+  }, [theme]);
   
   
   // Apply text colors when the diagram is first drawn or redrawn
@@ -291,17 +295,15 @@ export function TeleporterSankeyDiagram() {
     };
   };
 
+  // Reset selected chain when changing timeframe.
   useEffect(() => {
-    fetchData();
-    
-    // Reset selected chain when changing timeframe
     setSelectedChain(null);
-    
-    // Refresh data every 15 minutes
-    const interval = setInterval(fetchData, 15 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, [fetchData, timeframe]);
+  }, [timeframe]);
+
+  // Fetch, then refresh every 15 minutes (paused while the tab is hidden).
+  usePolling(() => {
+    fetchData();
+  }, 15 * 60 * 1000, [fetchData, timeframe]);
 
   // Handle node click to focus on chain connections
   const handleNodeClick = useCallback((node: SankeyNode) => {
@@ -569,7 +571,7 @@ export function TeleporterSankeyDiagram() {
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
         .attr('class', 'node-label')
         .text(d => d.displayName)
-        .attr('fill', '#ffffff')
+        .attr('fill', theme === 'dark' ? '#ffffff' : '#0f172a')
         .attr('font-weight', 'bold')
         .attr('font-size', '12px')
         .attr('pointer-events', 'none');
@@ -582,7 +584,7 @@ export function TeleporterSankeyDiagram() {
         .attr('class', 'value-label')
         .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
         .text(d => `${d.value.toLocaleString()} msgs`)
-        .attr('fill', 'rgba(255, 255, 255, 0.7)')
+        .attr('fill', theme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(15, 23, 42, 0.65)')
         .attr('font-size', '10px')
         .attr('pointer-events', 'none')
         .attr('opacity', 0) // Hide by default
@@ -608,17 +610,6 @@ export function TeleporterSankeyDiagram() {
         });
       // DO NOT TOUCH
       
-      // Add a title
-      svg.append('text')
-        .attr('x', width / 2)
-        .attr('y', -5)
-        .attr('class', 'diagram-title')
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .attr('fill', 'rgba(255, 255, 255, 0.7)')
-        .text(`Total: ${data.metadata.totalMessages.toLocaleString()} messages`);
-      
       svg.on('click', () => {
         if (selectedChain) {
           setSelectedChain(null);
@@ -635,7 +626,7 @@ export function TeleporterSankeyDiagram() {
         .attr('fill', errorTextColor)
         .text('Error rendering diagram. Please try again.');
     }
-  }, [data, getChainColor, selectedChain, navigate, handleNodeClick]);
+  }, [data, getChainColor, selectedChain, navigate, handleNodeClick, theme]);
 
   // Handle window resize
   useEffect(() => {
@@ -719,45 +710,44 @@ export function TeleporterSankeyDiagram() {
   }
 
   return (
-    <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <h3 className="text-base sm:text-lg font-semibold text-foreground">
+          <h3 className="text-[14px] font-semibold text-foreground">
             Avalanche Interchain Messages (ICM)
           </h3>
-        </div>
-        
-        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          {/* Toggle switch for daily/weekly data */}
-          <div className="bg-muted rounded-full p-1 flex items-center">
-            <button
-              onClick={() => setTimeframe('daily')}
-              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                timeframe === 'daily'
-                  ? 'bg-[#ef4444] text-white'
-                  : 'text-muted-foreground hover:bg-accent'
-              }`}
-            >
-              Daily
-            </button>
-            <button
-              onClick={() => setTimeframe('weekly')}
-              className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                timeframe === 'weekly'
-                  ? 'bg-[#ef4444] text-white'
-                  : 'text-muted-foreground hover:bg-accent'
-              }`}
-            >
-              Weekly
-            </button>
+          <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
           </div>
-          
-          <button 
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-1">
+            {(['daily', 'weekly'] as const).map((tf) => {
+              const active = timeframe === tf;
+              return (
+                <button
+                  key={tf}
+                  onClick={() => onTimeframeChange(tf)}
+                  className={`h-7 px-3 rounded-md text-[11px] font-medium border transition-colors ${
+                    active
+                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {tf === 'daily' ? 'Daily' : 'Weekly'}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
             onClick={fetchData}
-            className="p-1.5 rounded-full bg-muted text-muted-foreground hover:bg-accent transition-colors"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             title="Refresh data"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -773,29 +763,11 @@ export function TeleporterSankeyDiagram() {
         </div>
       )}
       
-      <div 
-        ref={containerRef} 
-        className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 rounded-lg border border-gray-700 dark:border-gray-800 h-[300px] sm:h-[400px] overflow-hidden"
+      <div
+        ref={containerRef}
+        className="relative bg-card h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden"
       >
-        {/* Dark space background with subtle, slow twinkling stars - reduced for performance */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div 
-              key={`star-${i}`}
-              className="absolute rounded-full bg-white"
-              style={{
-                width: `${Math.random() * 1.5 + 0.5}px`,
-                height: `${Math.random() * 1.5 + 0.5}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                willChange: 'opacity',
-                animation: `twinkle ${Math.random() * 8 + 6}s ease-in-out infinite`,
-                animationDelay: `-${Math.random() * 8}s`,
-              }}
-            />
-          ))}
-        </div>
-        
+
         {/* SVG for the Sankey diagram */}
         <svg 
           ref={svgRef} 

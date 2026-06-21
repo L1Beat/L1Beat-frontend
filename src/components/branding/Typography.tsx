@@ -17,26 +17,26 @@ export function Typography({ theme }: TypographyProps) {
         <h3 className="mb-6">Primary Typeface</h3>
         <div className="p-8 rounded-xl border border-border bg-card">
           <div className="mb-8">
-            <div className="text-5xl mb-4">System UI</div>
+            <div className="text-5xl mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>Inter</div>
             <p className="text-muted-foreground">
-              San Francisco (macOS), Segoe UI (Windows), Roboto (Android)
+              Loaded from Google Fonts at weights 400, 500, 600, 700
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h4 className="mb-4">Why System Fonts?</h4>
+              <h4 className="mb-4">Why Inter?</h4>
               <ul className="space-y-2 text-muted-foreground">
-                <li>• Fast loading - no web font downloads</li>
-                <li>• Native feel on every platform</li>
-                <li>• Excellent legibility at all sizes</li>
-                <li>• Designed for screens and interfaces</li>
-                <li>• Professional and modern appearance</li>
+                <li>• Purpose-built for UI and screens</li>
+                <li>• Excellent legibility at small sizes</li>
+                <li>• Tabular figures for data and metrics</li>
+                <li>• Consistent across every platform</li>
+                <li>• Falls back to system-ui if it fails to load</li>
               </ul>
             </div>
             <div>
               <h4 className="mb-4">Font Stack</h4>
               <code className="block p-4 rounded-lg bg-muted text-sm break-all">
-                system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
+                Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
               </code>
             </div>
           </div>
