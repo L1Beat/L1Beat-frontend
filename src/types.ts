@@ -510,6 +510,11 @@ export interface Stablecoin {
   holders: number;
   volume_24h: string;
   transfers_24h: number;
+  // True when this coin's reserves are themselves other stablecoins already
+  // counted on-chain (e.g. avUSD backed by USDC). Summing it into the headline
+  // total would count the same dollars twice, so the net total excludes it.
+  // The exclusion list is curated backend-side; never hardcode coins here.
+  doublecounted?: boolean;
 }
 
 export interface StablecoinsResponse {

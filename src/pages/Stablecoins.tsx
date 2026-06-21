@@ -260,14 +260,19 @@ export function Stablecoins() {
     let prev7d = 0;
     let hasTrend = false;
     for (const c of enriched) {
-      supply += c.supplyUsd;
       volume += c.volumeUsd;
       holders += c.holders || 0;
+      if (c.trend) hasTrend = true;
+      // Net headline: skip double-counted coins (their reserves are other
+      // stablecoins already counted on-chain) so the same dollars aren't summed
+      // twice. This lands ~$133M below the all-rows sum and matches DefiLlama.
+      // They stay in the table (gross) — just flagged there.
+      if (c.doublecounted) continue;
+      supply += c.supplyUsd;
       if (c.bridged) bridgedUsd += c.supplyUsd;
       else nativeUsd += c.supplyUsd;
       // Sum a coherent "7d ago" total: history where we have it, current
       // supply otherwise (a coin with no history contributes no change).
-      if (c.trend) hasTrend = true;
       prev7d += c.trend ? c.trend.prev7d : c.supplyUsd;
     }
     const change7d = prev7d > 0 ? (supply - prev7d) / prev7d : 0;
@@ -281,6 +286,9 @@ export function Stablecoins() {
     if (!enriched.length) return [];
     const map = new Map<string, number>();
     for (const c of enriched) {
+      // Net breakdown: exclude double-counted coins so issuer shares add up to
+      // the net headline total (the denominator passed to IssuerCard).
+      if (c.doublecounted) continue;
       const key = c.issuer || c.symbol;
       map.set(key, (map.get(key) || 0) + c.supplyUsd);
     }
@@ -676,7 +684,7 @@ const CHART_M = { top: 16, right: 20, bottom: 28, left: 60 };
 // USD via the token's peg; counts are taken as plain integers.
 function aggregateSeries(
   series: StablecoinSeries[],
-  meta: Map<string, { decimals: number; peg: string }>,
+  meta: Map<string, { decimals: number; peg: string; doublecounted?: boolean }>,
   metric: StablecoinMetric,
   fx: FxRates,
 ): SeriesPoint[] {
@@ -701,6 +709,11 @@ function aggregateSeries(
     // Without decimals/peg we can't safely scale a monetary value — skip until
     // the companion list endpoint has loaded.
     if (monetary && !info) continue;
+    // Supply is the only metric subject to double-counting (a coin whose
+    // reserves are other counted stablecoins). Exclude flagged coins so the
+    // total line's latest value matches the net headline above. Volume,
+    // holders and transfers aren't double-counted dollars, so keep them.
+    if (metric === 'supply' && info?.doublecounted) continue;
     const decimals = info?.decimals ?? 0;
     const peg = info?.peg ?? 'USD';
 
@@ -756,12 +769,13 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
   const stackedView = stacked && metric === 'supply';
 
   const meta = useMemo(() => {
-    const m = new Map<string, { decimals: number; peg: string; issuer: string }>();
+    const m = new Map<string, { decimals: number; peg: string; issuer: string; doublecounted: boolean }>();
     for (const c of coins) {
       m.set(c.token.toLowerCase(), {
         decimals: c.decimals,
         peg: c.peg,
         issuer: c.issuer || c.symbol,
+        doublecounted: !!c.doublecounted,
       });
     }
     return m;
@@ -863,6 +877,9 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
     for (const s of series) {
       const info = meta.get(s.token.toLowerCase());
       if (!info) continue;
+      // Stacked view is supply-only — exclude double-counted coins so the bands
+      // sum to the same net total as the single line.
+      if (info.doublecounted) continue;
       const pts = s.data
         .map((p) => ({ t: Date.parse(p.period), v: pegToUsd(toUnits(p.value, info.decimals), info.peg, fx) }))
         .filter((p) => !Number.isNaN(p.t))
@@ -1213,7 +1230,7 @@ function KpiStrip({
       label: 'Total supply',
       value: fmtUsd(totals.supply),
       icon: DollarSign,
-      tip: 'Sum of every tracked stablecoin supply, converted to USD using ECB reference rates for non-USD pegs.',
+      tip: 'Net stablecoin supply in USD (ECB reference rates for non-USD pegs). Excludes coins backed by other stablecoins already counted on-chain, so it reads below the table total — which lists every coin. This matches DefiLlama.',
       // Only annotate once history has loaded and there's a real total.
       change: totals.hasTrend && totals.supply > 0 ? totals.change7d : undefined,
       changeLabel: '7d',
@@ -1868,6 +1885,20 @@ function CoinRow({
                 <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
                   Bridged
                 </span>
+              )}
+              {coin.doublecounted && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 h-4 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 inline-flex items-center cursor-help">
+                      Double-counted
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[240px]">
+                    Backed by other stablecoins already counted on-chain. Excluded
+                    from the total supply above so the same dollars aren&apos;t
+                    counted twice.
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
             <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
