@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { Footer } from '../Footer';
 
 export function Layout() {
   return (
@@ -23,6 +24,9 @@ export function Layout() {
         <main className="flex-1">
           <Outlet />
         </main>
+        <Footer />
+        {/* clears the floating mobile dock so the footer isn't hidden behind it */}
+        <div className="md:hidden h-20" aria-hidden />
       </div>
       <MobileDock />
     </div>
