@@ -32,3 +32,9 @@ SEO_IMPLEMENTATION.md
 .serena
 # internal indexer specs — keep local, do not publish
 docs/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+.design-sync/ds.css
