@@ -65,12 +65,27 @@ All origins are allowed (`Access-Control-Allow-Origin: *`). No authentication is
 
 ## Rate Limiting
 
-All endpoints are rate limited to 100 requests/second per IP (burst of 100) by default.
+All endpoints are rate limited to 60 requests/minute per IP (burst of 10) by default.
+
+Every response carries the current quota (per-IP token bucket):
+- `X-RateLimit-Limit` — burst capacity (10 by default)
+- `X-RateLimit-Remaining` — tokens left right now
+- `X-RateLimit-Reset` — epoch seconds at which the bucket refills to full
 
 When rate limited, you'll receive:
 - HTTP 429 status
 - `Retry-After` header with seconds to wait
 - Error body with `retry_after` field
+
+These headers (and `Retry-After`) are listed in `Access-Control-Expose-Headers`, so cross-origin browser clients can read them.
+
+## Prometheus Metrics
+
+`/metrics` is a Prometheus endpoint for operators. It is disabled unless the API is started with `--metrics-token` or `ICICLE_METRICS_TOKEN`. When enabled, scrape it with:
+
+```bash
+curl -H "Authorization: Bearer $ICICLE_METRICS_TOKEN" https://api.l1beat.io/metrics
+```
 
 ## Common Query Parameters
 
@@ -513,6 +528,80 @@ Get native token balance (AVAX, ETH, etc.) for an address.
 
 ---
 
+### GET /api/v1/data/evm/{chainId}/stablecoins
+
+Curated stablecoins on a chain with **circulating** supply (excludes issuer-treasury addresses), holder count, and 24h transfer stats.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `chainId` | int | Chain ID (e.g. 43114) |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "token": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "peg": "USD",
+      "issuer": "Circle",
+      "bridged": false,
+      "supply": "459300000000000",
+      "holders": 128453,
+      "volume_24h": "32100000000000",
+      "transfers_24h": 58210
+    }
+  ]
+}
+```
+
+**Notes:**
+- Amount fields (`supply`, `volume_24h`) are strings in the token's smallest unit; scale by `decimals`.
+- `supply` is circulating (issuer treasuries in `stablecoin_excluded_holders` are subtracted), DeFiLlama-style.
+
+---
+
+### GET /api/v1/data/evm/{chainId}/stablecoins/timeseries
+
+Time series for a stablecoin metric.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `chainId` | int | Chain ID |
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `metric` | string | — | **Required.** One of `supply`, `volume`, `transfers`, `holders` |
+| `granularity` | string | `day` | `hour`, `day`, `week`, or `month` |
+| `token` | string | — | Token address (0x-hex). Omit for all stablecoins on the chain |
+| `from` | string | — | Start time (date, RFC3339, or unix) |
+| `to` | string | — | End time |
+| `limit` | int | 365 | Data points per token (max 5000) |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "chain_id": 43114,
+      "token": "0xb97ef9ef...",
+      "metric_name": "supply",
+      "granularity": "day",
+      "data": [
+        { "period": "2025-06-01T00:00:00Z", "value": "459300000000000" }
+      ]
+    }
+  ]
+}
+```
+
+---
+
 ## Data API - P-Chain
 
 ### GET /api/v1/data/pchain/txs
@@ -535,7 +624,7 @@ List P-Chain transactions.
   "data": [
     {
       "tx_id": "22FdhKfCTTW...xxNeV",
-      "tx_type": "RegisterL1ValidatorTx",
+      "tx_type": "RegisterL1Validator",
       "block_number": 12345678,
       "block_time": "2024-12-01T00:00:00Z",
       "tx_data": {
@@ -554,16 +643,18 @@ List P-Chain transactions.
 }
 ```
 
-**Common Transaction Types:**
-- `CreateSubnetTx` — Create a new subnet
-- `CreateChainTx` — Create a blockchain in a subnet
-- `AddValidatorTx` — Add validator to primary network
-- `AddDelegatorTx` — Add delegator to primary network
-- `ConvertSubnetToL1Tx` — Convert subnet to L1
-- `RegisterL1ValidatorTx` — Register L1 validator
-- `IncreaseL1ValidatorBalanceTx` — Top up validator balance
-- `DisableL1ValidatorTx` — Disable L1 validator
-- `SetL1ValidatorWeightTx` — Change validator weight
+**Common Transaction Types** (filter values for `?tx_type=`):
+- `CreateSubnet` — Create a new subnet
+- `CreateChain` — Create a blockchain in a subnet
+- `AddValidator` — Add validator to primary network
+- `AddDelegator` — Add delegator to primary network
+- `ConvertSubnetToL1` — Convert subnet to L1
+- `RegisterL1Validator` — Register L1 validator
+- `IncreaseL1ValidatorBalance` — Top up validator balance
+- `DisableL1Validator` — Disable L1 validator
+- `SetL1ValidatorWeight` — Change validator weight
+
+> **Note:** `tx_type` values have **no `Tx` suffix** (use `CreateSubnet`, not `CreateSubnetTx`). Filtering with a `…Tx` value returns `200` with `0` results. The authoritative, always-current list of types is `GET /api/v1/data/pchain/tx-types`.
 
 ---
 
@@ -582,18 +673,115 @@ Get a specific P-Chain transaction by ID.
 
 ### GET /api/v1/data/pchain/tx-types
 
-Get all P-Chain transaction types with counts.
+Get P-Chain transaction types with counts.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `days` | int | Restrict the count to the last N days (omit for all-time) |
 
 **Response:**
 ```json
 {
   "data": [
-    { "tx_type": "AddDelegatorTx", "count": 150000 },
-    { "tx_type": "AddValidatorTx", "count": 50000 },
-    { "tx_type": "RegisterL1ValidatorTx", "count": 1200 }
+    { "tx_type": "AddDelegator", "count": 150000 },
+    { "tx_type": "AddValidator", "count": 50000 },
+    { "tx_type": "RegisterL1Validator", "count": 1200 }
   ]
 }
 ```
+
+---
+
+### GET /api/v1/data/pchain/stats
+
+Headline P-Chain counters for an overview page.
+
+**Response:**
+```json
+{
+  "data": {
+    "active_l1_subnets": 42,
+    "active_legacy_subnets": 15,
+    "active_chains": 58,
+    "active_validators": 1200,
+    "recent_transactions": 34000,
+    "total_l1_fees_paid": 5000000000
+  }
+}
+```
+
+**Notes:**
+- `recent_transactions` is the last 7 days; `total_l1_fees_paid` is all-time in nAVAX.
+
+---
+
+### GET /api/v1/data/pchain/subnet-timeline
+
+Monthly count of subnets converted to L1, oldest first (render a cumulative line from these).
+
+**Response:**
+```json
+{
+  "data": [
+    { "period": "2024-01-01T00:00:00Z", "value": 3 },
+    { "period": "2024-02-01T00:00:00Z", "value": 5 }
+  ]
+}
+```
+
+---
+
+### GET /api/v1/data/pchain/blocks
+
+Recent P-Chain blocks (summarized from transactions), newest first. Bounded to a recent window for performance.
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `days` | int | 7 | Look-back window in days |
+| `limit` | int | 20 | Results per page (max 100) |
+| `offset` | int | 0 | Pagination offset |
+
+**Response:**
+```json
+{
+  "data": [
+    { "block_number": 24160141, "tx_count": 3, "block_time": "2025-06-01T12:00:00Z", "block_hash": "2ZW6HUePB..." }
+  ],
+  "meta": { "limit": 20, "offset": 0, "has_more": true }
+}
+```
+
+---
+
+### GET /api/v1/data/pchain/blocks/{number}
+
+A single P-Chain block by number, including proposer/parent metadata.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `number` | int | Block number |
+
+**Response:**
+```json
+{
+  "data": {
+    "block_number": 24160141,
+    "tx_count": 3,
+    "block_time": "2025-06-01T12:00:00Z",
+    "block_hash": "2ZW6HUePB...",
+    "parent_id": "2ABC...",
+    "proposer_id": "...",
+    "proposer_node_id": "NodeID-...",
+    "block_type": "AdvanceTime"
+  }
+}
+```
+
+**Notes:**
+- `parent_id`, `proposer_id`, `proposer_node_id`, `block_type` are only populated on this single-block endpoint. Returns 404 if the block isn't found.
 
 ---
 
@@ -692,7 +880,7 @@ List all blockchains with enriched subnet, L1 registry, and validator data. This
       ],
       "rpc_url": "https://rpc.mychain.com",
       "explorer_url": "https://explorer.mychain.com",
-      "sybil_resistance_type": "ProofOfAuthority",
+      "sybil_resistance_type": "Proof of Authority",
       "network_token": {
         "name": "My Token",
         "symbol": "MTK",
@@ -703,6 +891,7 @@ List all blockchains with enriched subnet, L1 registry, and validator data. This
       "validator_count": 10,
       "active_validators": 8,
       "total_staked": 5000000,
+      "total_staked_tokens": "5000",
       "total_fees_paid": 1500000000000
     }
   ],
@@ -719,8 +908,65 @@ List all blockchains with enriched subnet, L1 registry, and validator data. This
 - All registry fields (`name`, `description`, `logo_url`, `website_url`, `evm_chain_id`, `categories`, `socials`, `rpc_url`, `explorer_url`, `sybil_resistance_type`, `network_token`, `network`) are optional — only present if registry metadata exists
 - `converted_block`, `converted_time` only present for L1-converted subnets
 - `validator_count`, `active_validators`, `total_staked`, `total_fees_paid` only present for L1 chains
+- `total_staked` is the raw sum of validator weights; `total_staked_tokens` is that sum converted to **whole tokens** (decimal string), present only for Proof-of-Stake chains with a configured staking factor. Pair it with `network_token.symbol` for display.
 - `socials` is an array of `{"name": string, "url": string}` objects
 - `network_token` includes native token info when available
+
+---
+
+### GET /api/v1/data/chains/{chainId}/risk
+
+Per-chain decentralization and ValidatorManager risk profile (L2Beat-style). Keyed by the same `chain_id` (CB58) as `/api/v1/data/chains`.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `chainId` | string | Blockchain ID (CB58) |
+
+**Response:**
+```json
+{
+  "data": {
+    "chain_id": "2q9e4r6Mu...",
+    "validator_manager": {
+      "address": "0x1234...",
+      "type": "PoA",
+      "deployed_on": "c-chain",
+      "owner": {
+        "address": "0x5678...",
+        "kind": "multisig",
+        "multisig": { "threshold": 3, "owners": 5 }
+      },
+      "proxy": {
+        "is_proxy": true,
+        "implementation": "0xabcd...",
+        "proxy_admin": "0xdef0...",
+        "proxy_admin_owner": "0x9999...",
+        "upgrade_delay_seconds": 0
+      },
+      "churn": { "period_seconds": 3600, "max_churn_percentage": 20 }
+    },
+    "decentralization": {
+      "active_validator_count": 8,
+      "nakamoto_33": 2,
+      "nakamoto_50": 3,
+      "total_weight": "5000000",
+      "weights": ["2000000", "1500000", "..."]
+    },
+    "economic": null,
+    "updated_at": "2026-06-17T12:00:00Z"
+  }
+}
+```
+
+**Notes:**
+- `validator_manager.type` — `PoA`, `PoS-native`, `PoS-erc20`, or `unknown`
+- `deployed_on` — `c-chain` (manager reachable even if the L1 halts), `self` (lives on the L1, unreachable if stuck), or `unknown`
+- `owner.kind` — `eoa`, `multisig`, `timelock`, `dao`, `contract`, or `unknown`; `multisig` populated only for detected Gnosis Safes
+- `proxy.upgrade_delay_seconds` — `0` means upgrades are instant; a timelock delay otherwise
+- `decentralization` — present only when the chain has active L1 validators; `nakamoto_33`/`nakamoto_50` are the min validators controlling >33%/>50% of active weight; `weights` are raw, sorted descending
+- `economic` — reserved for a later tier; currently always `null`
+- Returns 404 if the chain ID is unknown
 
 ---
 
@@ -748,6 +994,8 @@ List validators (L1 and legacy subnet validators).
       "validation_id": "3DEF...uvw",
       "node_id": "NodeID-ABC123...",
       "weight": 100000,
+      "staked_amount": "100",
+      "staked_token": "MTK",
       "start_time": "2024-12-01T00:00:00Z",
       "active": true,
       "end_time": "2025-12-01T00:00:00Z",
@@ -769,6 +1017,7 @@ List validators (L1 and legacy subnet validators).
 
 **Notes:**
 - All balance/fee values in nAVAX (1 AVAX = 1,000,000,000 nAVAX)
+- `staked_amount` / `staked_token` — the validator's stake in **whole tokens** (decimal string, full precision) and the token's symbol. Present only for Proof-of-Stake chains (incl. the Primary Network, in AVAX); omitted for Proof-of-Authority chains, where `weight` is an abstract value with no token conversion. Derive your UI from the presence of `staked_amount`.
 - `end_time` — omitted for L1 validators with no expiry
 - `uptime_percentage` — omitted for L1 validators (not meaningful)
 - `balance`, `initial_deposit`, `total_topups`, `refund_amount`, `fees_paid` — only present for L1 validators
@@ -807,7 +1056,7 @@ Get detailed validator info by validation ID or node ID.
     "refund_amount": 0,
     "fees_paid": 1500000000000,
     "tx_hash": "22FdhK...xxNeV",
-    "tx_type": "RegisterL1ValidatorTx",
+    "tx_type": "RegisterL1Validator",
     "created_block": 12345678,
     "created_time": "2024-12-01T00:00:00Z",
     "bls_public_key": "0x85abcd...",
@@ -973,6 +1222,92 @@ Get daily fee burn data for an L1 subnet, computed from validator active periods
 - Fee burn = `active_seconds * 512` nAVAX
 - Full day = 86400 seconds = 44,236,800 nAVAX per validator
 - Returns empty array if no validators exist for the subnet
+
+---
+
+### GET /api/v1/metrics/evm/{chainId}/fees/burned
+
+Transaction-fee burn for an EVM chain, split into total / base-fee / priority-tip, per period plus all-time cumulative. On the C-Chain 100% of the fee is burned.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `chainId` | int | Chain ID (e.g. 43114) |
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `granularity` | string | `day` | `hour`, `day`, `week`, or `month` |
+| `from` | string | — | Start time (date, RFC3339, or unix) |
+| `to` | string | — | End time |
+| `limit` | int | 100 | Number of periods (max 1000) |
+
+**Response:**
+```json
+{
+  "data": {
+    "chain_id": 43114,
+    "granularity": "day",
+    "unit": "nAVAX",
+    "cumulative": {
+      "total_burned": "5013452000000000",
+      "base_fee_burned": "4900000000000000",
+      "priority_fee_burned": "113452000000000"
+    },
+    "series": [
+      {
+        "period": "2025-06-01T00:00:00Z",
+        "total_burned": "12000000000000",
+        "base_fee_burned": "11500000000000",
+        "priority_fee_burned": "500000000000"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- All amounts are nAVAX strings (1 nAVAX = 1e9 wei). `series` is chronological (oldest first).
+
+---
+
+### GET /api/v1/metrics/burned/total
+
+Network-wide all-time AVAX burned, split by chain (P / X / C). Only the C-Chain is indexed today; the others are `null` until computed.
+
+**Response:**
+```json
+{
+  "data": {
+    "unit": "nAVAX",
+    "total_burned": "5013452000000000",
+    "by_chain": {
+      "p_chain": null,
+      "x_chain": null,
+      "c_chain": "5013452000000000"
+    },
+    "updated_at": "2026-06-17T12:00:00Z"
+  }
+}
+```
+
+---
+
+### GET /api/v1/metrics/storage
+
+> **Operator-only.** Exposes internal table names / sizes / row counts, so it's gated behind the same bearer token as `/metrics`. Send `Authorization: Bearer <ICICLE_METRICS_TOKEN>`. Without it: `401` (or `404` when no token is configured). Not part of the public consumer API.
+
+Per-table on-disk size (bytes) and row counts for the indexer's ClickHouse store, largest first. Operational metadata only — table names and sizes, no row contents.
+
+**Response:**
+```json
+{
+  "data": [
+    { "table": "raw_traces", "size_bytes": 123456789012, "rows": 10000000000 },
+    { "table": "raw_txs", "size_bytes": 12345678901, "rows": 1000000000 }
+  ]
+}
+```
 
 ---
 
@@ -1182,6 +1517,7 @@ ws.onmessage = (event) => {
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | GET | `/api/v1/metrics/indexer/status` | Indexer sync status |
+| GET | `/api/v1/metrics/storage` | Per-table storage size & row counts (operator token) |
 | GET | `/api/v1/data/evm/{chainId}/blocks` | List blocks |
 | GET | `/api/v1/data/evm/{chainId}/blocks/{number}` | Get block by number |
 | GET | `/api/v1/data/evm/{chainId}/txs` | List transactions |
@@ -1190,11 +1526,18 @@ ws.onmessage = (event) => {
 | GET | `/api/v1/data/evm/{chainId}/address/{address}/internal-txs` | Address internal txs |
 | GET | `/api/v1/data/evm/{chainId}/address/{address}/balances` | ERC-20 token balances |
 | GET | `/api/v1/data/evm/{chainId}/address/{address}/native` | Native token balance |
+| GET | `/api/v1/data/evm/{chainId}/stablecoins` | List stablecoins (supply, holders, 24h) |
+| GET | `/api/v1/data/evm/{chainId}/stablecoins/timeseries` | Stablecoin metric time series |
 | GET | `/api/v1/data/pchain/txs` | List P-Chain transactions |
 | GET | `/api/v1/data/pchain/txs/{txId}` | Get P-Chain transaction |
 | GET | `/api/v1/data/pchain/tx-types` | P-Chain transaction type counts |
+| GET | `/api/v1/data/pchain/stats` | P-Chain overview counters |
+| GET | `/api/v1/data/pchain/subnet-timeline` | Monthly L1-conversion timeline |
+| GET | `/api/v1/data/pchain/blocks` | List P-Chain blocks |
+| GET | `/api/v1/data/pchain/blocks/{number}` | Get P-Chain block by number |
 | GET | `/api/v1/data/subnets/{subnetId}` | Get subnet details |
 | GET | `/api/v1/data/chains` | List chains (unified) |
+| GET | `/api/v1/data/chains/{chainId}/risk` | Chain risk & decentralization |
 | GET | `/api/v1/data/validators` | List validators |
 | GET | `/api/v1/data/validators/{id}` | Get validator detail |
 | GET | `/api/v1/data/validators/{id}/deposits` | Validator deposit history |
@@ -1203,6 +1546,8 @@ ws.onmessage = (event) => {
 | GET | `/api/v1/metrics/evm/{chainId}/stats` | Chain aggregate stats |
 | GET | `/api/v1/metrics/evm/{chainId}/timeseries` | List available metrics |
 | GET | `/api/v1/metrics/evm/{chainId}/timeseries/{metric}` | Get time series data |
+| GET | `/api/v1/metrics/evm/{chainId}/fees/burned` | Tx fee burn (total/base/tip) |
+| GET | `/api/v1/metrics/burned/total` | Network-wide AVAX burned |
 | WS | `/ws/blocks/{chainId}` | Real-time block stream |
 
 ---
@@ -1262,7 +1607,7 @@ curl "https://api.l1beat.io/api/v1/metrics/evm/43114/timeseries/active_addresses
 curl "https://api.l1beat.io/api/v1/data/pchain/txs?limit=20"
 
 # Filter by type
-curl "https://api.l1beat.io/api/v1/data/pchain/txs?tx_type=RegisterL1ValidatorTx"
+curl "https://api.l1beat.io/api/v1/data/pchain/txs?tx_type=RegisterL1Validator"
 
 # Get transaction by ID
 curl "https://api.l1beat.io/api/v1/data/pchain/txs/22FdhKfCTTW...xxNeV"
