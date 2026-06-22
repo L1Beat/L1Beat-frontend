@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileQuestion, ArrowLeft } from 'lucide-react';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { Footer } from '../components/Footer';
 
 export function NotFound() {
   const navigate = useNavigate();
@@ -34,8 +33,6 @@ export function NotFound() {
           </button>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 }
