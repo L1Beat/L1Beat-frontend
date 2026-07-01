@@ -562,7 +562,9 @@ export function Dashboard() {
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
         categories={categories}
-        validatorFilter={validatorFilter}
+        // The modal only offers active/all/inactive; when the tab is 'watchlist'
+        // it simply renders with nothing selected. Narrow cast preserves that.
+        validatorFilter={validatorFilter as 'active' | 'all' | 'inactive'}
         onValidatorFilterChange={setValidatorFilter}
       />
 

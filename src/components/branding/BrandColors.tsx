@@ -5,7 +5,7 @@ interface BrandColorsProps {
   theme: 'dark' | 'light';
 }
 
-export function BrandColors({ theme }: BrandColorsProps) {
+export function BrandColors({}: BrandColorsProps) {
   const [copiedColor, setCopiedColor] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, label: string) => {

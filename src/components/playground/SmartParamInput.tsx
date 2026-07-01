@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ParamDef } from './endpointCatalog';
 import { Switch } from '../branding/ui/switch';

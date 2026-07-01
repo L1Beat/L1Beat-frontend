@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import * as d3 from 'd3';
-import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
-import { format } from 'date-fns';
+import { sankey, sankeyLinkHorizontal, type SankeyNodeMinimal, type SankeyLinkMinimal } from 'd3-sankey';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
@@ -29,7 +28,7 @@ interface TeleporterData {
   };
 }
 
-interface SankeyNode extends d3.SankeyNode<SankeyNode, SankeyLink> {
+interface SankeyNode extends SankeyNodeMinimal<SankeyNode, SankeyLink> {
   name: string;
   id: string;
   color?: string;
@@ -37,7 +36,7 @@ interface SankeyNode extends d3.SankeyNode<SankeyNode, SankeyLink> {
   originalName?: string;
 }
 
-interface SankeyLink extends d3.SankeyLink<SankeyNode, SankeyLink> {
+interface SankeyLink extends SankeyLinkMinimal<SankeyNode, SankeyLink> {
   source: SankeyNode;
   target: SankeyNode;
   value: number;
@@ -59,25 +58,6 @@ const formatChainName = (name: string) => {
   return name;
 };
 
-// Function to find chain ID from chain name
-const findChainId = (chainName: string) => {
-  // Map of known chain names to their IDs
-  const chainMap: Record<string, string> = {
-    'Avalanche (C-Chain)': 'C',
-    'C-Chain': 'C',
-    'Dexalot L1': 'dexalot',
-    'Dexalot': 'dexalot',
-    'zeroone Mainnet L1': 'zeroone',
-    'ZeroOne': 'zeroone',
-    'Lamina1 L1': 'lamina1',
-    'Lamina1': 'lamina1',
-    'PLYR PHI L1': 'plyr',
-    'PLYR': 'plyr',
-  };
-  
-  return chainMap[chainName] || null;
-};
-
 // Maximum animation cycles per particle to prevent infinite loops
 const MAX_PARTICLE_CYCLES = 30;
 
@@ -91,9 +71,9 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
   const [data, setData] = useState<TeleporterData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hoveredLink, setHoveredLink] = useState<SankeyLink | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<SankeyNode | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [hoveredLink] = useState<SankeyLink | null>(null);
+  const [, setHoveredNode] = useState<SankeyNode | null>(null);
+  const [, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -577,7 +557,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
         .attr('pointer-events', 'none');
       
       // Add value labels, hidden by default
-      const valueLabels = nodes_g.append('text')
+      nodes_g.append('text')
         .attr('x', d => d.x0 < width / 2 ? d.x1 - d.x0 + 6 : -6)
         .attr('y', d => (d.y1 - d.y0) / 2 + 16)
         .attr('dy', '0.35em')
@@ -600,7 +580,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
         .on('mousemove', function(event) {
           setTooltipPosition({ x: event.pageX, y: event.pageY });
         })
-        .on('mouseout', function(event, d) {
+        .on('mouseout', function(_event, _d) {
           setHoveredNode(null);
           d3.select(this).select('.value-label').attr('opacity', 0);
         })
@@ -647,36 +627,6 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [data]);
-
-  // Format large numbers with appropriate suffixes
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    } else {
-      return num.toString();
-    }
-  };
-
-  // Calculate time since last update
-  const getTimeSinceUpdate = (): string => {
-    if (!data?.metadata.updatedAt) return 'Unknown';
-    
-    const updateTime = new Date(data.metadata.updatedAt);
-    const now = new Date();
-    const diffMs = now.getTime() - updateTime.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'} ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-    
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-  };
 
   if (loading) {
     return (

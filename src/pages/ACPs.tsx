@@ -1,15 +1,12 @@
 // src/pages/ACPs.tsx
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import {
   FileText,
-  ExternalLink,
   CheckCircle,
-  Clock,
-  XCircle,
   RefreshCw,
   AlertTriangle,
   Search,
@@ -18,15 +15,10 @@ import {
   List,
   TrendingUp,
   Users,
-  Tag,
-  BookOpen,
-  ChevronDown,
-  Star,
-  Archive,
-  Code,
-  AlertCircle
+  Archive
 } from 'lucide-react';
-import { acpService, LocalACP, EnhancedACP, ACPStats } from '../services/acpService';
+import { acpService } from '../services/acpService';
+import type { EnhancedACP, ACPStats } from '../types';
 import EnhancedACPCard from '../components/ACPCard';
 
 
@@ -39,11 +31,12 @@ interface Filters {
   track: string;
   complexity: string;
   author: string;
+  hasDiscussion?: boolean | null;
 }
 
 export default function ACPs() {
   const navigate = useNavigate();
-  const [acps, setAcps] = useState<LocalACP[]>([]);
+  const [acps, setAcps] = useState<EnhancedACP[]>([]);
   const [stats, setStats] = useState<ACPStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +44,8 @@ export default function ACPs() {
   // UI State
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('number');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortBy] = useState<SortOption>('number');
+  const [sortOrder] = useState<SortOrder>('desc');
   const [showFilters, setShowFilters] = useState(false);
 
   // Filters
@@ -113,7 +106,10 @@ export default function ACPs() {
   };
 
     function calculateStats(acps: EnhancedACP[]): ACPStats {
-  const stats: ACPStats = {
+  // These optional ACPStats fields are all initialized below and mutated in the
+  // loop, so require them locally to keep index writes and increments well-typed.
+  const stats: ACPStats &
+    Required<Pick<ACPStats, 'byCategory' | 'byImpact' | 'implementationProgress' | 'recentlyUpdated' | 'needsAttention'>> = {
     total: acps.length,
     byStatus: {},
     byTrack: {},
@@ -248,64 +244,6 @@ export default function ACPs() {
 
     return filtered;
   }, [acps, searchQuery, filters, sortBy, sortOrder]);
-
-  const getStatusIcon = (status: string) => {
-    const cleanStatus = getCleanStatus(status); 
-    switch (cleanStatus?.toLowerCase()) {
-      case 'final':
-      case 'active':
-      case 'activated':
-        return <CheckCircle className="w-4 h-4 text-white" />;
-      case 'draft':
-      case 'proposed':
-        return <Clock className="w-4 h-4 text-white" />;
-      case 'review':
-        return <AlertCircle className="w-4 h-4 text-white" />;
-      case 'withdrawn':
-      case 'rejected':
-      case 'stagnant':
-      case 'stale':
-        return <XCircle className="w-4 h-4 text-white" />;
-      default:
-        return <AlertTriangle className="w-4 h-4 text-white" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    const cleanStatus = getCleanStatus(status);
-    switch (cleanStatus?.toLowerCase()) {
-      case 'final':
-      case 'active':
-      case 'activated':
-        return 'bg-green-500 text-white';
-      case 'draft':
-      case 'proposed':
-        return 'bg-[#ef4444] text-white';
-      case 'review':
-        return 'bg-yellow-500 text-white';
-      case 'withdrawn':
-      case 'rejected':
-      case 'stagnant':
-      case 'stale':
-        return 'bg-muted text-foreground border border-border';
-      default:
-        return 'bg-muted text-foreground border border-border';
-    }
-  };
-
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'Low':
-        return 'bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
-      case 'High':
-        return 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400';
-      default:
-        // Avoid bg-muted/xx opacity: CSS vars are not RGB, can break in dark mode.
-        return 'bg-muted text-muted-foreground border border-border';
-    }
-  };
 
   const clearFilters = () => {
     setFilters({

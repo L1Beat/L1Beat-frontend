@@ -1,8 +1,7 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, Tag, ArrowRight } from 'lucide-react';
+import { Calendar, Tag } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BlogPost, formatBlogDate, calculateReadTime } from '../api/blogApi';
+import { BlogPost, formatBlogDate } from '../api/blogApi';
 import { AuthorCard } from './AuthorCard';
 import { getBlogPostImageUrl } from '../utils/imageExtractor';
 
@@ -12,7 +11,6 @@ interface BlogCardProps {
 }
 
 export function BlogCard({ post, featured = false }: BlogCardProps) {
-    const readTime = post.readTime || calculateReadTime(post.content || '');
     const formattedDate = formatBlogDate(post.publishedAt || '');
     const imageUrl = getBlogPostImageUrl(post);
 

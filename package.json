@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && node scripts/ssg.js",
-    "build:spa": "tsc && vite build",
+    "build": "tsc -b && node scripts/ssg.js",
+    "build:spa": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "build-acps": "node scripts/build-acps.js",

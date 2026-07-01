@@ -1571,23 +1571,27 @@ function SupplyTreemap({
   const H = 320;
 
   const rects = useMemo(() => {
+    // Recursive datum type so children match the node datum type.
+    type TreemapDatum = { children?: TreemapDatum[]; coin?: EnrichedCoin };
     const filtered = coins.filter((c) => c.supplyUsd > 0);
     if (filtered.length === 0) return [];
     const root = d3
-      .hierarchy<{ children?: EnrichedCoin[]; coin?: EnrichedCoin }>({
+      .hierarchy<TreemapDatum>({
         children: filtered.map((c) => ({ coin: c })),
       })
       .sum((d) => (d.coin ? d.coin.supplyUsd : 0))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 
     d3
-      .treemap<{ children?: EnrichedCoin[]; coin?: EnrichedCoin }>()
+      .treemap<TreemapDatum>()
       .size([W, H])
       .padding(2)
       .round(true)
       .tile(d3.treemapSquarify)(root);
 
-    return root.leaves().map((leaf) => {
+    return root.leaves().map((node) => {
+      // treemap() lays out nodes, so they carry x0/y0/x1/y1 coordinates.
+      const leaf = node as d3.HierarchyRectangularNode<TreemapDatum>;
       const coin = leaf.data.coin!;
       const x = leaf.x0;
       const y = leaf.y0;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJSInstance } from 'chart.js';
 import { format, parseISO } from 'date-fns';
@@ -316,7 +316,7 @@ export function ChainSpecificMetrics() {
           try {
             const data = await getDailyActiveAddresses(lookupId, 7);
             const latest = data?.[data.length - 1];
-            const value = Number(latest?.activeAddresses ?? latest?.value ?? 0);
+            const value = Number(latest?.activeAddresses ?? (latest as { value?: number } | undefined)?.value ?? 0);
             results[chain.chainId] = Number.isFinite(value) ? value : 0;
           } catch {
             results[chain.chainId] = 0;
@@ -342,6 +342,7 @@ export function ChainSpecificMetrics() {
     if (!selectedChain) return;
 
     async function fetchMetrics() {
+      if (!selectedChain) return;
       const chainId = selectedChain.originalChainId || selectedChain.chainId;
       const evmChainIdStr = selectedChain.evmChainId ? String(selectedChain.evmChainId) : chainId;
 

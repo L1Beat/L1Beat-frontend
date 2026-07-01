@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainValidators, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
+import { getChains, getTPSHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
   Activity,
@@ -23,12 +23,11 @@ import {
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import { watermarkPlugin, smoothLinePath } from '../utils/chartConfig';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
-import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
@@ -288,7 +287,7 @@ export function ChainDetails() {
         // If uptime is missing for this chain, fall back to remainingBalance (if present).
         // Note: we treat 0 as a valid numeric value; missing is undefined/null/non-finite.
         if (chain?.validators?.some(v => Number.isFinite(v.uptime))) {
-          comparison = (Number.isFinite(a.uptime) ? a.uptime : -1) - (Number.isFinite(b.uptime) ? b.uptime : -1);
+          comparison = (Number.isFinite(a.uptime) ? (a.uptime as number) : -1) - (Number.isFinite(b.uptime) ? (b.uptime as number) : -1);
         } else {
           const aBal = (a.remainingBalance ?? 0);
           const bBal = (b.remainingBalance ?? 0);
@@ -317,7 +316,7 @@ export function ChainDetails() {
   // Legacy subnets (primary network) use staking — show uptime column.
   const isL1Subnet = subnetType === 'l1';
   const hasRemainingBalanceData = isL1Subnet && (chain?.validators?.some(v => Number.isFinite(v.remainingBalance)) ?? false);
-  const hasUptimeData = !hasRemainingBalanceData && (chain?.validators?.some(v => Number.isFinite(v.uptime) && v.uptime > 0) ?? false);
+  const hasUptimeData = !hasRemainingBalanceData && (chain?.validators?.some(v => Number.isFinite(v.uptime) && (v.uptime as number) > 0) ?? false);
 
   const sybilResistance = (chain?.sybilResistanceType || '').toLowerCase();
 
@@ -1368,7 +1367,7 @@ export function ChainDetails() {
                                       (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
                                       (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
                                     }`}>
-                                        {Number.isFinite(validator.uptime) ? `${validator.uptime.toFixed(1)}%` : 'N/A'}
+                                        {Number.isFinite(validator.uptime) ? `${(validator.uptime as number).toFixed(1)}%` : 'N/A'}
                                     </span>
                                   </div>
                                   ) : (
@@ -1578,11 +1577,13 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
                   borderWidth: 1,
                   padding: 12,
                   callbacks: {
-                    label: (ctx: { dataset: { label?: string }; dataIndex: number; parsed: { y: number } }) => {
+                    label: (ctx: TooltipItem<'bar'>) => {
                       const d = series[ctx.dataIndex];
                       const total = d.base + d.priority;
-                      const pct = total > 0 ? (ctx.parsed.y / total) * 100 : 0;
-                      return `${ctx.dataset.label}: ${formatAvaxAmount(ctx.parsed.y)} AVAX (${pct.toFixed(1)}%)`;
+                      // Bar values are always numeric here; chart.js types y as number | null.
+                      const y = ctx.parsed.y as number;
+                      const pct = total > 0 ? (y / total) * 100 : 0;
+                      return `${ctx.dataset.label}: ${formatAvaxAmount(y)} AVAX (${pct.toFixed(1)}%)`;
                     },
                     footer: (items: { dataIndex: number }[]) => {
                       const d = series[items[0].dataIndex];

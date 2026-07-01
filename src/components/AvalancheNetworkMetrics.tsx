@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { useSearchParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
-import { Chart as ChartJSInstance } from 'chart.js';
+import { Chart as ChartJSInstance, ChartData } from 'chart.js';
 import { format, parseISO } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { TimeframeOption } from '../types';
@@ -809,7 +809,7 @@ export function AvalancheNetworkMetrics() {
               {[7, 30, 90, 360].map((days) => (
                 <button
                   key={days}
-                  onClick={() => handleTimeframeChange(days)}
+                  onClick={() => handleTimeframeChange(days as TimeframeOption)}
                   className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
                     timeframe === days
                       ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
@@ -933,10 +933,10 @@ export function AvalancheNetworkMetrics() {
 
       <div className="h-[300px] sm:h-[400px]">
         {chartData ? (
-          <Line 
-            ref={chartRef} 
-            data={chartData} 
-            options={options} 
+          <Line
+            ref={chartRef}
+            data={chartData as ChartData<'line'>}
+            options={options}
             plugins={[lineShadowPlugin, crosshairPlugin, watermarkPlugin]}
           />
         ) : (

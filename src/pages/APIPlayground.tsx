@@ -27,6 +27,9 @@ const HISTORY_STORAGE_KEY = 'l1beat_playground_history';
 const BOOKMARKS_STORAGE_KEY = 'l1beat_playground_bookmarks';
 const MAX_HISTORY = 20;
 const CARRY_OVER_PARAMS = ['chainId', 'limit', 'offset', 'subnet_id'];
+// Upper bound on rows accumulated via "Load more" — keeps memory and the JSON
+// viewer bounded on endpoints with huge result sets.
+const MAX_CUMULATIVE_ROWS = 1000;
 
 function loadBookmarks(): Bookmark[] {
   try {
@@ -162,6 +165,17 @@ function buildCurl(url: string): string {
   return `curl "${url}"`;
 }
 
+// Collect the response headers JS can read. Cross-origin, the browser only
+// exposes the CORS-safelisted ones (cache-control, content-type, …) unless the
+// server sends Access-Control-Expose-Headers.
+function readHeaders(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  h.forEach((value, key) => {
+    out[key] = value;
+  });
+  return out;
+}
+
 function buildFetchSnippet(url: string): string {
   return `const res = await fetch('${url}');
 const data = await res.json();
@@ -225,6 +239,7 @@ export function APIPlayground() {
   const [cumulativeData, setCumulativeData] = useState<unknown[]>([]);
   const [status, setStatus] = useState<number | null>(null);
   const [durationMs, setDurationMs] = useState<number | null>(null);
+  const [responseHeaders, setResponseHeaders] = useState<Record<string, string> | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
@@ -313,7 +328,7 @@ export function APIPlayground() {
       setParams(newParams);
       setResponse(null);
       setCumulativeData([]);
-      setStatus(null);
+      setStatus(null); setResponseHeaders(null);
       setDurationMs(null);
       setNetworkError(null);
       setMobileTab('request');
@@ -343,11 +358,11 @@ export function APIPlayground() {
       setNetworkError(null);
       setResponse(null);
       setCumulativeData([]);
-      setStatus(null);
+      setStatus(null); setResponseHeaders(null);
 
       const startTime = performance.now();
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: 'no-store' });
         const elapsed = Math.round(performance.now() - startTime);
         let json: unknown = null;
         try {
@@ -360,7 +375,7 @@ export function APIPlayground() {
           : [];
         setCumulativeData(freshData);
         setResponse(json);
-        setStatus(res.status);
+        setStatus(res.status); setResponseHeaders(readHeaders(res.headers));
         setDurationMs(elapsed);
         const entry: HistoryEntry = {
           id: crypto.randomUUID(),
@@ -414,7 +429,7 @@ export function APIPlayground() {
       setSelectedId(endpointId);
       setParams(merged);
       setResponse(null);
-      setStatus(null);
+      setStatus(null); setResponseHeaders(null);
       setDurationMs(null);
       setNetworkError(null);
       setMobileTab('request');
@@ -426,7 +441,7 @@ export function APIPlayground() {
           const url = buildUrl(restEndpoint.path, merged);
           setIsLoading(true);
           const startTime = performance.now();
-          fetch(url)
+          fetch(url, { cache: 'no-store' })
             .then(async (res) => {
               const elapsed = Math.round(performance.now() - startTime);
               let json: unknown = null;
@@ -436,7 +451,7 @@ export function APIPlayground() {
                 : [];
               setCumulativeData(freshData);
               setResponse(json);
-              setStatus(res.status);
+              setStatus(res.status); setResponseHeaders(readHeaders(res.headers));
               setDurationMs(elapsed);
               const entry: HistoryEntry = { id: crypto.randomUUID(), endpointId, url, status: res.status, durationMs: elapsed, timestamp: Date.now(), response: json };
               setHistory((prev) => { const next = [entry, ...prev].slice(0, MAX_HISTORY); saveHistory(next); return next; });
@@ -469,7 +484,7 @@ export function APIPlayground() {
       setParams(buildDefaults(endpoint));
     }
     setResponse(entry.response);
-    setStatus(entry.status);
+    setStatus(entry.status); setResponseHeaders(null);
     setDurationMs(entry.durationMs);
     setNetworkError(null);
   }, []);
@@ -482,6 +497,7 @@ export function APIPlayground() {
   const handleLoadNextPage = useCallback(async () => {
     if (!selectedId || isWsEndpoint(selectedId)) return;
     if (isLoading) return;
+    if (cumulativeData.length >= MAX_CUMULATIVE_ROWS) return;
     const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
     if (!endpoint) return;
     const meta = (response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
@@ -502,7 +518,7 @@ export function APIPlayground() {
     setIsLoading(true);
     const startTime = performance.now();
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       const elapsed = Math.round(performance.now() - startTime);
       let json: unknown = null;
       try { json = await res.json(); } catch { json = { error: { message: 'Response body was not valid JSON' } }; }
@@ -511,7 +527,7 @@ export function APIPlayground() {
         : [];
       setCumulativeData((prev) => [...prev, ...newItems]);
       setResponse(json);
-      setStatus(res.status);
+      setStatus(res.status); setResponseHeaders(readHeaders(res.headers));
       setDurationMs(elapsed);
     } catch (err) {
       const elapsed = Math.round(performance.now() - startTime);
@@ -520,11 +536,23 @@ export function APIPlayground() {
     } finally {
       setIsLoading(false);
     }
-  }, [response, params, selectedId, isLoading]);
+  }, [response, params, selectedId, isLoading, cumulativeData.length]);
 
   const handleRetryAfter = useCallback(() => {
     handleExecute();
   }, [handleExecute]);
+
+  // Build a shareable link from current state at click time, so it never lags
+  // behind the debounced address-bar sync.
+  const getShareUrl = useCallback(() => {
+    const sp = new URLSearchParams();
+    if (selectedId) sp.set('endpoint', selectedId);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v && v !== '') sp.set(k, v);
+    });
+    sp.set('autorun', '1');
+    return `${window.location.origin}${window.location.pathname}?${sp.toString()}`;
+  }, [selectedId, params]);
 
   // Bookmark handlers — strip ephemeral pagination keys before comparing
   const EPHEMERAL_PARAMS = ['cursor', 'offset'];
@@ -582,7 +610,7 @@ export function APIPlayground() {
     setParams(bm.params);
     setResponse(null);
     setCumulativeData([]);
-    setStatus(null);
+    setStatus(null); setResponseHeaders(null);
     setDurationMs(null);
     setNetworkError(null);
     setMobileTab('request');
@@ -610,8 +638,9 @@ export function APIPlayground() {
   const responseMeta = response
     ? ((response as Record<string, unknown>)?.meta as Record<string, unknown> | undefined)
     : undefined;
-  const hasNextPage = Boolean(responseMeta?.next_cursor) ||
-    (Boolean(responseMeta?.has_more) && !responseMeta?.next_cursor);
+  const hasNextPage = (Boolean(responseMeta?.next_cursor) ||
+    (Boolean(responseMeta?.has_more) && !responseMeta?.next_cursor)) &&
+    cumulativeData.length < MAX_CUMULATIVE_ROWS;
 
   const wsEndpoint = selectedId ? WS_ENDPOINTS.find((e) => e.id === selectedId) : undefined;
 
@@ -740,12 +769,14 @@ export function APIPlayground() {
                       response={displayResponse}
                       status={status}
                       durationMs={durationMs}
+                      headers={responseHeaders}
                       networkError={networkError}
                       isLoading={isLoading}
                       onLoadNextPage={hasNextPage ? handleLoadNextPage : null}
                       suggestedNext={suggestedNext}
                       onSuggestSelect={handleEndpointSelect}
                       onRetryAfter={handleRetryAfter}
+                      getShareUrl={getShareUrl}
                     />
                   </div>
                 </div>
@@ -841,12 +872,14 @@ export function APIPlayground() {
                       response={displayResponse}
                       status={status}
                       durationMs={durationMs}
+                      headers={responseHeaders}
                       networkError={networkError}
                       isLoading={isLoading}
                       onLoadNextPage={hasNextPage ? handleLoadNextPage : null}
                       suggestedNext={suggestedNext}
                       onSuggestSelect={handleEndpointSelect}
                       onRetryAfter={handleRetryAfter}
+                      getShareUrl={getShareUrl}
                     />
                   </div>
                 )}

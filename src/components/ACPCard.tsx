@@ -1,17 +1,22 @@
-import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'framer-motion';
-import { acpService } from '../services/acpService';
 import {
   Users,
   ArrowRight,
   BookOpen,
-  MessageCircle,
+  type LucideIcon,
 } from 'lucide-react';
+import type { EnhancedACP } from '../types';
 
-const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
-  
-  const getStatusColor = (status) => {
+interface EnhancedACPCardProps {
+  acp: EnhancedACP;
+  viewMode?: 'grid' | 'list';
+  onClick: (acp: EnhancedACP) => void;
+}
+
+const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardProps) => {
+
+  const getStatusColor = (status: string) => {
     const cleanStatus = status?.toLowerCase() || '';
     
     switch (cleanStatus) {
@@ -35,14 +40,14 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
     }
   };
 
-  const getComplexityIndicator = (complexity) => {
+  const getComplexityIndicator = (complexity?: string) => {
     const levels = {
       'Low': { bars: 1, color: 'bg-green-500' },
       'Medium': { bars: 2, color: 'bg-yellow-500' },
       'High': { bars: 3, color: 'bg-orange-500' },
       'Very High': { bars: 4, color: 'bg-red-500' },
     };
-    const config = levels[complexity] || levels['Medium'];
+    const config = levels[complexity as keyof typeof levels] || levels['Medium'];
 
     return (
       <div className="flex items-center gap-1" title={`Complexity: ${complexity}`}>
@@ -61,7 +66,14 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }) => {
     );
   };
 
-  const MetadataItem = ({ icon: Icon, label, value, colorClass = '' }) => (
+  interface MetadataItemProps {
+    icon: LucideIcon;
+    label: string;
+    value?: string | number;
+    colorClass?: string;
+  }
+
+  const MetadataItem = ({ icon: Icon, label, value, colorClass = '' }: MetadataItemProps) => (
     <div className={`flex items-center gap-1.5 text-muted-foreground ${colorClass}`}>
       <Icon className="w-4 h-4" />
       <span className="text-xs font-medium">{label}</span>

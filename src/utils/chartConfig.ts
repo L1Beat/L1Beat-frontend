@@ -8,7 +8,6 @@ import {
   Tooltip,
   Legend,
   Filler,
-  ChartOptions,
   Plugin
 } from 'chart.js';
 
