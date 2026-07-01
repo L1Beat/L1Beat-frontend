@@ -32,7 +32,7 @@ const primaryNav: NavItem[] = [
   { id: 'burn', label: 'Burn', path: '/burn', icon: Flame, badge: 'NEW' },
   { id: 'acps', label: 'ACPs', path: '/acps', icon: FileText },
   { id: 'blog', label: 'Blog', path: '/blog', icon: BookOpen },
-  { id: 'api', label: 'API', path: '/api', icon: Code, disabled: true },
+  { id: 'api', label: 'API', path: '/api', icon: Code, badge: 'NEW' },
 ];
 
 function isActive(pathname: string, path: string) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Bookmark, ChevronDown, ChevronUp, X } from 'lucide-react';
 import {
   Collapsible,

@@ -6,7 +6,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToasterProvider } from './components/Toaster';
 import App from './App';
 
-export function render(url: string, context: any) {
+export function render(url: string, _context: any) {
   const helmetContext: any = {};
   
   const html = ReactDOMServer.renderToString(

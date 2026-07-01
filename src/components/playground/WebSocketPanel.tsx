@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WsEndpointDef } from './endpointCatalog';
 import { SmartParamInput } from './SmartParamInput';
@@ -120,7 +120,10 @@ export function WebSocketPanel({
       if (msg.type === 'ping') return;
 
       if (msg.type === 'initial') {
-        const initialBlocks = (msg.data as Array<Record<string, unknown>>).map((b) => ({
+        const rawInitial = Array.isArray(msg.data)
+          ? (msg.data as Array<Record<string, unknown>>)
+          : [];
+        const initialBlocks = rawInitial.map((b) => ({
           id: crypto.randomUUID(),
           receivedAt: Date.now(),
           chain_id: Number(b.chain_id ?? 0),

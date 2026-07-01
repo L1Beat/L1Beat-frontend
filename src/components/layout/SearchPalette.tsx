@@ -84,6 +84,7 @@ const PAGES: Result[] = [
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
+  { id: 'page-api', type: 'page', title: 'API Playground', subtitle: 'Test the REST & WebSocket APIs', to: '/api' },
   { id: 'page-brand', type: 'page', title: 'Brand', subtitle: 'Brand guidelines', to: '/brand' },
 ];
 

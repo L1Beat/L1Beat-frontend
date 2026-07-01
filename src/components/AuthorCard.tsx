@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { User, Calendar, ExternalLink, Twitter, Linkedin, Globe, Github, Users, X, Mail } from 'lucide-react';
+import { User, Calendar, Twitter, Linkedin, Globe, Github, Users, X, Mail } from 'lucide-react';
 
 export interface AuthorProfile {
   name: string;

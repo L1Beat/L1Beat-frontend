@@ -12,9 +12,7 @@ import { SEO } from '../components/SEO';
 import {
   ArrowLeft,
   ArrowUpCircle,
-  ExternalLink,
   Users,
-  Tag,
   Clock,
   Github,
   Link as LinkIcon,
@@ -25,10 +23,10 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
-  BookOpen,
   Info
 } from 'lucide-react';
-import { acpService, LocalACP } from '../services/acpService';
+import { acpService } from '../services/acpService';
+import type { Author, EnhancedACP } from '../types';
 
 // Lazy-load mermaid (and its diagram renderers + cytoscape) only when an ACP
 // actually contains a diagram. Keeps ~1MB+ out of the main bundle for every
@@ -98,11 +96,11 @@ const preprocessContent = (content: string) => {
     .replace(/\$AVAX-([A-Za-z][A-Za-z\-]*)/g, '&#36;AVAX-$1')
     .replace(/\$ETH(?!\s*[+\-*/=<>≥≤\\{}()^_])/g, '&#36;ETH')
     .replace(/\$ETH-([A-Za-z][A-Za-z\-]*)/g, '&#36;ETH-$1')
-    .replace(/\n*\[!NOTE\]\s*(.*?)(?=\n\n|\n(?=[A-Z])|$)/gs, (match, noteContent) => {
+    .replace(/\n*\[!NOTE\]\s*(.*?)(?=\n\n|\n(?=[A-Z])|$)/gs, (_match, noteContent) => {
       return `\n\n:::note\n${noteContent.trim()}\n\n\n`;
     })
     // Convert [WARNING] blocks if they exist
-    .replace(/\n*\[!WARNING\]\s*(.*?)(?=\n\n|\n(?=[A-Z])|$)/gs, (match, warningContent) => {
+    .replace(/\n*\[!WARNING\]\s*(.*?)(?=\n\n|\n(?=[A-Z])|$)/gs, (_match, warningContent) => {
       return `\n\n:::warning\n${warningContent.trim()}\n\n\n`;
     })
     .replace(/<div[^>]*>/g, '')
@@ -112,7 +110,7 @@ const preprocessContent = (content: string) => {
 export default function ACPDetails() {
   const { acpNumber } = useParams<{ acpNumber: string }>();
   const navigate = useNavigate();
-  const [acp, setAcp] = useState<LocalACP | null>(null);
+  const [acp, setAcp] = useState<EnhancedACP | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -238,100 +236,7 @@ export default function ACPDetails() {
     // Get current theme
     const { theme } = useTheme();
     const isDark = theme === 'dark';
-    
-    // Improved theme variables that match your app's design system
-    const getDarkThemeVariables = () => ({
-      // Primary elements - nice blue that matches your app
-      primaryColor: '#3b82f6',
-      primaryTextColor: '#e2e8f0',  // Light gray for better readability
-      primaryBorderColor: '#1e40af',
-      
-      // Lines and connections
-      lineColor: '#64748b',         // Neutral gray for lines
-      
-      // Background colors using your dark palette
-      background: '#0f172a',        // dark-900
-      mainBkg: '#1e293b',          // dark-800  
-      secondBkg: '#334155',        // dark-700
-      tertiaryColor: '#475569',    // dark-600
-      
-      // Secondary elements
-      secondaryColor: '#334155',    // dark-700
-      
-      // Additional colors for better contrast
-      cScale0: '#0f172a',          // dark-900
-      cScale1: '#1e293b',          // dark-800
-      cScale2: '#334155',          // dark-700
-      cScale3: '#475569',          // dark-600
-      cScale4: '#64748b',          // dark-500
-      
-      // Text colors with good contrast
-      cScale11: '#e2e8f0',         // Light text
-      cScale12: '#f1f5f9',         // Lighter text
-      
-      // Node specific colors
-      nodeBkg: '#1e293b',          // dark-800
-      nodeTextColor: '#e2e8f0',    // Light gray
-      nodeBorder: '#3b82f6',       // Blue border
-      
-      // Special element colors
-      clusterBkg: '#334155',       // dark-700
-      clusterBorder: '#64748b',    // dark-500
-      defaultLinkColor: '#64748b', // dark-500
-      
-      // Error and success states
-      errorBkgColor: '#ef4444',
-      errorTextColor: '#fecaca',
-      successBkgColor: '#10b981',
-      successTextColor: '#a7f3d0',
-    });
 
-    const getLightThemeVariables = () => ({
-      // Primary elements - matching blue
-      primaryColor: '#3b82f6',
-      primaryTextColor: '#1e293b',  // Dark text for contrast
-      primaryBorderColor: '#1e40af',
-      
-      // Lines and connections  
-      lineColor: '#64748b',         // Neutral gray
-      
-      // Light backgrounds
-      background: '#ffffff',
-      mainBkg: '#ffffff',
-      secondBkg: '#f8fafc',        // Very light gray
-      tertiaryColor: '#e2e8f0',    // Light gray
-      
-      // Secondary elements
-      secondaryColor: '#f1f5f9',   // Light gray
-      
-      // Scale colors for light mode
-      cScale0: '#ffffff',
-      cScale1: '#f8fafc',
-      cScale2: '#f1f5f9',
-      cScale3: '#e2e8f0',
-      cScale4: '#cbd5e1',
-      
-      // Dark text for contrast
-      cScale11: '#334155',
-      cScale12: '#1e293b',
-      
-      // Node colors for light mode
-      nodeBkg: '#ffffff',
-      nodeTextColor: '#1e293b',
-      nodeBorder: '#3b82f6',
-      
-      // Special elements
-      clusterBkg: '#f8fafc',
-      clusterBorder: '#cbd5e1',
-      defaultLinkColor: '#64748b',
-      
-      // States
-      errorBkgColor: '#ef4444',
-      errorTextColor: '#991b1b',
-      successBkgColor: '#10b981',
-      successTextColor: '#065f46',
-    });
-    
     // Check if this is a mermaid diagram
     const isMermaid = language === 'mermaid' || 
                     content.includes('flowchart') || 
@@ -588,10 +493,6 @@ export default function ACPDetails() {
 
   const githubUrl = `https://github.com/avalanche-foundation/ACPs/blob/main/ACPs/${acp.folderName || acp.number}/README.md`;
 
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <div className="bg-background text-foreground">
       <SEO
@@ -652,7 +553,7 @@ export default function ACPDetails() {
                   <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-muted-foreground" />
                     <div className="flex flex-wrap items-center gap-2">
-                      {acp.authors?.map((author, index) => (
+                      {acp.authors?.map((author: Author, index: number) => (
                         <React.Fragment key={index}>
                           {index > 0 && <span className="text-muted-foreground">|</span>}
                           <a

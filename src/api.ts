@@ -1749,8 +1749,12 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
         const isStaked = v.staked_amount != null;
         return {
           address: v.node_id,
-          active: v.active === true || (v.active as unknown) === 'true' || v.active === 1,
-          uptime: v.primary_uptime ?? v.uptime_percentage,
+          // API may return active as a boolean, the string 'true', or the number 1.
+          // Compare via `unknown` so the defensive string/number checks are allowed.
+          active: v.active === true || (v.active as unknown) === 'true' || (v.active as unknown) === 1,
+          // The API always supplies one of these; consumers treat uptime as a
+          // number, so assert it here rather than widening the domain type.
+          uptime: (v.primary_uptime ?? v.uptime_percentage) as number,
           weight: String(v.weight),
           stakeUnit: (isStaked ? 'tokens' : 'weight') as 'tokens' | 'weight',
           stakedAmount: isStaked ? String(v.staked_amount) : undefined,
@@ -1916,7 +1920,8 @@ export async function getNetworkDailyFeeBurn(days: number = 30): Promise<{ times
       // Get all L1 chains to find subnet IDs
       const chains = await getChains();
       const l1SubnetIds = [...new Set(
-        chains.filter(c => c.isL1 && c.subnetId).map(c => c.subnetId)
+        // Filter guarantees subnetId is present, so it is safe as a string here.
+        chains.filter(c => c.isL1 && c.subnetId).map(c => c.subnetId!)
       )];
 
       // Fetch daily fees for all subnets in parallel

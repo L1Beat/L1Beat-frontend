@@ -113,16 +113,6 @@ export const REST_ENDPOINTS: EndpointDef[] = [
     params: [],
     suggestedNext: ['evm-blocks', 'metrics-chain-stats'],
   },
-  {
-    id: 'metrics-storage',
-    method: 'GET',
-    path: '/api/v1/metrics/storage',
-    title: 'Storage Stats',
-    description: 'Per-table on-disk size (bytes) and row counts for the indexer store',
-    category: 'Health & System',
-    params: [],
-  },
-
   // EVM Data
   {
     id: 'evm-blocks',
@@ -445,7 +435,16 @@ export const REST_ENDPOINTS: EndpointDef[] = [
     title: 'P-Chain Transaction Types',
     description: 'Get all P-Chain transaction types with counts',
     category: 'P-Chain Data',
-    params: [],
+    params: [
+      {
+        name: 'days',
+        kind: 'query',
+        type: 'int',
+        required: false,
+        default: '',
+        description: 'Restrict counts to the last N days (omit for all-time)',
+      },
+    ],
     suggestedNext: ['pchain-txs'],
   },
   {

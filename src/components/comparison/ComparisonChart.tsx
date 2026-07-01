@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
+import type { ChartOptions, Plugin } from 'chart.js';
 import { format } from 'date-fns';
 import { DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
@@ -381,7 +382,7 @@ export const ComparisonChart = memo(function ComparisonChart({
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px]" onMouseLeave={() => onHoverChain?.(null)}>
-          <Line data={chartData} options={options} plugins={[endLabelPlugin, crosshairPlugin, watermarkPlugin]} />
+          <Line data={chartData} options={options as unknown as ChartOptions<'line'>} plugins={[endLabelPlugin as unknown as Plugin<'line'>, crosshairPlugin, watermarkPlugin]} />
         </div>
       </motion.div>
     </AnimatePresence>

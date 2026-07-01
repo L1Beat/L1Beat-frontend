@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Filter, Users, RotateCcw } from 'lucide-react';
+import { X, Filter, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type ValidatorFilter = 'active' | 'all' | 'inactive';
