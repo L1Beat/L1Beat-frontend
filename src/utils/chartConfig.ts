@@ -4,6 +4,7 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -17,11 +18,17 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
   Filler
 );
+
+// One font for every chart: tick labels and tooltips are numbers, so they
+// get the mono face and tabular figures like the rest of the UI.
+ChartJS.defaults.font.family = "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+ChartJS.defaults.font.size = 11;
 
 // NOTE: Custom plugins (crosshair, watermark, averageLine) are NOT registered globally
 // They should be passed to individual chart components via the plugins prop to avoid
@@ -32,20 +39,33 @@ ChartJS.register(
 // hand-drawn SVG charts read identically. Values chosen to match what most
 // charts already used; see CHART_STYLE consumers across the app.
 export const CHART_STYLE = {
-  accent: '#ef4444',
-  accentRgb: '239, 68, 68',
-  line: { width: 1.75, sparkWidth: 1.25, tension: 0.35 },
-  // Area gradient (top → bottom) in accent red.
-  gradient: { top: 0.28, mid: 0.12, bottom: 0 },
-  grid: { dark: 'rgba(148, 163, 184, 0.08)', light: 'rgba(0, 0, 0, 0.05)', svgOpacity: 0.08 },
-  tick: { dark: '#94a3b8', light: '#64748b', size: 11 },
-  crosshair: { color: 'rgba(239, 68, 68, 0.4)', width: 1, dash: [6, 4] as number[], svgDash: '6 4' },
-  hover: { radius: 4, strokeWidth: 2 },
-  animation: { duration: 750, easing: 'easeInOutQuart' as const },
-  // Centered watermark — reads as branding and survives a shared screenshot
-  // crop, vs a corner logo that collides with axis labels.
-  watermark: { width: 160, opacity: 0.18, aspect: 29 / 120 },
+  // Brand red: UI only (logo, active rule). Never a data series. On a chart,
+  // red always means down.
+  accent: '#e84142',
+  accentRgb: '232, 65, 66',
+  // Default single-series ink, per theme. Neutral so the page reads graphite
+  // and off-white rather than black and red.
+  ink: { dark: '#c9ced4', darkRgb: '201, 206, 212', light: '#3a3f45', lightRgb: '58, 63, 69' },
+  up: '#3dbe7a',
+  upRgb: '61, 190, 122',
+  down: '#e84142',
+  downRgb: '232, 65, 66',
+  line: { width: 1.5, sparkWidth: 1.25, tension: 0.2 },
+  // Area fill under a line, top to bottom. Kept faint: a hint of weight, not a glow.
+  gradient: { top: 0.1, mid: 0.04, bottom: 0 },
+  grid: { dark: 'rgba(148, 163, 184, 0.08)', light: 'rgba(0, 0, 0, 0.06)', svgOpacity: 0.08 },
+  tick: { dark: '#8b939c', light: '#687078', size: 11 },
+  crosshair: { color: 'rgba(148, 163, 184, 0.5)', width: 1, dash: [4, 4] as number[], svgDash: '4 4' },
+  hover: { radius: 3, strokeWidth: 1.5 },
+  animation: { duration: 400, easing: 'easeOutQuart' as const },
+  // Watermark retired: a logo in the plot area competes with the data.
+  // Kept at 0 so remaining callers render nothing without a code change.
+  watermark: { width: 0, opacity: 0, aspect: 29 / 120 },
 } as const;
+
+/** Theme-aware default series color, e.g. for a single line chart. */
+export const getInkColor = (isDark: boolean) => (isDark ? CHART_STYLE.ink.dark : CHART_STYLE.ink.light);
+export const getInkRgb = (isDark: boolean) => (isDark ? CHART_STYLE.ink.darkRgb : CHART_STYLE.ink.lightRgb);
 
 // Build a smooth SVG path (Catmull-Rom → cubic bézier) through points, so the
 // hand-drawn SVG line charts curve like the Chart.js ones (tension 0.35) and
@@ -72,15 +92,16 @@ export function smoothLinePath(pts: { x: number; y: number }[]): string {
 
 // Tooltip styling shared by all Chart.js charts (line, bar, pie).
 export const chartTooltipStyle = (isDark: boolean) => ({
-  backgroundColor: isDark ? 'rgba(15, 23, 42, 0.97)' : 'rgba(255, 255, 255, 0.98)',
-  titleColor: isDark ? '#f1f5f9' : '#0f172a',
-  bodyColor: isDark ? '#cbd5e1' : '#334155',
-  borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0, 0, 0, 0.1)',
+  backgroundColor: isDark ? 'rgba(26, 29, 33, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+  titleColor: isDark ? '#e8eaed' : '#17191c',
+  bodyColor: isDark ? '#c9ced4' : '#3a3f45',
+  borderColor: isDark ? 'rgba(148, 163, 184, 0.25)' : 'rgba(0, 0, 0, 0.12)',
   borderWidth: 1,
-  padding: 12,
-  cornerRadius: 12,
-  titleFont: { size: 14, weight: 'bold' as const },
-  bodyFont: { size: 13 },
+  padding: 10,
+  cornerRadius: 4,
+  titleFont: { size: 12, weight: 500 as const },
+  bodyFont: { size: 12 },
+  displayColors: false,
 });
 
 // Crosshair plugin for interactive cursor tracking
@@ -98,30 +119,18 @@ export const crosshairPlugin: Plugin<'line'> = {
       ctx.beginPath();
       ctx.moveTo(x, topY);
       ctx.lineTo(x, bottomY);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
-      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = CHART_STYLE.crosshair.width;
+      ctx.strokeStyle = CHART_STYLE.crosshair.color;
+      ctx.setLineDash(CHART_STYLE.crosshair.dash);
       ctx.stroke();
       ctx.restore();
     }
   }
 };
 
-// Line shadow plugin for a subtle glow effect
-export const lineShadowPlugin: Plugin<'line'> = {
-  id: 'lineShadow',
-  beforeDatasetsDraw: (chart) => {
-    const ctx = chart.ctx;
-    ctx.save();
-    ctx.shadowColor = 'rgba(239, 68, 68, 0.35)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 4;
-  },
-  afterDatasetsDraw: (chart) => {
-    chart.ctx.restore();
-  }
-};
+// Line glow retired: instrument output has no drop shadow. Kept as a no-op so
+// existing `plugins={[lineShadowPlugin, ...]}` call sites stay valid.
+export const lineShadowPlugin: Plugin<'line'> = { id: 'lineShadow' };
 
 // Cache for the logo images (dark and light versions)
 let logoDark: HTMLImageElement | null = null;
@@ -155,7 +164,7 @@ export const watermarkPlugin: Plugin = {
     const logo = dark ? logoDark : logoLight;
     const loaded = dark ? logoDarkLoaded : logoLightLoaded;
     
-    if (!loaded || !logo) return;
+    if (!loaded || !logo || CHART_STYLE.watermark.opacity === 0) return;
     
     const ctx = chart.ctx;
     const { chartArea } = chart;
@@ -204,7 +213,7 @@ export const averageLinePlugin: Plugin<'line'> = {
     ctx.stroke();
     
     // Draw average label
-    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.font = "10px 'IBM Plex Mono', ui-monospace, monospace";
     ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
@@ -222,8 +231,8 @@ export const prefersReducedMotion = (): boolean => {
 
 // Get animation config based on reduced motion preference
 export const getAnimationConfig = (reducedMotion: boolean) => ({
-  duration: reducedMotion ? 0 : 750,
-  easing: 'easeInOutQuart' as const,
+  duration: reducedMotion ? 0 : CHART_STYLE.animation.duration,
+  easing: CHART_STYLE.animation.easing,
 });
 
 // Create gradient fill for chart

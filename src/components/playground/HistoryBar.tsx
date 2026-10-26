@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: number }) {
       ? 'bg-red-500/15 text-red-600 dark:text-red-400'
       : status >= 400
       ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
-      : 'bg-green-500/15 text-green-600 dark:text-green-400';
+      : 'bg-green-500/15 text-up';
   return (
     <span className={`text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${color}`}>
       {status}
@@ -114,7 +114,7 @@ export function HistoryBar({ history, onSelect, onClear }: HistoryBarProps) {
                 <button
                   key={entry.id}
                   onClick={() => onSelect(entry)}
-                  className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full border border-border hover:border-[#ef4444]/30 bg-card text-xs whitespace-nowrap transition-colors"
+                  className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded border border-border hover:border-foreground/30 bg-background text-xs whitespace-nowrap transition-colors"
                   style={{ boxShadow: 'var(--card-shadow)' }}
                 >
                   <span className="font-mono text-muted-foreground truncate max-w-[200px]">

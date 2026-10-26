@@ -1,26 +1,15 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { useSearchParams } from 'react-router-dom';
-import { Line } from 'react-chartjs-2';
-import { Chart as ChartJSInstance, ChartData } from 'chart.js';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { DailyBars, Delta, SeriesSummary, parseDay } from './instrument';
 import html2canvas from 'html2canvas';
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
-import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
 import { RefreshCw, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Share2, Coins, Info } from 'lucide-react';
 import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory, getNetworkDailyFeeBurn, getL1BeatFeeSummary } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TimeRangeSlider } from './TimeRangeSlider';
-import { 
-  crosshairPlugin, 
-  watermarkPlugin,
-  lineShadowPlugin,
-  prefersReducedMotion
-} from '../utils/chartConfig';
-
-// Custom plugins are passed directly to the Line chart via the plugins prop
-// NOT registered globally to avoid affecting other chart types (Pie, etc.)
 
 interface MetricData {
   timestamp: number;
@@ -41,7 +30,7 @@ type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' |
 
 // Distinct colors for each metric
 const METRIC_COLORS = {
-  networkTPS: { main: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.15)' },           // Red
+  networkTPS: { main: 'rgb(34, 211, 238)', fill: 'rgba(34, 211, 238, 0.12)' },         // Cyan
   dailyActiveAddresses: { main: 'rgb(59, 130, 246)', fill: 'rgba(59, 130, 246, 0.15)' }, // Blue
   dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },        // Purple
   maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },                // Green
@@ -50,9 +39,17 @@ const METRIC_COLORS = {
   feeBurn: { main: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.15)' },              // Amber
 };
 
+// The running total of validation fees overlays the bars in red, apart from the amber series.
+const CUMULATIVE_COLOR = 'rgb(232, 65, 66)';
+
+/** How a window of daily values rolls up into the headline number. */
+type Aggregate = 'sum' | 'avg' | 'max';
+const AGGREGATE_LABEL: Record<Aggregate, string> = { sum: 'Total', avg: 'Daily average', max: 'Peak day' };
+
 const METRICS = [
   { 
     id: 'networkTPS' as const,
+    aggregate: 'avg' as Aggregate,
     name: 'TPS',
     fullName: 'Network TPS',
     description: 'Average transactions per second aggregated across all Avalanche L1s and C-Chain',
@@ -62,7 +59,8 @@ const METRICS = [
     unit: 'TPS'
   },
   { 
-    id: 'dailyActiveAddresses' as const, 
+    id: 'dailyActiveAddresses' as const,
+    aggregate: 'avg' as Aggregate, 
     name: 'Active Addresses',
     fullName: 'Daily Active Addresses',
     description: 'Total unique wallet addresses that sent or received transactions across all chains in a day',
@@ -81,6 +79,7 @@ const METRICS = [
   },
   {
     id: 'dailyTxCount' as const,
+    aggregate: 'sum' as Aggregate,
     name: 'Tx Count',
     fullName: 'Daily Transaction Count',
     description: 'Total number of transactions processed across all Avalanche chains per day',
@@ -102,6 +101,7 @@ const METRICS = [
   },
   {
     id: 'maxTPS' as const,
+    aggregate: 'max' as Aggregate,
     name: 'Max TPS',
     fullName: 'Maximum TPS',
     description: 'Highest TPS peak recorded in a single day across the entire Avalanche network',
@@ -112,6 +112,7 @@ const METRICS = [
   },
   {
     id: 'gasUsed' as const,
+    aggregate: 'sum' as Aggregate,
     name: 'Gas Used',
     fullName: 'Daily Gas Used',
     description: 'Total computational gas consumed by all transactions across Avalanche chains per day',
@@ -133,6 +134,7 @@ const METRICS = [
   },
   {
     id: 'dailyMessageVolume' as const,
+    aggregate: 'sum' as Aggregate,
     name: 'ICM Messages',
     fullName: 'Daily ICM Message Volume',
     description: 'Total Interchain Messages (ICM) sent across Avalanche L1s daily',
@@ -143,9 +145,10 @@ const METRICS = [
   },
   {
     id: 'feeBurn' as const,
+    aggregate: 'sum' as Aggregate,
     name: 'L1 Validation Fees',
     fullName: 'L1 Validation Fees',
-    description: 'Cumulative AVAX paid by L1 validators to the P-Chain for continuous validation. Tooltip shows daily fees.',
+    description: 'AVAX paid by L1 validators to the P-Chain for continuous validation, per day.',
     icon: Coins,
     color: METRIC_COLORS.feeBurn,
     valueFormatter: (value: number) => {
@@ -158,7 +161,15 @@ const METRICS = [
   },
 ];
 
-export function AvalancheNetworkMetrics() {
+export function AvalancheNetworkMetrics({
+  hero = false,
+  actions,
+}: {
+  /** Fill the parent as the Metrics page's first screen: controls float, chart fills. */
+  hero?: boolean;
+  /** Extra controls rendered at the right end of the hero toolbar. */
+  actions?: React.ReactNode;
+} = {}) {
   const { theme } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -167,19 +178,17 @@ export function AvalancheNetworkMetrics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const chartRef = useRef<ChartJSInstance<'line'>>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const reducedMotion = prefersReducedMotion();
   const [copied, setCopied] = useState(false);
 
-  // Read timeframe from URL or default to 7
+  // Read timeframe from URL or default to 30 (7 bars was too sparse to read)
   const timeframeParam = searchParams.get('networkTimeframe');
   const timeframe = useMemo(() => {
-    const parsed = parseInt(timeframeParam || '7', 10);
-    if ([7, 30, 90, 360].includes(parsed)) {
+    const parsed = parseInt(timeframeParam || '30', 10);
+    if ([30, 90, 360].includes(parsed)) {
       return parsed as TimeframeOption;
     }
-    return 7 as TimeframeOption;
+    return 30 as TimeframeOption;
   }, [timeframeParam]);
 
   // Read selected metric from URL or default to 'networkTPS' (single metric only)
@@ -227,7 +236,6 @@ export function AvalancheNetworkMetrics() {
   const [rangeEnd, setRangeEnd] = useState(0);
 
   const isDark = theme === 'dark';
-  const isMobile = useMediaQuery(breakpoints.sm);
 
   // Get the primary metric (first selected) for date labels
   const primaryMetric = METRICS.find(m => m.id === selectedMetrics[0]) || METRICS[0];
@@ -265,10 +273,14 @@ export function AvalancheNetworkMetrics() {
   // Get filtered data based on range selection (for primary metric - used for labels)
   const filteredPrimaryData = useMemo(() => {
     if (primaryData.length === 0) return [];
+    // The hero has no range slider. Using the slider's indices there would
+    // render one stale partial range (old indices, new data) before the reset
+    // effect runs, and the bar chart kept leftover bars from that frame.
+    if (hero) return primaryData;
     const start = Math.max(0, rangeStart);
     const end = Math.min(primaryData.length - 1, rangeEnd);
     return primaryData.slice(start, end + 1);
-  }, [primaryData, rangeStart, rangeEnd]);
+  }, [primaryData, rangeStart, rangeEnd, hero]);
 
 
   // Export chart as PNG
@@ -545,427 +557,289 @@ export function AvalancheNetworkMetrics() {
     updateUrl(newTimeframe, undefined);
   };
 
-  // Calculate average for primary metric - MUST be before any conditional returns
-  const averageValue = useMemo(() => {
-    if (filteredPrimaryData.length === 0) return 0;
-    return filteredPrimaryData.reduce((sum, item) => sum + item.value, 0) / filteredPrimaryData.length;
-  }, [filteredPrimaryData]);
 
-  // Calculate percentage change from previous point for tooltips - MUST be before any conditional returns
-  const getPercentChange = useCallback((metricId: MetricType, index: number) => {
-    const data = metricsData[metricId] || [];
-    const start = Math.max(0, rangeStart);
-    const filteredData = data.slice(start, rangeEnd + 1);
-    if (index === 0 || filteredData.length < 2) return null;
-    const current = filteredData[index]?.value;
-    const previous = filteredData[index - 1]?.value;
-    if (!current || !previous || previous === 0) return null;
-    return ((current - previous) / previous) * 100;
-  }, [metricsData, rangeStart, rangeEnd]);
-
-  // Memoized chart data with multiple datasets for each selected metric
-  const chartData = useMemo(() => {
-    if (!filteredPrimaryData.length) return null;
-    
-    // Create datasets for each selected metric
-    const datasets = selectedMetrics.map((metricId, index) => {
-      const metric = METRICS.find(m => m.id === metricId);
-      if (!metric) return null;
-      
-      const metricData = metricsData[metricId] || [];
-      const start = Math.max(0, rangeStart);
-      const end = Math.min(metricData.length - 1, rangeEnd);
-      const filteredMetricData = metricData.slice(start, end + 1);
-      
-      // For multi-metric, only fill the first dataset
-      const shouldFill = index === 0;
-      
-      return {
-        label: metric.name,
-        data: filteredMetricData.map(item => item.value),
-        fill: shouldFill,
-        borderColor: metric.color.main,
-        backgroundColor: shouldFill ? (context: any) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          if (!chartArea) return metric.color.fill;
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          const baseColor = metric.color.main;
-          gradient.addColorStop(0, baseColor.replace('rgb', 'rgba').replace(')', ', 0.35)'));
-          gradient.addColorStop(0.4, baseColor.replace('rgb', 'rgba').replace(')', ', 0.15)'));
-          gradient.addColorStop(1, baseColor.replace('rgb', 'rgba').replace(')', ', 0.02)'));
-          return gradient;
-        } : 'transparent',
-        borderWidth: isDark ? 2.5 : 2,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: isMobile ? 5 : 7,
-        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-        pointHoverBorderColor: metric.color.main,
-        pointHoverBorderWidth: 2.5,
-        // Use different Y axis for metrics with very different scales
-        yAxisID: index === 0 ? 'y' : 'y1',
-      };
-    }).filter(Boolean);
-
-    return {
-      labels: filteredPrimaryData.map(item => {
-        const [year, month, day] = item.date.split('-');
-        return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), isMobile ? 'd MMM' : 'MMM d');
-      }),
-      datasets,
-    };
-  }, [filteredPrimaryData, selectedMetrics, metricsData, rangeStart, rangeEnd, isMobile, isDark]);
-
-  const hasMultipleMetrics = false;
-
-  // Memoized chart options with reduced motion support
-  const options = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: {
-      duration: reducedMotion ? 0 : 750,
-      easing: 'easeInOutQuart' as const,
-    },
-    transitions: {
-      active: {
-        animation: {
-          duration: reducedMotion ? 0 : 400,
-        },
-      },
-    },
-    interaction: {
-      mode: 'index' as const,
-      intersect: false,
-    },
-    plugins: {
-      legend: {
-        display: false, // We use our own legend with pills
-      },
-      tooltip: {
-        enabled: true,
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.97)' : 'rgba(255, 255, 255, 0.98)',
-        titleColor: isDark ? '#f1f5f9' : '#0f172a',
-        bodyColor: isDark ? '#cbd5e1' : '#334155',
-        borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0, 0, 0, 0.1)',
-        borderWidth: 1,
-        padding: isMobile ? 12 : 16,
-        boxPadding: 8,
-        cornerRadius: 12,
-        titleFont: {
-          size: isMobile ? 13 : 15,
-          weight: 'bold' as const,
-        },
-        bodyFont: {
-          size: isMobile ? 12 : 14,
-        },
-        bodySpacing: 6,
-        titleMarginBottom: 10,
-        displayColors: hasMultipleMetrics, // Show colors when multiple metrics
-        usePointStyle: true,
-        caretSize: 8,
-        caretPadding: 12,
-        callbacks: {
-          title: (items: any[]) => {
-            if (items.length === 0) return '';
-            const dataIndex = items[0].dataIndex;
-            const dataPoint = filteredPrimaryData[dataIndex];
-            if (!dataPoint) return '';
-            return format(parseISO(dataPoint.date), 'MMMM d, yyyy');
-          },
-          label: (context: any) => {
-            const datasetIndex = context.datasetIndex;
-            const metricId = selectedMetrics[datasetIndex];
-            const metric = METRICS.find(m => m.id === metricId);
-            if (!metric) return '';
-
-            const value = context.parsed.y;
-            const lines = [`Total Burned: ${metric.valueFormatter(value)} ${metric.unit}`];
-
-            // For fee burn, also show daily burn from metadata
-            if (metricId === 'feeBurn') {
-              const dataIndex = context.dataIndex;
-              const metricData = metricsData[metricId] || [];
-              const start = Math.max(0, rangeStart);
-              const filtered = metricData.slice(start, rangeEnd + 1);
-              const dailyBurn = filtered[dataIndex]?.metadata?.dailyBurn;
-              if (dailyBurn != null) {
-                const dailyFormatted = dailyBurn >= 1 ? dailyBurn.toFixed(4) : dailyBurn.toFixed(6);
-                lines.push(`Daily Burn: ${dailyFormatted} AVAX`);
-              }
-              return lines;
-            }
-
-            return `${metric.name}: ${metric.valueFormatter(value)} ${metric.unit}`;
-          },
-          // Use metric color for tooltip color box
-          labelColor: (context: any) => {
-            const datasetIndex = context.datasetIndex;
-            const metricId = selectedMetrics[datasetIndex];
-            const metric = METRICS.find(m => m.id === metricId);
-            const color = metric?.color.main || '#ef4444';
-            return {
-              borderColor: color,
-              backgroundColor: color,
-              borderWidth: 2,
-              borderRadius: 2,
-            };
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          color: isDark ? '#94a3b8' : '#64748b',
-          font: {
-            size: isMobile ? 10 : 11,
-          },
-          maxRotation: isMobile ? 45 : 0,
-          autoSkip: true,
-          autoSkipPadding: isMobile ? 20 : 30,
-          maxTicksLimit: isMobile ? 7 : undefined,
-        },
-      },
-      y: {
-        type: 'linear' as const,
-        display: true,
-        position: 'left' as const,
-        beginAtZero: true,
-        grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-        },
-        ticks: {
-          color: selectedMetrics[0] ? METRICS.find(m => m.id === selectedMetrics[0])?.color.main : (isDark ? '#94a3b8' : '#64748b'),
-          font: {
-            size: isMobile ? 10 : 11,
-          },
-          callback: (value: any) => {
-            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-            if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-            return value;
-          },
-          maxTicksLimit: isMobile ? 5 : 8,
-        },
-      },
-      // Second Y-axis for additional metrics (right side)
-      y1: {
-        type: 'linear' as const,
-        display: hasMultipleMetrics,
-        position: 'right' as const,
-        beginAtZero: true,
-        grid: {
-          drawOnChartArea: false, // Don't draw grid lines for second axis
-        },
-        ticks: {
-          color: selectedMetrics[1] ? METRICS.find(m => m.id === selectedMetrics[1])?.color.main : (isDark ? '#94a3b8' : '#64748b'),
-          font: {
-            size: isMobile ? 10 : 11,
-          },
-          callback: (value: any) => {
-            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-            if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-            return value;
-          },
-          maxTicksLimit: isMobile ? 5 : 8,
-        },
-      },
-    },
-  }), [isDark, isMobile, reducedMotion, filteredPrimaryData, selectedMetrics, hasMultipleMetrics, getPercentChange, averageValue]);
+  // Bars plot what happened each day. Validation fees are stored cumulative,
+  // so their bars use the daily amount instead.
+  const barValues = useMemo(
+    () =>
+      filteredPrimaryData.map((d) =>
+        primaryMetric.id === 'feeBurn' ? d.metadata?.dailyBurn ?? 0 : d.value,
+      ),
+    [filteredPrimaryData, primaryMetric.id],
+  );
+  // Validation fees: the stored running total rides along as a line.
+  const cumulativeValues = useMemo(
+    () => (primaryMetric.id === 'feeBurn' ? filteredPrimaryData.map((d) => d.value) : undefined),
+    [filteredPrimaryData, primaryMetric.id],
+  );
+  const barDates = useMemo(() => filteredPrimaryData.map((d) => d.date), [filteredPrimaryData]);
+  // The newest point is today when its UTC date matches: that day is still filling.
+  const partialLast =
+    filteredPrimaryData.length > 0 &&
+    filteredPrimaryData[filteredPrimaryData.length - 1].date.slice(0, 10) === new Date().toISOString().slice(0, 10);
+  const hasSeries = barValues.length > 0;
+  // Finished days only: an unfinished today would read as the window's low.
+  const completeValues = useMemo(() => (partialLast ? barValues.slice(0, -1) : barValues), [barValues, partialLast]);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  useEffect(() => setHoverIdx(null), [primaryMetric.id, timeframe]);
 
 
   // Loading state - must be AFTER all hooks
   if (loading && Object.keys(metricsData).length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-6">
-        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
+      <div className={hero ? 'h-full w-full bg-stage' : 'bg-card border border-border rounded-md p-6'}>
+        <div className={`${hero ? 'h-full' : 'h-[300px] sm:h-[400px]'} flex flex-col items-center justify-center`}>
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Loading network metrics...</p>
+          <p className="mt-3 text-[12px] text-muted-foreground">Loading network metrics</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div ref={containerRef} className="bg-card rounded-xl border border-border p-6">
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
-              <h2 className="text-base sm:text-lg font-semibold text-foreground">Network metrics</h2>
-            </div>
-            <p className="text-xs text-muted-foreground export-hide">
-              Compare multiple metrics across the Avalanche network
-            </p>
-          </div>
+  // Shared pieces for both layouts.
+  const rangeButtons = (
+    <div className="inline-flex items-center gap-px p-px rounded border border-border bg-background">
+      {[30, 90, 360].map((days) => (
+        <button
+          key={days}
+          onClick={() => handleTimeframeChange(days as TimeframeOption)}
+          className={`num h-7 px-2.5 rounded-[3px] text-[12px] font-medium transition-colors ${
+            timeframe === days
+              ? 'bg-foreground text-background'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          {days === 360 ? '1Y' : `${days}D`}
+        </button>
+      ))}
+    </div>
+  );
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 export-hide">
-            {/* Timeframe Selector */}
-            <div className="flex flex-wrap gap-1.5">
-              {[7, 30, 90, 360].map((days) => (
-                <button
-                  key={days}
-                  onClick={() => handleTimeframeChange(days as TimeframeOption)}
-                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
-                    timeframe === days
-                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
-                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {days === 360 ? '1Y' : `${days}D`}
-                </button>
-              ))}
-            </div>
+  const iconButton =
+    'inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
-            {/* Share Button */}
-            <button
-              onClick={handleCopyShareUrl}
-              className="p-2 rounded-lg bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors"
-              title={copied ? 'Copied!' : 'Copy share link'}
-            >
-              <Share2 className={`w-4 h-4 ${copied ? 'text-green-500' : ''}`} />
+  const shareAndExport = (
+    <>
+      <button onClick={handleCopyShareUrl} className={iconButton} title={copied ? 'Copied' : 'Copy share link'} aria-label="Copy share link">
+        <Share2 className={`w-3.5 h-3.5 ${copied ? 'text-up' : ''}`} />
+      </button>
+      <div className="relative">
+        <button
+          onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+          disabled={!hasSeries}
+          className={iconButton}
+          title="Export chart"
+          aria-label="Export chart"
+        >
+          <Download className="w-3.5 h-3.5" />
+        </button>
+        {isExportDropdownOpen && hasSeries && (
+          <div className="absolute right-0 mt-1 w-40 bg-popover border border-border rounded shadow-lg z-40 py-1">
+            <button onClick={handleExportPNG} className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2">
+              <Download className="w-3.5 h-3.5" />
+              Export as PNG
             </button>
-
-            {/* Export Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                disabled={!chartData}
-                className="p-2 rounded-lg bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Export chart"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-              {isExportDropdownOpen && chartData && (
-                <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-lg shadow-lg z-10">
-                  <button
-                    onClick={handleExportPNG}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted/30 transition-colors rounded-t-lg flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Export as PNG
-                  </button>
-                  <button
-                    onClick={handleExportCSV}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-muted/30 transition-colors rounded-b-lg flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Export as CSV
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Metric Selector Buttons — hidden during export */}
-        <div className="flex flex-wrap items-center gap-2 export-hide">
-          {METRICS.map((metric) => {
-            const Icon = metric.icon;
-            const isSelected = selectedMetrics[0] === metric.id;
-            const metricData = metricsData[metric.id] || [];
-            const latestValue = metricData[metricData.length - 1]?.value;
-
-            return (
-              <button
-                key={metric.id}
-                onClick={() => updateUrl(undefined, [metric.id])}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  isSelected
-                    ? 'border-2 shadow-sm'
-                    : 'border border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:border-muted-foreground/30'
-                }`}
-                style={isSelected ? {
-                  borderColor: metric.color.main,
-                  backgroundColor: `${metric.color.main}15`,
-                  color: metric.color.main,
-                } : undefined}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{metric.name}</span>
-                {isSelected && latestValue !== undefined && (
-                  <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: metric.color.main, color: 'white' }}>
-                    {metric.valueFormatter(latestValue)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* Info tooltip for selected metric */}
-          <div className="ml-auto relative group">
-            <div className="flex items-center gap-1.5 text-muted-foreground cursor-help">
-              <Info className="w-4 h-4" />
-            </div>
-            <div className="absolute right-0 top-full mt-2 px-3 py-2.5 rounded-lg bg-card border border-border text-xs max-w-[280px] whitespace-normal opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-30 shadow-xl">
-              <div className="absolute right-3 bottom-full w-0 h-0 border-x-[5px] border-x-transparent border-b-[5px] border-b-border" />
-              <p className="font-semibold text-foreground mb-1">{primaryMetric.fullName}</p>
-              <p className="text-muted-foreground leading-relaxed">{primaryMetric.description}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Export-only header — visible only during PNG export */}
-        <div className="export-show hidden items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="text-lg font-bold" style={{ color: primaryMetric.color.main }}>
-              {primaryMetric.fullName}
-            </div>
-            {(() => {
-              const d = metricsData[selectedMetrics[0]] || [];
-              const v = d[d.length - 1]?.value;
-              return v !== undefined ? (
-                <span className="text-2xl font-bold" style={{ color: primaryMetric.color.main }}>
-                  {primaryMetric.valueFormatter(v)} {primaryMetric.unit}
-                </span>
-              ) : null;
-            })()}
-          </div>
-          <span className="text-sm text-muted-foreground">
-            {timeframe === 360 ? '1Y' : `${timeframe}D`} · {format(new Date(), 'MMM d, yyyy')}
-          </span>
-        </div>
-      </div>
-
-      <div className="h-[300px] sm:h-[400px]">
-        {chartData ? (
-          <Line
-            ref={chartRef}
-            data={chartData as ChartData<'line'>}
-            options={options}
-            plugins={[lineShadowPlugin, crosshairPlugin, watermarkPlugin]}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full">
-            <p className="text-muted-foreground text-center mb-4">
-              {error || 'No data available for this metric'}
-            </p>
-            {!error?.includes('coming soon') && !error?.includes('not available yet') && (
-              <button
-                onClick={() => fetchAllMetrics()}
-                disabled={retrying}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {retrying ? (
-                  <>
-                    <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                    Retrying...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
-                    Retry
-                  </>
-                )}
-              </button>
-            )}
+            <button onClick={handleExportCSV} className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2">
+              <Download className="w-3.5 h-3.5" />
+              Export as CSV
+            </button>
           </div>
         )}
       </div>
+    </>
+  );
+
+  const metricChips = (
+    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+      {METRICS.map((metric) => {
+        const Icon = metric.icon;
+        const isSelected = selectedMetrics[0] === metric.id;
+        const metricData = metricsData[metric.id] || [];
+        const latestValue = metricData[metricData.length - 1]?.value;
+        return (
+          <button
+            key={metric.id}
+            onClick={() => updateUrl(undefined, [metric.id])}
+            aria-pressed={isSelected}
+            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded text-[12px] font-medium whitespace-nowrap transition-colors ${
+              isSelected
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
+            <span>{metric.name}</span>
+            {isSelected && latestValue !== undefined && (
+              <span className="num text-[11px] text-muted-foreground">{metric.valueFormatter(latestValue)}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const metricInfo = (
+    <div className="relative group">
+      <div className="flex items-center gap-1.5 text-muted-foreground cursor-help">
+        <Info className="w-3.5 h-3.5" />
+      </div>
+      <div className="absolute right-0 top-full mt-2 px-3 py-2.5 rounded bg-popover border border-border text-[11px] max-w-[280px] whitespace-normal opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-40 shadow-lg">
+        <p className="font-medium text-foreground mb-1">{primaryMetric.fullName}</p>
+        <p className="text-muted-foreground leading-relaxed">{primaryMetric.description}</p>
+      </div>
+    </div>
+  );
+
+  const exportHeader = (
+    <div className="export-show hidden items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="text-lg font-bold" style={{ color: primaryMetric.color.main }}>
+          {primaryMetric.fullName}
+        </div>
+        {(() => {
+          const d = metricsData[selectedMetrics[0]] || [];
+          const v = d[d.length - 1]?.value;
+          return v !== undefined ? (
+            <span className="text-2xl font-bold" style={{ color: primaryMetric.color.main }}>
+              {primaryMetric.valueFormatter(v)} {primaryMetric.unit}
+            </span>
+          ) : null;
+        })()}
+      </div>
+      <span className="text-sm text-muted-foreground">
+        {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
+      </span>
+    </div>
+  );
+
+  const chart = hasSeries ? (
+    <DailyBars
+      values={barValues}
+      dates={barDates}
+      color={primaryMetric.color.main}
+      format={primaryMetric.valueFormatter}
+      partialLast={partialLast}
+      cumulative={cumulativeValues}
+      cumulativeColor={CUMULATIVE_COLOR}
+      formatCumulative={(v) => `${primaryMetric.valueFormatter(v)} AVAX paid to date`}
+      onHover={setHoverIdx}
+    />
+  ) : (
+    <div className="flex flex-col items-center justify-center h-full">
+      <p className="text-[12px] text-muted-foreground text-center mb-3">
+        {error || 'No data available for this metric'}
+      </p>
+      {!error?.includes('coming soon') && !error?.includes('not available yet') && (
+        <button
+          onClick={() => fetchAllMetrics()}
+          disabled={retrying}
+          className="inline-flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium rounded bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`} />
+          {retrying ? 'Retrying' : 'Retry'}
+        </button>
+      )}
+    </div>
+  );
+
+  // Headline: the window rolled up, or the hovered day.
+  const readout = (() => {
+    if (!hasSeries) return null;
+    const agg = primaryMetric.aggregate;
+    const total = barValues.reduce((x, y) => x + y, 0);
+    const done = completeValues.length ? completeValues : barValues;
+    const rolled =
+      agg === 'sum' ? total : agg === 'avg' ? done.reduce((x, y) => x + y, 0) / done.length : Math.max(...done);
+    const first = parseDay(barDates[0]);
+    const last = parseDay(barDates[barDates.length - 1]);
+    const i = hoverIdx;
+    const value = i != null ? barValues[i] : rolled;
+    const prev = i != null && i > 0 ? barValues[i - 1] : null;
+    const change = prev ? ((barValues[i!] - prev) / prev) * 100 : null;
+    const toDate = cumulativeValues ? cumulativeValues[i ?? cumulativeValues.length - 1] : null;
+    return (
+      <div className="min-w-0">
+        <div className="text-[12px] text-muted-foreground leading-4">
+          {i != null
+            ? `${format(parseDay(barDates[i]), 'EEE, MMM d, yyyy')}${partialLast && i === barDates.length - 1 ? ', so far' : ''}`
+            : `${AGGREGATE_LABEL[agg]}, ${format(first, 'MMM d')} to ${format(last, 'MMM d, yyyy')}`}
+        </div>
+        <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+          <span className="num text-[32px] leading-9 font-medium text-foreground">{primaryMetric.valueFormatter(value)}</span>
+          <span className="text-[13px] text-muted-foreground">{primaryMetric.unit}</span>
+          {change != null && Number.isFinite(change) && <Delta value={change} label="vs day before" />}
+          {toDate != null && (
+            <span className="inline-flex items-baseline gap-1.5 ml-2 text-[11px] text-muted-foreground">
+              {/* Doubles as the legend for the cumulative line. */}
+              <span aria-hidden className="self-center w-3 h-[1.5px]" style={{ background: CUMULATIVE_COLOR }} />
+              <span className="num text-foreground">{primaryMetric.valueFormatter(toDate)}</span>
+              AVAX {i == null ? 'all time' : 'paid to date'}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  })();
+
+  const summary =
+    completeValues.length > 1 ? (
+      <SeriesSummary values={completeValues} format={primaryMetric.valueFormatter} className="export-hide" />
+    ) : null;
+
+  if (hero) {
+    return (
+      <div ref={containerRef} className="relative h-full w-full bg-stage">
+        {/* Toolbar floats over the chart. */}
+        <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto export-hide">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">Network metrics</h1>
+            {metricChips}
+            {metricInfo}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {rangeButtons}
+            {shareAndExport}
+            {actions}
+          </div>
+        </div>
+        <div className="absolute left-4 sm:left-6 right-4 sm:right-6 top-24 lg:top-[60px] export-hide">{readout}</div>
+        <div className="absolute left-4 sm:left-6 right-4 sm:right-6 top-44 lg:top-[136px] bottom-[150px] md:bottom-[168px]">
+          {chart}
+        </div>
+        {summary && (
+          <div className="hidden md:block absolute left-4 sm:left-6 bottom-[140px] z-20">{summary}</div>
+        )}
+        <div className="absolute left-4 right-4 top-2 hidden export-show">{exportHeader}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="bg-card rounded-md border border-border p-4 sm:p-5">
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-[14px] font-semibold text-foreground">Network charts</h2>
+            <p className="text-[12px] text-muted-foreground export-hide">
+              Pick up to three metrics to overlay across every Avalanche L1.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 export-hide">
+            {rangeButtons}
+            {shareAndExport}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 export-hide">
+          {metricChips}
+          <div className="ml-auto">{metricInfo}</div>
+        </div>
+        {exportHeader}
+      </div>
+
+      <div className="mb-3">{readout}</div>
+      <div className="h-[300px] sm:h-[400px]">{chart}</div>
+
+      {summary && <div className="mt-3">{summary}</div>}
 
       {/* Time Range Slider - show if any selected metric has enough data */}
       {primaryData.length > 3 && (

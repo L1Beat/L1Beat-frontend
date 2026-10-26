@@ -50,7 +50,7 @@ function StatusDot({ status }: { status: WsStatus }) {
   const textColors: Record<WsStatus, string> = {
     disconnected: 'text-muted-foreground',
     connecting: 'text-yellow-600 dark:text-yellow-400',
-    connected: 'text-green-600 dark:text-green-400',
+    connected: 'text-up',
     error: 'text-red-600 dark:text-red-400',
   };
   return (
@@ -215,7 +215,7 @@ export function WebSocketPanel({
       </div>
 
       {/* Chain picker + connect */}
-      <div className="bg-card rounded-xl border border-border p-5 space-y-4" style={{ boxShadow: 'var(--card-shadow)' }}>
+      <div className="bg-card rounded-md border border-border p-5 space-y-4" style={{ boxShadow: 'var(--card-shadow)' }}>
         <div className="space-y-4">
           {endpoint.params.map((param) => (
             <SmartParamInput
@@ -229,7 +229,7 @@ export function WebSocketPanel({
         </div>
 
         {/* URL preview */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border">
+        <div className="flex items-center gap-2 px-3 py-2 rounded bg-muted border border-border">
           <span className="font-mono text-xs text-muted-foreground flex-shrink-0">URL</span>
           <span className="font-mono text-xs text-foreground truncate">{wsUrl}</span>
         </div>
@@ -239,14 +239,14 @@ export function WebSocketPanel({
           {status === 'disconnected' || status === 'error' ? (
             <button
               onClick={connect}
-              className="px-4 py-2 bg-[#ef4444] hover:bg-[#dc2626] text-white rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-foreground text-background hover:bg-foreground/90 rounded text-sm font-medium transition-colors"
             >
               Connect
             </button>
           ) : (
             <button
               onClick={disconnect}
-              className="px-4 py-2 bg-muted hover:bg-muted/70 border border-border text-foreground rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-muted hover:bg-muted/70 border border-border text-foreground rounded text-sm font-medium transition-colors"
             >
               Disconnect
             </button>
@@ -262,7 +262,7 @@ export function WebSocketPanel({
       {status === 'connected' && (
         <div className="flex items-center gap-2 text-sm flex-wrap">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-green-600 dark:text-green-400 font-medium">Live</span>
+          <span className="text-up font-medium">Live</span>
           <span className="text-muted-foreground">
             · {msgCount} blocks received
             {latestBlock && (
@@ -275,7 +275,7 @@ export function WebSocketPanel({
       {/* View toggle + clear */}
       {blocks.length > 0 || rawMessages.length > 0 ? (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-muted rounded p-1">
             <button
               onClick={() => setViewMode('cards')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -321,7 +321,7 @@ export function WebSocketPanel({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
-                className="bg-card border border-border rounded-xl p-4"
+                className="bg-card border border-border rounded-md p-4"
                 style={{ boxShadow: 'var(--card-shadow)' }}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -334,7 +334,7 @@ export function WebSocketPanel({
                         initial={{ opacity: 1 }}
                         animate={{ opacity: 0 }}
                         transition={{ delay: 2, duration: 0.5 }}
-                        className="text-xs px-1.5 py-0.5 rounded bg-green-500/15 text-green-600 dark:text-green-400"
+                        className="text-xs px-1.5 py-0.5 rounded bg-green-500/15 text-up"
                       >
                         NEW
                       </motion.span>
@@ -370,7 +370,7 @@ export function WebSocketPanel({
           {rawMessages.map((msg) => (
             <div
               key={msg.id}
-              className="bg-card border border-border rounded-lg p-3 font-mono text-xs"
+              className="bg-card border border-border rounded p-3 font-mono text-xs"
               style={{ boxShadow: 'var(--card-shadow)' }}
             >
               <div className="flex items-center gap-2 mb-2">

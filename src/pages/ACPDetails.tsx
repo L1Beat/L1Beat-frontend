@@ -294,7 +294,7 @@ export default function ACPDetails() {
                   startOnLoad: false,
                   theme: 'base',
                   securityLevel: 'loose',
-                  fontFamily: 'Inter, system-ui, sans-serif',
+                  fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
                   themeVariables,
                   flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
                   sequence: { useMaxWidth: true },
@@ -304,7 +304,7 @@ export default function ACPDetails() {
               } catch (renderError) {
                 console.error('Mermaid render failed:', renderError);
                 element.innerHTML = `
-                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded-lg p-4">
+                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded p-4">
                     <p class="font-medium mb-2">Failed to render diagram</p>
                     <pre class="text-xs bg-card p-2 rounded overflow-auto border border-border">${cleanContent}</pre>
                   </div>
@@ -321,7 +321,7 @@ export default function ACPDetails() {
       }, [chartId, content, isDark]); // Re-render on theme change
 
       return (
-        <div className="my-8 p-4 rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-colors duration-200">
+        <div className="my-8 p-4 rounded-md border border-border bg-card shadow-sm overflow-hidden transition-colors duration-200">
           <div id={chartId} className="flex justify-center min-h-[150px] items-center w-full overflow-x-auto" />
         </div>
       );
@@ -338,7 +338,7 @@ export default function ACPDetails() {
       };
 
       return (
-        <div className="my-6 rounded-xl overflow-hidden border border-border bg-card shadow-sm transition-colors duration-200">
+        <div className="my-6 rounded-md overflow-hidden border border-border bg-card shadow-sm transition-colors duration-200">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
@@ -352,11 +352,11 @@ export default function ACPDetails() {
             </div>
             <button
               onClick={handleCopy}
-              className="p-1.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]"
+              className="p-1.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/30"
               title="Copy code"
             >
               {isCopied ? (
-                <Check className="w-4 h-4 text-green-500" />
+                <Check className="w-4 h-4 text-up" />
               ) : (
                 <Copy className="w-4 h-4" />
               )}
@@ -382,7 +382,7 @@ export default function ACPDetails() {
                 {content}
               </SyntaxHighlighter>
             ) : (
-              <pre className="p-6 overflow-x-auto bg-muted rounded-b-lg">
+              <pre className="p-6 overflow-x-auto bg-muted rounded-b">
                 <code className="text-foreground text-sm font-mono">{content}</code>
               </pre>
             )}
@@ -409,7 +409,7 @@ export default function ACPDetails() {
       switch (cleanStatus?.toLowerCase()) {
       case 'activated':
       case 'final':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-5 h-5 text-up" />;
       case 'draft':
       case 'review':
         return <Clock className="w-5 h-5 text-yellow-500" />;
@@ -428,7 +428,7 @@ export default function ACPDetails() {
       case 'final':
         return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30';
       case 'draft':
-        return 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20 dark:bg-[#ef4444]/20 dark:text-[#ef4444] dark:border-[#ef4444]/30';
+        return 'bg-accent text-foreground border-brand/20 dark:bg-brand/20 dark:text-brand dark:border-brand/30';
       case 'review':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-500/30';
       case 'stagnant':
@@ -472,14 +472,14 @@ export default function ACPDetails() {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => navigate('/acps')}
-                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-foreground/30 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to ACPs
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626]"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand hover:bg-foreground/90"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -505,51 +505,46 @@ export default function ACPDetails() {
           <div className="flex items-center justify-between mb-5">
             <button
               onClick={() => navigate('/acps')}
-              className="inline-flex items-center px-3 h-9 border border-border text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-[12px] rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               Back to ACPs
             </button>
           </div>
 
           {/* ACP Header */}
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card mb-5">
-            <div aria-hidden className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/10 blur-3xl" />
-            </div>
-
-            <div className="relative p-6 sm:p-7">
-              <div className="flex flex-col gap-6">
+          <div className="relative border-b border-border mb-5">
+            <div className="relative pb-5">
+              <div className="flex flex-col gap-4">
                 {/* Top Row: ID and Status */}
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div className="flex items-center gap-4">
-                    <span className="text-3xl font-mono font-bold text-[#ef4444]">
+                    <span className="num text-[13px] text-muted-foreground">
                       ACP-{acp.number}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 ${getStatusColor(acp.status)}`}>
+                    <span className={`px-2 h-6 rounded text-[11px] font-medium flex items-center gap-1.5 ${getStatusColor(acp.status)}`}>
                       {getStatusIcon(acp.status)}
                       {acp.status}
                     </span>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                      {acp.track} Track
-                    </span>
+                    <span className="text-[11px] text-muted-foreground">{acp.track} track</span>
                     {acp.complexity && (
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                        {acp.complexity} Complexity
-                      </span>
+                      <>
+                        <span aria-hidden className="text-muted-foreground/40">·</span>
+                        <span className="text-[11px] text-muted-foreground">{acp.complexity} complexity</span>
+                      </>
                     )}
                   </div>
                 </div>
 
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground leading-tight">
+                <h1 className="text-[22px] sm:text-[26px] font-semibold text-foreground leading-tight">
                   <ReactMarkdown>{acp.title}</ReactMarkdown>
                 </h1>
 
                 {/* Author and Meta */}
-                <div className="flex flex-wrap items-center gap-6 text-sm border-y border-border py-6">
+                <div className="flex flex-wrap items-center gap-5 text-[12px]">
                   <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-muted-foreground" />
                     <div className="flex flex-wrap items-center gap-2">
@@ -560,7 +555,7 @@ export default function ACPDetails() {
                             href={author.url || `https://github.com/${author.github}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-foreground hover:text-[#ef4444] transition-colors"
+                            className="font-medium text-foreground hover:text-foreground transition-colors"
                           >
                             {author.name}
                           </a>
@@ -591,35 +586,35 @@ export default function ACPDetails() {
                 <div className="flex gap-3 flex-wrap">
                   <button
                     onClick={() => window.open(githubUrl, '_blank', 'noopener,noreferrer')}
-                    className="inline-flex items-center px-5 py-2.5 rounded-lg shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors cursor-pointer"
                   >
-                    <Github className="w-4 h-4 mr-2" />
+                    <Github className="w-3.5 h-3.5" />
                     View on GitHub
                   </button>
 
                   {acp.discussion && (
                     <button
                       onClick={() => window.open(acp.discussion, '_blank', 'noopener,noreferrer')}
-                      className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all cursor-pointer"
+                      className="inline-flex items-center gap-1.5 h-7 px-3 border border-border rounded text-[12px] font-medium text-foreground bg-background hover:bg-accent transition-colors cursor-pointer"
                     >
-                      <LinkIcon className="w-4 h-4 mr-2" />
-                      View Discussion
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      View discussion
                     </button>
                   )}
 
                   <button
                     onClick={copyToClipboard}
-                    className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all ml-auto"
+                    className="inline-flex items-center gap-1.5 h-7 px-3 border border-border rounded text-[12px] font-medium text-foreground bg-background hover:bg-accent transition-colors ml-auto"
                   >
                     {copied ? (
                       <>
-                        <Check className="w-4 h-4 mr-2 text-green-500" />
+                        <Check className="w-3.5 h-3.5 text-up" />
                         Copied
                       </>
                     ) : (
                       <>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Link
+                        <Copy className="w-3.5 h-3.5" />
+                        Copy link
                       </>
                     )}
                   </button>
@@ -630,7 +625,7 @@ export default function ACPDetails() {
 
           {/* Content + right rail */}
           <div className="lg:flex lg:gap-8 lg:items-start">
-          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 flex-1 min-w-0">
+          <div className="flex-1 min-w-0 lg:pr-10">
             <div className="max-w-none break-words">
             <ReactMarkdown
   remarkPlugins={[remarkGfm, remarkMath]}
@@ -640,7 +635,7 @@ export default function ACPDetails() {
     a: ({ children, ...props }) => (
       <a
         {...props}
-        className="text-[#ef4444] hover:text-[#dc2626] underline underline-offset-4 decoration-[#ef4444]/30"
+        className="text-brand hover:text-foreground-hover underline underline-offset-4 decoration-brand/30"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -702,7 +697,7 @@ export default function ACPDetails() {
     blockquote: ({ children, ...props }) => (
       <blockquote
         {...props}
-        className="my-6 rounded-r-lg border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 px-4 py-3 text-muted-foreground"
+        className="my-6 rounded-r border-l-4 border-brand/30 bg-brand/5 px-4 py-3 text-muted-foreground"
       >
         {children}
       </blockquote>
@@ -737,7 +732,7 @@ export default function ACPDetails() {
         <img
           {...props}
           src={src}
-          className="max-w-full h-auto rounded-lg shadow-md my-8 border border-border block mx-auto bg-card"
+          className="max-w-full h-auto rounded shadow-md my-8 border border-border block mx-auto bg-card"
           loading="lazy"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -758,10 +753,10 @@ export default function ACPDetails() {
       if (text.startsWith(':::note')) {
         const noteContent = text.replace(/^:::note\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-[#ef4444] bg-[#ef4444]/5 dark:bg-[#ef4444]/10">
+          <div className="my-6 rounded overflow-hidden border-l-4 border-brand bg-brand/5 dark:bg-brand/10">
             <div className="p-4">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-5 h-5 text-[#ef4444] mt-0.5">
+                <div className="flex-shrink-0 w-5 h-5 text-brand mt-0.5">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="flex-1 text-sm leading-relaxed text-muted-foreground">
@@ -777,7 +772,7 @@ export default function ACPDetails() {
       if (text.startsWith(':::warning')) {
         const warningContent = text.replace(/^:::warning\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-yellow-500 bg-yellow-500/5 dark:bg-yellow-500/10">
+          <div className="my-6 rounded overflow-hidden border-l-4 border-yellow-500 bg-yellow-500/5 dark:bg-yellow-500/10">
             <div className="p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5">
@@ -857,7 +852,7 @@ function ACPSideRail({
                   {title}
                 </a>
                 {active && (
-                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-[#ef4444]" />
+                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-brand" />
                 )}
               </li>
             );

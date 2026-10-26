@@ -1,28 +1,50 @@
 // src/pages/ACPs.tsx
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
-import {
-  FileText,
-  CheckCircle,
-  RefreshCw,
-  AlertTriangle,
-  Search,
-  Filter,
-  Grid,
-  List,
-  TrendingUp,
-  Users,
-  Archive
-} from 'lucide-react';
+import { SegmentedControl, StatStrip } from '../components/instrument';
+import { RefreshCw, Search, X } from 'lucide-react';
 import { acpService } from '../services/acpService';
 import type { EnhancedACP, ACPStats } from '../types';
 import EnhancedACPCard from '../components/ACPCard';
 
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'list' | 'grid';
+const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
+  { value: 'list', label: 'List' },
+  { value: 'grid', label: 'Cards' },
+];
+// Status tabs follow the ACP lifecycle; "Other" catches withdrawn, stale, drafts.
+const STATUS_TABS = ['All', 'Proposed', 'Implementable', 'Activated', 'Other'] as const;
+type StatusTab = (typeof STATUS_TABS)[number];
+const MAIN_STATUSES = new Set(['Proposed', 'Implementable', 'Activated']);
+const TRACKS = ['Standards Track', 'Best Practices Track', 'Meta Track', 'Subnet Track'];
+const COMPLEXITIES = ['Low', 'Medium', 'High', 'Very High'];
+
+const statusDot: Record<string, string> = {
+  Activated: 'bg-up',
+  Active: 'bg-up',
+  Implementable: 'bg-[#3987e5]',
+  Proposed: 'bg-[#d4a017]',
+  Review: 'bg-[#d4a017]',
+  Draft: 'bg-muted-foreground/60',
+  Stale: 'bg-muted-foreground/40',
+  Withdrawn: 'bg-muted-foreground/40',
+  Rejected: 'bg-muted-foreground/40',
+};
+
+function complexityDots(level?: string) {
+  const n = level === 'Very High' ? 4 : level === 'High' ? 3 : level === 'Medium' ? 2 : level === 'Low' ? 1 : 0;
+  return (
+    <span className="inline-flex items-center gap-0.5" title={level ? `${level} complexity` : 'Unknown complexity'} aria-label={level ? `${level} complexity` : undefined}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <span key={i} aria-hidden className={`w-1.5 h-1.5 rounded-full ${i < n ? 'bg-foreground/70' : 'bg-muted'}`} />
+      ))}
+    </span>
+  );
+}
+
 type SortOption = 'number' | 'title' | 'status' | 'track';
 type SortOrder = 'asc' | 'desc';
 
@@ -42,11 +64,11 @@ export default function ACPs() {
   const [error, setError] = useState<string | null>(null);
 
   // UI State
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [statusTab, setStatusTab] = useState<StatusTab>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy] = useState<SortOption>('number');
   const [sortOrder] = useState<SortOrder>('desc');
-  const [showFilters, setShowFilters] = useState(false);
 
   // Filters
   const [filters, setFilters] = useState<Filters>({
@@ -198,8 +220,10 @@ export default function ACPs() {
         if (!matchesSearch) return false;
       }
 
-      // Status filter
-      if (filters.status && getCleanStatus(acp.status) !== filters.status) return false;
+      // Status tab, then the explicit status filter if one is set
+      const clean = getCleanStatus(acp.status);
+      if (statusTab === 'Other' ? MAIN_STATUSES.has(clean) : statusTab !== 'All' && clean !== statusTab) return false;
+      if (filters.status && clean !== filters.status) return false;
 
       // Track filter
       if (filters.track && acp.track !== filters.track) return false;
@@ -243,7 +267,19 @@ export default function ACPs() {
     });
 
     return filtered;
-  }, [acps, searchQuery, filters, sortBy, sortOrder]);
+  }, [acps, searchQuery, filters, sortBy, sortOrder, statusTab]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<StatusTab, number> = { All: acps.length, Proposed: 0, Implementable: 0, Activated: 0, Other: 0 };
+    for (const acp of acps) {
+      const clean = getCleanStatus(acp.status);
+      if (MAIN_STATUSES.has(clean)) counts[clean as StatusTab]++;
+      else counts.Other++;
+    }
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acps]);
+  const activeFilterCount = Object.values(filters).filter((f) => f !== '' && f != null).length;
 
   const clearFilters = () => {
     setFilters({
@@ -253,6 +289,7 @@ export default function ACPs() {
       author: '',
     });
     setSearchQuery('');
+    setStatusTab('All');
   };
 
   if (loading) {
@@ -278,18 +315,13 @@ export default function ACPs() {
       <div className="min-h-screen bg-background text-foreground flex flex-col">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
-            <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
-            <h2 className="text-lg font-semibold text-foreground mb-2">
-              Failed to Load ACPs
-            </h2>
-            <p className="text-muted-foreground mb-4">
-              {error}
-            </p>
+            <h2 className="text-[15px] font-semibold text-foreground mb-1">Couldn't load the ACPs</h2>
+            <p className="text-[12px] text-muted-foreground mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
+              className="inline-flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium rounded bg-foreground text-background hover:bg-foreground/90"
             >
-              <RefreshCw className="w-4 h-4 mr-2" />
+              <RefreshCw className="w-3.5 h-3.5" />
               Retry
             </button>
           </div>
@@ -305,443 +337,176 @@ export default function ACPs() {
         url="/acps"
       />
       <div className="flex-1">
-        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              <h1 className="text-[18px] leading-6 font-semibold text-foreground">
                 Avalanche Community Proposals
               </h1>
-              <p className="mt-2 text-muted-foreground">
-                Browse and explore all ACPs in the Avalanche ecosystem
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Every ACP from draft to activation, with status, track, and authors.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 border border-border rounded text-[12px] font-medium text-foreground bg-background hover:bg-accent transition-colors"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <RefreshCw className="w-3.5 h-3.5" />
                 Refresh
               </button>
             </div>
           </div>
 
-          {/* Statistics Cards */}
+          {/* Statistics */}
           {stats && (
-            <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <motion.div
-                className="bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg p-4 border border-[#ef4444]/20 dark:border-[#ef4444]/50"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
-                whileHover={{ y: -2, transition: { duration: 0.2 } }}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-[#ef4444]">
-                      {stats.total}
-                    </div>
-                    <div className="text-sm font-medium text-[#ef4444]/80">Total ACPs</div>
-                  </div>
-                  <FileText className="w-8 h-8 text-[#ef4444]" />
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700/50"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
-                whileHover={{ y: -2, transition: { duration: 0.2 } }}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {stats.totalAuthors || 0}
-                    </div>
-                    <div className="text-sm font-medium text-green-600/80 dark:text-green-400/80">Contributors</div>
-                  </div>
-                  <Users className="w-8 h-8 text-green-500" />
-                </div>
-              </motion.div>
-              
-              <motion.div
-                className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700/50"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
-                whileHover={{ y: -2, transition: { duration: 0.2 } }}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {stats.implementationProgress?.deployed || 0}
-                    </div>
-                    <div className="text-sm font-medium text-blue-600/80 dark:text-blue-400/80">Deployed</div>
-                  </div>
-                  <CheckCircle className="w-8 h-8 text-blue-500" />
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-700/50"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
-                whileHover={{ y: -2, transition: { duration: 0.2 } }}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                      {stats.recentlyUpdated || 0}
-                    </div>
-                    <div className="text-sm font-medium text-yellow-600/80 dark:text-yellow-400/80">Recently Updated</div>
-                  </div>
-                  <TrendingUp className="w-8 h-8 text-yellow-500" />
-                </div>
-              </motion.div>
+            <div>
+              <StatStrip
+                items={[
+                  { label: 'Total ACPs', value: String(stats.total), sub: 'tracked proposals' },
+                  { label: 'Contributors', value: String(stats.totalAuthors || 0), sub: 'distinct authors' },
+                  { label: 'Deployed', value: String(stats.implementationProgress?.deployed || 0), sub: 'activated on mainnet' },
+                  { label: 'Recently updated', value: String(stats.recentlyUpdated || 0), sub: 'changed in the last 30 days' },
+                ]}
+              />
             </div>
           )}
 
-          {/* Controls Bar */}
-          <div className="bg-card rounded-2xl shadow-sm border border-border p-4 mb-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              {/* Search Bar */}
-              <div className="flex-1 max-w-xl">
-                <div className="relative group">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-[#ef4444] transition-colors w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search ACPs by number, title, or author..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg bg-muted focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div className="flex items-center gap-2">
-                {/* Filter Button */}
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`inline-flex items-center px-4 py-2 border rounded-md text-sm font-medium transition-colors ${
-                    showFilters
-                      ? 'border-[#ef4444] text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20'
-                      : 'border-border text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20'
-                  }`}
-                >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
-                  {Object.values(filters).filter(f => f !== '' && f !== null).length > 0 && (
-                    <span className="ml-2 px-2 py-0.5 text-xs bg-[#ef4444] text-white rounded-full">
-                      {Object.values(filters).filter(f => f !== '' && f !== null).length}
-                    </span>
-                  )}
-                </button>
-
-                {/* View Mode Toggle */}
-                <div className="flex items-center bg-muted border border-border rounded-md p-1 relative">
-                  {/* Background slider */}
-                  <motion.div
-                    className="absolute bg-card shadow-sm rounded"
-                    layoutId="viewToggleBackground"
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      left: viewMode === 'grid' ? '4px' : '36px',
-                    }}
-                    transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  />
-                  <motion.button
-                    onClick={() => setViewMode('grid')}
-                    className={`relative z-10 p-2 rounded ${
-                      viewMode === 'grid'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  >
-                    <motion.div
-                      animate={{
-                        rotate: viewMode === 'grid' ? [0, -10, 10, 0] : 0
-                      }}
-                      transition={{ duration: 0.4, ease: "easeOut" }}
-                    >
-                      <Grid className="w-4 h-4" />
-                    </motion.div>
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setViewMode('list')}
-                    className={`relative z-10 p-2 rounded ${
-                      viewMode === 'list'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                  >
-                    <motion.div
-                      animate={{
-                        rotate: viewMode === 'list' ? [0, -10, 10, 0] : 0
-                      }}
-                      transition={{ duration: 0.4, ease: "easeOut" }}
-                    >
-                      <List className="w-4 h-4" />
-                    </motion.div>
-                  </motion.button>
-                </div>
-              </div>
-            </div>
-
-            {/* Filters Panel */}
-            {showFilters && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  {/* Status Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={filters.status}
-                      onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
-                    >
-                      <option value="">All</option>
-                      <option value="Draft">Draft</option>
-                      <option value="Review">Review</option>
-                      <option value="Proposed">Proposed</option>
-                      <option value="Implementable">Implementable</option>
-                      <option value="Activated">Activated</option>
-                      <option value="Stale">Stale</option>
-                      <option value="Withdrawn">Withdrawn</option>
-                    </select>
-                  </div>
-
-                  {/* Track Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">
-                      Track
-                    </label>
-                    <select
-                      value={filters.track}
-                      onChange={(e) => setFilters({ ...filters, track: e.target.value })}
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
-                    >
-                      <option value="">All</option>
-                      <option value="Standards Track">Standards Track</option>
-                      <option value="Best Practices Track">Best Practices</option>
-                      <option value="Meta Track">Meta Track</option>
-                      <option value="Subnet Track">Subnet Track</option>
-                    </select>
-                  </div>
-
-                  {/* Complexity Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">
-                      Complexity
-                    </label>
-                    <select
-                      value={filters.complexity}
-                      onChange={(e) => setFilters({ ...filters, complexity: e.target.value })}
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground"
-                    >
-                      <option value="">All</option>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                      <option value="Very High">Very High</option>
-                    </select>
-                  </div>
-
-                  {/* Author Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">
-                      Author
-                    </label>
-                    <input
-                      type="text"
-                      value={filters.author}
-                      onChange={(e) => setFilters({ ...filters, author: e.target.value })}
-                      placeholder="Filter by author..."
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm bg-muted text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-
-                  
-
-                  {/* Clear Filters */}
-                  <div className="flex items-end">
+          {/* Toolbar: status tabs, search, track and complexity, view */}
+          <section id="acps" className="scroll-mt-12">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 py-2">
+              <nav className="flex items-center gap-0.5 -ml-2.5 overflow-x-auto no-scrollbar" aria-label="Status">
+                {STATUS_TABS.map((t) => {
+                  const active = t === statusTab;
+                  return (
                     <button
-                      onClick={() => setFilters({
-                        status: '',
-                        track: '',
-                        complexity: '',
-                        author: '',
-                        hasDiscussion: null
-                      })}
-                      className="w-full px-3 py-2 border border-border rounded-md text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
+                      key={t}
+                      onClick={() => setStatusTab(t)}
+                      className={`flex items-baseline gap-1.5 h-8 px-2.5 rounded whitespace-nowrap transition-colors ${
+                        active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
                     >
-                      Clear All
+                      <span className="text-[12.5px] font-medium">{t}</span>
+                      <span className="num text-[11px] text-muted-foreground">{tabCounts[t]}</span>
                     </button>
-                  </div>
-                </div>
+                  );
+                })}
+              </nav>
+              <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search by number, title, or author"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-8 pl-8 pr-8 rounded bg-background border border-border text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <select
+                value={filters.track}
+                onChange={(e) => setFilters({ ...filters, track: e.target.value })}
+                aria-label="Track"
+                className="h-8 px-2 rounded border border-border bg-background text-[12px] text-foreground focus:outline-none focus:border-foreground/40"
+              >
+                <option value="">All tracks</option>
+                {TRACKS.map((t) => (
+                  <option key={t} value={t}>{t.replace(' Track', '')}</option>
+                ))}
+              </select>
+              <select
+                value={filters.complexity}
+                onChange={(e) => setFilters({ ...filters, complexity: e.target.value })}
+                aria-label="Complexity"
+                className="h-8 px-2 rounded border border-border bg-background text-[12px] text-foreground focus:outline-none focus:border-foreground/40"
+              >
+                <option value="">Any complexity</option>
+                {COMPLEXITIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              {(activeFilterCount > 0 || searchQuery || statusTab !== 'All') && (
+                <button onClick={clearFilters} className="inline-flex items-center gap-1 h-8 px-2 rounded text-[12px] text-muted-foreground hover:text-foreground">
+                  Clear
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              <div className="flex-1" />
+              <span className="num text-[11px] text-muted-foreground hidden sm:inline">
+                {filteredAndSortedACPs.length} of {acps.length}
+              </span>
+              <SegmentedControl value={viewMode} options={VIEW_OPTIONS} onChange={setViewMode} ariaLabel="View" />
+            </div>
+
+            {filteredAndSortedACPs.length === 0 ? (
+              <div className="border-y border-border px-6 py-12 text-center text-[12px] text-muted-foreground">
+                No ACPs match. Clear the search or pick another status.
+              </div>
+            ) : viewMode === 'list' ? (
+              <div className="overflow-x-auto border-t border-border">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-background">
+                    <tr className="h-9 border-b border-border text-[11px] font-medium text-muted-foreground">
+                      <th className="text-left font-medium w-20 num">ACP</th>
+                      <th className="text-left font-medium">Title</th>
+                      <th className="text-left font-medium w-32">Status</th>
+                      <th className="text-left font-medium w-32 hidden lg:table-cell">Track</th>
+                      <th className="text-left font-medium w-24 hidden md:table-cell">Complexity</th>
+                      <th className="text-left font-medium hidden xl:table-cell">Authors</th>
+                      <th className="text-right font-medium w-16 hidden md:table-cell">Read</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSortedACPs.map((acp) => {
+                      const clean = getCleanStatus(acp.status);
+                      const authors = acp.authors?.map((a) => a.name).filter(Boolean) ?? [];
+                      return (
+                        <tr
+                          key={acp.number}
+                          onClick={() => navigate(`/acps/${acp.number}`)}
+                          className="h-10 cursor-pointer border-b border-border/50 hover:bg-accent/40 transition-colors"
+                        >
+                          <td className="num text-[12px] text-muted-foreground pr-3">{acp.number}</td>
+                          <td className="pr-4">
+                            <span className="text-[12.5px] font-medium text-foreground line-clamp-1">{acp.title}</span>
+                          </td>
+                          <td>
+                            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${statusDot[clean] ?? 'bg-muted-foreground/40'}`} />
+                              {clean}
+                            </span>
+                          </td>
+                          <td className="text-[11px] text-muted-foreground hidden lg:table-cell">{(acp.track || '').replace(' Track', '') || '—'}</td>
+                          <td className="hidden md:table-cell">{complexityDots(acp.complexity)}</td>
+                          <td className="text-[11px] text-muted-foreground hidden xl:table-cell">
+                            <span className="line-clamp-1">
+                              {authors.length === 0 ? '—' : authors.length <= 2 ? authors.join(', ') : `${authors[0]}, ${authors[1]} +${authors.length - 2}`}
+                            </span>
+                          </td>
+                          <td className="num text-[11px] text-muted-foreground text-right hidden md:table-cell">
+                            {acp.readingTime ? `${acp.readingTime} min` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                {filteredAndSortedACPs.map((acp) => (
+                  <EnhancedACPCard key={acp.number} acp={acp} viewMode="grid" onClick={(a) => navigate(`/acps/${a.number}`)} />
+                ))}
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Results Count */}
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Showing {filteredAndSortedACPs.length} of {acps.length} ACPs
-            </div>
-            {filteredAndSortedACPs.length === 0 && (searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
-              <motion.button
-                onClick={clearFilters}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-[#ef4444] dark:text-[#ef4444] bg-[#ef4444]/10 dark:bg-[#ef4444]/20 border border-[#ef4444]/20 dark:border-[#ef4444]/30 rounded-md hover:bg-[#ef4444]/20 dark:hover:bg-[#ef4444]/30 transition-colors"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <RefreshCw className="w-3 h-3 mr-1" />
-                Clear All Filters
-              </motion.button>
-            )}
-          </div>
-
-          {/* ACPs Grid/List */}
-          <LayoutGroup>
-            <AnimatePresence mode="wait">
-              {filteredAndSortedACPs.length === 0 ? (
-                <motion.div
-                  key="empty-state"
-                  className="text-center py-12 px-4"
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                >
-                  <motion.div
-                    initial={{ scale: 0.8 }}
-                    animate={{ scale: 1 }}
-                    transition={{ duration: 0.3, delay: 0.1, ease: "easeOut" }}
-                  >
-                    <Archive className="w-16 h-16 mx-auto text-muted-foreground mb-6" />
-                  </motion.div>
-                  <h3 className="text-xl font-semibold text-foreground mb-3">
-                    No ACPs match your criteria
-                  </h3>
-                  <div className="max-w-md mx-auto space-y-3">
-                    <p className="text-muted-foreground">
-                      {searchQuery && Object.values(filters).some(f => f !== '' && f !== null)
-                        ? `No results found for "${searchQuery}" with current filters applied.`
-                        : searchQuery
-                        ? `No results found for "${searchQuery}".`
-                        : 'No ACPs match the current filter criteria.'}
-                    </p>
-
-                    {(searchQuery || Object.values(filters).some(f => f !== '' && f !== null)) && (
-                      <div className="flex flex-col sm:flex-row gap-2 justify-center items-center pt-2">
-                        <motion.button
-                          onClick={clearFilters}
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] rounded-md transition-colors"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Clear All Filters
-                        </motion.button>
-                        {searchQuery && (
-                          <motion.button
-                            onClick={() => setSearchQuery('')}
-                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-foreground bg-muted border border-border hover:bg-accent hover:border-[#ef4444]/20 rounded-md transition-colors"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                          >
-                            Clear Search
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ) : viewMode === 'grid' ? (
-                <motion.div
-                  key="grid-view"
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                >
-                  {filteredAndSortedACPs.map((acp, index) => (
-                    <motion.div
-                      key={acp.number}
-                      layout
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.2,
-                        delay: index * 0.02,
-                        ease: "easeOut"
-                      }}
-                    >
-                      <EnhancedACPCard
-                        acp={acp}
-                        viewMode="grid"
-                        onClick={(acp) => navigate(`/acps/${acp.number}`)}
-                      />
-                    </motion.div>
-                  ))}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="list-view"
-                  className="space-y-4"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                >
-                  {filteredAndSortedACPs.map((acp, index) => (
-                    <motion.div
-                      key={acp.number}
-                      layout
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.18,
-                        delay: index * 0.015,
-                        ease: "easeOut"
-                      }}
-                    >
-                      <EnhancedACPCard
-                        acp={acp}
-                        viewMode="list"
-                        onClick={(acp) => navigate(`/acps/${acp.number}`)}
-                      />
-                    </motion.div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </LayoutGroup>
-
-          {/* Load More / Pagination (if needed) */}
-          {filteredAndSortedACPs.length > 0 && filteredAndSortedACPs.length < acps.length && (
-            <div className="mt-8 text-center">
-              <button className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]">
-                Load More
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -56,14 +56,14 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   const Icon = toast.variant === 'success' ? CheckCircle2 : toast.variant === 'error' ? AlertTriangle : Info;
   const iconColor =
     toast.variant === 'success'
-      ? 'text-green-500'
+      ? 'text-up'
       : toast.variant === 'error'
-        ? 'text-[#ef4444]'
+        ? 'text-brand'
         : 'text-foreground';
   return (
     <div
       role="status"
-      className="pointer-events-auto inline-flex items-start gap-2.5 min-h-9 px-3.5 py-2 rounded-xl bg-popover border border-border shadow-xl text-[12px] font-medium text-foreground"
+      className="pointer-events-auto inline-flex items-start gap-2.5 min-h-9 px-3.5 py-2 rounded-md bg-popover border border-border shadow-xl text-[12px] font-medium text-foreground"
     >
       <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${iconColor}`} />
       <span className="flex-1">{toast.message}</span>

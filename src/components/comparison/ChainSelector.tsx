@@ -53,7 +53,7 @@ export const ChainSelector = memo(function ChainSelector({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 20 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
+          className="bg-card border border-border rounded-md w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
           style={{ boxShadow: 'var(--card-shadow)' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -71,7 +71,7 @@ export const ChainSelector = memo(function ChainSelector({
               onClick={onClose}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              className="p-2 rounded hover:bg-muted transition-colors"
             >
               <X className="w-5 h-5 text-muted-foreground" />
             </motion.button>
@@ -80,14 +80,14 @@ export const ChainSelector = memo(function ChainSelector({
           {/* Search */}
           <div className="px-6 pt-4 pb-3">
             <div className="relative group/search">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60 group-focus-within/search:text-[#ef4444] transition-colors pointer-events-none" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60 group-focus-within/search:text-foreground transition-colors pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search chains..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ color: 'var(--foreground)' }}
-                className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl bg-white dark:bg-[#2c2c2e] border border-border placeholder-gray-400 dark:placeholder-gray-500 transition-all focus:outline-none focus:bg-white dark:focus:bg-[#2c2c2e] focus:border-[#ef4444]/40 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.08)]"
+                className="w-full pl-10 pr-10 py-2.5 text-sm rounded-md bg-white dark:bg-[#2c2c2e] border border-border placeholder-gray-400 dark:placeholder-gray-500 transition-all focus:outline-none focus:bg-white dark:focus:bg-[#2c2c2e] focus:border-brand/40 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.08)]"
                 autoFocus
               />
               {searchTerm && (
@@ -125,18 +125,18 @@ export const ChainSelector = memo(function ChainSelector({
                       transition={{ delay: index * 0.01, duration: 0.15 }}
                       whileHover={!disabled && !selected ? { scale: 1.08, y: -2 } : {}}
                       whileTap={!disabled && !selected ? { scale: 0.95 } : {}}
-                      className={`group relative aspect-square rounded-xl border flex items-center justify-center transition-all duration-200 ${
+                      className={`group relative aspect-square rounded-md border flex items-center justify-center transition-all duration-200 ${
                         selected
-                          ? 'border-[#ef4444] bg-[#ef4444]/10 shadow-lg shadow-[#ef4444]/20'
+                          ? 'border-foreground/60 bg-accent'
                           : disabled
                           ? 'border-border bg-muted/30 opacity-30 cursor-not-allowed'
-                          : 'border-border bg-muted/40 hover:border-[#ef4444]/50 hover:bg-muted/70 hover:shadow-md'
+                          : 'border-border bg-muted/40 hover:border-brand/50 hover:bg-muted/70 hover:shadow-md'
                       }`}
                     >
                       <img
                         src={logoSrc}
                         alt={chain.chainName}
-                        className={`w-8 h-8 rounded-lg transition-transform duration-200 ${
+                        className={`w-8 h-8 rounded transition-transform duration-200 ${
                           selected ? 'scale-100' : 'group-hover:scale-110'
                         }`}
                         onError={(e) => {
@@ -151,14 +151,14 @@ export const ChainSelector = memo(function ChainSelector({
                           initial={{ scale: 0, rotate: -180 }}
                           animate={{ scale: 1, rotate: 0 }}
                           transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#ef4444] rounded-full flex items-center justify-center shadow-lg"
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-brand rounded-full flex items-center justify-center shadow-lg"
                         >
                           <Check className="w-3 h-3 text-white" strokeWidth={3} />
                         </motion.div>
                       )}
 
                       {/* Hover tooltip */}
-                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg bg-foreground text-background text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded bg-foreground text-background text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
                         {chain.chainName}
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
                           <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-foreground"></div>

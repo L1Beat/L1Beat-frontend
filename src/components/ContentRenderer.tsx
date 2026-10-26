@@ -13,7 +13,7 @@ const markdownComponents = {
     <a
       {...props}
       className={[
-        'text-[#ef4444] underline underline-offset-4 decoration-[#ef4444]/30 hover:text-[#dc2626] transition-colors',
+        'text-brand underline underline-offset-4 decoration-brand/30 hover:text-foreground-hover transition-colors',
         className
       ]
         .filter(Boolean)
@@ -49,7 +49,7 @@ const markdownComponents = {
     <pre
       {...props}
       className={[
-        'my-6 overflow-x-auto rounded-xl border border-border bg-muted p-4',
+        'my-6 overflow-x-auto rounded-md border border-border bg-muted p-4',
         className
       ]
         .filter(Boolean)
@@ -101,7 +101,7 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
       bg: 'bg-green-500/10',
       border: 'border-green-500',
       icon: CheckCircle,
-      iconColor: 'text-green-500',
+      iconColor: 'text-up',
       titleColor: 'text-green-700 dark:text-green-400',
       title: 'Success'
     }
@@ -112,7 +112,7 @@ const NoteBlock: React.FC<NoteBlockProps> = ({
   const title = defaultTitle || style.title;
 
   return (
-    <div className={`my-6 p-4 rounded-lg border-l-4 ${style.bg} ${style.border}`}>
+    <div className={`my-6 p-4 rounded border-l-4 ${style.bg} ${style.border}`}>
       <div className="flex items-start gap-3">
         <div className={`mt-0.5 ${style.iconColor}`}>
           <Icon className="w-5 h-5" />
@@ -238,10 +238,10 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
               <img
                 src={block.src}
                 alt={block.alt}
-                className="w-full h-auto rounded-xl border border-border shadow-sm transition-transform duration-300 group-hover:scale-[1.02]"
+                className="w-full h-auto rounded-md border border-border shadow-sm transition-transform duration-300 group-hover:scale-[1.02]"
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-md" />
             </div>
             {(block.caption || block.alt) && (
               <figcaption className="text-sm text-muted-foreground text-center mt-4 italic max-w-2xl mx-auto">
@@ -267,9 +267,9 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         return (
           <blockquote 
             key={index}
-            className="border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 pl-8 py-6 my-8 rounded-r-lg relative"
+            className="border-l-4 border-brand/30 bg-brand/5 pl-8 py-6 my-8 rounded-r relative"
           >
-            <div className="absolute top-4 left-2 text-[#ef4444]/40 text-4xl font-serif">"</div>
+            <div className="absolute top-4 left-2 text-brand/40 text-4xl font-serif">"</div>
             <div className="italic text-lg leading-relaxed text-muted-foreground">
               <ReactMarkdown components={markdownComponents as any}>{block.content}</ReactMarkdown>
             </div>
@@ -279,7 +279,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
       case 'code':
         return (
           <div key={index} className="my-8">
-            <div className="bg-muted border border-border rounded-xl overflow-hidden">
+            <div className="bg-muted border border-border rounded-md overflow-hidden">
               <div className="px-4 py-2 text-sm text-muted-foreground border-b border-border flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   {block.language || 'Code'}
@@ -298,7 +298,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         if (block.platform === 'youtube') {
           return (
             <div key={index} className="my-12">
-              <div className="relative aspect-video bg-muted border border-border rounded-xl overflow-hidden shadow-sm group">
+              <div className="relative aspect-video bg-muted border border-border rounded-md overflow-hidden shadow-sm group">
                 <iframe
                   src={block.src}
                   className="w-full h-full"

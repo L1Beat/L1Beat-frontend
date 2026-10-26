@@ -158,15 +158,15 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
       : 'N/A';
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
+    <div className="bg-card rounded-md border border-border overflow-hidden">
       <header className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <PieChart className="w-4 h-4 text-[#ef4444]" />
+          <PieChart className="w-4 h-4 text-muted-foreground" />
           <h2 className="text-[14px] font-semibold text-foreground">
             {isWeightMode ? 'Weight distribution' : 'Stake distribution'}
           </h2>
         </div>
-        <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+        <span className="text-[11px] font-medium text-muted-foreground">
           {validators.length} validators
         </span>
       </header>
@@ -179,7 +179,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
           {/* Total in the donut centre — hidden while hovering so the tooltip is readable */}
           {!hovering && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total {unitLabel}</span>
+              <span className="text-[10px] text-muted-foreground">Total {unitLabel}</span>
               <span className="text-lg font-bold text-foreground tabular-nums">{totalDisplay}</span>
             </div>
           )}

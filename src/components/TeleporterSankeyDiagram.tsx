@@ -58,15 +58,30 @@ const formatChainName = (name: string) => {
   return name;
 };
 
-// Maximum animation cycles per particle to prevent infinite loops
-const MAX_PARTICLE_CYCLES = 30;
+// Particles run for as long as the diagram is mounted and visible; they are
+// interrupted and removed on every redraw and on unmount, so there is no leak.
+const MAX_PARTICLE_CYCLES = Number.POSITIVE_INFINITY;
 
 interface TeleporterSankeyDiagramProps {
   timeframe: 'daily' | 'weekly';
   onTimeframeChange: (tf: 'daily' | 'weekly') => void;
+  /** Fill the parent with no panel chrome (the Overview hero owns the controls). */
+  fill?: boolean;
+  /** Fires when a chain node is selected or the selection is cleared. */
+  onSelectionChange?: (selection: SankeySelection | null) => void;
+  /** Pass null to clear the selection from outside (e.g. a chip's close button). */
+  selection?: SankeySelection | null;
 }
 
-export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: TeleporterSankeyDiagramProps) {
+export interface SankeySelection {
+  /** Chain name as it appears in the message data. */
+  chain: string;
+  displayName: string;
+  /** Left column nodes are senders, right column nodes are receivers. */
+  direction: 'outgoing' | 'incoming';
+}
+
+export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange, fill = false, onSelectionChange, selection }: TeleporterSankeyDiagramProps) {
   const navigate = useNavigate();
   const [data, setData] = useState<TeleporterData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,13 +158,13 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
   // Generate a consistent color for a chain
   const getChainColor = useCallback((chainName: string) => {
     // Target strict brand colors
-    // C-Chain: Primary Red (#ef4444)
+    // C-Chain: brand red (#e84142)
     // Others: Neutral/Grayscale to highlight C-Chain's centrality
     
     const name = chainName.toLowerCase();
     
     if (name.includes('c-chain') || name.includes('avalanche')) {
-      return '#ef4444'; // Brand Red
+      return '#e84142'; // Brand red
     }
 
     // Generate consistent neutral/slate colors for other chains
@@ -275,9 +290,16 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
     };
   };
 
+  // The parent cleared the selection (chip close, view switch).
+  useEffect(() => {
+    if (selection === null) setSelectedChain(null);
+  }, [selection]);
+
   // Reset selected chain when changing timeframe.
   useEffect(() => {
     setSelectedChain(null);
+    onSelectionChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);
 
   // Fetch, then refresh every 15 minutes (paused while the tab is hidden).
@@ -288,8 +310,18 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
   // Handle node click to focus on chain connections
   const handleNodeClick = useCallback((node: SankeyNode) => {
     // Toggle the selected chain to focus on its connections
-    setSelectedChain(selectedChain === node.name ? null : node.name);
-  }, [selectedChain]);
+    const next = selectedChain === node.name ? null : node.name;
+    setSelectedChain(next);
+    onSelectionChange?.(
+      next
+        ? {
+            chain: node.originalName ?? node.name.replace(/^(source|target)-/, ''),
+            displayName: node.displayName ?? node.name,
+            direction: node.name.startsWith('source-') ? 'outgoing' : 'incoming',
+          }
+        : null,
+    );
+  }, [selectedChain, onSelectionChange]);
 
   // Draw the Sankey diagram
   useEffect(() => {
@@ -300,7 +332,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
     
     const container = containerRef.current;
     const containerWidth = container.clientWidth;
-    const containerHeight = Math.max(400, container.clientHeight);
+    const containerHeight = Math.max(fill ? 240 : 400, container.clientHeight);
     
     // Set up margins
     const margin = { top: 20, right: 30, bottom: 20, left: 30 };
@@ -401,7 +433,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
         .append('path')
         .attr('d', 'M 20 0 L 0 0 0 20')
         .attr('fill', 'none')
-        .attr('stroke', 'rgba(255, 255, 255, 0.05)')
+        .attr('stroke', theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(23, 25, 28, 0.06)')
         .attr('stroke-width', 0.5);
       
       svg.append('rect')
@@ -478,7 +510,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
                 return `translate(${point.x},${point.y})`;
               };
             })
-            .attr('opacity', 0.85)
+            .attr('opacity', 0.95)
             .on('end', startAnimation);
         }
         startAnimation();
@@ -492,14 +524,15 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
       activeParticlesRef.current = [];
 
       linkPaths.each(function(d) {
-        if (d.value > 50) {
-          // Reduce number of particles for better performance
-          const numParticles = Math.min(3, Math.max(1, Math.floor(d.value / 150)));
+        if (d.value > 5) {
+          // One bullet per ~60 messages, between 1 and 8 per corridor.
+          const numParticles = Math.min(8, Math.max(1, Math.round(d.value / 60)));
           for (let j = 0; j < numParticles; j++) {
             const particle = svg.append('circle')
               .attr('r', 3)
-              .attr('fill', d.source.color)
-              .style('mix-blend-mode', 'screen') as d3.Selection<SVGCircleElement, unknown, null, undefined>;
+              .attr('fill', theme === 'dark' ? '#ffffff' : '#17191c')
+              .attr('opacity', 0)
+              .style('mix-blend-mode', theme === 'dark' ? 'screen' : 'normal') as d3.Selection<SVGCircleElement, unknown, null, undefined>;
             activeParticlesRef.current.push(particle);
             animateParticle(particle, this);
           }
@@ -593,47 +626,65 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
       svg.on('click', () => {
         if (selectedChain) {
           setSelectedChain(null);
+          onSelectionChange?.(null);
         }
       });
 
     } catch (err) {
       console.error('Error rendering Sankey diagram:', err);
       // Error handling remains the same...
-      const errorTextColor = '#ffffff';
+      const errorTextColor = theme === 'dark' ? '#ffffff' : '#17191c';
       svg.append('text')
         .attr('x', width / 2).attr('y', height / 2)
         .attr('text-anchor', 'middle')
         .attr('fill', errorTextColor)
         .text('Error rendering diagram. Please try again.');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, getChainColor, selectedChain, navigate, handleNodeClick, theme]);
 
-  // Handle window resize
+  // Redraw when the container's size actually changes. The observer is
+  // installed once per mount of the container (not per data update): a fresh
+  // observe() always fires an initial callback, so re-installing it on every
+  // data change made the diagram redraw itself in a loop and eat clicks.
+  const dataRef = useRef<TeleporterData | null>(null);
+  dataRef.current = data;
+  const hasData = data !== null;
   useEffect(() => {
-    const handleResize = () => {
-      if (data) {
-        // Redraw the diagram on resize
-        const timer = setTimeout(() => {
-          if (svgRef.current && containerRef.current) {
-            d3.select(svgRef.current).selectAll('*').remove();
-            // This will trigger the useEffect that draws the diagram
-            setData({...data});
-          }
-        }, 100);
-        return () => clearTimeout(timer);
-      }
+    const el = containerRef.current;
+    if (!hasData || !el) return;
+    let timer: number | undefined;
+    let last = { w: Math.round(el.clientWidth), h: Math.round(el.clientHeight) };
+    const redraw = () => {
+      if (!dataRef.current || !svgRef.current) return;
+      d3.select(svgRef.current).selectAll('*').remove();
+      // A new object identity re-runs the draw effect.
+      setData({ ...dataRef.current });
     };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [data]);
+    const onSizeMaybeChanged = () => {
+      const w = Math.round(el.clientWidth);
+      const h = Math.round(el.clientHeight);
+      if (w === last.w && h === last.h) return;
+      last = { w, h };
+      window.clearTimeout(timer);
+      timer = window.setTimeout(redraw, 150);
+    };
+    window.addEventListener('resize', onSizeMaybeChanged);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onSizeMaybeChanged) : null;
+    observer?.observe(el);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', onSizeMaybeChanged);
+      observer?.disconnect();
+    };
+  }, [hasData]);
 
   if (loading) {
     return (
-      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
-        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
+      <div className={fill ? 'h-full w-full bg-stage' : 'bg-card rounded border border-border p-4 sm:p-6 h-full'}>
+        <div className={`${fill ? 'h-full' : 'h-[300px] sm:h-[400px]'} flex flex-col items-center justify-center`}>
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-sm sm:text-base text-muted-foreground">Loading message flow data...</p>
+          <p className="mt-3 text-[12px] text-muted-foreground">Loading message flows</p>
         </div>
       </div>
     );
@@ -641,17 +692,16 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
 
   if (!data) {
     return (
-      <div className="bg-card rounded-lg border border-border p-4 sm:p-6 h-full">
-        <div className="h-[300px] sm:h-[400px] flex flex-col items-center justify-center">
-          <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-500 mb-4" />
-          <p className="text-sm sm:text-base text-muted-foreground text-center mb-4 px-4">
-            No Teleporter message data available
+      <div className={fill ? 'h-full w-full bg-stage' : 'bg-card rounded border border-border p-4 sm:p-6 h-full'}>
+        <div className={`${fill ? 'h-full' : 'h-[300px] sm:h-[400px]'} flex flex-col items-center justify-center`}>
+          <p className="text-[12px] text-muted-foreground text-center mb-3 px-4">
+            No interchain message data yet.
           </p>
           <button 
             onClick={fetchData}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444]"
+            className="inline-flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium rounded bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
-            <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
+            <RefreshCw className="h-3.5 w-3.5" />
             Retry
           </button>
         </div>
@@ -660,16 +710,17 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className={fill ? 'relative h-full w-full overflow-hidden bg-stage' : 'rounded-md border border-border bg-card overflow-hidden'}>
+      {!fill && (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
           <h3 className="text-[14px] font-semibold text-foreground">
             Avalanche Interchain Messages (ICM)
           </h3>
-          <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-up" />
+            Live
+          </span>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
@@ -682,7 +733,7 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
                   onClick={() => onTimeframeChange(tf)}
                   className={`h-7 px-3 rounded-md text-[11px] font-medium border transition-colors ${
                     active
-                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      ? 'bg-foreground border-foreground text-background'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -701,9 +752,10 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
           </button>
         </div>
       </div>
+      )}
       
       {error && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 mb-4 flex items-start gap-2">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded p-3 mb-4 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
           <div>
             <p className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
@@ -713,9 +765,12 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
         </div>
       )}
       
+      {/* In fill mode the measured box sits inside a centred, padded frame so
+          the SVG never overflows its own padding. */}
+      <div className={fill ? 'h-full w-full max-w-[1200px] mx-auto px-4 sm:px-8' : undefined}>
       <div
         ref={containerRef}
-        className="relative bg-card h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden"
+        className={fill ? 'relative h-full w-full overflow-hidden' : 'relative bg-card h-[360px] sm:h-[520px] lg:h-[600px] overflow-hidden'}
       >
 
         {/* SVG for the Sankey diagram */}
@@ -727,23 +782,24 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange }: Telepo
         {/* Tooltip for links */}
         {hoveredLink && (
           <div 
-            className={`absolute z-10 p-4 rounded-lg shadow-lg border pointer-events-none ${
-              hoveredLink.value < 100 ? 'bg-yellow-100 dark:bg-yellow-900 border-yellow-300 text-base font-bold' : 'bg-white dark:bg-dark-800 text-sm'
+            className={`absolute z-10 p-4 rounded shadow-lg border pointer-events-none ${
+              hoveredLink.value < 100 ? 'bg-popover border-[#d4a017] text-base font-bold' : 'bg-popover text-sm'
             }`}
           >
-            <div className="font-medium text-gray-900 dark:text-white mb-1">
+            <div className="font-medium text-foreground mb-1">
               {hoveredLink.source.displayName} → {hoveredLink.target.displayName}
             </div>
-            <div className="text-gray-600 dark:text-gray-300">
+            <div className="text-muted-foreground">
               Messages: <span className="font-semibold">{hoveredLink.value.toLocaleString()}</span>
             </div>
-            <div className="text-gray-600 dark:text-gray-300">
+            <div className="text-muted-foreground">
               {((hoveredLink.value / data.metadata.totalMessages) * 100).toFixed(1)}% of total
             </div>
           </div>
         )}
         
         {/* Tooltip for nodes */}
+      </div>
       </div>
       
       {/* Stats card at the bottom removed - moved to NetworkMetricsBar */}

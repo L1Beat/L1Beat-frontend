@@ -26,7 +26,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
         return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
       case 'draft':
       case 'proposed':
-        return 'bg-[#ef4444]/10 text-[#ef4444] dark:bg-[#ef4444]/20 dark:text-[#ef4444]';
+        return 'bg-muted text-foreground';
       case 'review':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
       case 'withdrawn':
@@ -86,10 +86,10 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
     return (
       <motion.div
         onClick={() => onClick(acp)}
-        className="bg-card rounded-xl border border-border p-4 cursor-pointer group"
+        className="bg-card rounded-md border border-border p-4 cursor-pointer group"
         whileHover={{
           boxShadow: "0 10px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
-          borderColor: "rgb(239, 68, 68)",
+          borderColor: "rgb(232, 65, 66)",
           y: -2
         }}
         transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -97,12 +97,12 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
         <div className="flex items-center justify-between gap-6">
           <div className="flex-1">
             <div className="flex items-center gap-4 mb-2">
-              <span className="text-lg font-bold font-mono text-[#ef4444] dark:text-[#ef4444]">
+              <span className="num text-[15px] font-medium text-foreground">
                 ACP-{acp.number}
               </span>
               <motion.h3
                 className="text-base font-semibold text-foreground"
-                whileHover={{ color: "#ef4444" }}
+                whileHover={{}}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               >
                 <ReactMarkdown>{acp.title}</ReactMarkdown>
@@ -127,7 +127,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
               </div>
             </div>
             <motion.div
-              whileHover={{ x: 4, color: "#ef4444" }}
+              whileHover={{ x: 4 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <ArrowRight className="w-6 h-6 text-muted-foreground" />
@@ -141,10 +141,10 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
   return (
     <motion.div
       onClick={() => onClick(acp)}
-      className="bg-card rounded-xl border border-border p-5 cursor-pointer group h-full flex flex-col"
+      className="bg-card rounded-md border border-border p-5 cursor-pointer group h-full flex flex-col"
       whileHover={{
         boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
-        borderColor: "#ef4444",
+        borderColor: "#e84142",
         y: -4,
         scale: 1.02
       }}
@@ -153,7 +153,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
     >
       <div className="flex-1">
         <div className="flex items-start justify-between mb-3">
-          <span className="text-xl font-bold font-mono text-[#ef4444] dark:text-[#ef4444]">
+          <span className="num text-[17px] font-medium text-foreground">
             ACP-{acp.number}
           </span>
           <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(acp.status)}`}>
@@ -163,7 +163,7 @@ const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardPro
 
         <motion.h3
           className="text-lg font-semibold text-foreground mb-2 leading-tight"
-          whileHover={{ color: "#ef4444" }}
+          whileHover={{}}
           transition={{ duration: 0.2, ease: "easeOut" }}
         >
           <ReactMarkdown>{acp.title}</ReactMarkdown>

@@ -4,22 +4,20 @@ import {
   ArrowDownUp,
   ChevronDown,
   ChevronUp,
-  Coins,
   Copy,
-  DollarSign,
   ExternalLink,
   Info,
   Search,
   TrendingDown,
   TrendingUp,
-  Users,
   X,
 } from 'lucide-react';
 import { useToast } from '../components/Toaster';
 import { SEO } from '../components/SEO';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { ChartWatermark } from '../components/ChartWatermark';
+import { StatStrip } from '../components/instrument';
+import type { StatItem } from '../components/instrument';
 import {
   Tooltip,
   TooltipContent,
@@ -377,35 +375,34 @@ export function Stablecoins() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <div>
         <SEO
           title="Stablecoins on Avalanche"
           description="Live supply, holders, and 24h activity for every major stablecoin on Avalanche C-Chain: USDC, USDT, AUSD, BUIDL, EURC and more."
           url="/stablecoins"
         />
 
-        <header>
-          <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
-            STABLECOINS
+        {/* Hero: the supply chart fills the first screen, headline numbers float along the bottom. */}
+        <section
+          className="relative border-b border-border bg-stage h-[560px] md:h-[min(calc(100vh-48px),900px)] md:min-h-[600px]"
+          aria-label="Stablecoin supply history"
+        >
+          <SectionErrorBoundary label="the supply history chart">
+            <SupplyHistoryCard coins={coins} fx={fx} hero />
+          </SectionErrorBoundary>
+          <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
+            <SectionErrorBoundary label="the stablecoin KPIs">
+              <KpiStrip totals={totals} floating />
+            </SectionErrorBoundary>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-            Avalanche stablecoin supply
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-            Every tracked stablecoin on Avalanche C-Chain. Non-USD pegs (EUR, SGD, JPY) are
-            converted at ECB reference rates for the totals. Issuer-side reserves may differ.
-          </p>
-        </header>
+        </section>
 
-        <SectionErrorBoundary label="the stablecoin KPIs">
+        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-5">
+        <div className="md:hidden">
           <KpiStrip totals={totals} />
-        </SectionErrorBoundary>
+        </div>
 
-        <SectionErrorBoundary label="the supply history chart">
-          <SupplyHistoryCard coins={coins} fx={fx} />
-        </SectionErrorBoundary>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
           <SectionErrorBoundary label="issuer breakdown">
             <IssuerCard
               slices={issuerSlices}
@@ -429,17 +426,17 @@ export function Stablecoins() {
         )}
 
         <SectionErrorBoundary label="the stablecoin table">
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 py-3.5 border-b border-border">
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-2 border-b border-border">
               <div className="flex items-center gap-2 flex-wrap">
                 {pegFilters.map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeg(p)}
-                    className={`h-7 px-2.5 rounded-full text-[11px] font-semibold tracking-wide transition-colors ${
+                    className={`h-7 px-2 rounded border text-[11px] font-medium transition-colors ${
                       peg === p
-                        ? 'bg-[#ef4444]/15 text-[#ef4444]'
-                        : 'bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/70'
+                        ? 'bg-foreground border-foreground text-background'
+                        : 'bg-background border-border text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {p}
@@ -464,7 +461,7 @@ export function Stablecoins() {
                     <span className="w-px h-4 bg-border mx-1" />
                     <button
                       onClick={() => setIssuerFilter(null)}
-                      className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold tracking-wide bg-[#ef4444]/15 text-[#ef4444] hover:bg-[#ef4444]/25 transition-colors"
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded border border-border text-[11px] font-medium text-foreground hover:bg-accent transition-colors"
                       title="Clear issuer filter"
                     >
                       <span>Issuer: {issuerFilter}</span>
@@ -480,7 +477,7 @@ export function Stablecoins() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search symbol or issuer"
-                  className="w-full h-8 pl-8 pr-2 rounded-lg border border-border bg-background text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#ef4444]/40"
+                  className="w-full h-8 pl-8 pr-2 rounded border border-border bg-background text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
                 />
               </div>
             </div>
@@ -501,7 +498,7 @@ export function Stablecoins() {
               <>
                 {/* Mobile sort selector — table headers aren't visible below md */}
                 <div className="md:hidden flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+                  <span className="text-[11px] font-medium text-muted-foreground">
                     {filtered.length} stablecoin{filtered.length === 1 ? '' : 's'}
                   </span>
                   <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -513,7 +510,7 @@ export function Stablecoins() {
                         setSortKey(k);
                         setSortDir(d);
                       }}
-                      className="h-7 px-2 rounded-md border border-border bg-background text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-[#ef4444]/40"
+                      className="h-7 px-2 rounded-md border border-border bg-background text-[11px] text-foreground focus:outline-none focus:border-foreground/40"
                     >
                       <option value="supplyUsd:desc">Supply ↓</option>
                       <option value="supplyUsd:asc">Supply ↑</option>
@@ -541,9 +538,9 @@ export function Stablecoins() {
 
                 {/* Desktop table — own scroll context so the header can stick */}
                 <div className="hidden md:block overflow-auto max-h-[70vh]">
-                  <table className="w-full text-[13px]">
-                    <thead className="sticky top-0 z-10 bg-card">
-                      <tr className="border-b border-border bg-card text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+                  <table className="w-full text-[12px]">
+                    <thead className="sticky top-0 z-10 bg-background">
+                      <tr className="border-b border-border bg-background text-[11px] font-medium text-muted-foreground">
                         <th className="text-left font-bold px-4 py-2.5 w-10">#</th>
                         <SortableTh
                           label="Stablecoin"
@@ -619,7 +616,7 @@ export function Stablecoins() {
                   </table>
                 </div>
 
-                <footer className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-border">
+                <footer className="flex items-center justify-between gap-2 py-2 border-t border-border">
                   <span className="text-[11px] tabular-nums text-muted-foreground">
                     {filtered.length} stablecoin{filtered.length === 1 ? '' : 's'}
                   </span>
@@ -628,6 +625,7 @@ export function Stablecoins() {
             )}
           </div>
         </SectionErrorBoundary>
+        </div>
       </div>
     </TooltipProvider>
   );
@@ -754,7 +752,7 @@ function aggregateSeries(
   return periods.map((t) => ({ t, v: totals.get(t) || 0 }));
 }
 
-function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) {
+function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; fx: FxRates; hero?: boolean }) {
   const [metric, setMetric] = useState<StablecoinMetric>('supply');
   const [granularity, setGranularity] = useState<StablecoinGranularity>('day');
   const [series, setSeries] = useState<StablecoinSeries[]>([]);
@@ -764,6 +762,27 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
   // the toggle is hidden otherwise.
   const [stacked, setStacked] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // In hero mode the SVG fills its box, so the viewBox height follows the
+  // box's aspect ratio and the drawing keeps a 1:1 unit-to-pixel feel.
+  const chartBoxRef = useRef<HTMLDivElement>(null);
+  const [heroSize, setHeroSize] = useState({ w: CHART_W, h: CHART_H });
+  useEffect(() => {
+    if (!hero) return;
+    const el = chartBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const w = Math.max(320, Math.round(el.clientWidth || CHART_W));
+      const h = Math.max(160, Math.round(el.clientHeight || CHART_H));
+      setHeroSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hero]);
+  // Hero: viewBox units equal CSS pixels, so text and strokes render 1:1.
+  const chartW = hero ? heroSize.w : CHART_W;
+  const chartH = hero ? heroSize.h : CHART_H;
 
   const monetary = metric === 'supply' || metric === 'volume';
   const stackedView = stacked && metric === 'supply';
@@ -828,12 +847,12 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
     const x = d3
       .scaleUtc()
       .domain([points[0].t, points[points.length - 1].t])
-      .range([CHART_M.left, CHART_W - CHART_M.right]);
+      .range([CHART_M.left, chartW - CHART_M.right]);
     const y = d3
       .scaleLinear()
       .domain([domainMin, domainMax])
-      .range([CHART_H - CHART_M.bottom, CHART_M.top]);
-    const baselineY = CHART_H - CHART_M.bottom; // fill from the axis floor
+      .range([chartH - CHART_M.bottom, CHART_M.top]);
+    const baselineY = chartH - CHART_M.bottom; // fill from the axis floor
     const area = d3
       .area<SeriesPoint>()
       .x((d) => x(d.t))
@@ -955,7 +974,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!geom || !svgRef.current || points.length === 0) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const vx = ((e.clientX - rect.left) / rect.width) * CHART_W;
+    const vx = ((e.clientX - rect.left) / rect.width) * chartW;
     const t = geom.x.invert(vx).getTime();
     let best = 0;
     let bestD = Infinity;
@@ -997,84 +1016,245 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
     },
   };
 
+  const seg = (active: boolean) =>
+    `h-7 px-2.5 rounded-[3px] text-[12px] font-medium transition-colors ${
+      active ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+    }`;
+  const group = 'inline-flex items-center gap-px p-px rounded border border-border bg-background';
+  const stackedToggle = metric === 'supply' && (
+    <div className={group} role="tablist" aria-label="Composition">
+      {([['total', 'Total'], ['stacked', 'By issuer']] as const).map(([key, label]) => (
+        <button key={key} role="tab" aria-selected={(key === 'stacked') === stacked} onClick={() => setStacked(key === 'stacked')} className={seg((key === 'stacked') === stacked)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  const metricToggle = (
+    <div className={group} role="tablist" aria-label="Metric">
+      {METRIC_OPTIONS.map((m) => (
+        <button key={m.key} role="tab" aria-selected={metric === m.key} onClick={() => setMetric(m.key)} className={seg(metric === m.key)}>
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+  const granularityToggle = (
+    <div className={group} role="tablist" aria-label="Granularity">
+      {GRANULARITY_OPTIONS.map((g) => (
+        <button key={g.key} role="tab" aria-selected={granularity === g.key} onClick={() => setGranularity(g.key)} className={`num ${seg(granularity === g.key)}`}>
+          {g.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (hero) {
+    return (
+      <div className="relative h-full w-full bg-stage">
+        <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">Stablecoins</h1>
+            {metricToggle}
+            {stackedToggle}
+          </div>
+          {granularityToggle}
+        </div>
+        <div className="absolute top-14 lg:top-[52px] left-4 sm:left-6 right-4 sm:right-6 z-20 pointer-events-none">
+          {shown && (
+            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+              <div>
+                <div className="num text-[26px] leading-none font-medium text-foreground">
+                  {fmtValue(shown.v)}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1.5">
+                  {active
+                    ? fmtDate(new Date(active.t))
+                    : latest
+                      ? `Latest, ${fmtDate(new Date(latest.t))}`
+                      : null}
+                </div>
+              </div>
+              {peak && peak !== latest && (
+                <div className="text-right">
+                  <div className="text-[11px] font-medium text-muted-foreground">
+                    Peak
+                  </div>
+                  <div className="num text-[14px] font-medium text-foreground">
+                    {fmtValue(peak.v)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground tabular-nums">
+                    {fmtDate(new Date(peak.t))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div ref={chartBoxRef} className="absolute left-4 sm:left-6 right-4 sm:right-6 top-[132px] lg:top-[120px] bottom-[150px] md:bottom-[160px]">
+          {loading && points.length === 0 ? (
+            <div className={`flex items-center justify-center ${hero ? "h-full" : "h-[280px]"}`}>
+              <LoadingSpinner size="md" />
+            </div>
+          ) : !geom ? (
+            <div className={`flex items-center justify-center ${hero ? "h-full" : "h-[280px]"} text-[12px] text-muted-foreground`}>
+              No history available for this view.
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="relative">
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${chartW} ${chartH}`}
+                className={hero ? "w-full h-full block" : "w-full h-auto block"}
+                onMouseMove={handleMove}
+                onMouseLeave={() => setHover(null)}
+                role="img"
+                aria-label={`Stablecoin ${metric} over time`}
+              >
+                <defs>
+                  <linearGradient id="sc-supply-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.12} />
+                    <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+
+                {geom.yTicks.map((tick) => (
+                  <g key={tick}>
+                    <line
+                      x1={CHART_M.left}
+                      x2={chartW - CHART_M.right}
+                      y1={geom.y(tick)}
+                      y2={geom.y(tick)}
+                      stroke="currentColor"
+                      strokeOpacity={0.08}
+                    />
+                    <text
+                      x={CHART_M.left - 8}
+                      y={geom.y(tick)}
+                      textAnchor="end"
+                      dominantBaseline="middle"
+                      className="fill-muted-foreground"
+                      fontSize={10}
+                    >
+                      {fmtY(tick)}
+                    </text>
+                  </g>
+                ))}
+
+                {geom.xTicks.map((tick) => (
+                  <text
+                    key={+tick}
+                    x={geom.x(tick)}
+                    y={chartH - 8}
+                    textAnchor="middle"
+                    className="fill-muted-foreground"
+                    fontSize={10}
+                  >
+                    {geom.fmtTick(tick)}
+                  </text>
+                ))}
+
+                {stack ? (
+                  stack.bands.map((b) => (
+                    <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
+                  ))
+                ) : (
+                  <>
+                    <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
+                    <path
+                      d={geom.linePath}
+                      fill="none"
+                      stroke="var(--ink)"
+                      strokeWidth={1.75}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </>
+                )}
+
+                {/* Persistent marker at the latest point */}
+                {!stack && latest && !active && (
+                  <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="var(--ink)" />
+                )}
+
+                {active && (
+                  <g>
+                    <line
+                      x1={geom.x(active.t)}
+                      x2={geom.x(active.t)}
+                      y1={CHART_M.top}
+                      y2={chartH - CHART_M.bottom}
+                      stroke="var(--ink)"
+                      strokeOpacity={0.4}
+                      strokeDasharray="6 4"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      cx={geom.x(active.t)}
+                      cy={geom.y(active.v)}
+                      r={4}
+                      fill="var(--ink)"
+                      stroke="var(--card, #fff)"
+                      strokeWidth={2}
+                    />
+                  </g>
+                )}
+              </svg>
+          
+              </div>
+              {stack && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
+                  {stack.bands.map((b) => (
+                    <div key={b.name} className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
+                      <span className="text-[11px] text-muted-foreground">{b.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">{COPY[metric].title}</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">{COPY[metric].subtitle}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {metric === 'supply' && (
-            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
-              {([['total', 'Total'], ['stacked', 'By issuer']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setStacked(key === 'stacked')}
-                  className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
-                    (key === 'stacked') === stacked
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
-            {METRIC_OPTIONS.map((m) => (
-              <button
-                key={m.key}
-                onClick={() => setMetric(m.key)}
-                className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
-                  metric === m.key
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
-            {GRANULARITY_OPTIONS.map((g) => (
-              <button
-                key={g.key}
-                onClick={() => setGranularity(g.key)}
-                className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
-                  granularity === g.key
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
+          {stackedToggle}
+          {metricToggle}
+          {granularityToggle}
         </div>
       </header>
 
       {shown && (
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-4">
           <div>
-            <div className="text-[28px] leading-none font-bold text-foreground tabular-nums tracking-tight">
+            <div className="num text-[26px] leading-none font-medium text-foreground">
               {fmtValue(shown.v)}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1.5">
               {active
                 ? fmtDate(new Date(active.t))
                 : latest
-                  ? `Latest · ${fmtDate(new Date(latest.t))}`
+                  ? `Latest, ${fmtDate(new Date(latest.t))}`
                   : null}
             </div>
           </div>
           {peak && peak !== latest && (
             <div className="text-right">
-              <div className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
+              <div className="text-[11px] font-medium text-muted-foreground">
                 Peak
               </div>
-              <div className="text-[14px] font-bold text-foreground tabular-nums">
+              <div className="num text-[14px] font-medium text-foreground">
                 {fmtValue(peak.v)}
               </div>
               <div className="text-[10px] text-muted-foreground tabular-nums">
@@ -1086,11 +1266,11 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
       )}
 
       {loading && points.length === 0 ? (
-        <div className="flex items-center justify-center h-[280px]">
+        <div className={`flex items-center justify-center ${hero ? "h-full" : "h-[280px]"}`}>
           <LoadingSpinner size="md" />
         </div>
       ) : !geom ? (
-        <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+        <div className={`flex items-center justify-center ${hero ? "h-full" : "h-[280px]"} text-[12px] text-muted-foreground`}>
           No history available for this view.
         </div>
       ) : (
@@ -1098,8 +1278,8 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
           <div className="relative">
           <svg
             ref={svgRef}
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            className="w-full h-auto block"
+            viewBox={`0 0 ${chartW} ${chartH}`}
+            className={hero ? "w-full h-full block" : "w-full h-auto block"}
             onMouseMove={handleMove}
             onMouseLeave={() => setHover(null)}
             role="img"
@@ -1107,8 +1287,8 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
           >
             <defs>
               <linearGradient id="sc-supply-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.12} />
+                <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
               </linearGradient>
             </defs>
 
@@ -1116,7 +1296,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
               <g key={tick}>
                 <line
                   x1={CHART_M.left}
-                  x2={CHART_W - CHART_M.right}
+                  x2={chartW - CHART_M.right}
                   y1={geom.y(tick)}
                   y2={geom.y(tick)}
                   stroke="currentColor"
@@ -1139,7 +1319,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
               <text
                 key={+tick}
                 x={geom.x(tick)}
-                y={CHART_H - 8}
+                y={chartH - 8}
                 textAnchor="middle"
                 className="fill-muted-foreground"
                 fontSize={10}
@@ -1158,7 +1338,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
                 <path
                   d={geom.linePath}
                   fill="none"
-                  stroke="#ef4444"
+                  stroke="var(--ink)"
                   strokeWidth={1.75}
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -1169,7 +1349,7 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
 
             {/* Persistent marker at the latest point */}
             {!stack && latest && !active && (
-              <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="#ef4444" />
+              <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="var(--ink)" />
             )}
 
             {active && (
@@ -1178,8 +1358,8 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
                   x1={geom.x(active.t)}
                   x2={geom.x(active.t)}
                   y1={CHART_M.top}
-                  y2={CHART_H - CHART_M.bottom}
-                  stroke="#ef4444"
+                  y2={chartH - CHART_M.bottom}
+                  stroke="var(--ink)"
                   strokeOpacity={0.4}
                   strokeDasharray="6 4"
                   vectorEffect="non-scaling-stroke"
@@ -1188,14 +1368,14 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
                   cx={geom.x(active.t)}
                   cy={geom.y(active.v)}
                   r={4}
-                  fill="#ef4444"
+                  fill="var(--ink)"
                   stroke="var(--card, #fff)"
                   strokeWidth={2}
                 />
               </g>
             )}
           </svg>
-          <ChartWatermark />
+          
           </div>
           {stack && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
@@ -1212,10 +1392,11 @@ function SupplyHistoryCard({ coins, fx }: { coins: Stablecoin[]; fx: FxRates }) 
     </div>
   );
 }
-
 function KpiStrip({
   totals,
+  floating = false,
 }: {
+  floating?: boolean;
   totals: {
     supply: number;
     volume: number;
@@ -1225,75 +1406,37 @@ function KpiStrip({
     hasTrend: boolean;
   };
 }) {
-  const cards = [
+  const items: StatItem[] = [
     {
       label: 'Total supply',
       value: fmtUsd(totals.supply),
-      icon: DollarSign,
-      tip: 'Net stablecoin supply in USD (ECB reference rates for non-USD pegs). Excludes coins backed by other stablecoins already counted on-chain, so it reads below the table total — which lists every coin. This matches DefiLlama.',
       // Only annotate once history has loaded and there's a real total.
-      change: totals.hasTrend && totals.supply > 0 ? totals.change7d : undefined,
-      changeLabel: '7d',
+      delta: totals.hasTrend && totals.supply > 0 ? totals.change7d : null,
+      deltaLabel: '7d',
+      sub: 'USD equivalent, net of double counting',
+      tooltip:
+        'Net stablecoin supply in USD (ECB reference rates for non-USD pegs). Excludes coins backed by other stablecoins already counted on-chain, so it reads below the table total, which lists every coin. This matches DefiLlama.',
     },
     {
       label: 'Stablecoins',
       value: totals.count > 0 ? totals.count.toLocaleString() : '—',
-      icon: Coins,
-      tip: 'Distinct stablecoin contracts indexed on Avalanche C-Chain.',
+      sub: 'distinct contracts',
+      tooltip: 'Distinct stablecoin contracts indexed on Avalanche C-Chain.',
     },
     {
-      label: 'Total holders',
+      label: 'Holders',
       value: fmtCount(totals.holders),
-      icon: Users,
-      tip: 'Sum of unique holders across every stablecoin. A wallet holding two stablecoins is counted twice.',
+      sub: 'summed across coins',
+      tooltip: 'Sum of unique holders across every stablecoin. A wallet holding two stablecoins is counted twice.',
     },
     {
-      label: '24h volume',
+      label: 'Transfer volume, 24h',
       value: fmtUsd(totals.volume),
-      icon: TrendingUp,
-      tip: 'On-chain transfer volume in the last 24 hours, USD-equivalent.',
+      sub: 'USD equivalent',
+      tooltip: 'On-chain transfer volume in the last 24 hours, USD-equivalent.',
     },
   ];
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      {cards.map(({ label, value, icon: Icon, tip, change, changeLabel }) => (
-        <div key={label} className="rounded-xl border border-border bg-card p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
-                {label}
-              </span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="text-muted-foreground/70 hover:text-foreground"
-                  >
-                    <Info className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[240px]">
-                  {tip}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
-              <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-2xl font-bold text-foreground tracking-tight">{value}</div>
-            {change !== undefined && (
-              <span className="flex items-baseline gap-1">
-                <ChangeBadge value={change} className="text-[12px]" />
-                <span className="text-[10px] text-muted-foreground/70">{changeLabel}</span>
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <StatStrip items={items} floating={floating} />;
 }
 
 function TopMovers({
@@ -1306,21 +1449,21 @@ function TopMovers({
   logoMap: Record<string, string>;
 }) {
   const columns: { title: string; tone: string; Icon: typeof TrendingUp; coins: EnrichedCoin[] }[] = [
-    { title: 'Inflows', tone: 'text-green-600 dark:text-green-400', Icon: TrendingUp, coins: gainers },
-    { title: 'Outflows', tone: 'text-[#ef4444]', Icon: TrendingDown, coins: losers },
+    { title: 'Inflows', tone: 'text-up', Icon: TrendingUp, coins: gainers },
+    { title: 'Outflows', tone: 'text-down', Icon: TrendingDown, coins: losers },
   ];
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden">
       <header className="flex items-center gap-2 px-4 py-3 border-b border-border">
         <h2 className="text-[14px] font-semibold text-foreground">Supply flows</h2>
-        <span className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+        <span className="text-[11px] font-medium text-muted-foreground">
           7d
         </span>
       </header>
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
         {columns.map(({ title, tone, Icon, coins }) => (
           <div key={title} className="p-3 sm:p-4">
-            <div className={`flex items-center gap-1.5 mb-2 text-[11px] font-bold tracking-wider uppercase ${tone}`}>
+            <div className={`flex items-center gap-1.5 mb-2 text-[11px] font-medium ${tone}`}>
               <Icon className="w-3.5 h-3.5" />
               {title}
             </div>
@@ -1331,7 +1474,7 @@ function TopMovers({
                 {coins.map((c) => (
                   <li
                     key={c.token}
-                    className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-center gap-2.5 px-1.5 py-1.5 rounded hover:bg-muted/50 transition-colors"
                   >
                     <CoinLogo coin={c} logoUrl={logoMap[c.token.toLowerCase()]} />
                     <div className="min-w-0 flex-1">
@@ -1351,13 +1494,14 @@ function TopMovers({
   );
 }
 
+// Categorical, no red: red on this page means supply went down.
 const ISSUER_PALETTE = [
-  '#ef4444', // brand red
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#a855f7', // purple
-  '#f97316', // orange
-  '#64748b', // slate (Others)
+  '#3987e5', // blue
+  '#d95926', // orange
+  '#199e70', // green
+  '#8b5cf6', // violet
+  '#d4a017', // gold
+  '#6b7280', // gray (Others)
 ];
 
 function IssuerCard({
@@ -1375,20 +1519,13 @@ function IssuerCard({
 }) {
   const [viewMode, setViewMode] = useState<'issuers' | 'coins'>('issuers');
 
-  // SVG donut params
-  const size = 140;
-  const radius = 60;
-  const stroke = 18;
-  const circumference = 2 * Math.PI * radius;
-  let cursor = 0;
-
   // Top-3 concentration. slices are pre-sorted desc and "Others" lives at the
   // end, so the first three entries are always the top three individual issuers.
   const top3 = slices.filter((s) => s.name !== 'Others').slice(0, 3);
   const top3Sum = top3.reduce((s, x) => s + x.value, 0);
   const top3Pct = total > 0 ? (top3Sum / total) * 100 : 0;
 
-  // Map issuer name → color, derived from the donut's slice order so both views
+  // Map issuer name → color, derived from the slice order so both views
   // stay visually consistent. Issuers outside the top-5 use the "Others" color.
   const issuerColor = useMemo(() => {
     const map = new Map<string, string>();
@@ -1405,17 +1542,17 @@ function IssuerCard({
   }, [slices]);
 
   return (
-    <div className="lg:col-span-2 rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="lg:col-span-2 rounded-md border border-border bg-card p-4 sm:p-5">
       <header className="flex items-center justify-between mb-4 gap-3">
         <h2 className="text-[14px] font-semibold text-foreground">Supply breakdown</h2>
-        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40">
+        <div className="flex items-center gap-px p-px rounded border border-border bg-background">
           {(['issuers', 'coins'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`h-6 px-2 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors ${
+              className={`h-6 px-2 rounded text-[11px] font-medium transition-colors ${
                 viewMode === mode
-                  ? 'bg-card text-foreground shadow-sm'
+                  ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -1443,111 +1580,44 @@ function IssuerCard({
             onSelect={onSelect}
           />
         ) : (
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-          <svg
-            width={size}
-            height={size}
-            viewBox={`0 0 ${size} ${size}`}
-            className="shrink-0 -rotate-90"
-            aria-hidden
-          >
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke="currentColor"
-              strokeOpacity={0.08}
-              strokeWidth={stroke}
-            />
-            {slices.map((s, i) => {
-              const frac = s.value / total;
-              const len = frac * circumference;
-              const dashoffset = -cursor;
-              cursor += len;
-              const isOthers = s.name === 'Others';
-              const isSelected = selected === s.name;
-              const isDimmed = selected !== null && !isSelected;
-              const color = ISSUER_PALETTE[i] || ISSUER_PALETTE[ISSUER_PALETTE.length - 1];
-              return (
-                <circle
-                  key={s.name}
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={radius}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={stroke}
-                  strokeDasharray={`${len} ${circumference}`}
-                  strokeDashoffset={dashoffset}
-                  strokeLinecap="butt"
-                  opacity={isDimmed ? 0.3 : 1}
-                  className={`transition-opacity ${
-                    isOthers ? '' : 'cursor-pointer hover:opacity-80'
-                  }`}
-                  onClick={isOthers ? undefined : () => onSelect(s.name)}
-                >
-                  <title>
-                    {s.name}: {((s.value / total) * 100).toFixed(1)}%
-                  </title>
-                </circle>
-              );
-            })}
-          </svg>
-
-          <ul className="flex-1 w-full space-y-0.5">
-            {slices.map((s, i) => {
-              const pct = total > 0 ? (s.value / total) * 100 : 0;
-              const isOthers = s.name === 'Others';
-              const isSelected = selected === s.name;
-              const isDimmed = selected !== null && !isSelected;
-              const color =
-                ISSUER_PALETTE[i] || ISSUER_PALETTE[ISSUER_PALETTE.length - 1];
-              const content = (
-                <>
+        <ul className="space-y-1">
+          {slices.map((s, i) => {
+            const pct = total > 0 ? (s.value / total) * 100 : 0;
+            const isOthers = s.name === 'Others';
+            const isSelected = selected === s.name;
+            const isDimmed = selected !== null && !isSelected;
+            const color = ISSUER_PALETTE[i] || ISSUER_PALETTE[ISSUER_PALETTE.length - 1];
+            const row = (
+              <>
+                <span className="w-28 sm:w-36 shrink-0 text-[12px] text-foreground truncate text-left">{s.name}</span>
+                <span className="flex-1 h-2 rounded-sm bg-muted/50 overflow-hidden">
                   <span
-                    className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ background: color }}
+                    className="block h-full rounded-sm"
+                    style={{ width: `${Math.max(0.5, pct)}%`, background: color }}
                   />
-                  <span className="text-[12px] font-medium text-foreground truncate flex-1 text-left">
-                    {s.name}
-                  </span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    {fmtUsd(s.value)}
-                  </span>
-                  <span className="text-[11px] tabular-nums font-semibold text-foreground w-12 text-right">
-                    {pct >= 0.1 ? `${pct.toFixed(1)}%` : '<0.1%'}
-                  </span>
-                </>
-              );
-              return (
-                <li key={s.name}>
-                  {isOthers ? (
-                    <div
-                      className={`flex items-center gap-3 px-1.5 py-1 ${
-                        isDimmed ? 'opacity-50' : ''
-                      }`}
-                    >
-                      {content}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onSelect(s.name)}
-                      className={`flex w-full items-center gap-3 px-1.5 py-1 rounded transition-colors ${
-                        isSelected
-                          ? 'bg-[#ef4444]/10'
-                          : 'hover:bg-muted/60'
-                      } ${isDimmed ? 'opacity-50' : ''}`}
-                    >
-                      {content}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                </span>
+                <span className="num w-20 shrink-0 text-right text-[11px] text-muted-foreground">{fmtUsd(s.value)}</span>
+                <span className="num w-12 shrink-0 text-right text-[11px] text-foreground">
+                  {pct >= 0.1 ? `${pct.toFixed(1)}%` : '<0.1%'}
+                </span>
+              </>
+            );
+            const cls = `flex w-full items-center gap-3 px-1.5 py-1 rounded transition-colors ${
+              isSelected ? 'bg-accent' : isOthers ? '' : 'hover:bg-accent/50'
+            } ${isDimmed ? 'opacity-50' : ''}`;
+            return (
+              <li key={s.name}>
+                {isOthers ? (
+                  <div className={cls}>{row}</div>
+                ) : (
+                  <button type="button" onClick={() => onSelect(s.name)} className={cls} aria-pressed={isSelected}>
+                    {row}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
         )}
       </>)}
     </div>
@@ -1683,10 +1753,10 @@ function ConcentrationBanner({
   topNames: string[];
 }) {
   return (
-    <div className="mb-5 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+    <div className="mb-5 rounded border border-border bg-muted/30 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3 mb-1.5">
         <div className="min-w-0 flex items-baseline gap-2">
-          <span className="text-[11px] font-bold tracking-wider uppercase text-muted-foreground shrink-0">
+          <span className="text-[11px] font-medium text-muted-foreground shrink-0">
             Top 3 issuers
           </span>
           <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">
@@ -1704,7 +1774,7 @@ function ConcentrationBanner({
       </div>
       <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
         <div
-          className="h-full rounded-full bg-[#ef4444]"
+          className="h-full rounded-full bg-ink"
           style={{ width: `${Math.min(100, pct)}%` }}
         />
       </div>
@@ -1718,7 +1788,7 @@ function OriginCard({ nativeUsd, bridgedUsd }: { nativeUsd: number; bridgedUsd: 
   const bridgedPct = total > 0 ? (bridgedUsd / total) * 100 : 0;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
       <header className="flex items-center justify-between mb-4">
         <h2 className="text-[14px] font-semibold text-foreground">Native vs bridged</h2>
         <Tooltip>
@@ -1740,12 +1810,12 @@ function OriginCard({ nativeUsd, bridgedUsd }: { nativeUsd: number; bridgedUsd: 
         <>
           <div className="h-3 rounded-full bg-muted/40 overflow-hidden flex mb-4">
             <div
-              className="h-full bg-[#ef4444]"
+              className="h-full bg-ink"
               style={{ width: `${nativePct}%` }}
               title={`Native ${nativePct.toFixed(1)}%`}
             />
             <div
-              className="h-full bg-[#3b82f6]"
+              className="h-full bg-[#3987e5]"
               style={{ width: `${bridgedPct}%` }}
               title={`Bridged ${bridgedPct.toFixed(1)}%`}
             />
@@ -1753,7 +1823,7 @@ function OriginCard({ nativeUsd, bridgedUsd }: { nativeUsd: number; bridgedUsd: 
           <div className="grid grid-cols-2 gap-4">
             <OriginStat
               label="Native"
-              dotColor="#ef4444"
+              dotColor="var(--ink)"
               value={fmtUsd(nativeUsd)}
               pct={nativePct}
             />
@@ -1851,7 +1921,7 @@ function SortableTh({
 // Every tracked peg gets its own tint so the Peg column reads as a quick colour
 // key (currency at a glance) rather than a wall of identical gray badges.
 const PEG_TINT: Record<string, string> = {
-  USD: 'bg-[#22c55e]/10 text-green-600 dark:text-green-400',
+  USD: 'bg-[#22c55e]/10 text-up',
   EUR: 'bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400',
   SGD: 'bg-[#a855f7]/10 text-purple-600 dark:text-purple-400',
   JPY: 'bg-[#f97316]/10 text-orange-600 dark:text-orange-400',
@@ -1875,7 +1945,7 @@ function CoinRow({
   const shareBarWidth = Math.max(0.5, coin.share * 100);
 
   return (
-    <tr className="group border-b border-border/60 even:bg-muted/[0.035] hover:bg-[#ef4444]/[0.05] transition-colors">
+    <tr className="group border-b border-border/60 even:bg-muted/[0.035] hover:bg-accent/40 transition-colors">
       <td className="px-4 py-3 text-[11px] tabular-nums text-muted-foreground align-middle">
         {rank}
       </td>
@@ -1886,14 +1956,14 @@ function CoinRow({
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-bold text-foreground">{coin.symbol}</span>
               {coin.bridged && (
-                <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
+                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
                   Bridged
                 </span>
               )}
               {coin.doublecounted && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 h-4 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 inline-flex items-center cursor-help">
+                    <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 inline-flex items-center cursor-help">
                       Double-counted
                     </span>
                   </TooltipTrigger>
@@ -1939,7 +2009,7 @@ function CoinRow({
           ) : (
             <div className="h-1 w-24 rounded-full bg-muted/40 overflow-hidden">
               <div
-                className="h-full rounded-full bg-[#ef4444]"
+                className="h-full rounded-full bg-ink"
                 style={{ width: `${shareBarWidth}%` }}
                 title={`${(coin.share * 100).toFixed(2)}% of supply`}
               />
@@ -1992,7 +2062,7 @@ function MobileCoinCard({
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[14px] font-bold text-foreground">{coin.symbol}</span>
               {coin.bridged && (
-                <span className="text-[9px] font-bold tracking-wider uppercase px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
+                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
                   Bridged
                 </span>
               )}
@@ -2054,7 +2124,7 @@ function Stat({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 min-w-0">
-      <dt className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground shrink-0">
+      <dt className="text-[11px] font-medium text-muted-foreground shrink-0">
         {label}
       </dt>
       <dd
@@ -2164,10 +2234,10 @@ function ChangeBadge({
   const tone = flat
     ? 'text-muted-foreground'
     : value > 0
-      ? 'text-green-600 dark:text-green-400'
-      : 'text-[#ef4444]';
+      ? 'text-up'
+      : 'text-down';
   return (
-    <span className={`tabular-nums font-semibold ${tone} ${className}`}>
+    <span className={`num font-medium ${tone} ${className}`}>
       {flat ? '0%' : fmtChange(value)}
     </span>
   );
@@ -2199,7 +2269,7 @@ function Sparkline({
     })
     .join(' ');
   const up = data[data.length - 1] >= data[0];
-  const color = up ? '#22c55e' : '#ef4444';
+  const color = up ? 'var(--up)' : 'var(--down)';
   return (
     <svg
       width={width}
@@ -2229,7 +2299,7 @@ function AvgHolderCell({ value }: { value: number }) {
   // >= $100k avg = clearly whale/institutional concentration
   const tone =
     value >= 100_000
-      ? 'text-[#ef4444]'
+      ? 'text-[#d4a017]'
       : value >= 1_000
         ? 'text-foreground'
         : 'text-muted-foreground';
@@ -2243,7 +2313,7 @@ function VelocityCell({ value }: { value: number }) {
   // 1.0× = whole supply turns over once daily — a meaningful threshold for "active"
   const tone =
     value >= 1
-      ? 'text-green-600 dark:text-green-400'
+      ? 'text-up'
       : value >= 0.2
         ? 'text-foreground'
         : 'text-muted-foreground';
@@ -2319,7 +2389,7 @@ function CoinLogo({ coin, logoUrl }: { coin: EnrichedCoin; logoUrl?: string }) {
 
   if (idx >= sources.length) {
     return (
-      <div className="w-8 h-8 rounded-full bg-[#ef4444]/10 text-[#ef4444] flex items-center justify-center text-[11px] font-bold shrink-0">
+      <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center text-[11px] font-bold shrink-0">
         {coin.symbol.charAt(0)}
       </div>
     );

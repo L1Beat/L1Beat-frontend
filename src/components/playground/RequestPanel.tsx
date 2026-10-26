@@ -44,8 +44,8 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? (
         <>
-          <Check className="w-3 h-3 text-green-500" />
-          <span className="text-green-500">Copied!</span>
+          <Check className="w-3 h-3 text-up" />
+          <span className="text-up">Copied!</span>
         </>
       ) : (
         <>
@@ -64,7 +64,7 @@ function CodeBlock({ label, content }: { label: string; content: string }) {
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <CopyButton text={content} />
       </div>
-      <div className="font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto scrollbar-hide border border-border">
+      <div className="font-mono text-xs bg-muted rounded p-3 overflow-x-auto scrollbar-hide border border-border">
         <pre className="whitespace-pre-wrap break-all text-foreground">{content}</pre>
       </div>
     </div>
@@ -82,9 +82,9 @@ function UrlBlock({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="block font-mono text-xs bg-muted rounded-lg p-3 overflow-x-auto scrollbar-hide border border-border hover:border-[#ef4444]/40 transition-colors group"
+        className="block font-mono text-xs bg-muted rounded p-3 overflow-x-auto scrollbar-hide border border-border hover:border-brand/40 transition-colors group"
       >
-        <pre className="whitespace-pre-wrap break-all text-foreground group-hover:text-[#ef4444]/70 transition-colors duration-150">{url}</pre>
+        <pre className="whitespace-pre-wrap break-all text-foreground group-hover:text-foreground/70 transition-colors duration-150">{url}</pre>
       </a>
     </div>
   );
@@ -137,7 +137,7 @@ export function RequestPanel({
         {/* Endpoint header */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-green-500/15 text-green-600 dark:text-green-400 text-xs font-mono px-1.5 py-0.5 rounded">
+            <span className="bg-green-500/15 text-up text-xs font-mono px-1.5 py-0.5 rounded">
               GET
             </span>
             <code className="text-sm font-mono text-foreground break-all flex-1">
@@ -149,7 +149,7 @@ export function RequestPanel({
               className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
             >
               {isBookmarked
-                ? <BookmarkCheck className="w-4 h-4 text-[#ef4444]" />
+                ? <BookmarkCheck className="w-4 h-4 text-muted-foreground" />
                 : <Bookmark className="w-4 h-4" />}
             </button>
           </div>
@@ -158,7 +158,7 @@ export function RequestPanel({
             <ul className="space-y-1 mt-2">
               {endpoint.notes.map((note) => (
                 <li key={note} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <span className="text-[#ef4444] mt-0.5 flex-shrink-0">•</span>
+                  <span className="text-muted-foreground mt-0.5 flex-shrink-0">•</span>
                   <span>{note}</span>
                 </li>
               ))}
@@ -170,7 +170,7 @@ export function RequestPanel({
         {pathParams.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+              <h3 className="text-xs font-medium text-foreground">
                 Path Parameters
               </h3>
               <div className="flex-1 h-px bg-border" />
@@ -191,7 +191,7 @@ export function RequestPanel({
         {sortedQueryParams.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+              <h3 className="text-xs font-medium text-foreground">
                 Query Parameters
               </h3>
               {requiredQueryParams.length === 0 && (
@@ -214,7 +214,7 @@ export function RequestPanel({
         {/* Request Preview */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+            <h3 className="text-xs font-medium text-foreground">
               Request Preview
             </h3>
             <div className="flex-1 h-px bg-border" />
@@ -229,7 +229,7 @@ export function RequestPanel({
                   onClick={() => handleSnippetTab(tab)}
                   className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
                     snippetTab === tab
-                      ? 'bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/30'
+                      ? 'bg-accent text-foreground border border-brand/30'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent'
                   }`}
                 >
@@ -248,7 +248,7 @@ export function RequestPanel({
           onClick={onExecute}
           disabled={isLoading || hasValidationErrors}
           title={hasValidationErrors ? 'Fill in required parameters' : undefined}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+          className="w-full flex items-center justify-center gap-2 h-9 px-4 bg-foreground hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed text-background rounded text-[12px] font-medium transition-colors"
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />

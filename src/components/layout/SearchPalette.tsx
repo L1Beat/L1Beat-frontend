@@ -80,7 +80,7 @@ interface SearchPaletteProps {
 const PAGES: Result[] = [
   { id: 'page-overview', type: 'page', title: 'Overview', subtitle: 'Live L1 screener', to: '/' },
   { id: 'page-metrics', type: 'page', title: 'Network Metrics', subtitle: 'Aggregate L1 metrics', to: '/metrics' },
-  { id: 'page-flows', type: 'page', title: 'Cross-chain Flows', subtitle: 'ICM & Teleporter activity', to: '/flows' },
+  { id: 'page-flows', type: 'page', title: 'Cross-chain flows', subtitle: 'ICM and Teleporter activity, on the Overview', to: '/?view=flows' },
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
@@ -351,7 +351,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
         className="absolute inset-0 bg-black/60 dark:bg-black/60 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-xl rounded-2xl border border-border bg-popover shadow-2xl shadow-black/40 dark:shadow-black/60 overflow-hidden">
+      <div className="relative w-full max-w-xl rounded-md border border-border bg-popover shadow-2xl shadow-black/40 dark:shadow-black/60 overflow-hidden">
         <div className="flex items-center gap-3 px-4 h-12 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
@@ -385,7 +385,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                 const SectionIcon = section.icon;
                 return (
                   <div key={section.label} className="mb-1 last:mb-0">
-                    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold text-muted-foreground">
                       <SectionIcon className="w-3 h-3" />
                       <span>{section.label}</span>
                       <span className="text-muted-foreground/60 font-medium normal-case tracking-normal">
@@ -404,12 +404,12 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                               onMouseEnter={() => setActive(idx)}
                               onClick={() => handleSelect(r)}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                                isActive ? 'bg-[#ef4444]/10' : 'hover:bg-accent'
+                                isActive ? 'bg-accent' : 'hover:bg-accent/50'
                               }`}
                             >
                               <div
                                 className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
-                                  isActive ? 'bg-[#ef4444]/15 text-[#ef4444]' : 'bg-muted text-muted-foreground'
+                                  isActive ? 'bg-foreground/10 text-foreground' : 'bg-muted text-muted-foreground'
                                 }`}
                               >
                                 <Icon className="w-3.5 h-3.5" />
@@ -426,7 +426,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                                 {TYPE_LABEL[r.type].toUpperCase()}
                               </span>
                               {isActive && (
-                                <ArrowRight className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
+                                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                               )}
                             </button>
                           </li>

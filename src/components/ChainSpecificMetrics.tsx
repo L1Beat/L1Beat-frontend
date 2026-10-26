@@ -9,7 +9,7 @@ import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { TimeRangeSlider } from './TimeRangeSlider';
+import { SeriesSummary } from './instrument';
 import { LoadingSpinner } from './LoadingSpinner';
 import {
   crosshairPlugin,
@@ -34,7 +34,7 @@ const METRIC_COLORS = {
   dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },
   maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },
   gasUsed: { main: 'rgb(249, 115, 22)', fill: 'rgba(249, 115, 22, 0.15)' },
-  avgGasPrice: { main: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.15)' },
+  avgGasPrice: { main: 'rgb(20, 184, 166)', fill: 'rgba(20, 184, 166, 0.15)' },
   feesPaid: { main: 'rgb(236, 72, 153)', fill: 'rgba(236, 72, 153, 0.15)' },
 };
 
@@ -402,12 +402,6 @@ export function ChainSpecificMetrics() {
   }, [selectedChain, timeframe]);
 
   // Handler for range changes
-  const handleRangeChange = useCallback((metricId: string, start: number, end: number) => {
-    setRangeStates(prev => ({
-      ...prev,
-      [metricId]: { start, end }
-    }));
-  }, []);
 
   // Toggle export dropdown for a specific metric
   const toggleExportDropdown = useCallback((metricId: string) => {
@@ -501,25 +495,27 @@ export function ChainSpecificMetrics() {
         label: metric.name,
         data: filteredData.map(item => item.value),
         fill: true,
+        // Each metric keeps one hue (none of them red) as its identity across
+        // the page; axes and grid stay neutral.
         borderColor: metric.color.main,
         backgroundColor: (context: any) => {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
-          if (!chartArea) return metric.color.fill;
+          const rgba = (a: number) => metric.color.main.replace('rgb', 'rgba').replace(')', `, ${a})`);
+          if (!chartArea) return rgba(0.06);
           const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          const baseColor = metric.color.main;
-          gradient.addColorStop(0, baseColor.replace('rgb', 'rgba').replace(')', ', 0.35)'));
-          gradient.addColorStop(0.4, baseColor.replace('rgb', 'rgba').replace(')', ', 0.15)'));
-          gradient.addColorStop(1, baseColor.replace('rgb', 'rgba').replace(')', ', 0.02)'));
+          gradient.addColorStop(0, rgba(0.16));
+          gradient.addColorStop(0.5, rgba(0.06));
+          gradient.addColorStop(1, rgba(0));
           return gradient;
         },
-        borderWidth: isDark ? 2.5 : 2,
-        tension: 0.35,
+        borderWidth: 1.5,
+        tension: 0.2,
         pointRadius: 0,
-        pointHoverRadius: isMobile ? 5 : 7,
-        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: isDark ? '#1a1d21' : '#ffffff',
         pointHoverBorderColor: metric.color.main,
-        pointHoverBorderWidth: 2.5,
+        pointHoverBorderWidth: 1.5,
       }],
     };
 
@@ -593,13 +589,16 @@ export function ChainSpecificMetrics() {
             color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
           },
           ticks: {
-            color: metric.color.main,
+            color: isDark ? '#8b939c' : '#687078',
             font: {
               size: isMobile ? 10 : 11,
             },
             callback: (value: any) => {
-              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-              if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+              const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+              if (value >= 1e12) return `${trim(value / 1e12)}T`;
+              if (value >= 1e9) return `${trim(value / 1e9)}B`;
+              if (value >= 1e6) return `${trim(value / 1e6)}M`;
+              if (value >= 1e3) return `${trim(value / 1e3)}k`;
               return value;
             },
             maxTicksLimit: isMobile ? 5 : 8,
@@ -612,53 +611,49 @@ export function ChainSpecificMetrics() {
     const Icon = metric.icon;
 
     return (
-      <div key={metricId} ref={(el) => { chartContainerRefs.current[metricId] = el; }} className="bg-card rounded-xl border border-border p-6">
+      <div key={metricId} ref={(el) => { chartContainerRefs.current[metricId] = el; }} className="bg-card rounded-md border border-border p-4">
         {/* Export-only chain name */}
         <div className="export-show hidden items-center justify-between mb-2">
           <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
           <span className="text-sm text-muted-foreground">
-            {timeframe === 360 ? '1Y' : `${timeframe}D`} · {format(new Date(), 'MMM d, yyyy')}
+            {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
           </span>
         </div>
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: metric.color.main.replace('rgb', 'rgba').replace(')', ', 0.1)') }}
-            >
-              <Icon className="w-5 h-5" style={{ color: metric.color.main }} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">{metric.name}</h3>
-              <p className="text-2xl font-bold" style={{ color: metric.color.main }}>
-                {metric.valueFormatter(latestValue)}
-                {metric.unit && <span className="text-sm ml-1 text-muted-foreground">{metric.unit}</span>}
-              </p>
-            </div>
+        {/* Header: metric name, latest value, export */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0">
+            <h3 className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
+              <Icon className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
+              {metric.name}
+            </h3>
+            <p className="num text-[22px] leading-7 font-medium" style={{ color: metric.color.main }}>
+              {metric.valueFormatter(latestValue)}
+              {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
+            </p>
           </div>
           <div className="relative export-hide">
             <button
               onClick={() => toggleExportDropdown(metricId)}
-              className="p-2 rounded-lg hover:bg-accent transition-colors"
+              className="inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="Export chart"
+              aria-label="Export chart"
             >
-              <Download className="w-4 h-4 text-muted-foreground" />
+              <Download className="w-3.5 h-3.5" />
             </button>
             {exportDropdownStates[metricId] && (
-              <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 mt-1 w-40 bg-popover border border-border rounded shadow-lg z-10 py-1">
                 <button
                   onClick={() => handleDownloadPNG(metricId)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-t-lg flex items-center gap-2"
+                  className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                   Export as PNG
                 </button>
                 <button
                   onClick={() => handleDownloadCSV(metricId)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-b-lg flex items-center gap-2"
+                  className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                   Export as CSV
                 </button>
               </div>
@@ -667,7 +662,7 @@ export function ChainSpecificMetrics() {
         </div>
 
         {/* Chart */}
-        <div className="h-[300px] mb-4">
+        <div className="h-[220px]">
           <Line
             ref={(ref) => {
               if (ref) chartRefs.current[metricId] = ref;
@@ -678,21 +673,20 @@ export function ChainSpecificMetrics() {
           />
         </div>
 
-        {/* Time Range Slider */}
-        <TimeRangeSlider
-          data={data.map(item => ({ date: item.date, value: item.value }))}
-          startIndex={start}
-          endIndex={end}
-          onChange={(newStart, newEnd) => handleRangeChange(metricId, newStart, newEnd)}
-          color={metric.color.main}
-        />
+        {filteredData.length > 1 && (
+          <SeriesSummary
+            values={filteredData.map((item) => item.value)}
+            format={(v) => metric.valueFormatter(v)}
+            className="mt-2 export-hide"
+          />
+        )}
       </div>
     );
   };
 
   if (loading) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8">
+      <div className="bg-card border border-border rounded-md p-8">
         <div className="flex items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
@@ -701,38 +695,31 @@ export function ChainSpecificMetrics() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Section Header with Chain Selector */}
-      <div className="bg-card border border-border rounded-xl p-5 sm:p-6">
-        <div className="flex flex-col gap-5">
+      <div className="border-b border-border pb-4">
+        <div className="flex flex-col gap-3">
           {/* Top row: Title + dropdown */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
-              <div>
-                <h2 className="text-base sm:text-lg font-semibold text-foreground">
-                  Chain-specific metrics
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Detailed metrics for individual chains
-                </p>
-              </div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-foreground">Chain-specific metrics</h2>
+              <p className="text-[12px] text-muted-foreground">One chain at a time. Pick from the list or the most active chains.</p>
             </div>
 
             {/* Chain Selector Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full sm:w-72 px-4 py-2.5 bg-muted/40 border border-border rounded-xl flex items-center justify-between hover:bg-muted/70 hover:border-[#ef4444]/20 transition-colors"
+                className="w-full sm:w-64 h-8 px-3 bg-background border border-border rounded flex items-center justify-between hover:border-foreground/30 transition-colors"
               >
-                <span className="text-sm font-medium text-foreground truncate">
+                <span className="text-[12px] font-medium text-foreground truncate">
                   {selectedChain?.chainName || 'Select Chain'}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-full sm:w-72 bg-card border border-border rounded-xl shadow-lg z-10 max-h-80 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-full sm:w-72 bg-card border border-border rounded-md shadow-lg z-10 max-h-80 overflow-y-auto">
                   {chains.map((chain) => (
                     <button
                       key={chain.chainId}
@@ -740,9 +727,9 @@ export function ChainSpecificMetrics() {
                         handleChainChange(chain);
                         setIsDropdownOpen(false);
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-[12px] hover:bg-accent/50 transition-colors ${
                         selectedChain?.chainId === chain.chainId
-                          ? 'bg-[#ef4444]/10 text-[#ef4444] font-medium'
+                          ? 'bg-accent text-foreground font-medium'
                           : 'text-foreground'
                       }`}
                     >
@@ -777,17 +764,17 @@ export function ChainSpecificMetrics() {
                         }}
                         title={`${chain.chainName}${Number.isFinite(latestDAA) && latestDAA > 0 ? ` • ${latestDAA.toLocaleString()} DAA` : ''}`}
                         className={[
-                          'h-11 w-11 rounded-2xl border transition-all flex items-center justify-center shrink-0',
-                          'bg-muted/20 hover:bg-muted/40',
+                          'h-9 w-9 rounded border transition-colors flex items-center justify-center shrink-0',
+                          'bg-background hover:bg-accent/50',
                           isActive
-                            ? 'border-[#ef4444]/40 ring-2 ring-[#ef4444]/20'
-                            : 'border-border hover:border-[#ef4444]/20'
+                            ? 'border-foreground/60'
+                            : 'border-border hover:border-foreground/30'
                         ].join(' ')}
                       >
                         <img
                           src={logoSrc}
                           alt={chain.chainName}
-                          className="h-8 w-8 rounded-xl bg-muted/30 ring-1 ring-border"
+                          className="h-6 w-6 rounded bg-muted/30"
                           onError={(e) => {
                             e.currentTarget.src = '/icon-dark-animated.svg';
                             e.currentTarget.onerror = null;
@@ -806,9 +793,9 @@ export function ChainSpecificMetrics() {
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days as TimeframeOption)}
-                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`h-8 px-3 rounded text-xs font-medium border transition-colors ${
                     timeframe === days
-                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      ? 'bg-foreground border-foreground text-background'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -819,11 +806,11 @@ export function ChainSpecificMetrics() {
               {/* Share Button */}
               <button
                 onClick={handleShare}
-                className="p-2 rounded-xl bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 transition-all ml-2"
+                className="p-2 rounded-md bg-muted/40 border border-border hover:bg-muted/70 hover:border-foreground/30 transition-all ml-2"
                 title="Share this view"
               >
                 {copied ? (
-                  <span className="text-xs font-medium text-green-500 px-1">Copied!</span>
+                  <span className="text-xs font-medium text-up px-1">Copied!</span>
                 ) : (
                   <Share2 className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -835,7 +822,7 @@ export function ChainSpecificMetrics() {
 
       {/* Metrics Charts Grid */}
       {selectedChain && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {METRICS.map(metric => renderMetricChart(metric.id))}
         </div>
       )}

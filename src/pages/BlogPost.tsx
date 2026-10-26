@@ -222,8 +222,8 @@ export function BlogPost() {
   if (error) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
-          <AlertCircle className="w-7 h-7 text-[#ef4444]" />
+        <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
+          <AlertCircle className="w-7 h-7 text-muted-foreground" />
         </div>
         <h1 className="text-2xl font-bold text-foreground mb-2">
           {error === 'Post not found' ? 'Article not found' : 'Something went wrong'}
@@ -236,14 +236,14 @@ export function BlogPost() {
         <div className="flex gap-2 justify-center">
           <button
             onClick={() => navigate('/blog')}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-colors"
           >
             Back to Blog
           </button>
           {error !== 'Post not found' && (
             <button
               onClick={fetchPost}
-              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-card border border-border text-sm font-semibold text-foreground hover:bg-accent transition-colors"
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-card border border-border text-sm font-semibold text-foreground hover:bg-accent transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Try Again
@@ -290,31 +290,28 @@ export function BlogPost() {
 
       <div className="lg:flex lg:gap-10 lg:items-start">
         <article className="flex-1 min-w-0 space-y-6">
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-            <div aria-hidden className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
-            </div>
-            <div className="relative p-6 sm:p-7 space-y-5">
+          <div className="border-b border-border">
+            <div className="relative pb-6 space-y-4">
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {post.tags.map((tag) => (
                     <Link
                       key={tag}
                       to={`/blog?tag=${encodeURIComponent(tag)}`}
-                      className="inline-flex items-center px-2.5 h-6 rounded-full text-[10px] font-bold tracking-[0.1em] bg-[#ef4444]/15 text-[#ef4444] hover:bg-[#ef4444]/25 transition-colors"
+                      className="inline-flex items-center text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {tag.toUpperCase()}
+                      {tag}
                     </Link>
                   ))}
                 </div>
               )}
 
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight leading-tight">
+              <h1 className="text-[24px] sm:text-[30px] font-semibold text-foreground leading-tight">
                 {post.title}
               </h1>
 
               {post.subtitle && post.subtitle.trim() && (
-                <p className="text-base text-muted-foreground leading-relaxed">
+                <p className="text-[14px] text-muted-foreground leading-relaxed">
                   {post.subtitle}
                 </p>
               )}
@@ -334,11 +331,11 @@ export function BlogPost() {
             <img
               src={post.imageUrl}
               alt={post.title}
-              className="w-full h-auto max-h-[460px] object-cover rounded-xl"
+              className="w-full h-auto max-h-[460px] object-cover rounded-md"
             />
           )}
 
-          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 shadow-xl">
+          <div>
             <div ref={contentRef} className="prose-content max-w-none">
               {renderMainContent(post.mainContent || post.content)}
             </div>
@@ -405,7 +402,7 @@ function TocRail({
                 {title}
               </a>
               {active && (
-                <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-[#ef4444]" />
+                <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-brand" />
               )}
             </li>
           );
@@ -488,7 +485,7 @@ function AuthorsBlock({
       </div>
       <button
         onClick={onShare}
-        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold bg-background/60 border border-border text-foreground hover:bg-accent transition-colors shrink-0"
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded text-xs font-semibold bg-background/60 border border-border text-foreground hover:bg-accent transition-colors shrink-0"
       >
         <XIcon className="w-3.5 h-3.5" />
         Share
@@ -509,7 +506,7 @@ function AuthorAvatar({
   const initial = name.charAt(0).toUpperCase();
   return (
     <div
-      className="relative rounded-full overflow-hidden shrink-0 bg-[#ef4444]/15"
+      className="relative rounded-full overflow-hidden shrink-0 bg-brand/15"
       style={{ width: size, height: size }}
     >
       {profile?.avatar ? (
@@ -520,7 +517,7 @@ function AuthorAvatar({
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-[#ef4444]">
+        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-brand">
           {initial}
         </div>
       )}
@@ -605,7 +602,7 @@ function NewsletterCard() {
 
   if (submitted) {
     return (
-      <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-5 text-center">
+      <div className="rounded-md border border-green-500/30 bg-green-500/10 p-5 text-center">
         <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-3">
           <Check className="w-4 h-4 text-white" />
         </div>
@@ -618,10 +615,10 @@ function NewsletterCard() {
   }
 
   return (
-    <div className="rounded-xl border border-[#ef4444]/30 bg-card p-5">
+    <div className="rounded-md border border-border bg-card p-5">
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/15 flex items-center justify-center">
-          <Mail className="w-3.5 h-3.5 text-[#ef4444]" />
+        <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
+          <Mail className="w-3.5 h-3.5 text-muted-foreground" />
         </div>
         <div className="text-[13px] font-semibold text-foreground">Weekly digest</div>
       </div>
@@ -635,12 +632,12 @@ function NewsletterCard() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@domain.com"
           required
-          className="w-full h-9 px-3 rounded-lg bg-background border border-border text-xs placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]/30 focus:border-[#ef4444]/40"
+          className="w-full h-9 px-3 rounded bg-background border border-border text-xs placeholder-muted-foreground focus:outline-none focus:border-foreground/40"
         />
         <button
           type="submit"
           disabled={submitting}
-          className="w-full h-9 rounded-lg bg-[#ef4444] text-white text-xs font-semibold hover:bg-[#dc2626] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          className="w-full h-9 rounded bg-foreground text-background hover:bg-foreground/90 text-xs font-semibold hover:bg-foreground/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? 'Subscribing…' : 'Subscribe'}
         </button>
@@ -651,7 +648,7 @@ function NewsletterCard() {
 
 function RelatedCard({ posts }: { posts: RelatedPost[] }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-md border border-border bg-card p-5">
       <div className="text-[10px] font-bold tracking-[0.15em] text-muted-foreground mb-3">
         RELATED
       </div>
@@ -669,12 +666,12 @@ function RelatedCard({ posts }: { posts: RelatedPost[] }) {
                     loading="lazy"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-md bg-[#ef4444]/15 shrink-0 flex items-center justify-center">
-                    <ArrowUpRight className="w-4 h-4 text-[#ef4444]" />
+                  <div className="w-14 h-14 rounded-md bg-muted shrink-0 flex items-center justify-center">
+                    <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-[#ef4444] transition-colors">
+                  <div className="text-xs font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-foreground transition-colors">
                     {post.title}
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1">

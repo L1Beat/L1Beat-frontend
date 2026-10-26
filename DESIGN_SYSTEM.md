@@ -1,183 +1,138 @@
 # L1Beat Design System
 
-A design system inspired by Apple's Human Interface Guidelines, optimized for a dark-first blockchain analytics dashboard.
+An instrument, not a landing page. L1Beat is a screener and chart tool for
+Avalanche L1s, so the interface is built the way terminals and research tools
+are built: dense tables, one restrained accent, numbers in a mono face, and
+chrome that recedes behind the data.
 
 ---
 
 ## Design Principles
 
-### 1. Clarity
-- Clean, precise, uncluttered interfaces
-- Every element serves a purpose
-- Clear visual hierarchy guides the eye
-- Familiar iconography and patterns
+### 1. Numbers are the hero
+- Every number, ID, hash and address is set in IBM Plex Mono with tabular figures, right-aligned in tables.
+- Headline values are big; their labels are small, sentence case, and quiet.
+- No decorative icons next to metrics. The number carries the meaning.
 
-### 2. Consistency
-- Uniform navigation, typography, and color usage
-- Leverage system-provided patterns
-- Predictable interactions reduce cognitive load
+### 2. Red means down
+- Brand red (`#E84142`, Avalanche's own) appears in exactly three places: the logo, the active nav rule, and negative deltas.
+- Active states, buttons and selections are neutral (foreground on background), never red.
+- Chart series ink is neutral. Green and red keep their up/down meaning.
 
-### 3. Deference
-- UI should not distract from data and content
-- Let metrics and charts be the focus
-- Subtle backgrounds, prominent data
+### 3. Density over decoration
+- Table rows are 36 to 38px. Base UI text is 13px, table text 12px.
+- Sections are separated by hairlines and flat panels, not shadows or glows.
+- No pills with tracked uppercase, no "NEW" or "LIVE" badges. A timestamp says when data was updated.
 
-### 4. Depth
-- Use layers and translucency for hierarchy
-- Elevated surfaces for modals and popovers
-- Motion provides context and feedback
+### 4. Honest data
+- Every panel of numbers carries a source footnote.
+- Empty states say why ("Indexer is still backfilling"), not just a dash.
+- Charts show low / average / high / latest under the plot so the eye can check the line.
 
 ---
 
 ## Color System
 
-### Dark Mode (Primary)
+Tokens live in `src/index.css` and are exposed through Tailwind (`bg-card`, `text-muted-foreground`, `text-up`, `bg-brand/…`).
 
-#### Backgrounds
+### Dark mode (default)
+
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `--background` | `#000000` | Page background |
-| `--background-secondary` | `#1c1c1e` | Cards, elevated surfaces |
-| `--background-tertiary` | `#2c2c2e` | Nested elements, inputs |
+| `--background` | `#141619` | Page. Graphite, not pure black |
+| `--card` | `#1a1d21` | Panels, one step lighter than the page |
+| `--popover` | `#1e2227` | Menus, tooltips, floating bars |
+| `--muted` / `--secondary` | `#22262b` | Inputs, inactive fills |
+| `--accent` | `#262b31` | Hover and selected rows |
+| `--border` | `rgba(148, 163, 184, 0.16)` | Hairlines everywhere |
+| `--foreground` | `#e8eaed` | Primary text |
+| `--muted-foreground` | `#9aa3ad` | Labels, secondary text |
+| `--ink` | `#c9ced4` | Default chart series |
 
-#### Text
-| Token | Hex/Value | Usage |
-|-------|-----------|-------|
-| `--foreground` | `#ffffff` | Primary text |
-| `--foreground-secondary` | `rgba(235, 235, 245, 0.6)` | Secondary text |
-| `--foreground-tertiary` | `rgba(235, 235, 245, 0.3)` | Placeholder, disabled |
-| `--foreground-quaternary` | `rgba(235, 235, 245, 0.18)` | Subtle hints |
+### Light mode
 
-#### Borders & Separators
-| Token | Hex/Value | Usage |
-|-------|-----------|-------|
-| `--border` | `rgba(84, 84, 88, 0.6)` | Default borders |
-| `--border-opaque` | `#38383a` | Solid borders |
-| `--separator` | `rgba(84, 84, 88, 0.36)` | Dividers |
-
-#### Fills (Interactive Elements)
-| Token | Hex/Value | Usage |
-|-------|-----------|-------|
-| `--fill` | `rgba(120, 120, 128, 0.36)` | Default fill |
-| `--fill-secondary` | `rgba(120, 120, 128, 0.32)` | Secondary fill |
-| `--fill-tertiary` | `rgba(118, 118, 128, 0.24)` | Tertiary fill |
-
-### Light Mode
-
-#### Backgrounds
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `--background` | `#ffffff` | Page background |
-| `--background-secondary` | `#f2f2f7` | Cards, elevated surfaces |
-| `--background-tertiary` | `#ffffff` | Nested elements |
+| `--background` | `#f5f6f7` | Page, cool paper grey |
+| `--card` | `#ffffff` | Panels read as sheets on the grey page |
+| `--muted` / `--secondary` | `#eef0f2` | Inputs, inactive fills |
+| `--accent` | `#e9ebee` | Hover and selected rows |
+| `--border` | `rgba(23, 25, 28, 0.12)` | Hairlines |
+| `--foreground` | `#17191c` | Primary text |
+| `--muted-foreground` | `#626a73` | Labels |
+| `--ink` | `#3a3f45` | Default chart series |
 
-#### Text
-| Token | Hex/Value | Usage |
-|-------|-----------|-------|
-| `--foreground` | `#000000` | Primary text |
-| `--foreground-secondary` | `rgba(60, 60, 67, 0.6)` | Secondary text |
-| `--foreground-tertiary` | `rgba(60, 60, 67, 0.3)` | Placeholder, disabled |
+### Brand and semantic
 
-### Brand Colors
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `--brand-red` | `#ef4444` | Primary accent, CTAs |
-| `--brand-red-hover` | `#dc2626` | Hover state |
-| `--brand-red-active` | `#b91c1c` | Active/pressed state |
+| Token | Dark | Light | Usage |
+|-------|------|-------|-------|
+| `--brand` | `#e84142` | `#e84142` | Logo, active nav rule. Also the `down` color |
+| `--up` | `#3dbe7a` | `#1f9d5b` | Positive deltas, "live" dot |
+| `--down` | `#e84142` | `#e84142` | Negative deltas |
 
-### Semantic Colors
-| Token | Light | Dark | Usage |
-|-------|-------|------|-------|
-| `--success` | `#34c759` | `#30d158` | Positive states |
-| `--warning` | `#ff9500` | `#ff9f0a` | Warnings |
-| `--error` | `#ff3b30` | `#ff453a` | Errors, destructive |
-| `--info` | `#007aff` | `#0a84ff` | Informational |
+### Categorical (charts and category keys)
+
+Blue `#3987e5`, orange `#d95926`, green `#199e70`, violet `#8b5cf6`, gold `#d4a017`, gray `#6b7280`. Never red: on a chart red means down.
 
 ---
 
 ## Typography
 
-### Font Family
+### Families
 ```css
-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;  /* UI */
+font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;            /* numbers, IDs */
 ```
+Loaded from Google Fonts: Plex Sans 400/500/600, Plex Mono 400/500. Use the `.num` utility (`font-mono tabular-nums`) for anything a user scans or copies.
 
-### Type Scale
-| Name | Size | Weight | Line Height | Usage |
-|------|------|--------|-------------|-------|
-| Display | 28px | 600 | 1.2 | Page titles |
-| Heading | 20px | 600 | 1.3 | Section headers |
-| Title | 17px | 600 | 1.4 | Card titles |
-| Body | 15px | 400 | 1.5 | Default text |
-| Label | 13px | 500 | 1.4 | Labels, captions |
-| Caption | 12px | 400 | 1.4 | Small text, metadata |
-| Micro | 11px | 500 | 1.3 | Badges, tags |
+### Scale
+| Name | Size / line | Weight | Usage |
+|------|-------------|--------|-------|
+| Display | 24 / 30 | 600 | Reserved; rarely used |
+| Heading | 18 / 24 | 600 | Page title (`PageHeader`) |
+| Title | 15 / 20 | 600 | Panel titles |
+| Stat | 22 / 28 | 500, mono | Headline numbers (`StatStrip`) |
+| Body | 13 / 19 | 400 | Default UI text |
+| Table | 12 / 16 | 400, mono for numbers | Table cells |
+| Label | 12 / 16 | 400 | Stat labels, descriptions |
+| Caption | 11 / 15 | 400 | Footnotes, column headers, deltas |
 
-### Font Weights
-- **Regular**: 400 - Body text, descriptions
-- **Medium**: 500 - Labels, emphasis
-- **Semibold**: 600 - Headings, important values
-- **Bold**: 700 - Strong emphasis (use sparingly)
+Weights are 400, 500 and 600 only. Labels are sentence case; no tracked uppercase.
 
 ---
 
 ## Spacing
 
-### Base Unit
-`4px` - All spacing should be multiples of 4px
-
-### Spacing Scale
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--space-1` | 4px | Tight spacing, inline elements |
-| `--space-2` | 8px | Related elements |
-| `--space-3` | 12px | Default gap |
-| `--space-4` | 16px | Section padding |
-| `--space-5` | 20px | Card padding |
-| `--space-6` | 24px | Section gaps |
-| `--space-8` | 32px | Large sections |
-| `--space-10` | 40px | Page margins |
-| `--space-12` | 48px | Major sections |
-
-### Touch Targets
-- **Minimum**: 44×44px for all interactive elements
-- **Recommended**: 48×48px for primary actions
+Base unit `4px`. Panels pad 16px (`p-4`), 20px on `sm`. Table cells pad 7px vertically. Page sections are 20px apart (`space-y-5`).
 
 ---
 
 ## Border Radius
 
-| Token | Value | Usage |
+| Class | Value | Usage |
 |-------|-------|-------|
-| `--radius-sm` | 6px | Small elements, tags |
-| `--radius-md` | 8px | Buttons, inputs |
-| `--radius-lg` | 12px | Cards |
-| `--radius-xl` | 16px | Modals, large cards |
-| `--radius-2xl` | 20px | Hero sections |
-| `--radius-full` | 9999px | Pills, avatars |
+| `rounded` | 4px | Buttons, inputs, chips, segmented controls |
+| `rounded-md` | 6px | Panels, popovers, menus |
+| `rounded-lg` | 8px | Rare: large hero panels |
+| `rounded-full` | | Avatars and status dots only |
 
 ---
 
 ## Shadows
 
-Use shadows sparingly in dark mode. Prefer elevation through background color changes.
+None in dark mode. Elevation comes from the surface step (`--background` → `--card` → `--popover`) and hairlines. Floating elements (menus, the compare bar) use a soft `shadow-lg`. Light mode uses no card shadows either.
 
-### Dark Mode
-```css
-/* Subtle elevation - use sparingly */
---shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
---shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+---
 
-/* Prefer background elevation instead */
-/* Base: #000000 → Elevated: #1c1c1e → Higher: #2c2c2e */
-```
+## Shared components (`src/components/instrument`)
 
-### Light Mode
-```css
---shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
---shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
---shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-```
+| Component | Replaces | Notes |
+|-----------|----------|-------|
+| `StatStrip` | The four-card KPI grid | One row divided by hairlines, label / mono value / delta, optional tooltip and footnote |
+| `PageHeader` | Eyebrow + hero headline | 18px title, one-line description, controls on the right |
+| `SegmentedControl` | Red range toggles | Neutral filled active state |
+| `UpdatedAgo` | LIVE pill | "Updated 14s ago", "Refreshing" while fetching |
+| `SeriesSummary` | | Low / average / high / latest under a chart |
 
 ---
 

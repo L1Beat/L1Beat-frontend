@@ -156,8 +156,8 @@ function ChartView({ series }: { series: ChartSeries }) {
         >
           <defs>
             <linearGradient id="pg-series-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.12} />
+              <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
             </linearGradient>
           </defs>
           {ticks.map((tick, i) => (
@@ -169,20 +169,20 @@ function ChartView({ series }: { series: ChartSeries }) {
             </g>
           ))}
           <path d={area} fill="url(#pg-series-fill)" />
-          <path d={line} fill="none" stroke="#ef4444" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <path d={line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           <text x={M.left} y={H - 8} textAnchor="start" className="fill-muted-foreground" fontSize={10}>{fmtDate(minX)}</text>
           <text x={W - M.right} y={H - 8} textAnchor="end" className="fill-muted-foreground" fontSize={10}>{fmtDate(maxX)}</text>
           {hp && (
             <g>
               <line x1={sx(hp.t)} x2={sx(hp.t)} y1={M.top} y2={floor} stroke="currentColor" strokeOpacity={0.25} strokeDasharray="3 3" />
-              <circle cx={sx(hp.t)} cy={sy(hp.y)} r={3.5} fill="#ef4444" stroke="var(--background)" strokeWidth={1.5} />
+              <circle cx={sx(hp.t)} cy={sy(hp.y)} r={3} fill="var(--ink)" stroke="var(--background)" strokeWidth={1.5} />
             </g>
           )}
         </svg>
         <ChartWatermark />
         {hp && (
           <div
-            className="pointer-events-none absolute z-10 px-2 py-1 rounded-md bg-card border border-border shadow-md text-[11px] whitespace-nowrap"
+            className="pointer-events-none absolute z-10 px-2 py-1 rounded bg-popover border border-border shadow-md text-[11px] whitespace-nowrap"
             style={{
               left: `${hoverPct}%`,
               top: `${(sy(hp.y) / H) * 100}%`,
@@ -209,7 +209,7 @@ function StatusBadge({ status }: { status: number }) {
       ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
       : status >= 300
       ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-      : 'bg-green-500/15 text-green-600 dark:text-green-400';
+      : 'bg-green-500/15 text-up';
   const label =
     status >= 400
       ? `${status} Error`
@@ -218,7 +218,7 @@ function StatusBadge({ status }: { status: number }) {
       : `${status} OK`;
   return (
     <span
-      className={`text-xs font-mono font-medium px-2 py-0.5 rounded-full ${color}`}
+      className={`num text-[11px] font-medium px-1.5 h-5 inline-flex items-center rounded ${color}`}
     >
       {label}
     </span>
@@ -257,7 +257,7 @@ function RateLimitCard({
   }, [seconds, paused]);
 
   return (
-    <div className="m-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+    <div className="m-6 p-4 rounded bg-orange-500/10 border border-orange-500/20">
       <div className="font-medium text-orange-700 dark:text-orange-400 mb-2">
         Rate Limited
       </div>
@@ -271,7 +271,7 @@ function RateLimitCard({
           </p>
           <button
             onClick={() => onRetryRef.current()}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[#ef4444] hover:bg-[#dc2626] text-white font-medium transition-colors"
+            className="text-xs px-3 py-1.5 rounded bg-foreground text-background hover:bg-foreground/90 font-medium transition-colors"
           >
             Retry now
           </button>
@@ -371,7 +371,7 @@ function JsonNode({ value, depth, objKey }: JsonNodeProps) {
         <RouterLink
           to={link}
           title="Open validator"
-          className="text-[#4ade80] underline decoration-dotted underline-offset-2 hover:text-[#ef4444] transition-colors"
+          className="text-[#4ade80] underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
         >
           {JSON.stringify(value)}
         </RouterLink>
@@ -565,7 +565,7 @@ function TableView({ rows, columns }: { rows: Record<string, unknown>[]; columns
                     className="px-3 py-1.5 whitespace-nowrap max-w-[22rem] truncate tabular-nums text-foreground/90"
                   >
                     {link ? (
-                      <RouterLink to={link} className="underline decoration-dotted underline-offset-2 hover:text-[#ef4444] transition-colors">
+                      <RouterLink to={link} className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors">
                         {text}
                       </RouterLink>
                     ) : (
@@ -680,7 +680,7 @@ export function ResponsePanel({
     return (
       <div className="p-6 space-y-3">
         <div className="flex items-center gap-3 mb-4">
-          <Skeleton className="h-6 w-16 rounded-full" />
+          <Skeleton className="h-5 w-16 rounded" />
           <Skeleton className="h-4 w-12" />
         </div>
         <Skeleton className="h-4 w-full" />
@@ -696,7 +696,7 @@ export function ResponsePanel({
   // Network error
   if (networkError) {
     return (
-      <div className="m-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400">
+      <div className="m-6 p-4 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400">
         <div className="flex items-center gap-2 font-medium mb-1">
           <AlertCircle className="w-4 h-4" />
           Network Error
@@ -738,7 +738,7 @@ export function ResponsePanel({
               <span className="text-sm text-muted-foreground">{durationMs}ms</span>
             )}
           </div>
-          <div className="m-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+          <div className="m-6 p-4 rounded bg-yellow-500/10 border border-yellow-500/20">
             {!!err.code && (
               <div className="font-mono text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-2">
                 {String(err.code)}
@@ -817,13 +817,13 @@ export function ResponsePanel({
           </span>
         )}
         {!!meta?.has_more && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400">
+          <span className="text-[11px] px-1.5 h-5 inline-flex items-center rounded bg-[#3987e5]/15 text-[#3987e5]">
             has more
           </span>
         )}
         {rlRemaining !== null && rlLimit !== null && (
           <span
-            className={`text-xs px-2 py-0.5 rounded-full ${
+            className={`num text-[11px] px-1.5 h-5 inline-flex items-center rounded ${
               rlRemaining === 0
                 ? 'bg-red-500/15 text-red-600 dark:text-red-400'
                 : rlRemaining <= 3
@@ -933,7 +933,7 @@ export function ResponsePanel({
           <div className="px-6 pb-6">
             <button
               onClick={onLoadNextPage}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-border hover:border-[#ef4444]/50 hover:bg-[#ef4444]/5 text-sm text-muted-foreground hover:text-foreground transition-all duration-150"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded border border-dashed border-border hover:border-foreground/30 hover:bg-accent/40 text-[12px] text-muted-foreground hover:text-foreground transition-all duration-150"
             >
               <ChevronRight className="w-3.5 h-3.5" />
               Load more results
@@ -952,7 +952,7 @@ export function ResponsePanel({
               <button
                 key={e.id}
                 onClick={() => onSuggestSelect(e.id)}
-                className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-[#ef4444]/50 hover:bg-[#ef4444]/5 text-muted-foreground hover:text-foreground transition-all"
+                className="text-[11px] px-2 h-7 rounded border border-border hover:border-foreground/30 hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
               >
                 {e.title}
               </button>

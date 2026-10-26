@@ -20,7 +20,6 @@ const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Met
 const ValidatorDetails = lazy(() => import('./pages/ValidatorDetails').then(m => ({ default: m.ValidatorDetails })));
 const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => ({ default: m.BrandGuidelines })));
 const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ default: m.APIPlayground })));
-const Flows = lazy(() => import('./pages/Flows').then(m => ({ default: m.Flows })));
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 
@@ -102,7 +101,8 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/chain/:chainId" element={<ChainDetails />} />
         <Route path="/metrics" element={<Metrics />} />
-        <Route path="/flows" element={<Flows />} />
+        {/* The Flows page folded into the Overview hero; keep old links alive. */}
+        <Route path="/flows" element={<Navigate to="/?view=flows" replace />} />
         <Route path="/stablecoins" element={<Stablecoins />} />
         <Route path="/burn" element={<Burn />} />
         <Route path="/acps" element={<ACPs />} />

@@ -100,7 +100,7 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-      className="bg-card border border-border rounded-xl overflow-hidden shadow-sm"
+      className="bg-card border border-border rounded-md overflow-hidden shadow-sm"
     >
       <div className="p-6 border-b border-border bg-muted/20">
         <h3 className="text-lg font-semibold text-foreground">
@@ -115,13 +115,13 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-muted/20">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">
                 Metric
               </th>
               {metrics.chains.map((chain) => (
                 <th
                   key={chain.chainId}
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground"
                 >
                   <div className="flex items-center gap-2">
                     <span className="truncate max-w-[150px]" title={chain.chainName}>
@@ -145,7 +145,7 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-[#ef4444]" />
+                      <Icon className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-foreground">{row.label}</span>
                     </div>
                   </td>
@@ -165,7 +165,7 @@ export const ComparisonMetricsTable = memo(function ComparisonMetricsTable({
                             transition={{ delay: rowIndex * 0.06 + 0.15 }}
                             className={`text-lg font-bold ${
                               best
-                                ? 'text-green-600 dark:text-green-400'
+                                ? 'text-up'
                                 : 'text-foreground'
                             }`}
                           >

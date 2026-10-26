@@ -5,30 +5,28 @@ import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
-  Activity,
   ArrowLeft,
   Search,
   Info,
   Copy,
   Check,
   ExternalLink,
-  Users,
   TrendingUp,
   AlertTriangle,
   Shield,
   Globe,
   MessageCircle,
   Github,
-  BarChart3
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
-import { watermarkPlugin, smoothLinePath } from '../utils/chartConfig';
+import { watermarkPlugin, smoothLinePath, getInkRgb } from '../utils/chartConfig';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { SEO } from '../components/SEO';
+import { StatStrip } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
@@ -137,8 +135,8 @@ export function ChainDetails() {
       const sid = foundChain.subnetId;
 
       // Kick off the validators fetch NOW (concurrent with the batch) but await
-      // it separately — for big chains it can take ~20s, and it must not hold
-      // up the fast TPS/fees data or the rest of the shell.
+      // it separately so it never holds up the TPS/fees data. One request
+      // returns every validator, active and inactive.
       const validatorsPromise = sid ? getL1BeatValidators(sid, false) : null;
 
       // The Primary Network / C-Chain burns EIP-1559 base fee + priority tip on
@@ -199,7 +197,7 @@ export function ChainDetails() {
         if (!cancelled) setDetailsLoading(false);
       }
 
-      // Phase 3 — validators (already in flight). Slow chains stream in here.
+      // Phase 3 — validators (already in flight).
       if (validatorsPromise) {
         try {
           const vals = await validatorsPromise;
@@ -255,15 +253,6 @@ export function ChainDetails() {
     return latestTPS.toFixed(2);
   };
 
-  const getTPSColor = (tpsStr: string) => {
-    if (tpsStr === 'N/A') return 'text-muted-foreground';
-    if (tpsStr === '< 1.00') return 'text-yellow-500 dark:text-yellow-400';
-    const tps = Number(tpsStr);
-    if (tps >= 1) return 'text-green-500 dark:text-green-400';
-    if (tps >= 0.1) return 'text-yellow-500 dark:text-yellow-400';
-    return 'text-red-500 dark:text-red-400';
-  };
-
   const tokenDecimals = chain?.networkToken?.decimals ?? 18;
   const tokenSymbol = chain?.networkToken?.symbol || 'N/A';
   // Avalanche staking/validator APIs often represent AVAX in nAVAX (1e9).
@@ -311,7 +300,9 @@ export function ChainDetails() {
     overscan: 12,
   });
 
-  const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
+  // Shares are of the stake that is validating now; inactive validators would dilute them.
+  const totalStakeBaseUnits =
+    chain?.validators.reduce((sum, v) => (v.active ? sum + getStakeBaseUnits(v) : sum), 0n) || 0n;
   // L1 subnets use continuous fees — show remaining balance column.
   // Legacy subnets (primary network) use staking — show uptime column.
   const isL1Subnet = subnetType === 'l1';
@@ -456,13 +447,13 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
-          <AlertTriangle className="w-7 h-7 text-[#ef4444]" />
+        <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Chain not found'}</h2>
         <button
           onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Overview
@@ -472,7 +463,6 @@ export function ChainDetails() {
   }
 
   const tpsValue = getCurrentTPS();
-  const tpsColor = getTPSColor(tpsValue);
   const lastUpdate = tpsHistory.length > 0 ? tpsHistory[tpsHistory.length - 1].timestamp : null;
 
   // Validators stream in after the shell. Until they arrive, derive active/
@@ -520,7 +510,7 @@ export function ChainDetails() {
   };
 
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
       <SEO
         title={chain.chainName}
         description={
@@ -538,75 +528,49 @@ export function ChainDetails() {
         All chains
       </button>
 
-      <header className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
-        </div>
-        <div className="relative p-6 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="relative shrink-0">
-                <img
-                  src={chain.chainLogoUri || '/icon-dark-animated.svg'}
-                  alt=""
-                  className="w-14 h-14 rounded-2xl bg-background/40 p-1.5 ring-1 ring-white/[0.08]"
-                  onError={(e) => {
-                    e.currentTarget.src = '/icon-dark-animated.svg';
-                    e.currentTarget.onerror = null;
-                  }}
-                />
-                <div
-                  className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#1c1c1e] ${
-                    hasActiveValidators ? 'bg-green-500' : 'bg-muted'
-                  }`}
-                />
-              </div>
+      <header className="border-b border-border pb-5">
+        <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-4 min-w-0">
+              <img
+                src={chain.chainLogoUri || '/icon-dark-animated.svg'}
+                alt=""
+                className="w-11 h-11 rounded-md bg-muted shrink-0 object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = '/icon-dark-animated.svg';
+                  e.currentTarget.onerror = null;
+                }}
+              />
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight truncate">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h1 className="text-[22px] leading-7 font-semibold text-foreground truncate">
                     {chain.chainName}
                   </h1>
-                  {chain.network === 'mainnet' && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-[#ef4444]/15 text-[#ef4444]">
-                      MAINNET
-                    </span>
-                  )}
-                  {chain.network === 'fuji' && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-yellow-500/15 text-yellow-500">
-                      TESTNET
-                    </span>
-                  )}
-                  {hasActiveValidators ? (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
-                      <span className="w-1 h-1 rounded-full bg-green-500" />
-                      ACTIVE
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                      INACTIVE
-                    </span>
-                  )}
-                  {(() => {
-                    const name = (chain.chainName || '').toLowerCase();
-                    const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
-                    const typeLabel = isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy Subnet';
-                    return (
-                      <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                        {typeLabel}
-                      </span>
-                    );
-                  })()}
-                  {chain.sybilResistanceType && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                      {/proof of authority/i.test(chain.sybilResistanceType)
-                        ? 'PoA'
-                        : /proof of stake/i.test(chain.sybilResistanceType)
-                          ? 'PoS'
-                          : chain.sybilResistanceType}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${hasActiveValidators ? 'bg-up' : 'bg-muted-foreground/40'}`} />
+                    {hasActiveValidators ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {[
+                      chain.network === 'fuji' ? 'Fuji testnet' : chain.network === 'mainnet' ? 'Mainnet' : null,
+                      (() => {
+                        const name = (chain.chainName || '').toLowerCase();
+                        const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
+                        return isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy subnet';
+                      })(),
+                      chain.sybilResistanceType
+                        ? /proof of authority/i.test(chain.sybilResistanceType)
+                          ? 'PoA'
+                          : /proof of stake/i.test(chain.sybilResistanceType)
+                            ? 'PoS'
+                            : chain.sybilResistanceType
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                   {chain.networkToken?.symbol && (
                     <span className="inline-flex items-center gap-1 font-medium text-foreground">
                       {chain.networkToken.logoUri && (
@@ -637,14 +601,14 @@ export function ChainDetails() {
                       <span>·</span>
                       <button
                         onClick={() => handleCopy('subnetId', chain.subnetId)}
-                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors font-mono"
+                        className="num inline-flex items-center gap-1 h-5 px-1.5 rounded bg-muted hover:bg-accent transition-colors"
                         title={chain.subnetId}
                       >
                         <span>
                           {chain.subnetId.slice(0, 6)}…{chain.subnetId.slice(-4)}
                         </span>
                         {copied === 'subnetId' ? (
-                          <Check className="w-2.5 h-2.5 text-green-500" />
+                          <Check className="w-2.5 h-2.5 text-up" />
                         ) : (
                           <Copy className="w-2.5 h-2.5" />
                         )}
@@ -663,7 +627,7 @@ export function ChainDetails() {
                             toast('Failed to copy RPC URL', 'error');
                           }
                         }}
-                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors"
+                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-muted hover:bg-accent transition-colors"
                         title={chain.rpcUrls[0]}
                       >
                         <span>RPC</span>
@@ -673,18 +637,16 @@ export function ChainDetails() {
                   )}
                 </div>
                 {chain.description && (
-                  <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed mt-3 max-w-2xl line-clamp-3">
+                  <p className="text-[12px] text-muted-foreground leading-relaxed mt-2 max-w-2xl line-clamp-2">
                     {chain.description}
                   </p>
                 )}
                 {chain.categories && chain.categories.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <div className="flex flex-wrap items-center gap-x-3 mt-2 text-[11px] text-muted-foreground capitalize">
                     {chain.categories.map((c) => (
-                      <span
-                        key={c}
-                        className="inline-flex items-center px-2 h-5 rounded text-[10px] font-semibold bg-[#ef4444]/10 text-[#ef4444]"
-                      >
-                        {c}
+                      <span key={c} className="inline-flex items-center gap-1.5">
+                        <span aria-hidden className="w-1.5 h-1.5 rounded-sm bg-muted-foreground/60" />
+                        {c.toLowerCase()}
                       </span>
                     ))}
                   </div>
@@ -697,7 +659,7 @@ export function ChainDetails() {
                   href={chain.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                   title="Website"
                 >
                   <Globe className="w-3.5 h-3.5 text-muted-foreground" />
@@ -708,7 +670,7 @@ export function ChainDetails() {
                   href={chain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                   title="Explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
@@ -722,7 +684,7 @@ export function ChainDetails() {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                    className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                     title={social.name}
                   >
                     <Icon className="w-3.5 h-3.5 text-muted-foreground" />
@@ -735,45 +697,38 @@ export function ChainDetails() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          label="Current TPS"
-          value={tpsValue}
-          valueClassName={tpsColor}
-          icon={Activity}
-          loading={detailsLoading && tpsHistory.length === 0}
-        />
-        <KpiCard
-          label="Active Validators"
-          value={(chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString()}
-          icon={Users}
-        />
-        <KpiCard
-          label="Nakamoto (33%)"
-          value={decentralization?.nak33 != null ? String(decentralization.nak33) : '—'}
-          icon={Shield}
-          loading={detailsLoading && decentralization == null}
-        />
-        <KpiCard
-          label="Fees burned"
-          value={allTimeFeesBurned > 0 ? `${formatAvaxAmount(allTimeFeesBurned / 1_000_000_000)} AVAX` : '—'}
-          icon={TrendingUp}
-          loading={detailsLoading && allTimeFeesBurned === 0}
-        />
-      </div>
-
-      {lastUpdate && (
-        <div className="text-[11px] text-muted-foreground -mt-2">
-          Last updated {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
-        </div>
-      )}
+      <StatStrip
+        items={[
+          {
+            label: 'Current TPS',
+            value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
+            sub: 'transactions per second',
+          },
+          {
+            label: 'Active validators',
+            value: (chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString(),
+          },
+          {
+            label: 'Nakamoto (33%)',
+            value: decentralization?.nak33 != null ? String(decentralization.nak33) : '—',
+            sub: 'validators to control a third of stake',
+            tooltip: 'Smallest number of validators that together control more than 33% of total stake. Higher means stake is more spread out.',
+          },
+          {
+            label: 'Fees burned',
+            value: allTimeFeesBurned > 0 ? formatAvaxAmount(allTimeFeesBurned / 1_000_000_000) : '—',
+            sub: allTimeFeesBurned > 0 ? 'AVAX, all time' : 'No burn data',
+          },
+        ]}
+        footnote={lastUpdate ? `Updated ${format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}` : undefined}
+      />
 
             {/* Sticky section nav — scroll-spy, matching the Metrics page */}
             <nav
-              className="sticky top-14 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md border-b border-border"
+              className="sticky top-12 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-background border-b border-border"
               aria-label="Sections"
             >
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar -mb-px">
                 {sections.map((s) => {
                   const isActive = activeSection === s.id;
                   return (
@@ -781,10 +736,10 @@ export function ChainDetails() {
                       key={s.id}
                       type="button"
                       onClick={() => scrollToSection(s.id)}
-                      className={`shrink-0 inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-semibold tracking-wide transition-colors ${
+                      className={`shrink-0 inline-flex items-center h-10 px-2.5 border-b-2 text-[12px] font-medium transition-colors ${
                         isActive
-                          ? 'bg-[#ef4444]/12 text-[#ef4444]'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                          ? 'border-foreground text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       {s.label}
@@ -795,13 +750,13 @@ export function ChainDetails() {
             </nav>
 
             <div className="flex flex-col gap-4 sm:gap-6">
-              <section id="activity" className="order-1 scroll-mt-28">
+              <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
                   <ChainActivityCard history={tpsHistory} loading={detailsLoading && tpsHistory.length === 0} />
                 </SectionErrorBoundary>
               </section>
 
-              <section id="economics" className="order-3 scroll-mt-28">
+              <section id="economics" className="order-3 scroll-mt-24">
                 <SectionErrorBoundary label="economics">
                   {detailsLoading ? (
                     <EconomicsSkeleton />
@@ -816,7 +771,7 @@ export function ChainDetails() {
                 if (notApplicable) {
                   return (
                     <div className="space-y-4 sm:space-y-6">
-                      <div className="bg-card rounded-xl border border-border p-8 sm:p-10 text-center max-w-2xl mx-auto">
+                      <div className="bg-card rounded-md border border-border p-8 sm:p-10 text-center max-w-2xl mx-auto">
                         <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <TrendingUp className="w-5 h-5 text-muted-foreground" />
                         </div>
@@ -845,31 +800,20 @@ export function ChainDetails() {
                     return (
                       <>
                         {/* Summary Cards — shared KpiCard style for page consistency */}
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                          <KpiCard
-                            label="Total burned (AVAX)"
-                            value={formatAvaxValue(allTimeBurnedAvax)}
-                            valueClassName="text-[#ef4444]"
-                            icon={Activity}
-                          />
-                          <KpiCard
-                            label="Today's burn (AVAX)"
-                            value={formatAvaxValue(latestDailyAvax)}
-                            icon={TrendingUp}
-                          />
-                          <KpiCard
-                            label="Avg daily burn (AVAX)"
-                            value={formatAvaxValue(avgDailyAvax)}
-                            icon={BarChart3}
-                          />
-                        </div>
+                        <StatStrip
+                          items={[
+                            { label: 'Total burned', value: formatAvaxValue(allTimeBurnedAvax), sub: 'AVAX, all time' },
+                            { label: "Today's burn", value: formatAvaxValue(latestDailyAvax), sub: 'AVAX' },
+                            { label: 'Avg daily burn', value: formatAvaxValue(avgDailyAvax), sub: `AVAX, ${filteredFeeBurn.length}-day window` },
+                          ]}
+                        />
 
                         {/* Cumulative Fee Burn Chart */}
-                        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
-                          <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="bg-card rounded-md border border-border overflow-hidden">
+                          <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                              <h3 className="text-base sm:text-lg font-bold text-foreground">Cumulative Fee Burn</h3>
-                              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                              <h3 className="text-[14px] font-semibold text-foreground">Cumulative fee burn</h3>
+                              <p className="text-[12px] text-muted-foreground mt-0.5">
                                 {isPrimaryNetwork
                                   ? feeBurnSplit
                                     ? `AVAX burned via EIP-1559 · ${feeBurnSplit.basePct.toFixed(1)}% base fee · ${feeBurnSplit.priorityPct.toFixed(1)}% priority tip`
@@ -882,10 +826,10 @@ export function ChainDetails() {
                                 <button
                                   key={value}
                                   onClick={() => setFeeBurnTimeframe(value as 0 | 7 | 30 | 90)}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                  className={`num h-7 px-2.5 rounded text-[12px] font-medium transition-colors ${
                                     feeBurnTimeframe === value
-                                      ? 'bg-[#ef4444] text-white shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                                      ? 'bg-foreground text-background'
+                                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                                   }`}
                                 >
                                   {label}
@@ -920,7 +864,7 @@ export function ChainDetails() {
                                       ctx.moveTo(tooltip.caretX, chartArea.top);
                                       ctx.lineTo(tooltip.caretX, chartArea.bottom);
                                       ctx.lineWidth = 1;
-                                      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+                                      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
                                       ctx.stroke();
                                       ctx.restore();
                                     }
@@ -928,20 +872,8 @@ export function ChainDetails() {
                                 };
 
                                 // Line shadow plugin matching AvalancheNetworkMetrics
-                                const lineShadowPlugin = {
-                                  id: 'feeBurnLineShadow',
-                                  beforeDatasetsDraw: (chart: any) => {
-                                    const { ctx } = chart;
-                                    ctx.save();
-                                    ctx.shadowColor = 'rgba(239, 68, 68, 0.35)';
-                                    ctx.shadowBlur = 12;
-                                    ctx.shadowOffsetX = 0;
-                                    ctx.shadowOffsetY = 4;
-                                  },
-                                  afterDatasetsDraw: (chart: any) => {
-                                    chart.ctx.restore();
-                                  },
-                                };
+                                // Glow retired: instrument output has no drop shadow.
+                                const lineShadowPlugin = { id: 'feeBurnLineShadow' };
 
                                 const isDark = theme === 'dark';
 
@@ -958,25 +890,26 @@ export function ChainDetails() {
                                       datasets: [{
                                         label: 'Cumulative Burn (AVAX)',
                                         data: cumulativeData,
-                                        borderColor: 'rgb(239, 68, 68)',
+                                        borderColor: `rgb(${getInkRgb(isDark)})`,
                                         backgroundColor: (ctx: any) => {
                                           const chart = ctx.chart;
                                           const { ctx: c, chartArea } = chart;
-                                          if (!chartArea) return 'rgba(239, 68, 68, 0.1)';
+                                          const ink = getInkRgb(isDark);
+                                          if (!chartArea) return `rgba(${ink}, 0.08)`;
                                           const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                          gradient.addColorStop(0, 'rgba(239, 68, 68, 0.35)');
-                                          gradient.addColorStop(0.4, 'rgba(239, 68, 68, 0.15)');
-                                          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.02)');
+                                          gradient.addColorStop(0, `rgba(${ink}, 0.12)`);
+                                          gradient.addColorStop(0.5, `rgba(${ink}, 0.05)`);
+                                          gradient.addColorStop(1, `rgba(${ink}, 0)`);
                                           return gradient;
                                         },
                                         fill: true,
-                                        borderWidth: isDark ? 2.5 : 2,
-                                        tension: 0.35,
+                                        borderWidth: 1.5,
+                                        tension: 0.2,
                                         pointRadius: 0,
-                                        pointHoverRadius: 7,
-                                        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-                                        pointHoverBorderColor: 'rgb(239, 68, 68)',
-                                        pointHoverBorderWidth: 2.5,
+                                        pointHoverRadius: 4,
+                                        pointHoverBackgroundColor: isDark ? '#1a1d21' : '#ffffff',
+                                        pointHoverBorderColor: `rgb(${getInkRgb(isDark)})`,
+                                        pointHoverBorderWidth: 1.5,
                                       }],
                                     }}
                                     plugins={[crosshairPlugin, lineShadowPlugin, watermarkPlugin]}
@@ -1073,9 +1006,8 @@ export function ChainDetails() {
                       </>
                     );
                   })() : (
-                    <div className="bg-card rounded-xl border border-border p-8 text-center">
-                      <TrendingUp className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-muted-foreground">No fee burn data available for this chain.</p>
+                    <div className="border-y border-border py-10 text-center text-[12px] text-muted-foreground">
+                      No fee burn data for this chain yet.
                     </div>
                   )}
                 </div>
@@ -1084,7 +1016,7 @@ export function ChainDetails() {
                 </SectionErrorBoundary>
               </section>
 
-              <section id="validators" className="order-2 scroll-mt-28">
+              <section id="validators" className="order-2 scroll-mt-24">
                 <SectionErrorBoundary label="validators">
                 <div className="space-y-4 sm:space-y-6">
                   {/* Decentralization summary — the verdict + control read that
@@ -1103,11 +1035,9 @@ export function ChainDetails() {
                   <>
                   {/* No active validators warning */}
                   {chain.validators.length > 0 && !chain.validators.some(v => v.active) && (
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                      <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                        This chain has no active validators. Showing historical validator data below.
-                      </p>
+                    <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
+                      <AlertTriangle className="w-3.5 h-3.5 text-[#d4a017] flex-shrink-0" />
+                      This chain has no active validators. Showing historical validator data below.
                     </div>
                   )}
 
@@ -1123,18 +1053,18 @@ export function ChainDetails() {
                   )}
 
                   {/* Validators Table */}
-                  <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                    {/* Validators Header & Search */}
-                    <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
-                      <div className="flex flex-col gap-3 sm:gap-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                          <h3 className="text-lg sm:text-xl font-semibold text-foreground">
+                  <div>
+                    {/* Validators toolbar */}
+                    <div className="py-2">
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+                        <div className="flex items-center gap-4">
+                          <h3 className="text-[13px] font-medium text-foreground">
                             Validators
-                            <span className="ml-2 text-base font-normal text-muted-foreground">
-                              ({filteredValidators.length})
+                            <span className="num ml-1.5 text-[11px] font-normal text-muted-foreground">
+                              {filteredValidators.length}
                             </span>
                           </h3>
-                          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-card border border-border self-start sm:self-auto">
+                          <div className="flex items-center gap-0.5">
                             {(['active', 'inactive', 'all'] as const).map((s) => {
                               const total = chain.validators.length;
                               const activeCount = chain.validators.filter(v => v.active === true).length;
@@ -1146,14 +1076,14 @@ export function ChainDetails() {
                                   key={s}
                                   type="button"
                                   onClick={() => setValidatorStatus(s)}
-                                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-semibold tracking-wide capitalize transition-colors ${
+                                  className={`inline-flex items-baseline gap-1.5 h-8 px-2.5 rounded text-[12.5px] font-medium capitalize transition-colors ${
                                     isActive
-                                      ? 'bg-[#ef4444]/12 text-[#ef4444]'
-                                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                                      ? 'bg-accent text-foreground'
+                                      : 'text-muted-foreground hover:text-foreground'
                                   }`}
                                 >
                                   {s}
-                                  <span className="text-[10px] font-medium text-muted-foreground/70 tabular-nums">
+                                  <span className="num text-[11px] font-normal text-muted-foreground">
                                     {count}
                                   </span>
                                 </button>
@@ -1161,16 +1091,15 @@ export function ChainDetails() {
                             })}
                           </div>
                         </div>
+                        <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
                         <div className="relative w-full sm:w-72">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-4 w-4 text-muted-foreground" />
-                          </div>
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                           <input
                             type="text"
-                            placeholder="Search by Node ID or Address..."
+                            placeholder="Search by node ID or address"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-sm shadow-sm"
+                            className="w-full h-8 pl-8 pr-3 rounded bg-background border border-border text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
                           />
                         </div>
                       </div>
@@ -1178,15 +1107,15 @@ export function ChainDetails() {
 
                     {/* Own scroll context (max-height) so the header can stick
                         while the rows scroll — no pagination. */}
-                    <div ref={validatorScrollRef} className="overflow-auto max-h-[70vh]">
-                      <table className="min-w-full divide-y divide-border">
-                        <thead className="sticky top-0 z-10 bg-card">
-                          <tr className="border-b border-border">
-                            <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <div ref={validatorScrollRef} className="overflow-auto max-h-[70vh] border-t border-border">
+                      <table className="min-w-full text-[12px]">
+                        <thead className="sticky top-0 z-10 bg-background">
+                          <tr className="h-9 border-b border-border">
+                            <th className="pr-4 text-left text-[11px] font-medium text-muted-foreground w-24">
                               Status
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'address') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1199,14 +1128,14 @@ export function ChainDetails() {
                               <div className="flex items-center gap-1">
                               Validator
                                 {sortBy === 'address' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
                               </div>
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'stake') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1228,14 +1157,14 @@ export function ChainDetails() {
                                   </span>
                                 )}
                                 {sortBy === 'stake' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
                               </div>
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'uptime') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1245,11 +1174,11 @@ export function ChainDetails() {
                                 }
                               }}
                             >
-                              <div className="flex items-center gap-1">
-                              <span className="hidden sm:inline">{hasUptimeData ? 'Avg Validator Uptime' : (hasRemainingBalanceData ? 'Remaining Balance' : 'Avg Validator Uptime')}</span>
+                              <div className="flex items-center justify-end gap-1">
+                              <span className="hidden sm:inline">{hasUptimeData ? 'Avg uptime' : (hasRemainingBalanceData ? 'Remaining balance' : 'Avg uptime')}</span>
                               <span className="sm:hidden">{hasUptimeData ? 'Uptime' : (hasRemainingBalanceData ? 'Balance' : 'Uptime')}</span>
                                 {sortBy === 'uptime' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
@@ -1257,7 +1186,7 @@ export function ChainDetails() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-card divide-y divide-border">
+                        <tbody>
                           {(() => {
                             const virtualRows = rowVirtualizer.getVirtualItems();
                             const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
@@ -1286,105 +1215,78 @@ export function ChainDetails() {
                                 key={validator.address}
                                 data-index={index}
                                 ref={rowVirtualizer.measureElement}
-                                className="hover:bg-muted/30 transition-colors cursor-pointer"
+                                className="h-10 border-b border-border/50 hover:bg-accent/40 transition-colors cursor-pointer"
                                 onClick={() => {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
                               >
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {validator.active ? (
-                                    <div className="flex items-center">
-                                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                      <span className="text-green-800 dark:text-green-300 text-sm font-medium">Active</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center">
-                                      <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                                      <span className="text-red-800 dark:text-red-300 text-sm font-medium">Inactive</span>
-                                    </div>
-                                  )}
+                                <td className="pr-4 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/40'}`} />
+                                    {validator.active ? 'Active' : 'Inactive'}
+                                  </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-card"
-                                      style={{
-                                        backgroundColor: getValidatorColor(index, theme === 'dark', 0.9)
-                                      }}
-                                    >
-                                      {validator.address.slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-medium text-foreground">
-                                        {validator.address.slice(0, 8)}...{validator.address.slice(-6)}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        Node ID
-                                      </div>
-                                    </div>
+                                <td className="pr-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2.5">
+                                    <span
+                                      aria-hidden
+                                      className="w-2 h-2 rounded-sm shrink-0"
+                                      style={{ backgroundColor: getValidatorColor(index, theme === 'dark', 0.9) }}
+                                    />
+                                    <span className="num text-[12px] text-foreground">
+                                      {validator.address.slice(0, 8)}…{validator.address.slice(-6)}
+                                    </span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-foreground font-medium">
-                                    {stakeIsWeight ? (
-                                      <>
-                                        {formatWeight(validator.weight)}{' '}
-                                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                          weight
-                                          <span
-                                            className="text-muted-foreground cursor-help inline-flex"
-                                            title="A measure of voting influence of this validator when validating for the Avalanche L1"
-                                            aria-label="Weight tooltip"
-                                          >
-                                            <Info className="w-3 h-3" />
-                                          </span>
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        {formatStakedTokens(validator.stakedAmount)}{' '}
-                                        <span className="text-xs text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {percentage}% of total
+                                <td className="pr-4 whitespace-nowrap">
+                                  <div className="num flex items-baseline gap-3 text-[12px] text-foreground">
+                                    <span className="min-w-[4.5rem]">
+                                      {stakeIsWeight ? (
+                                        formatWeight(validator.weight)
+                                      ) : (
+                                        <>
+                                          {formatStakedTokens(validator.stakedAmount)}{' '}
+                                          <span className="text-[11px] text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground">{percentage}%</span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="pr-4 whitespace-nowrap">
                                   {hasUptimeData ? (
-                                  <div className="flex items-center">
-                                    <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                  <div className="flex items-center justify-end gap-2.5">
+                                    <div className="w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
                                       <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                          (validator.uptime || 0) >= 90 ? 'bg-green-500' :
-                                          (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
+                                        className={`h-full rounded-sm ${
+                                          (validator.uptime || 0) >= 90 ? 'bg-up' :
+                                          (validator.uptime || 0) >= 80 ? 'bg-[#d4a017]' : 'bg-down'
                                         }`}
                                         style={{ width: `${validator.uptime || 0}%` }}
                                       ></div>
                                     </div>
-                                    <span className={`text-sm font-medium min-w-[3rem] ${
-                                      (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
-                                      (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                                    <span className={`num text-[12px] w-14 text-right ${
+                                      (validator.uptime || 0) >= 90 ? 'text-foreground' :
+                                      (validator.uptime || 0) >= 80 ? 'text-[#d4a017]' : 'text-down'
                                     }`}>
                                         {Number.isFinite(validator.uptime) ? `${(validator.uptime as number).toFixed(1)}%` : 'N/A'}
                                     </span>
                                   </div>
                                   ) : (
-                                    <div className="flex items-center">
-                                      <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                    <div className="flex items-center justify-end gap-2.5">
+                                      <div className="w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
                                         {(() => {
                                           const raw = Number(validator.remainingBalance ?? 0);
                                           const avax = Number.isFinite(raw) ? toAvax(raw) : 0;
                                           const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
                                           const barColor =
-                                            monthsRemaining <= 1 ? 'bg-red-500' :
-                                            monthsRemaining <= 3 ? 'bg-yellow-500' :
-                                            'bg-green-500';
+                                            monthsRemaining <= 1 ? 'bg-down' :
+                                            monthsRemaining <= 3 ? 'bg-[#d4a017]' :
+                                            'bg-up';
 
                                           return (
                                         <div
-                                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                          className={`h-full rounded-sm ${barColor}`}
                                           style={{
                                             width: `${maxRemainingBalance > 0 ? Math.min(100, ((validator.remainingBalance ?? 0) / maxRemainingBalance) * 100) : 0}%`
                                           }}
@@ -1395,18 +1297,18 @@ export function ChainDetails() {
                                       {(() => {
                                         const raw = Number(validator.remainingBalance);
                                         if (!Number.isFinite(raw)) {
-                                          return <span className="text-sm font-medium min-w-[6rem] text-muted-foreground">N/A</span>;
+                                          return <span className="num text-[12px] w-24 text-right text-muted-foreground">—</span>;
                                         }
 
                                         const avax = toAvax(raw);
                                         const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
                                         const textColor =
-                                          monthsRemaining <= 1 ? 'text-red-600 dark:text-red-400' :
-                                          monthsRemaining <= 3 ? 'text-yellow-600 dark:text-yellow-400' :
-                                          'text-green-600 dark:text-green-400';
+                                          monthsRemaining <= 1 ? 'text-down' :
+                                          monthsRemaining <= 3 ? 'text-[#d4a017]' :
+                                          'text-foreground';
 
                                         return (
-                                          <span className={`text-sm font-medium min-w-[6rem] ${textColor}`}>
+                                          <span className={`num text-[12px] w-24 text-right ${textColor}`}>
                                             {formatAvax(avax)} AVAX
                                           </span>
                                         );
@@ -1431,10 +1333,8 @@ export function ChainDetails() {
 
                     {/* No Results */}
                     {searchTerm && filteredValidators.length === 0 && (
-                      <div className="px-4 sm:px-6 py-6 sm:py-8 text-center">
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          No validators found matching "{searchTerm}"
-                        </p>
+                      <div className="border-b border-border py-8 text-center text-[12px] text-muted-foreground">
+                        No validators match "{searchTerm}".
                       </div>
                     )}
                   </div>
@@ -1462,11 +1362,11 @@ function formatTps(value: number | undefined | null): string {
 function ValidatorsSkeleton() {
   return (
     <>
-      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+      <div className="bg-card rounded-md border border-border p-4 sm:p-6">
         <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
-        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+        <div className="h-56 rounded bg-muted animate-pulse" />
       </div>
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="bg-card rounded-md border border-border overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
           <div className="h-5 w-32 rounded bg-muted animate-pulse" />
         </div>
@@ -1488,15 +1388,15 @@ function EconomicsSkeleton() {
     <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <div key={i} className="rounded-md border border-border bg-card p-4 sm:p-5">
             <div className="h-3 w-24 rounded bg-muted animate-pulse mb-3" />
             <div className="h-7 w-28 rounded-md bg-muted animate-pulse" />
           </div>
         ))}
       </div>
-      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+      <div className="bg-card rounded-md border border-border p-4 sm:p-6">
         <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
-        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+        <div className="h-56 rounded bg-muted animate-pulse" />
       </div>
     </div>
   );
@@ -1526,11 +1426,11 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
   const tick = (v: unknown) => formatAvaxAmount(Number(v));
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
-      <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="bg-card rounded-md border border-border overflow-hidden">
+      <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-base sm:text-lg font-bold text-foreground">Fee Burn: base vs priority</h3>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">Fee burn: base vs priority</h3>
+          <p className="text-[12px] text-muted-foreground mt-0.5">
             {isAll ? 'All time' : `Last ${tf} days`} · {basePct.toFixed(1)}% base fee · {(100 - basePct).toFixed(1)}% priority tip
           </p>
         </div>
@@ -1539,8 +1439,8 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
             <button
               key={value}
               onClick={() => setTf(value as 0 | 7 | 30 | 90)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                tf === value ? 'bg-[#ef4444] text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                tf === value ? 'bg-foreground text-background hover:bg-foreground/90' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               }`}
             >
               {label}
@@ -1554,7 +1454,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
             data={{
               labels,
               datasets: [
-                { label: 'Base fee', data: series.map((d) => d.base), backgroundColor: 'rgba(239, 68, 68, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
+                { label: 'Base fee', data: series.map((d) => d.base), backgroundColor: 'rgba(140, 148, 158, 0.9)', stack: 'burn', borderRadius: 2, borderSkipped: false },
                 { label: 'Priority tip', data: series.map((d) => d.priority), backgroundColor: 'rgba(245, 158, 11, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
               ],
             }}
@@ -1680,35 +1580,35 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="rounded-md border border-border bg-card p-4 sm:p-5">
         <header className="flex items-end justify-between gap-3 mb-3">
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last 30 days</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second, last 30 days</p>
           </div>
           <div className="h-7 w-16 rounded-md bg-muted animate-pulse" />
         </header>
-        <div className="h-[180px] rounded-lg bg-muted animate-pulse" />
+        <div className="h-[180px] rounded bg-muted animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
       <header className="flex items-end justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last {points.length} days</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second, last {points.length} days</p>
         </div>
         {shown && (
           <div className="text-right">
-            <div className="text-2xl font-bold text-foreground tabular-nums leading-none">{formatTpsExact(shown.v)}</div>
+            <div className="num text-[22px] font-medium text-foreground leading-none">{formatTpsExact(shown.v)}</div>
             <div className="text-[11px] mt-1">
               {active ? (
                 <span className="text-muted-foreground">{format(new Date(active.t * 1000), 'MMM d')}</span>
               ) : delta != null ? (
-                <span className={positive ? 'text-green-500' : 'text-[#ef4444]'}>
-                  {positive ? '▲' : '▼'} {Math.abs(delta).toFixed(0)}% · 30d
+                <span className={positive ? 'text-up' : 'text-down'}>
+                  {positive ? '+' : '−'}{Math.abs(delta).toFixed(0)}% over 30d
                 </span>
               ) : (
                 <span className="text-muted-foreground">latest</span>
@@ -1734,8 +1634,8 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
         >
           <defs>
             <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.12} />
+              <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
             </linearGradient>
           </defs>
           {geom.yTicks.map((tick, i) => (
@@ -1747,12 +1647,12 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
             </g>
           ))}
           <path d={geom.area} fill="url(#chain-tps-fill)" />
-          <path d={geom.line} fill="none" stroke="#ef4444" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="#ef4444" />}
+          <path d={geom.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="var(--ink)" />}
           {active && (
             <g>
-              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="#ef4444" strokeOpacity={0.4} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
-              <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="#ef4444" stroke="var(--card, #fff)" strokeWidth={2} />
+              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="rgb(148, 163, 184)" strokeOpacity={0.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+              <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="var(--ink)" stroke="var(--card, #fff)" strokeWidth={2} />
             </g>
           )}
         </svg>
@@ -1814,34 +1714,34 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
             ? 'Contract'
             : 'Unknown';
   const ownerTone = singleKey
-    ? 'text-[#ef4444]'
+    ? 'text-down'
     : shared
-      ? 'text-green-600 dark:text-green-400'
+      ? 'text-up'
       : 'text-foreground';
 
   const upgradeLabel = !isProxy ? 'Immutable' : instant ? 'Instant upgrade' : formatDelay(delay);
   const upgradeTone = !isProxy
-    ? 'text-green-600 dark:text-green-400'
+    ? 'text-up'
     : instant
-      ? 'text-[#ef4444]'
-      : 'text-yellow-600 dark:text-yellow-400';
+      ? 'text-down'
+      : 'text-[#d4a017]';
 
   let chip: string;
   let chipTone: string;
   let headline: string;
   if (singleKey && (instant || !isProxy)) {
     chip = 'Single-key control';
-    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
+    chipTone = 'text-down bg-down/10';
     headline = instant
       ? 'A single key can instantly upgrade the manager and replace the validator set.'
       : 'A single key directly controls the validator set.';
   } else if (instant) {
     chip = 'Instantly upgradeable';
-    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
+    chipTone = 'text-down bg-down/10';
     headline = 'The manager can be upgraded instantly by its admin, so control can be changed at any time.';
   } else if (shared && !isProxy) {
     chip = 'Shared control';
-    chipTone = 'text-green-600 dark:text-green-400 bg-green-500/10';
+    chipTone = 'text-up bg-green-500/10';
     headline = 'Control is shared and the manager is not upgradeable.';
   } else {
     chip = 'Partial safeguards';
@@ -1868,12 +1768,12 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
 function recoverability(deployedOn?: string) {
   if (deployedOn === 'self')
     return {
-      tone: 'text-yellow-600 dark:text-yellow-400',
+      tone: 'text-[#d4a017]',
       text: 'Validator manager runs on this L1, so if the chain halts its validator set can’t be changed (no recovery path).',
     };
   if (deployedOn === 'c-chain')
     return {
-      tone: 'text-green-600 dark:text-green-400',
+      tone: 'text-up',
       text: 'Validator manager runs on the C-Chain, so the validator set stays changeable even if this L1 halts.',
     };
   return null;
@@ -1881,16 +1781,16 @@ function recoverability(deployedOn?: string) {
 
 const PERMISSIONED = {
   label: 'Permissioned',
-  text: 'text-orange-500',
-  ring: 'bg-orange-500/10',
-  dot: 'bg-orange-500',
+  text: 'text-[#d95926]',
+  ring: 'bg-[#d95926]/10',
+  dot: 'bg-[#d95926]',
   note: 'The chain operator controls who can validate (PoA).',
 };
 const PERMISSIONLESS = {
   label: 'Permissionless',
-  text: 'text-green-600 dark:text-green-400',
-  ring: 'bg-green-500/10',
-  dot: 'bg-green-500',
+  text: 'text-up',
+  ring: 'bg-up/10',
+  dot: 'bg-up',
   note: 'Anyone meeting the stake requirement can validate (PoS).',
 };
 
@@ -1931,14 +1831,14 @@ function DecentralizationCard({
     { value: data.count.toLocaleString(), label: 'Active validators' },
   ];
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden">
       <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-[#ef4444]" />
+          <Shield className="w-4 h-4 text-muted-foreground" />
           <h2 className="text-[14px] font-semibold text-foreground">Decentralization</h2>
         </div>
         {perm && (
-          <span className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold ${perm.ring} ${perm.text}`}>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] ${perm.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${perm.dot}`} />
             {perm.label}
           </span>
@@ -1948,27 +1848,25 @@ function DecentralizationCard({
       <div className="p-4 sm:p-5">
         {data.hasData ? (
           <>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <dl className="grid grid-cols-3 divide-x divide-border border border-border rounded-md">
               {stats.map((s) => (
-                <div key={s.label} className="rounded-lg bg-muted/30 px-2.5 py-2.5 sm:px-3" title={s.title}>
-                  <div className="text-lg sm:text-2xl font-bold text-foreground tabular-nums leading-none">
-                    {s.value}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">{s.label}</div>
+                <div key={s.label} className="px-3 py-2.5" title={s.title}>
+                  <dt className="text-[11px] text-muted-foreground leading-4">{s.label}</dt>
+                  <dd className="num text-[20px] leading-7 font-medium text-foreground">{s.value}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
 
             {/* Stake-concentration bar: the top `nak33` validators (which control
                 >33%) are highlighted; the rest are muted. Ticks mark 33% / 50%. */}
             {data.shares.length > 0 && (
               <div className="mt-4">
-                <div className="relative flex h-2.5 rounded-full overflow-hidden bg-muted/40">
+                <div className="relative flex h-2 rounded-sm overflow-hidden bg-muted/40">
                   {data.shares.map((s, i) => (
                     <div
                       key={i}
                       style={{ width: `${Math.max(s * 100, 0.4)}%` }}
-                      className={`h-full ${i < (data.nak33 ?? 0) ? 'bg-[#ef4444]' : 'bg-emerald-500/45'} ${
+                      className={`h-full ${i < (data.nak33 ?? 0) ? 'bg-[#d4a017]' : 'bg-up/45'} ${
                         i > 0 ? 'border-l border-card/70' : ''
                       }`}
                       title={`#${i + 1}: ${(s * 100).toFixed(1)}% of stake`}
@@ -1979,12 +1877,12 @@ function DecentralizationCard({
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm bg-[#ef4444]" />
+                    <span className="w-2 h-2 rounded-sm bg-[#d4a017]" />
                     Top {data.nak33} control &gt;33% of stake
                   </span>
                   <span className="flex items-center gap-1.5">
                     Remaining {Math.max(0, data.count - (data.nak33 ?? 0))}
-                    <span className="w-2 h-2 rounded-sm bg-emerald-500/45" />
+                    <span className="w-2 h-2 rounded-sm bg-up/45" />
                   </span>
                 </div>
               </div>
@@ -1999,10 +1897,10 @@ function DecentralizationCard({
         {/* Control & upgradeability — on-chain ValidatorManager reads. */}
         <div className="mt-5 pt-4 border-t border-border/60">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
-            <div className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+            <div className="text-[11px] font-medium text-muted-foreground">
               Control &amp; upgradeability
             </div>
-            <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold ${control.chipTone}`}>
+            <span className={`inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium ${control.chipTone}`}>
               {control.chip}
             </span>
           </div>
@@ -2010,11 +1908,11 @@ function DecentralizationCard({
           {control.rows.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {control.rows.map((r) => (
-                <div key={r.label} className="rounded-lg bg-muted/30 px-3 py-2">
-                  <div className="text-[10px] text-muted-foreground">{r.label}</div>
-                  <div className={`text-[13px] font-semibold ${r.tone}`}>{r.value}</div>
+                <div key={r.label} className="border border-border rounded px-3 py-2">
+                  <div className="text-[11px] text-muted-foreground">{r.label}</div>
+                  <div className={`text-[13px] font-medium ${r.tone}`}>{r.value}</div>
                   {r.sub && (
-                    <div className="text-[10px] text-muted-foreground/70 font-mono mt-0.5 truncate">{r.sub}</div>
+                    <div className="num text-[10px] text-muted-foreground/70 mt-0.5 truncate">{r.sub}</div>
                   )}
                 </div>
               ))}
@@ -2041,37 +1939,6 @@ function DecentralizationCard({
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  valueClassName,
-  icon: Icon,
-  loading = false,
-}: {
-  label: string;
-  value: string | number;
-  valueClassName?: string;
-  icon: typeof Activity;
-  loading?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">{label}</span>
-        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
-          <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-        </div>
-      </div>
-      {loading ? (
-        <div className="h-7 sm:h-8 w-20 rounded-md bg-muted animate-pulse" />
-      ) : (
-        <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
-          {value}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ChainDetailsSkeleton() {
   return (
@@ -2079,10 +1946,10 @@ function ChainDetailsSkeleton() {
       <div className="h-4 w-24 rounded bg-muted animate-pulse" />
 
       {/* Header card */}
-      <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-7">
+      <div className="rounded-md border border-border bg-card shadow-xl p-6 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-muted animate-pulse" />
+            <div className="w-14 h-14 rounded-md bg-muted animate-pulse" />
             <div className="space-y-2.5">
               <div className="flex items-center gap-2">
                 <div className="h-7 w-48 rounded bg-muted animate-pulse" />
@@ -2100,7 +1967,7 @@ function ChainDetailsSkeleton() {
       <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-border">
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-8 w-24 rounded-lg bg-muted animate-pulse" />
+            <div key={i} className="h-8 w-24 rounded bg-muted animate-pulse" />
           ))}
         </div>
       </div>
@@ -2108,10 +1975,10 @@ function ChainDetailsSkeleton() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
+          <div key={i} className="rounded-md border border-border bg-card p-4 sm:p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="h-3 w-20 rounded bg-muted animate-pulse" />
-              <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
+              <div className="w-7 h-7 rounded bg-muted animate-pulse" />
             </div>
             <div className="h-7 w-24 rounded bg-muted animate-pulse" />
           </div>
@@ -2119,10 +1986,10 @@ function ChainDetailsSkeleton() {
       </div>
 
       {/* Content body — generic validator table placeholder */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="rounded-md border border-border bg-card overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="h-5 w-40 rounded bg-muted animate-pulse" />
-          <div className="h-9 w-64 rounded-lg bg-muted animate-pulse" />
+          <div className="h-9 w-64 rounded bg-muted animate-pulse" />
         </div>
         {Array.from({ length: 6 }).map((_, i) => (
           <div
@@ -2131,7 +1998,7 @@ function ChainDetailsSkeleton() {
           >
             <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
             <div className="flex items-center gap-3 flex-1">
-              <div className="w-9 h-9 rounded-lg bg-muted animate-pulse" />
+              <div className="w-9 h-9 rounded bg-muted animate-pulse" />
               <div className="space-y-1.5">
                 <div className="h-3 w-40 rounded bg-muted animate-pulse" />
                 <div className="h-2.5 w-24 rounded bg-muted animate-pulse" />

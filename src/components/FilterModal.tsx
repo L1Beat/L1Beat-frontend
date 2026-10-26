@@ -60,12 +60,12 @@ export function FilterModal({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onKeyDown={handleKeyDown}
-              className="bg-card rounded-2xl border border-border max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
+              className="bg-card rounded-md border border-border max-w-md w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
             >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-[#ef4444] dark:text-[#ef4444]" />
+              <Filter className="w-5 h-5 text-muted-foreground" />
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Filter Chains
               </h2>
@@ -88,9 +88,9 @@ export function FilterModal({
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => onCategoryChange('')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                     selectedCategory === ''
-                      ? 'bg-[#ef4444] text-white'
+                      ? 'bg-foreground text-background hover:bg-foreground/90'
                       : 'bg-muted text-foreground hover:bg-accent'
                   }`}
                 >
@@ -100,9 +100,9 @@ export function FilterModal({
                   <button
                     key={cat}
                     onClick={() => onCategoryChange(selectedCategory === cat ? '' : cat)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                       selectedCategory === cat
-                        ? 'bg-[#ef4444] text-white'
+                        ? 'bg-foreground text-background hover:bg-foreground/90'
                         : 'bg-muted text-foreground hover:bg-accent'
                     }`}
                   >
@@ -126,9 +126,9 @@ export function FilterModal({
                   <button
                     key={option.value}
                     onClick={() => onValidatorFilterChange(option.value)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                       validatorFilter === option.value
-                        ? 'bg-[#ef4444] text-white'
+                        ? 'bg-foreground text-background hover:bg-foreground/90'
                         : 'bg-muted text-foreground hover:bg-accent'
                     }`}
                   >
@@ -146,7 +146,7 @@ export function FilterModal({
               disabled={!hasActiveFilters}
               whileHover={hasActiveFilters ? { scale: 1.02 } : {}}
               whileTap={hasActiveFilters ? { scale: 0.98 } : {}}
-              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             >
               <RotateCcw className="w-4 h-4" />
               Reset Filters
@@ -155,7 +155,7 @@ export function FilterModal({
               onClick={onClose}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="px-6 py-2 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:ring-offset-2"
+              className="px-6 py-2 bg-foreground text-background hover:bg-foreground/90 text-sm font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-foreground/30 focus:ring-offset-2"
             >
               Apply
             </motion.button>

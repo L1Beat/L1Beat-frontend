@@ -32,7 +32,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                     boxShadow: "0 20px 40px -12px rgb(0 0 0 / 0.15)"
                 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
-                className="group block bg-card rounded-2xl shadow-lg border border-border overflow-hidden"
+                className="group block bg-card rounded-md shadow-lg border border-border overflow-hidden"
             >
                 <Link to={`/blog/${post.slug}`} className="block">
                     <div className="flex flex-col lg:flex-row">
@@ -42,7 +42,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                 {/* Pill-shaped tag at the top */}
                                 {post.tags && post.tags.length > 0 && (
                                     <div className="inline-flex">
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#ef4444]/10 dark:bg-[#ef4444]/20 text-[#ef4444] dark:text-[#ef4444] rounded-full">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand/10 dark:bg-brand/20 text-brand dark:text-brand rounded-full">
                                             <Tag className="w-3 h-3" />
                                             {post.tags[0]}
                                         </span>
@@ -56,7 +56,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
                                 </div>
 
                                 {/* Large multi-line headline */}
-                                <h2 className="text-xl lg:text-2xl xl:text-3xl font-semibold text-foreground leading-tight break-words group-hover:text-[#ef4444] transition-colors duration-300">
+                                <h2 className="text-xl lg:text-2xl xl:text-3xl font-semibold text-foreground leading-tight break-words group-hover:text-foreground transition-colors duration-300">
                                     {post.title}
                                 </h2>
 
@@ -110,7 +110,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
 
                         {/* Right Column: Image Block - Adjusts to left column height */}
                         <div className="w-full lg:w-[65%] p-6 lg:p-8 flex flex-col justify-center">
-                            <div className="flex-1 flex items-center justify-center bg-muted rounded-lg relative overflow-hidden border border-border">
+                            <div className="flex-1 flex items-center justify-center bg-muted rounded relative overflow-hidden border border-border">
                                 <motion.img
                                     src={imageUrl}
                                     alt={post.title}
@@ -129,7 +129,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
     return (
         <Link
             to={`/blog/${post.slug}`}
-            className="group flex flex-col bg-card rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-border hover:border-[#ef4444]/50 transform hover:-translate-y-2 hover:scale-[1.02]"
+            className="group flex flex-col bg-card rounded-md shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-border hover:border-brand/50 transform hover:-translate-y-2 hover:scale-[1.02]"
         >
             {/* Banner Image */}
             <div className="relative h-48 overflow-hidden">
@@ -144,7 +144,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
             {/* Content */}
             <div className="p-6 flex-grow flex flex-col">
                 {/* Title */}
-                <h3 className="text-xl font-semibold text-foreground group-hover:text-[#ef4444] transition-colors mb-3 line-clamp-2 h-[3.5rem]">
+                <h3 className="text-xl font-semibold text-foreground group-hover:text-foreground transition-colors mb-3 line-clamp-2 h-[3.5rem]">
                     {post.title}
                 </h3>
 

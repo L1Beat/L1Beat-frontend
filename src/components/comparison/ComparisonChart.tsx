@@ -36,11 +36,12 @@ interface ComparisonChartProps {
   viewMode?: 'absolute' | 'normalized';
 }
 
+// Categorical, no red: red on a chart means down.
 const CHAIN_COLORS = [
-  { line: 'rgb(99, 102, 241)', fill: 'rgba(99, 102, 241, 0.1)' },   // Indigo
-  { line: 'rgb(16, 185, 129)', fill: 'rgba(16, 185, 129, 0.1)' },   // Emerald
-  { line: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.1)' },   // Amber
-  { line: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.1)' },     // Red
+  { line: 'rgb(57, 135, 229)', fill: 'rgba(57, 135, 229, 0.08)' },  // Blue
+  { line: 'rgb(217, 89, 38)', fill: 'rgba(217, 89, 38, 0.08)' },    // Orange
+  { line: 'rgb(25, 158, 112)', fill: 'rgba(25, 158, 112, 0.08)' },  // Green
+  { line: 'rgb(139, 92, 246)', fill: 'rgba(139, 92, 246, 0.08)' },  // Violet
 ];
 
 function getDataPoints(data: ChainComparisonData, metricType: ComparisonMetricType): { timestamp: number }[] {
@@ -269,7 +270,7 @@ export const ComparisonChart = memo(function ComparisonChart({
     }) {
       const { ctx, data, chartArea } = chart;
       ctx.save();
-      ctx.font = '600 11px ui-sans-serif, system-ui, -apple-system';
+      ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'left';
 
@@ -322,7 +323,7 @@ export const ComparisonChart = memo(function ComparisonChart({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
+        className="bg-card border border-border rounded-md shadow-md p-6"
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px] flex flex-col items-center justify-center">
@@ -351,7 +352,7 @@ export const ComparisonChart = memo(function ComparisonChart({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
+        className="bg-card border border-border rounded-md shadow-md p-6"
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px] flex flex-col items-center justify-center">
@@ -378,7 +379,7 @@ export const ComparisonChart = memo(function ComparisonChart({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -12 }}
         transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
+        className="bg-card border border-border rounded-md shadow-md p-6"
       >
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
         <div className="h-[400px]" onMouseLeave={() => onHoverChain?.(null)}>

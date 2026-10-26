@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, RefreshCw, Search, X } from 'lucide-react';
-import { BlogPost, BlogTag, getBlogPosts, getBlogTags } from '../api/blogApi';
-import { BlogCard } from '../components/BlogCard';
+import { Link, useSearchParams } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
+import { BlogPost, BlogTag, formatBlogDate, getBlogPosts, getBlogTags } from '../api/blogApi';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
+import { getBlogPostImageUrl } from '../utils/imageExtractor';
+
+function authorsOf(post: BlogPost): string[] {
+  if (post.authors && post.authors.length > 0) return post.authors;
+  if (post.authorProfiles && post.authorProfiles.length > 0) return post.authorProfiles.map((p) => p.name);
+  return post.author ? [post.author] : [];
+}
+
+function joinNames(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+}
 
 const POSTS_PER_PAGE = 12;
 
@@ -16,16 +28,9 @@ export function BlogList() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [hasMore, setHasMore] = useState(false);
 
   const selectedTag = searchParams.get('tag');
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   useEffect(() => {
     let active = true;
@@ -73,19 +78,8 @@ export function BlogList() {
     }
   };
 
-  const filteredPosts = useMemo(() => {
-    if (!debouncedSearch.trim()) return posts;
-    const term = debouncedSearch.toLowerCase();
-    return posts.filter((p) => {
-      return (
-        p.title.toLowerCase().includes(term) ||
-        p.excerpt.toLowerCase().includes(term) ||
-        p.author?.toLowerCase().includes(term) ||
-        p.tags.some((t) => t.toLowerCase().includes(term))
-      );
-    });
-  }, [posts, debouncedSearch]);
 
+  const filteredPosts = posts;
   const featuredPost = filteredPosts[0];
   const regularPosts = filteredPosts.slice(1);
   const latestUpdate = useMemo(() => {
@@ -109,92 +103,74 @@ export function BlogList() {
     );
   }
 
+  const hasFilters = Boolean(selectedTag);
+
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
       <SEO
         title="Blog"
         description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
         url="/blog"
       />
-      <Hero
-        totalArticles={posts.length}
-        latestUpdate={latestUpdate}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        resultCount={filteredPosts.length}
-        showResultCount={Boolean(debouncedSearch)}
-      />
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[18px] leading-6 font-semibold text-foreground">Research and notes</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5">
+            Validator economics, cross-chain messaging, and the long arc of L1 adoption.
+          </p>
+        </div>
+        {latestUpdate && (
+          <span className="hidden sm:inline text-[11px] text-muted-foreground">
+            <span className="num">{posts.length}</span> {posts.length === 1 ? 'article' : 'articles'}, updated {formatRelative(latestUpdate)}
+          </span>
+        )}
+      </header>
 
-      {tags.length > 0 && (
-        <TagFilter
-          tags={tags}
-          selectedTag={selectedTag}
-          onSelect={handleTagFilter}
-          totalPosts={posts.length}
-        />
-      )}
+      {/* Toolbar: topic tabs. Full-text search lives in the global ⌘K palette. */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 py-2">
+        <nav className="flex items-center gap-0.5 -ml-2.5 overflow-x-auto no-scrollbar" aria-label="Topics">
+          <TopicTab label="All" count={posts.length} active={!selectedTag} onClick={() => handleTagFilter(null)} />
+          {tags.map((tag) => (
+            <TopicTab key={tag.name} label={tag.name} count={tag.count} active={selectedTag === tag.name} onClick={() => handleTagFilter(tag.name)} />
+          ))}
+        </nav>
+      </div>
 
       {error && (
-        <div className="rounded-xl border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-[#ef4444]" />
-          <span className="text-sm text-[#ef4444]">{error}</span>
-          <button
-            onClick={() => window.location.reload()}
-            className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-[#ef4444] hover:text-[#dc2626]"
-          >
+        <div className="border-y border-border py-3 flex items-center gap-3 text-[12px]">
+          <span className="text-muted-foreground">{error}</span>
+          <button onClick={() => window.location.reload()} className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-foreground hover:underline">
             <RefreshCw className="w-3 h-3" />
             Retry
           </button>
         </div>
       )}
 
-      <AnimatePresence mode="wait">
-        {filteredPosts.length === 0 ? (
-          <EmptyState
-            searchTerm={debouncedSearch}
-            selectedTag={selectedTag}
-            onClear={() => {
-              setSearchTerm('');
-              handleTagFilter(null);
-            }}
-          />
-        ) : (
-          <motion.div
-            key={`${selectedTag || 'all'}-${debouncedSearch}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-6"
-          >
-            {featuredPost && <BlogCard post={featuredPost} featured />}
+      {filteredPosts.length === 0 ? (
+        <div className="border-y border-border px-6 py-12 text-center text-[12px] text-muted-foreground">
+          {hasFilters ? 'No articles on this topic yet.' : 'No articles yet.'}
+        </div>
+      ) : (
+        <div className="border-t border-border">
+          {/* Lead: the newest article, with its image. */}
+          {featuredPost && !hasFilters && <LeadArticle post={featuredPost} />}
 
-            {regularPosts.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {regularPosts.map((post) => (
-                  <BlogCard key={post._id} post={post} />
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* Index: every other article as a dated row. */}
+          {(hasFilters ? filteredPosts : regularPosts).map((post) => (
+            <ArticleRow key={post._id} post={post} />
+          ))}
+        </div>
+      )}
 
       {hasMore && filteredPosts.length > 0 && (
         <div className="flex justify-center pt-2">
           <button
             onClick={loadMore}
             disabled={loadingMore}
-            className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-card border border-border text-sm font-semibold text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-2 h-8 px-3 rounded border border-border bg-background text-[12px] font-medium text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loadingMore ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Loading…
-              </>
-            ) : (
-              'Load more articles'
-            )}
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingMore ? 'animate-spin' : ''}`} />
+            {loadingMore ? 'Loading' : 'Load more articles'}
           </button>
         </div>
       )}
@@ -202,74 +178,78 @@ export function BlogList() {
   );
 }
 
-function Hero({
-  totalArticles,
-  latestUpdate,
-  searchTerm,
-  onSearchChange,
-  resultCount,
-  showResultCount,
-}: {
-  totalArticles: number;
-  latestUpdate: string | null;
-  searchTerm: string;
-  onSearchChange: (v: string) => void;
-  resultCount: number;
-  showResultCount: boolean;
-}) {
-  const meta: string[] = [];
-  if (totalArticles > 0) {
-    meta.push(`${totalArticles} ${totalArticles === 1 ? 'article' : 'articles'}`);
-  }
-  if (latestUpdate) {
-    meta.push(`Updated ${formatRelative(latestUpdate)}`);
-  }
-
+function TopicTab({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
-    <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-      <div className="min-w-0">
-        <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
-          L1BEAT INSIGHTS
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-          Avalanche L1s, explained.
-        </h1>
-        <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
-          Field notes on validator economics, cross-chain messaging, and the long arc of L1
-          adoption.
-        </p>
-        {meta.length > 0 && (
-          <div className="text-xs text-muted-foreground mt-3">{meta.join(' · ')}</div>
-        )}
-      </div>
-      <div className="lg:w-80 shrink-0 flex flex-col gap-1.5">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search articles…"
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full h-10 pl-9 pr-9 rounded-lg bg-card border border-border text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]/30 focus:border-[#ef4444]/40"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        {showResultCount && (
-          <div className="text-[11px] text-muted-foreground pl-1">
-            {resultCount} {resultCount === 1 ? 'result' : 'results'}
-          </div>
-        )}
-      </div>
-    </header>
+    <button
+      onClick={onClick}
+      className={`flex items-baseline gap-1.5 h-8 px-2.5 rounded whitespace-nowrap transition-colors ${
+        active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <span className="text-[12.5px] font-medium">{label}</span>
+      <span className="num text-[11px] text-muted-foreground">{count}</span>
+    </button>
   );
 }
+
+function LeadArticle({ post }: { post: BlogPost }) {
+  const imageUrl = getBlogPostImageUrl(post);
+  const authors = joinNames(authorsOf(post));
+  return (
+    <Link
+      to={`/blog/${post.slug}`}
+      className="group grid grid-cols-1 lg:grid-cols-12 gap-6 py-6 border-b border-border hover:bg-accent/30 -mx-4 px-4 transition-colors"
+    >
+      <div className="lg:col-span-5 flex flex-col justify-center min-w-0">
+        <div className="num text-[11px] text-muted-foreground">
+          {formatBlogDate(post.publishedAt)}
+          {post.readTime ? ` · ${post.readTime} min read` : ''}
+        </div>
+        <h2 className="mt-2 text-[22px] sm:text-[26px] leading-tight font-semibold text-foreground">{post.title}</h2>
+        {post.excerpt && <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground line-clamp-3">{post.excerpt}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+          {authors && <span className="text-foreground">{authors}</span>}
+          {post.tags?.slice(0, 3).map((t) => (
+            <span key={t} className="text-muted-foreground">{t}</span>
+          ))}
+        </div>
+      </div>
+      {imageUrl && (
+        <div className="lg:col-span-7">
+          <img src={imageUrl} alt="" className="w-full aspect-[16/9] object-cover rounded-md bg-muted" loading="lazy" />
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function ArticleRow({ post }: { post: BlogPost }) {
+  const imageUrl = getBlogPostImageUrl(post);
+  const authors = joinNames(authorsOf(post));
+  return (
+    <Link
+      to={`/blog/${post.slug}`}
+      className="group flex items-center gap-5 py-4 border-b border-border hover:bg-accent/30 -mx-4 px-4 transition-colors"
+    >
+      <div className="num w-28 shrink-0 text-[11px] text-muted-foreground">{formatBlogDate(post.publishedAt)}</div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-[14px] font-medium text-foreground leading-snug line-clamp-2">{post.title}</h3>
+        {post.excerpt && <p className="mt-1 text-[12px] text-muted-foreground line-clamp-1 hidden sm:block">{post.excerpt}</p>}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
+          {authors && <span className="text-foreground/80">{authors}</span>}
+          {post.readTime ? <span className="num">{post.readTime} min read</span> : null}
+          {post.tags?.slice(0, 2).map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+      </div>
+      {imageUrl && (
+        <img src={imageUrl} alt="" className="hidden md:block w-32 h-20 object-cover rounded bg-muted shrink-0" loading="lazy" />
+      )}
+    </Link>
+  );
+}
+
 
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
@@ -285,105 +265,6 @@ function formatRelative(iso: string): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-function TagFilter({
-  tags,
-  selectedTag,
-  onSelect,
-  totalPosts,
-}: {
-  tags: BlogTag[];
-  selectedTag: string | null;
-  onSelect: (tag: string | null) => void;
-  totalPosts: number;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-      <FilterChip
-        label="All"
-        count={totalPosts}
-        active={!selectedTag}
-        onClick={() => onSelect(null)}
-      />
-      {tags.map((tag) => (
-        <FilterChip
-          key={tag.name}
-          label={tag.name}
-          count={tag.count}
-          active={selectedTag === tag.name}
-          onClick={() => onSelect(tag.name)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function FilterChip({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
-        active
-          ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
-          : 'bg-card border-border text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      {label}
-      <span
-        className={`text-[10px] font-bold px-1.5 h-4 inline-flex items-center rounded-full ${
-          active ? 'bg-[#ef4444] text-white' : 'bg-muted text-muted-foreground'
-        }`}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
 
 
-function EmptyState({
-  searchTerm,
-  selectedTag,
-  onClear,
-}: {
-  searchTerm: string;
-  selectedTag: string | null;
-  onClear: () => void;
-}) {
-  const hasFilters = Boolean(searchTerm || selectedTag);
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      className="rounded-2xl border border-border bg-card px-6 py-12 text-center"
-    >
-      <h3 className="text-base font-semibold text-foreground mb-2">
-        {hasFilters ? 'No articles match these filters' : 'No articles yet'}
-      </h3>
-      <p className="text-sm text-muted-foreground mb-4">
-        {hasFilters
-          ? 'Try different keywords or browse by topic.'
-          : 'Check back soon for fresh insights from the Avalanche ecosystem.'}
-      </p>
-      {hasFilters && (
-        <button
-          onClick={onClear}
-          className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Clear filters
-        </button>
-      )}
-    </motion.div>
-  );
-}
+

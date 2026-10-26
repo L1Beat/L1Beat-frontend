@@ -34,7 +34,7 @@ function getDaysRemaining(balance: number): number {
 }
 
 function getDaysColor(days: number): string {
-  if (days > 90) return 'text-green-500';
+  if (days > 90) return 'text-up';
   if (days >= 30) return 'text-yellow-500';
   return 'text-red-500';
 }
@@ -122,13 +122,13 @@ export function ValidatorDetails() {
   if (error || !validator) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
-          <AlertTriangle className="w-7 h-7 text-[#ef4444]" />
+        <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Validator not found'}</h2>
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Go back
@@ -200,20 +200,20 @@ export function ValidatorDetails() {
         {backLabel}
       </button>
 
-      <header className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+      <header className="relative overflow-hidden rounded-md border border-border bg-card shadow-xl">
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-muted/40 blur-3xl" />
         </div>
         <div className="relative p-6 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center shrink-0">
-                <Shield className="w-7 h-7 text-[#ef4444]" />
+              <div className="w-14 h-14 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Shield className="w-7 h-7 text-muted-foreground" />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   {validator.active ? (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
+                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-up">
                       <span className="w-1 h-1 rounded-full bg-green-500" />
                       ACTIVE
                     </span>
@@ -222,7 +222,7 @@ export function ValidatorDetails() {
                       INACTIVE
                     </span>
                   )}
-                  <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-[#ef4444]/15 text-[#ef4444]">
+                  <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-accent text-foreground">
                     {kindConfig.label.toUpperCase()}
                   </span>
                   {chain && (
@@ -245,7 +245,7 @@ export function ValidatorDetails() {
                     title="Copy Node ID"
                   >
                     {copied === 'node' ? (
-                      <Check className="w-4 h-4 text-green-500" />
+                      <Check className="w-4 h-4 text-up" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -264,7 +264,7 @@ export function ValidatorDetails() {
                       {validator.validation_id.slice(0, 6)}…{validator.validation_id.slice(-4)}
                     </span>
                     {copied === 'validation' ? (
-                      <Check className="w-2.5 h-2.5 text-green-500" />
+                      <Check className="w-2.5 h-2.5 text-up" />
                     ) : (
                       <Copy className="w-2.5 h-2.5" />
                     )}
@@ -276,7 +276,7 @@ export function ValidatorDetails() {
               href={`https://subnets.avax.network/validators/${validator.node_id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded border border-border bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
             >
               Explorer <ExternalLink className="w-3 h-3" />
             </a>
@@ -322,17 +322,17 @@ export function ValidatorDetails() {
                 label={kind === 'legacy' ? 'Primary Network Stake' : 'Staked Amount'}
                 value={`${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`}
               />
-              <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+              <div className="rounded-md border border-border bg-card p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-3 gap-2">
                   <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
                     {kind === 'legacy' ? 'Primary Uptime' : 'Uptime'}
                   </span>
-                  <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center shrink-0">
-                    <Shield className="w-3.5 h-3.5 text-[#ef4444]" />
+                  <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0">
+                    <Shield className="w-3.5 h-3.5 text-muted-foreground" />
                   </div>
                 </div>
                 <p className={`text-2xl font-bold tracking-tight mb-2 ${
-                  uptimeValue >= 80 ? 'text-green-500' : uptimeValue >= 50 ? 'text-yellow-500' : 'text-red-500'
+                  uptimeValue >= 80 ? 'text-up' : uptimeValue >= 50 ? 'text-yellow-500' : 'text-red-500'
                 }`}>
                   {uptimeValue.toFixed(2)}%
                 </p>
@@ -373,7 +373,7 @@ export function ValidatorDetails() {
           transition={{ duration: 0.4, delay: 0.16 }}
         >
           {/* Left column: Financial / Staking details */}
-          <div className="bg-card rounded-xl border border-border p-6">
+          <div className="bg-card rounded-md border border-border p-6">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
               <Coins className="w-4 h-4 text-muted-foreground" />
               {isL1 ? 'Balance Details' : 'Staking Details'}
@@ -384,7 +384,7 @@ export function ValidatorDetails() {
                   <DetailRow label="Total Deposited" value={`${formatAvax(totalDeposited)} AVAX`} />
                   <DetailRow label="Fees Paid" value={`${formatAvax(feesPaid)} AVAX`} valueColor="text-red-500" />
                   <DetailRow label="Initial Deposit" value={`${formatAvax(initialDeposit)} AVAX`} />
-                  <DetailRow label="Total Top-ups" value={`${formatAvax(totalTopups)} AVAX`} valueColor="text-green-500" />
+                  <DetailRow label="Total Top-ups" value={`${formatAvax(totalTopups)} AVAX`} valueColor="text-up" />
                   {refundAmount > 0 && (
                     <DetailRow label="Refund Amount" value={`${formatAvax(refundAmount)} AVAX`} />
                   )}
@@ -447,7 +447,7 @@ export function ValidatorDetails() {
           </div>
 
           {/* Right column: Validator Info */}
-          <div className="bg-card rounded-xl border border-border p-6">
+          <div className="bg-card rounded-md border border-border p-6">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
               <Shield className="w-4 h-4 text-muted-foreground" />
               Validator Info
@@ -500,7 +500,7 @@ export function ValidatorDetails() {
                       href={`https://subnets.avax.network/p-chain/tx/${validator.tx_hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-mono text-[#ef4444] hover:underline"
+                      className="text-sm font-mono text-brand hover:underline"
                     >
                       {validator.tx_hash.slice(0, 8)}...{validator.tx_hash.slice(-6)}
                     </a>
@@ -509,7 +509,7 @@ export function ValidatorDetails() {
                       className="text-muted-foreground hover:text-foreground transition-colors"
                       title="Copy Tx Hash"
                     >
-                      {copied === 'tx' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                      {copied === 'tx' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
                     </button>
                     <a
                       href={`https://subnets.avax.network/p-chain/tx/${validator.tx_hash}`}
@@ -546,7 +546,7 @@ export function ValidatorDetails() {
                       className="text-muted-foreground hover:text-foreground transition-colors"
                       title="Copy BLS Public Key"
                     >
-                      {copied === 'bls' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                      {copied === 'bls' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
                 </div>
@@ -563,7 +563,7 @@ export function ValidatorDetails() {
                       className="text-muted-foreground hover:text-foreground transition-colors"
                       title="Copy Address"
                     >
-                      {copied === 'owner' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                      {copied === 'owner' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
                 </div>
@@ -575,7 +575,7 @@ export function ValidatorDetails() {
         {/* ── Deposit History — L1 only ── */}
         {isL1 && deposits.length > 0 && (
           <motion.div
-            className="bg-card rounded-xl border border-border p-6"
+            className="bg-card rounded-md border border-border p-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.24 }}
@@ -618,7 +618,7 @@ export function ValidatorDetails() {
                             href={`https://subnets.avax.network/p-chain/tx/${deposit.tx_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[#ef4444] hover:underline"
+                            className="inline-flex items-center gap-1 text-brand hover:underline"
                           >
                             {deposit.tx_id.slice(0, 8)}...{deposit.tx_id.slice(-6)}
                             <ExternalLink className="w-3 h-3" />
@@ -633,7 +633,7 @@ export function ValidatorDetails() {
             {deposits.length > 10 && (
               <button
                 onClick={() => setShowAllDeposits(!showAllDeposits)}
-                className="mt-3 text-xs font-medium text-[#ef4444] hover:text-[#ef4444]/80 transition-colors"
+                className="mt-3 text-xs font-medium text-brand hover:text-foreground/80 transition-colors"
               >
                 {showAllDeposits ? 'Show less' : `Show all ${deposits.length} transactions`}
               </button>
@@ -655,15 +655,15 @@ function HeroCard({ icon, label, value, valueColor, subtitle, warning }: {
   warning?: boolean;
 }) {
   const sizedIcon = isValidElement(icon)
-    ? cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-3.5 h-3.5 text-[#ef4444]' })
+    ? cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-3.5 h-3.5 text-brand' })
     : icon;
   return (
-    <div className={`rounded-xl border p-4 sm:p-5 bg-card ${warning ? 'border-red-500/40' : 'border-border'}`}>
+    <div className={`rounded-md border p-4 sm:p-5 bg-card ${warning ? 'border-red-500/40' : 'border-border'}`}>
       <div className="flex items-center justify-between mb-3 gap-2">
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground truncate">{label}</span>
         <div className="flex items-center gap-1.5 shrink-0">
           {warning && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
-          <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
+          <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
             {sizedIcon}
           </div>
         </div>
@@ -684,14 +684,14 @@ function StakingPeriodCard({ period, active }: {
 }) {
   const daysLeft = Math.floor(period.daysLeft);
   const barColor = !active ? 'bg-muted-foreground' : daysLeft > 30 ? 'bg-green-500' : daysLeft > 7 ? 'bg-yellow-500' : 'bg-red-500';
-  const textColor = !active ? 'text-muted-foreground' : daysLeft > 30 ? 'text-green-500' : daysLeft > 7 ? 'text-yellow-500' : 'text-red-500';
+  const textColor = !active ? 'text-muted-foreground' : daysLeft > 30 ? 'text-up' : daysLeft > 7 ? 'text-yellow-500' : 'text-red-500';
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
       <div className="flex items-center justify-between mb-3 gap-2">
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground">Staking Period</span>
-        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center shrink-0">
-          <Timer className="w-3.5 h-3.5 text-[#ef4444]" />
+        <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0">
+          <Timer className="w-3.5 h-3.5 text-muted-foreground" />
         </div>
       </div>
       <p className={`text-2xl font-bold tracking-tight mb-2 ${textColor}`}>

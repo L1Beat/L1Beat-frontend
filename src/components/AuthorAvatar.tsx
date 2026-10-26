@@ -64,7 +64,7 @@ export function AuthorAvatar({
         </div>
       ) : (
         <div
-          className={`${sizeClasses[size]} bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full ${borderClassName} flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:from-[#dc2626] hover:to-[#b91c1c] ${className}`}
+          className={`${sizeClasses[size]} bg-gradient-to-br from-brand to-brand-hover rounded-full ${borderClassName} flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:from-brand-hover hover:to-brand-hover ${className}`}
         >
           {initials.length <= 2 ? (
             <span className={`${sizeClasses[size].split(' ')[2]} font-semibold text-white select-none`}>

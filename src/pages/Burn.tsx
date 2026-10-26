@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Flame, Zap, Activity, Gauge, Volume2, VolumeX } from 'lucide-react';
+import { Flame, Volume2, VolumeX } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { StatStrip } from '../components/instrument';
+import type { StatItem } from '../components/instrument';
 import { getBurnedTotal } from '../api';
 
 // --- websocket types -------------------------------------------------------
@@ -341,7 +343,8 @@ function EmberCanvas({ burst, reduced }: { burst: FeedBlock | null; reduced: boo
       // Gentle baseline embers so it always smolders.
       spawnAcc += dt;
       if (spawnAcc > 140) { spawnAcc = 0; spawn(1); }
-      ctx.globalCompositeOperation = 'lighter';
+      // Additive glow only reads on the dark stage; on light it would wash out to white.
+      ctx.globalCompositeOperation = document.documentElement.classList.contains('dark') ? 'lighter' : 'source-over';
       const arr = embers.current;
       for (let i = arr.length - 1; i >= 0; i--) {
         const e = arr[i];
@@ -392,35 +395,21 @@ function BurnCounter({ avax, reduced }: { avax: number; reduced: boolean }) {
   const intPart = Math.floor(v).toLocaleString('en-US');
   const frac = (v - Math.floor(v)).toFixed(6).slice(1); // ".520617"
   return (
-    <div className="flex items-baseline justify-center font-bold tabular-nums leading-none">
+    <div className="flex items-baseline justify-center leading-none">
       <span
-        className="text-5xl sm:text-7xl lg:text-8xl bg-gradient-to-b from-orange-300 via-[#ef4444] to-orange-600 bg-clip-text text-transparent"
-        style={{ filter: 'drop-shadow(0 0 24px rgba(239,68,68,0.45))' }}
+        className="num text-5xl sm:text-7xl lg:text-8xl font-medium bg-gradient-to-b from-orange-400 via-orange-500 to-orange-700 dark:from-orange-200 dark:via-orange-400 dark:to-orange-600 bg-clip-text text-transparent"
       >
         {intPart}
       </span>
-      <span className="text-xl sm:text-3xl lg:text-4xl text-orange-400/70 ml-0.5">{frac}</span>
+      <span className="num text-xl sm:text-3xl lg:text-4xl text-orange-600/70 dark:text-orange-400/70 ml-0.5">{frac}</span>
     </div>
   );
 }
 
-// Isolated so its 60fps tween only re-renders itself, not the whole page/feed.
-function SessionStat({ navax, reduced }: { navax: bigint; reduced: boolean }) {
+// Isolated so its 60fps tween only re-renders this text, not the whole strip.
+function SessionValue({ navax, reduced }: { navax: bigint; reduced: boolean }) {
   const v = useTween(navaxToAvax(navax), 700, reduced);
-  return <StatCard icon={Activity} label="Burned this session" value={v.toFixed(8)} sub="since you opened" />;
-}
-
-function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Flame; label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/60 backdrop-blur px-4 py-3.5">
-      <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-        <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-        {label}
-      </div>
-      <div className="mt-1.5 text-xl sm:text-2xl font-bold text-foreground tabular-nums">{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
-    </div>
-  );
+  return <>{v.toFixed(8)}</>;
 }
 
 // --- live feed -------------------------------------------------------------
@@ -433,28 +422,37 @@ function timeAgo(tsMs: number, now: number): string {
 
 // memo: with the clock isolated to LiveFeed, a per-second tick only re-renders
 // rows whose `now` bucket actually changed the label (props are otherwise stable).
-const BlockRow = memo(function BlockRow({ block, now, reduced, isNewest }: { block: FeedBlock; now: number; reduced: boolean; isNewest: boolean }) {
-  // Flash intensity scales (log) with burn size; newest row gets the ignite flash.
-  const heat = Math.min(1, Math.log10(block.navaxNum + 10) / 7);
+const BlockRow = memo(function BlockRow({
+  block,
+  now,
+  reduced,
+  isNewest,
+  maxAvax,
+}: {
+  block: FeedBlock;
+  now: number;
+  reduced: boolean;
+  isNewest: boolean;
+  maxAvax: number;
+}) {
+  const pct = maxAvax > 0 ? Math.max(1, (block.avax / maxAvax) * 100) : 0;
   return (
-    <div
-      className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border/50 last:border-0"
+    <tr
+      className="h-10 border-b border-border/50"
       style={!reduced && isNewest ? { animation: 'burnIgnite 900ms ease-out' } : undefined}
     >
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-foreground tabular-nums">Block {block.block_number.toLocaleString('en-US')}</div>
-        <div className="text-[11px] text-muted-foreground">
-          {timeAgo(block.tsMs, now)} · {block.tx_count} tx
-        </div>
-      </div>
-      <div
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-bold tabular-nums text-orange-300 border border-orange-500/30"
-        style={{ background: `rgba(239,68,68,${0.08 + heat * 0.22})` }}
-      >
-        <Flame className="w-3.5 h-3.5 text-[#ef4444]" />
-        {block.avax.toFixed(8)}
-      </div>
-    </div>
+      <td className="num text-[12px] text-foreground">{block.block_number.toLocaleString('en-US')}</td>
+      <td className="num text-[12px] text-muted-foreground">{timeAgo(block.tsMs, now)}</td>
+      <td className="num text-[12px] text-muted-foreground text-right">{block.tx_count}</td>
+      <td className="text-right">
+        <span className="inline-flex items-center justify-end gap-2.5">
+          <span aria-hidden className="hidden sm:block w-24 h-[3px] rounded-sm bg-muted/60 overflow-hidden">
+            <span className="block h-full rounded-sm bg-orange-400/80" style={{ width: `${pct}%` }} />
+          </span>
+          <span className="num text-[12px] text-foreground w-28 inline-block">{block.avax.toFixed(8)}</span>
+        </span>
+      </td>
+    </tr>
   );
 });
 
@@ -466,32 +464,41 @@ function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+  const shown = blocks.slice(0, FEED_VISIBLE);
+  const maxAvax = shown.reduce((m, b) => Math.max(m, b.avax), 0);
 
   return (
-    <section className="mt-8 rounded-2xl border border-border bg-card overflow-hidden">
-      <header className="flex items-center gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
-        <Flame className="w-4 h-4 text-[#ef4444]" />
-        <h2 className="text-sm font-bold tracking-wide uppercase text-foreground">Live C-Chain Block Burns</h2>
-      </header>
-      {blocks.length === 0 ? (
-        <div className="divide-y divide-border/50">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between px-4 sm:px-5 py-3">
-              <div className="space-y-1.5">
-                <div className="h-3.5 w-28 rounded bg-muted animate-pulse" />
-                <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
-              </div>
-              <div className="h-6 w-24 rounded-full bg-muted animate-pulse" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div>
-          {blocks.slice(0, FEED_VISIBLE).map((b, i) => (
-            <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} />
-          ))}
-        </div>
-      )}
+    <section>
+      <div className="flex items-baseline justify-between gap-3 py-2">
+        <h2 className="text-[13px] font-medium text-foreground">Live C-Chain block burns</h2>
+        <span className="text-[11px] text-muted-foreground">
+          Last <span className="num">{FEED_VISIBLE}</span> blocks
+        </span>
+      </div>
+      <table className="w-full text-[12px] border-t border-border">
+        <thead>
+          <tr className="h-9 border-b border-border text-[11px] font-medium text-muted-foreground">
+            <th className="text-left font-medium">Block</th>
+            <th className="text-left font-medium">Age</th>
+            <th className="text-right font-medium">Txs</th>
+            <th className="text-right font-medium">Burned, AVAX</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.length === 0
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="h-10 border-b border-border/50">
+                  <td><div className="h-3 w-24 rounded bg-muted animate-pulse" /></td>
+                  <td><div className="h-3 w-12 rounded bg-muted animate-pulse" /></td>
+                  <td className="text-right"><div className="ml-auto h-3 w-8 rounded bg-muted animate-pulse" /></td>
+                  <td className="text-right"><div className="ml-auto h-3 w-28 rounded bg-muted animate-pulse" /></td>
+                </tr>
+              ))
+            : shown.map((b, i) => (
+                <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} maxAvax={maxAvax} />
+              ))}
+        </tbody>
+      </table>
     </section>
   );
 }
@@ -524,77 +531,92 @@ export function Burn() {
     return sum / shown.length;
   }, [blocks]);
 
+  const latest = blocks[0];
+  const stats: StatItem[] = [
+    { label: 'Burn rate', value: ratePerMin.toFixed(6), sub: 'AVAX per minute, last 60s' },
+    { label: 'Burned this session', value: <SessionValue navax={sessionNavax} reduced={reduced} />, sub: 'AVAX since you opened the page' },
+    {
+      label: 'Avg burn per block',
+      value: avgPerBlock > 0 ? avgPerBlock.toFixed(8) : '—',
+      sub: blocks.length ? `AVAX, last ${Math.min(blocks.length, FEED_VISIBLE)} blocks` : 'Waiting for blocks',
+    },
+    {
+      label: 'Latest block',
+      value: latest ? latest.block_number.toLocaleString('en-US') : '—',
+      sub: latest ? `${latest.tx_count} tx, ${latest.avax.toFixed(6)} AVAX burned` : 'Waiting for blocks',
+    },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <div>
       <SEO title="AVAX Burn: Live Avalanche Fee Burn" description="Live AVAX burned on Avalanche, streamed block by block. Every C-Chain fee, base fee and priority tip, is burned." />
       <style>{`
         @keyframes burnIgnite {
-          0% { background-color: rgba(239,68,68,0.28); transform: translateY(-6px); opacity: 0; }
+          0% { background-color: rgba(249,115,22,0.22); transform: translateY(-6px); opacity: 0; }
           40% { opacity: 1; }
           100% { background-color: transparent; transform: translateY(0); opacity: 1; }
         }
         @keyframes flameFlicker { 0%,100% { transform: scale(1) rotate(-1deg); opacity: .9 } 50% { transform: scale(1.12) rotate(1deg); opacity: 1 } }
       `}</style>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-b from-[#1a1410] to-card px-6 py-12 sm:py-16 text-center">
+      {/* Hero: the running total fills the first screen, embers rise behind it. */}
+      <section className="relative overflow-hidden border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),900px)] md:min-h-[560px]">
         <div
           className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none"
-          style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(239,68,68,0.18), transparent 70%)' }}
+          style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(249,115,22,0.16), transparent 70%)' }}
           aria-hidden
         />
         <EmberCanvas burst={lastBlock} reduced={reduced} />
 
-        <button
-          type="button"
-          onClick={sound.toggle}
-          aria-pressed={sound.enabled}
-          title={sound.enabled ? 'Mute fireplace' : 'Play fireplace sound'}
-          className="absolute top-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-black/30 px-3 py-1.5 text-[11px] font-semibold text-orange-200/90 backdrop-blur hover:bg-black/50 transition-colors"
-        >
-          {sound.enabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-          <span className="hidden sm:inline">{sound.enabled ? 'Sound on' : 'Fireplace'}</span>
-        </button>
-
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase text-orange-300/90">
-            <Flame className="w-4 h-4 text-[#ef4444]" style={!reduced ? { animation: 'flameFlicker 1.4s ease-in-out infinite' } : undefined} />
-            Total AVAX Burned on C-Chain
+        <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex items-center justify-between gap-3 pointer-events-none [&>*]:pointer-events-auto">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">AVAX burn</h1>
+            <p className="hidden lg:block text-[12px] text-muted-foreground truncate">
+              Every C-Chain fee, base fee and priority tip, is burned and removed from circulating supply.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={sound.toggle}
+            aria-pressed={sound.enabled}
+            title={sound.enabled ? 'Mute fireplace' : 'Play fireplace sound'}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded border border-border bg-background/70 text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {sound.enabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{sound.enabled ? 'Sound on' : 'Fireplace'}</span>
+          </button>
+        </div>
 
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 pb-16 pointer-events-none">
+          <div className="inline-flex items-center gap-2 text-[13px] font-medium text-orange-700 dark:text-orange-200/90">
+            <Flame className="w-4 h-4 text-orange-500 dark:text-orange-400" style={!reduced ? { animation: 'flameFlicker 1.4s ease-in-out infinite' } : undefined} />
+            Total AVAX burned on the C-Chain
+          </div>
           <div className="mt-6 mb-3">
             {totalNavax == null ? (
-              <div className="h-16 sm:h-24 w-72 sm:w-[28rem] mx-auto rounded-xl bg-muted animate-pulse" />
+              <div className="h-16 sm:h-24 w-72 sm:w-[28rem] mx-auto rounded-md bg-muted animate-pulse" />
             ) : (
               <BurnCounter avax={totalAvax} reduced={reduced} />
             )}
           </div>
-
-          <div className="text-sm font-semibold tracking-wide text-muted-foreground">AVAX</div>
-
-          <div className="mt-7 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
-            {connected ? 'Live · streaming C-Chain blocks' : 'Reconnecting…'}
+          <div className="text-[12px] text-muted-foreground">AVAX</div>
+          <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-up' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
+            {connected ? 'Live, streaming C-Chain blocks' : 'Reconnecting'}
           </div>
+        </div>
+
+        <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
+          <StatStrip items={stats} floating />
         </div>
       </section>
 
-      {/* Blurb */}
-      <p className="mt-6 text-center text-sm text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-        AVAX is the hard-capped native token of Avalanche. On the C-Chain the{' '}
-        <span className="text-foreground font-medium">entire transaction fee</span> (base fee and priority tip) is{' '}
-        <span className="text-[#ef4444] font-medium">burned</span>, removed from circulating supply.
-      </p>
-
-      {/* Stats */}
-      <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard icon={Zap} label="Burn rate" value={`${ratePerMin.toFixed(6)}`} sub="AVAX / min" />
-        <SessionStat navax={sessionNavax} reduced={reduced} />
-        <StatCard icon={Gauge} label="Avg burn / block" value={avgPerBlock > 0 ? avgPerBlock.toFixed(8) : '—'} sub={blocks.length ? `last ${Math.min(blocks.length, FEED_VISIBLE)} blocks` : 'AVAX'} />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+        <div className="md:hidden">
+          <StatStrip items={stats} />
+        </div>
+        <LiveFeed blocks={blocks} reduced={reduced} />
       </div>
-
-      {/* Live feed */}
-      <LiveFeed blocks={blocks} reduced={reduced} />
     </div>
   );
 }

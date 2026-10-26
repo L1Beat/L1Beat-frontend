@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Github, Mail, Heart } from 'lucide-react';
 import { siX } from 'simple-icons/icons';
 import { useTheme } from '../hooks/useTheme';
@@ -10,8 +11,7 @@ const RESOURCES: { label: string; href: string }[] = [
   { label: 'Avalanche Network', href: 'https://www.avax.network/' },
 ];
 
-const linkCls = 'text-sm text-muted-foreground transition-colors hover:text-foreground';
-const headCls = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground';
+const linkCls = 'text-[12px] text-muted-foreground transition-colors hover:text-foreground';
 
 function XIcon({ className }: { className?: string }) {
   return (
@@ -41,38 +41,25 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative mt-auto border-t border-border bg-background text-foreground">
-      {/* subtle brand hairline */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ef4444]/40 to-transparent" />
-
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 2xl:max-w-screen-2xl">
-        <div className="grid grid-cols-2 gap-8 py-12 md:grid-cols-12 md:gap-6">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-6">
+    <footer className="mt-auto border-t border-border bg-background text-foreground">
+      <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6">
+        {/* One row: identity on the left, destinations on the right. */}
+        <div className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4 min-w-0">
             <L1BeatLogo size="small" theme={theme} />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-              Real-time analytics and monitoring for every Avalanche L1.
+            <p className="text-[12px] text-muted-foreground truncate">
+              Real-time analytics for every Avalanche L1. Alpha: data may be incomplete.
             </p>
           </div>
-
-          {/* Resources */}
-          <div className="md:col-span-3">
-            <h3 className={headCls}>Resources</h3>
-            <ul className="mt-4 space-y-2.5">
-              {RESOURCES.map((l) => (
-                <li key={l.label}>
-                  <a href={l.href} target="_blank" rel="noopener noreferrer" className={linkCls}>
-                    {l.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Connect */}
-          <div className="md:col-span-3">
-            <h3 className={headCls}>Connect</h3>
-            <div className="mt-4 flex items-center gap-2">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-label="Footer">
+            {RESOURCES.map((l) => (
+              <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={linkCls}>
+                {l.label}
+              </a>
+            ))}
+            <Link to="/brand" className={linkCls}>Brand</Link>
+            <span aria-hidden className="hidden sm:block w-px h-4 bg-border" />
+            <div className="flex items-center gap-1">
               {SOCIALS.map(({ label, href, Icon }) => (
                 <a
                   key={label}
@@ -81,21 +68,22 @@ export function Footer() {
                   rel="noopener noreferrer"
                   title={label}
                   aria-label={label}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-[#ef4444]/40 hover:text-[#ef4444]"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon className="h-3.5 w-3.5" />
                 </a>
               ))}
             </div>
-          </div>
+          </nav>
         </div>
 
-        {/* Bottom bar */}
-        <div className="flex flex-col gap-3 border-t border-border py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© {year} L1Beat. All rights reserved.</p>
+        <div className="flex flex-col gap-2 border-t border-border py-3 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            © <span className="num">{year}</span> L1Beat. All rights reserved.
+          </p>
           <p className="flex items-center gap-1.5">
             Built with
-            <Heart className="h-3.5 w-3.5 fill-[#ef4444] text-[#ef4444]" />
+            <Heart className="h-3 w-3 fill-current" />
             for the Avalanche community
           </p>
         </div>

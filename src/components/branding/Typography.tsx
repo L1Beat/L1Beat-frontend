@@ -17,26 +17,26 @@ export function Typography({ theme }: TypographyProps) {
         <h3 className="mb-6">Primary Typeface</h3>
         <div className="p-8 rounded-xl border border-border bg-card">
           <div className="mb-8">
-            <div className="text-5xl mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>Inter</div>
+            <div className="text-5xl mb-4" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>IBM Plex Sans</div>
             <p className="text-muted-foreground">
-              Loaded from Google Fonts at weights 400, 500, 600, 700
+              Loaded from Google Fonts at weights 400, 500, 600. IBM Plex Mono (400, 500) carries every number, ID and hash.
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h4 className="mb-4">Why Inter?</h4>
+              <h4 className="mb-4">Why IBM Plex?</h4>
               <ul className="space-y-2 text-muted-foreground">
-                <li>• Purpose-built for UI and screens</li>
+                <li>• Designed for technical and data-dense interfaces</li>
                 <li>• Excellent legibility at small sizes</li>
                 <li>• Tabular figures for data and metrics</li>
-                <li>• Consistent across every platform</li>
+                <li>• Sans and Mono share one skeleton, so mixed lines stay even</li>
                 <li>• Falls back to system-ui if it fails to load</li>
               </ul>
             </div>
             <div>
               <h4 className="mb-4">Font Stack</h4>
               <code className="block p-4 rounded-lg bg-muted text-sm break-all">
-                Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+                'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif
               </code>
             </div>
           </div>

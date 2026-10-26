@@ -5,34 +5,61 @@
 @layer base {
   :root {
     /* Shadows - light mode gets proper shadows (iOS HIG) */
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
-    --card-shadow-hover: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+    --card-shadow: none;
+    --card-shadow-hover: none;
 
-    /* Design system colors - Light mode (iOS HIG) */
-    --background: #ffffff;
-    --foreground: #000000;
-    --card: #f2f2f7;
-    --card-foreground: #000000;
+    /* Surfaces, light. A cool paper grey page with white panels, so panels
+       read as sheets of data rather than cards floating on white. */
+    --background: #f5f6f7;
+    --foreground: #17191c;
+    --card: #ffffff;
+    --card-foreground: #17191c;
     --popover: #ffffff;
-    --popover-foreground: #000000;
-    --primary: #000000;
+    --popover-foreground: #17191c;
+    --primary: #17191c;
     --primary-foreground: #ffffff;
-    --secondary: #f2f2f7;
-    --secondary-foreground: #000000;
-    --muted: #f2f2f7;
-    --muted-foreground: rgba(60, 60, 67, 0.6);
-    --foreground-tertiary: rgba(60, 60, 67, 0.3);
-    --accent: #e5e5ea;
-    --accent-foreground: #000000;
-    --destructive: #d4183d;
+    --secondary: #eef0f2;
+    --secondary-foreground: #17191c;
+    --muted: #eef0f2;
+    --muted-foreground: #626a73;
+    --foreground-tertiary: rgba(23, 25, 28, 0.35);
+    --accent: #e9ebee;
+    --accent-foreground: #17191c;
+    --destructive: #e84142;
     --destructive-foreground: #ffffff;
-    --border: rgba(0, 0, 0, 0.15);
-    --separator: rgba(60, 60, 67, 0.12);
+    --border: #dde1e6;
+    --separator: rgba(23, 25, 28, 0.08);
     --input: transparent;
-    --input-background: #f2f2f7;
+    --input-background: #ffffff;
     --switch-background: #cbced4;
-    --ring: rgba(60, 60, 67, 0.3);
-    --radius: 0.625rem;
+    --ring: rgba(23, 25, 28, 0.3);
+
+    /* RGB channels of the surface tokens, so Tailwind alpha modifiers
+       (bg-accent/40, border-border/50) work. Keep in sync with the hex above. */
+    --background-rgb: 245 246 247;
+    --foreground-rgb: 23 25 28;
+    --card-rgb: 255 255 255;
+    --popover-rgb: 255 255 255;
+    --muted-rgb: 238 240 242;
+    --muted-foreground-rgb: 98 106 115;
+    --accent-rgb: 233 235 238;
+    --secondary-rgb: 238 240 242;
+    --border-rgb: 221 225 230;
+    /* Full-bleed hero canvas (map, flows, charts, burn). */
+    --stage-rgb: 250 251 252;
+    --radius: 0.375rem;
+
+    /* Brand and semantic ink. Red is Avalanche's own #E84142 and is reserved
+       for the logo, the active nav rule, and negative deltas. */
+    --brand-rgb: 232 65 66;
+    --brand-hover: #d23536;
+    --up: #1f9d5b;
+    --up-rgb: 31 157 91;
+    --down: #e84142;
+    --down-rgb: 232 65 66;
+    /* Default single-series chart ink. Neutral, so green/red keep meaning. */
+    --ink: #3a3f45;
+    --ink-rgb: 58 63 69;
 
     /* Fill colors for interactive elements */
     --fill: rgba(120, 120, 128, 0.2);
@@ -45,28 +72,45 @@
     --card-shadow: none;
     --card-shadow-hover: none;
 
-    /* Design system colors - Dark mode (iOS HIG) */
-    --background: #000000;
-    --foreground: #ffffff;
-    --card: #1c1c1e;
-    --card-foreground: #ffffff;
-    --popover: #1c1c1e;
-    --popover-foreground: #ffffff;
-    --primary: #ffffff;
-    --primary-foreground: #000000;
-    --secondary: #2c2c2e;
-    --secondary-foreground: #ffffff;
-    --muted: #2c2c2e;
-    --muted-foreground: rgba(235, 235, 245, 0.6);
-    --foreground-tertiary: rgba(235, 235, 245, 0.3);
-    --accent: #2c2c2e;
-    --accent-foreground: #ffffff;
-    --destructive: #ff453a;
+    /* Surfaces, dark. Graphite, not pure black: panels sit one step lighter
+       than the page and hairlines do the separating, not shadows. */
+    --background: #141619;
+    --foreground: #e8eaed;
+    --card: #1a1d21;
+    --card-foreground: #e8eaed;
+    --popover: #1e2227;
+    --popover-foreground: #e8eaed;
+    --primary: #e8eaed;
+    --primary-foreground: #141619;
+    --secondary: #22262b;
+    --secondary-foreground: #e8eaed;
+    --muted: #22262b;
+    --muted-foreground: #9aa3ad;
+    --foreground-tertiary: rgba(232, 234, 237, 0.35);
+    --accent: #262b31;
+    --accent-foreground: #e8eaed;
+    --destructive: #e84142;
     --destructive-foreground: #ffffff;
-    --border: rgba(84, 84, 88, 0.36);
-    --separator: rgba(84, 84, 88, 0.36);
-    --input: #2c2c2e;
-    --ring: rgba(235, 235, 245, 0.3);
+    --border: #2a2f35;
+    --separator: rgba(148, 163, 184, 0.10);
+    --input: #1e2227;
+    --ring: rgba(232, 234, 237, 0.3);
+
+    --background-rgb: 20 22 25;
+    --foreground-rgb: 232 234 237;
+    --card-rgb: 26 29 33;
+    --popover-rgb: 30 34 39;
+    --muted-rgb: 34 38 43;
+    --muted-foreground-rgb: 154 163 173;
+    --accent-rgb: 38 43 49;
+    --secondary-rgb: 34 38 43;
+    --border-rgb: 42 47 53;
+    --stage-rgb: 14 16 19;
+
+    --up: #3dbe7a;
+    --up-rgb: 61 190 122;
+    --ink: #c9ced4;
+    --ink-rgb: 201 206 212;
 
     /* Fill colors for interactive elements */
     --fill: rgba(120, 120, 128, 0.36);
@@ -76,28 +120,33 @@
 
   body {
     @apply bg-background text-foreground min-h-screen transition-colors duration-200;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
-  /* Improve chart readability in dark mode */
-  .dark canvas {
-    filter: brightness(0.9) contrast(1.1);
+  /* Numbers everywhere align in columns. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
   }
+
 }
 
 @layer components {
-  .stat-card {
-    @apply relative overflow-hidden bg-card rounded-xl border border-border transition-all duration-300;
-    box-shadow: var(--card-shadow);
+  /* A number a user reads or copies: mono, tabular, slightly tighter. */
+  .num {
+    @apply font-mono tabular-nums;
+    letter-spacing: -0.01em;
   }
 
-  .stat-card::before {
-    content: '';
-    @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#ef4444] to-[#dc2626] opacity-90;
+  .stat-card {
+    @apply relative overflow-hidden bg-card rounded-md border border-border;
   }
 
   .chart-container {
-    @apply bg-card rounded-xl border border-border transition-all duration-300;
-    box-shadow: var(--card-shadow);
+    @apply bg-card rounded-md border border-border;
   }
 
   .status-pill {
@@ -118,7 +167,7 @@
 
   /* Theme toggle button styles */
   .theme-toggle {
-    @apply p-2 rounded-lg bg-muted hover:bg-accent border border-border transition-all duration-200;
+    @apply p-2 rounded bg-muted hover:bg-accent border border-border transition-all duration-200;
   }
 
   .theme-toggle svg {
@@ -479,15 +528,15 @@
   }
 
   .prose pre {
-    @apply mb-4 rounded-lg overflow-x-auto;
+    @apply mb-4 rounded overflow-x-auto;
   }
 
   .prose img {
-    @apply rounded-lg shadow-md max-w-full h-auto my-4;
+    @apply rounded shadow-md max-w-full h-auto my-4;
   }
 
   .prose a {
-    @apply text-[#ef4444] dark:text-[#ef4444] hover:underline;
+    @apply text-brand dark:text-brand hover:underline;
   }
 
   /* Replace the existing .prose list styles with these */
@@ -510,7 +559,7 @@
   .prose>ul>li::before,
   .prose li:not(li li)::before {
     content: '•';
-    @apply absolute left-0 text-[#ef4444] font-bold text-lg;
+    @apply absolute left-0 text-muted-foreground font-medium text-lg;
   }
 
   /* Level 2 nested lists */
@@ -545,7 +594,7 @@
 
   .prose ol>li::before {
     content: '•';
-    @apply absolute left-0 text-[#ef4444] font-bold text-lg;
+    @apply absolute left-0 text-muted-foreground font-medium text-lg;
   }
 
   .prose ol ol>li::before {
@@ -640,10 +689,10 @@
   }
 
   .prose-content a {
-    color: #ef4444;
+    color: var(--foreground);
     text-decoration: underline;
-    text-underline-offset: 4px;
-    text-decoration-color: rgba(239, 68, 68, 0.3);
+    text-underline-offset: 3px;
+    text-decoration-color: var(--border);
   }
 
   .prose-content a:hover {
@@ -671,7 +720,7 @@
   }
 
   .prose-content blockquote {
-    @apply my-6 rounded-r-lg border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 px-4 py-3 text-muted-foreground;
+    @apply my-6 rounded-r border-l-2 border-border bg-muted px-4 py-3 text-muted-foreground;
   }
 
   .prose-content table {
@@ -685,7 +734,7 @@
   }
 
   .prose-content pre {
-    @apply my-6 overflow-x-auto rounded-xl border border-border bg-muted p-4;
+    @apply my-6 overflow-x-auto rounded-md border border-border bg-muted p-4;
   }
   .prose-content pre code {
     @apply text-foreground;

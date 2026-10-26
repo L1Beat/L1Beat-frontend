@@ -22,7 +22,7 @@ export function L1BeatLogo({
   // Color scheme based on theme
   const colors = {
     dark: {
-      icon: '#ef4444',
+      icon: '#e84142',
       text: variant === 'header' ? '#f8fafc' : '#ffffff'
     },
     light: {

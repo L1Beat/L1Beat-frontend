@@ -35,7 +35,7 @@ function MethodBadge({ method }: { method: 'GET' | 'WS' }) {
     );
   }
   return (
-    <span className="bg-green-500/15 text-green-600 dark:text-green-400 text-xs font-mono px-1.5 py-0.5 rounded">
+    <span className="bg-green-500/15 text-up text-xs font-mono px-1.5 py-0.5 rounded">
       GET
     </span>
   );
@@ -56,20 +56,18 @@ export function LandingState({ onSelect }: LandingStateProps) {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+    <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
       {/* Header */}
-      <div className="space-y-3">
-        <h1 className="text-[28px] font-bold text-foreground leading-tight">
-          Icicle API Playground
-        </h1>
-        <p className="text-[17px] text-muted-foreground max-w-xl">
-          Explore and test the L1Beat API directly from your browser. No auth required.
+      <div className="space-y-2">
+        <h1 className="text-[18px] leading-6 font-semibold text-foreground">API playground</h1>
+        <p className="text-[12px] text-muted-foreground max-w-xl">
+          Call the L1Beat REST and WebSocket API from the browser. No key needed.
         </p>
 
         {/* Base URL chip */}
-        <div className="flex items-center gap-2 mt-4">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted border border-border">
-            <span className="font-mono text-sm text-foreground">
+        <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 h-8 px-2.5 rounded bg-background border border-border">
+            <span className="num text-[12px] text-foreground">
               {PLAYGROUND_API_BASE}
             </span>
             <button
@@ -78,7 +76,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
               title="Copy base URL"
             >
               {copied ? (
-                <Check className="w-3.5 h-3.5 text-green-500" />
+                <Check className="w-3.5 h-3.5 text-up" />
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
@@ -87,23 +85,18 @@ export function LandingState({ onSelect }: LandingStateProps) {
         </div>
 
         {/* Stats row */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-2">
-          <span>{REST_ENDPOINTS.length} REST endpoints</span>
-          <span className="text-border">·</span>
-          <span>{WS_ENDPOINTS.length} WebSocket</span>
-          <span className="text-border">·</span>
-          <span>Open CORS</span>
-          <span className="text-border">·</span>
-          <span>60 req/min (burst 10)</span>
-        </div>
+        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-muted-foreground pt-1">
+          <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">{REST_ENDPOINTS.length}</dd><dt>REST endpoints</dt></div>
+          <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">{WS_ENDPOINTS.length}</dd><dt>WebSocket</dt></div>
+          <div className="flex items-baseline gap-1.5"><dt>Open CORS</dt></div>
+          <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">60</dd><dt>req/min, burst 10</dt></div>
+        </dl>
       </div>
 
       {/* Featured queries */}
       <div>
-        <h2 className="text-[15px] font-semibold text-foreground mb-4">
-          Try a featured query
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h2 className="text-[13px] font-medium text-foreground py-2">Featured queries</h2>
+        <div className="border-t border-border">
           {FEATURED_QUERIES.map((q) => {
             const Icon = ICON_MAP[q.icon] ?? Activity;
             const isWs = isWsEndpoint(q.endpointId);
@@ -111,21 +104,12 @@ export function LandingState({ onSelect }: LandingStateProps) {
               <button
                 key={q.endpointId + q.title}
                 onClick={() => onSelect(q.endpointId, q.params)}
-                className="bg-card border border-border rounded-xl p-5 text-left hover:border-[#ef4444]/50 hover:bg-[#ef4444]/5 transition-all group"
-                style={{ boxShadow: 'var(--card-shadow)' }}
+                className="w-full flex items-center gap-3 h-11 px-2 -mx-2 text-left border-b border-border/50 hover:bg-accent/40 transition-colors"
               >
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-[#ef4444]/10 text-[#ef4444] group-hover:bg-[#ef4444]/20 transition-colors flex-shrink-0">
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-foreground">{q.title}</h3>
-                      <MethodBadge method={isWs ? 'WS' : 'GET'} />
-                    </div>
-                    <p className="text-xs text-muted-foreground">{q.description}</p>
-                  </div>
-                </div>
+                <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <MethodBadge method={isWs ? 'WS' : 'GET'} />
+                <span className="text-[12.5px] font-medium text-foreground shrink-0">{q.title}</span>
+                <span className="text-[12px] text-muted-foreground truncate">{q.description}</span>
               </button>
             );
           })}

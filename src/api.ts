@@ -1,6 +1,10 @@
 import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity, ChainRisk } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
+import { getFallbackChainLogos } from './services/chainLogos';
+
+/** What the indexer's chain list gets when a chain has no logo. */
+export const PLACEHOLDER_CHAIN_LOGO = '/icon-dark-animated.svg';
 
 // Filter predicate to exclude today's partial data from time-series arrays.
 // Data for the current day is incomplete and causes misleading dips in charts.
@@ -400,7 +404,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             chainId: chainSlug,
             originalChainId: rawChainId,
             chainName,
-            chainLogoUri: chain.logo_url || '/icon-dark-animated.svg',
+            chainLogoUri: chain.logo_url || PLACEHOLDER_CHAIN_LOGO,
             description: chain.description || '',
             website: chain.website_url || '',
             socials: chain.socials || [],
@@ -438,6 +442,17 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
           if (filters?.network && chain.network !== filters.network) return false;
           return true;
         });
+
+      // The indexer has no logo for about half the chains. Fill what Glacier
+      // knows; the rest keep the placeholder and render as a lettered disc.
+      const missing = chains.filter((c) => c.chainLogoUri === PLACEHOLDER_CHAIN_LOGO && c.platformChainId);
+      if (missing.length > 0) {
+        const fallback = await getFallbackChainLogos();
+        for (const c of missing) {
+          const uri = fallback[c.platformChainId];
+          if (uri) c.chainLogoUri = uri;
+        }
+      }
 
       return chains;
     } catch (error) {
@@ -1593,15 +1608,15 @@ async function fetchExternalWithRetry<T>(
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
   extraParams: Record<string, string> = {},
-  opts: { throttleMs?: number; maxPages?: number } = {}
+  opts: { throttleMs?: number; maxPages?: number; pageSize?: number } = {}
 ): Promise<T[]> {
   // throttleMs: pause between pages to stay under the API's rate limit on
   //   endpoints with many pages (e.g. the Primary Network has 3000+ validators).
   // maxPages: hard safety bound on the number of requests.
-  const { throttleMs = 0, maxPages = Infinity } = opts;
+  const { throttleMs = 0, maxPages = Infinity, pageSize = 100 } = opts;
   const all: T[] = [];
   let offset = 0;
-  const limit = 100;
+  const limit = pageSize;
   let page = 0;
 
   while (page < maxPages) {
@@ -1735,13 +1750,13 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
     try {
       const params: Record<string, string> = { subnet_id: subnetId };
       if (activeOnly) params['active'] = 'true';
-      // Chains like the Primary Network have 3000+ validators (31 pages). Throttle
-      // between pages so we don't trip the API rate limit (429) mid-pagination,
-      // and cap the page count as a safety bound.
+      // The API serves up to 10,000 rows per page, so even the Primary Network
+      // (5,000+ validators including inactive history) is one request. The
+      // paging loop stays for larger sets; the throttle and cap are safety bounds.
       const allValidators = await fetchAllL1BeatPages<L1BeatValidator>(
         '/api/v1/data/validators',
         params,
-        { throttleMs: 200, maxPages: 60 }
+        { throttleMs: 150, maxPages: 10, pageSize: 10000 }
       );
       return allValidators.map((v) => {
         // PoS chains return a real staked amount + token; PoA chains omit them
@@ -1912,40 +1927,24 @@ export async function getBurnedTotal(): Promise<BurnedTotal | null> {
   }, 60 * 1000);
 }
 
-// Aggregate daily fee burn across all L1 subnets for network-wide chart
+// Daily L1 validation fees summed across every L1. The indexer aggregates when
+// subnet_id is omitted, so this is one request instead of one per L1 (which ran
+// into the API's burst limit and dropped L1s from the daily totals).
 export async function getNetworkDailyFeeBurn(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
   const cacheKey = `l1beat-network-daily-fees-${days}`;
   return fetchExternalWithCache(cacheKey, async () => {
     try {
-      // Get all L1 chains to find subnet IDs
-      const chains = await getChains();
-      const l1SubnetIds = [...new Set(
-        // Filter guarantees subnetId is present, so it is safe as a string here.
-        chains.filter(c => c.isL1 && c.subnetId).map(c => c.subnetId!)
-      )];
-
-      // Fetch daily fees for all subnets in parallel
-      const allFees = await Promise.all(
-        l1SubnetIds.map(id => getL1BeatDailyFeeBurn(id))
+      const response = await fetchExternalWithRetry<{ data: DailyFeeBurn[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees/daily?days=${days}`
       );
-
-      // Aggregate by date
-      const feesByDate = new Map<string, number>();
-      allFees.flat().forEach(entry => {
-        const current = feesByDate.get(entry.date) || 0;
-        feesByDate.set(entry.date, current + entry.total_fees_burned);
-      });
-
-      // Convert to sorted array, filter by days, convert nAVAX to AVAX
-      const sorted = Array.from(feesByDate.entries())
-        .map(([date, nAvax]) => ({
-          timestamp: Math.floor(new Date(date).getTime() / 1000),
-          value: nAvax / 1_000_000_000,
+      // nAVAX to AVAX, oldest first.
+      return (response.data ?? [])
+        .map((entry) => ({
+          timestamp: Math.floor(new Date(entry.date).getTime() / 1000),
+          value: entry.total_fees_burned / 1_000_000_000,
         }))
         .sort((a, b) => a.timestamp - b.timestamp)
         .slice(-days);
-
-      return sorted;
     } catch (error) {
       console.error('Network daily fee burn fetch error:', error);
       return [];

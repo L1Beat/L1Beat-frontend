@@ -84,7 +84,7 @@ export function BookmarkBar({ bookmarks, onSelect, onDelete }: BookmarkBarProps)
               return (
                 <div
                   key={bm.id}
-                  className="flex-shrink-0 flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded-full border border-border hover:border-[#ef4444]/30 bg-card text-xs whitespace-nowrap transition-colors group"
+                  className="flex-shrink-0 flex items-center gap-1 pl-3 pr-1.5 py-1.5 rounded border border-border hover:border-foreground/30 bg-background text-xs whitespace-nowrap transition-colors group"
                   style={{ boxShadow: 'var(--card-shadow)' }}
                 >
                   <button

@@ -377,7 +377,7 @@ export const ComparisonView = memo(function ComparisonView({
 
   if (chainsLoading) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-xl p-12 flex flex-col items-center justify-center">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-md p-12 flex flex-col items-center justify-center">
         <LoadingSpinner size="lg" />
         <p className="mt-4 text-muted-foreground">Loading chains...</p>
       </motion.div>
@@ -389,7 +389,7 @@ export const ComparisonView = memo(function ComparisonView({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Compare Chains</h2>
+          <h2 className="text-[15px] font-semibold text-foreground">Compare chains</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             {comparisonChains.length === 0
               ? 'Select up to 4 L1s to compare performance metrics'
@@ -404,7 +404,7 @@ export const ComparisonView = memo(function ComparisonView({
               <motion.button
                 initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
                 onClick={handleClearAll}
-                className="flex items-center gap-2 px-3.5 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-all"
+                className="flex items-center gap-2 px-3.5 py-2 border border-border rounded text-sm font-medium text-muted-foreground hover:bg-muted transition-all"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Clear All
               </motion.button>
@@ -415,8 +415,8 @@ export const ComparisonView = memo(function ComparisonView({
             disabled={!canAddMore}
             whileHover={canAddMore ? { scale: 1.03 } : {}}
             whileTap={canAddMore ? { scale: 0.97 } : {}}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              canAddMore ? 'bg-[#ef4444] text-white hover:bg-[#dc2626]' : 'bg-muted text-muted-foreground cursor-not-allowed'
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+              canAddMore ? 'bg-foreground text-background hover:bg-foreground/90 hover:bg-foreground/90' : 'bg-muted text-muted-foreground cursor-not-allowed'
             }`}
           >
             <Plus className="w-4 h-4" /> Add Chain
@@ -427,7 +427,7 @@ export const ComparisonView = memo(function ComparisonView({
       {/* Quick-compare Presets */}
       {presets.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-          <span className="shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase mr-1">
+          <span className="shrink-0 text-[11px] text-muted-foreground mr-1">
             Quick compare
           </span>
           {presets.map(p => {
@@ -440,7 +440,7 @@ export const ComparisonView = memo(function ComparisonView({
                 disabled={p.chains.length === 0}
                 className={`shrink-0 inline-flex items-center h-7 px-3 rounded-full text-[12px] font-semibold tracking-wide transition-colors ${
                   isActive
-                    ? 'bg-[#ef4444] text-white shadow-sm shadow-[#ef4444]/20'
+                    ? 'bg-foreground text-background'
                     : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
@@ -470,7 +470,7 @@ export const ComparisonView = memo(function ComparisonView({
                 transition={{ type: 'spring', stiffness: 400, damping: 28, delay: index * 0.05 }}
                 onMouseEnter={() => setHoveredChainId(data.chain.chainId)}
                 onMouseLeave={() => setHoveredChainId(null)}
-                className={`bg-card rounded-xl border ${color.border} p-4 flex flex-col gap-3.5 transition-shadow ${
+                className={`bg-card rounded-md border ${color.border} p-4 flex flex-col gap-3.5 transition-shadow ${
                   hoveredChainId === data.chain.chainId ? 'shadow-lg shadow-black/30' : ''
                 }`}
               >
@@ -519,19 +519,19 @@ export const ComparisonView = memo(function ComparisonView({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Max TPS</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestTps ? 'text-green-500' : stats?.isWorstTps ? 'text-red-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestTps ? 'text-up' : stats?.isWorstTps ? 'text-red-500' : 'text-foreground'}`}>
                         {stats ? (stats.maxTps < 1 && stats.maxTps > 0 ? '< 1.0' : stats.maxTps.toFixed(2)) : '–'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Validators</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestValidators ? 'text-green-500' : stats?.isWorstValidators ? 'text-red-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestValidators ? 'text-up' : stats?.isWorstValidators ? 'text-red-500' : 'text-foreground'}`}>
                         {stats?.validators.toLocaleString() ?? '–'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Daily Tx</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestDailyTx ? 'text-green-500' : stats?.isWorstDailyTx ? 'text-red-500' : 'text-foreground'}`}>
+                      <span className={`text-xs font-semibold ${stats?.isBestDailyTx ? 'text-up' : stats?.isWorstDailyTx ? 'text-red-500' : 'text-foreground'}`}>
                         {stats ? formatCompact(stats.dailyTx) : '–'}
                       </span>
                     </div>
@@ -593,7 +593,7 @@ export const ComparisonView = memo(function ComparisonView({
               onClick={() => setIsModalOpen(true)}
               whileHover={{ scale: 1.02, borderColor: 'rgba(113,113,122,0.5)' }}
               whileTap={{ scale: 0.98 }}
-              className={`relative rounded-xl border border-dashed p-4 flex flex-col items-center justify-center gap-2 min-h-[140px] transition-all cursor-pointer ${
+              className={`relative rounded-md border border-dashed p-4 flex flex-col items-center justify-center gap-2 min-h-[140px] transition-all cursor-pointer ${
                 isPrimary
                   ? 'border-border hover:bg-muted/30'
                   : 'border-border/50 hover:bg-muted/20'
@@ -634,18 +634,18 @@ export const ComparisonView = memo(function ComparisonView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.35 }}
-            className="bg-card border border-border rounded-xl overflow-hidden"
+            className="bg-card border border-border rounded-md overflow-hidden"
           >
             {/* Chart Controls Bar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-3 border-b border-border">
-              <div className="flex flex-wrap gap-1 p-1 bg-muted/50 rounded-lg">
+              <div className="flex flex-wrap gap-1 p-1 bg-muted/50 rounded">
                 {COMPARISON_METRICS.map(metric => (
                   <button
                     key={metric.id}
                     onClick={() => handleMetricChange(metric.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                       selectedMetric === metric.id
-                        ? 'bg-[#ef4444] text-white shadow-sm'
+                        ? 'bg-foreground text-background hover:bg-foreground/90'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                     }`}
                   >
@@ -654,7 +654,7 @@ export const ComparisonView = memo(function ComparisonView({
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                <div className="flex gap-1 p-1 bg-muted/50 rounded">
                   {(['absolute', 'normalized'] as const).map(mode => (
                     <button
                       key={mode}
@@ -670,7 +670,7 @@ export const ComparisonView = memo(function ComparisonView({
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                <div className="flex gap-1 p-1 bg-muted/50 rounded">
                   {([7, 30] as const).map(days => (
                     <button
                       key={days}
@@ -687,7 +687,7 @@ export const ComparisonView = memo(function ComparisonView({
                 </div>
                 <button
                   onClick={handleCopyShareUrl}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                 >
                   <Share2 className="w-3 h-3" />
                   {copied ? 'Copied!' : 'Share'}
@@ -713,14 +713,14 @@ export const ComparisonView = memo(function ComparisonView({
             key="empty-state"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-card border border-border rounded-xl p-10 text-center"
+            className="bg-card border border-border rounded-md p-10 text-center"
           >
             <p className="text-muted-foreground text-sm">Add at least one more chain to see the comparison chart</p>
             <motion.button
               onClick={() => setIsModalOpen(true)}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-all"
+              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-all"
             >
               <Plus className="w-4 h-4" /> Add Another Chain
             </motion.button>

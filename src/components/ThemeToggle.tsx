@@ -4,7 +4,7 @@ import * as d3 from 'd3';
 import { Moon, Sun } from 'lucide-react';
 
 interface ThemeToggleProps {
-  variant?: 'default' | 'sidebar';
+  variant?: 'default' | 'sidebar' | 'compact';
 }
 
 export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
@@ -50,11 +50,24 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
     return (
       <button
         onClick={handleClick}
-        className="w-full flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        className="w-full flex items-center gap-2.5 h-8 px-4 text-muted-foreground hover:text-foreground hover:bg-accent/40 transition-colors"
         aria-label="Toggle theme"
       >
         {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-        <span className="text-[12px] font-medium">{isDark ? 'Light mode' : 'Dark mode'}</span>
+        <span className="text-[12px]">{isDark ? 'Light mode' : 'Dark mode'}</span>
+      </button>
+    );
+  }
+
+  if (variant === 'compact') {
+    return (
+      <button
+        onClick={handleClick}
+        className="inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        title={isDark ? 'Light mode' : 'Dark mode'}
+      >
+        {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
       </button>
     );
   }
@@ -62,7 +75,7 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
   return (
     <button
       onClick={handleClick}
-      className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      className="inline-flex items-center justify-center w-9 h-9 rounded border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
       aria-label="Toggle theme"
     >
       {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}

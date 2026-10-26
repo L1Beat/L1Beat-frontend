@@ -105,7 +105,7 @@ function DragHandle({
   return (
     <div
       onMouseDown={onMouseDown}
-      className="relative flex-shrink-0 w-1 bg-border cursor-col-resize hover:bg-[#ef4444]/40 active:bg-[#ef4444]/60 transition-colors duration-150 group flex items-center justify-center"
+      className="relative flex-shrink-0 w-1 bg-border cursor-col-resize hover:bg-foreground/30 active:bg-foreground/50 transition-colors duration-150 group flex items-center justify-center"
     >
       <div className="absolute flex items-center justify-center w-3 h-4 rounded-sm bg-background border border-border/60 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
         <GripVertical className="w-2.5 h-2.5 text-muted-foreground" />
@@ -820,7 +820,7 @@ export function APIPlayground() {
                   onClick={() => setMobileTab('request')}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
                     mobileTab === 'request'
-                      ? 'text-foreground border-b-2 border-[#ef4444]'
+                      ? 'text-foreground border-b-2 border-brand'
                       : 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
                   }`}
                 >
@@ -830,7 +830,7 @@ export function APIPlayground() {
                   onClick={() => setMobileTab('response')}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
                     mobileTab === 'response'
-                      ? 'text-foreground border-b-2 border-[#ef4444]'
+                      ? 'text-foreground border-b-2 border-brand'
                       : 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
                   }`}
                 >
@@ -900,7 +900,7 @@ export function APIPlayground() {
 
           {/* Floating endpoint picker */}
           <button
-            className="fixed bottom-16 left-4 z-30 flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-full text-sm font-medium shadow-lg hover:border-[#ef4444]/40 transition-colors"
+            className="fixed bottom-16 left-4 z-30 flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-md text-[12px] font-medium shadow-lg hover:border-foreground/30 transition-colors"
             onClick={() => setIsMobileSidebarOpen(true)}
           >
             <Menu className="w-4 h-4" />
