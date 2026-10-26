@@ -1051,16 +1051,18 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
 
   if (hero) {
     return (
-      <div className="relative h-full w-full bg-stage">
-        <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto">
-          <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">Stablecoins</h1>
+      // Phones stack toolbar, headline and chart in normal flow (the toolbar
+      // wraps to several rows there); from sm up they float over the chart.
+      <div className="relative h-full w-full bg-stage flex flex-col gap-3 px-4 pt-3 pb-4 sm:block sm:p-0">
+        <div className="relative sm:absolute sm:top-3 sm:left-6 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <h1 className="hidden sm:block text-[15px] leading-6 font-semibold text-foreground shrink-0">Stablecoins</h1>
             {metricToggle}
             {stackedToggle}
           </div>
           {granularityToggle}
         </div>
-        <div className="absolute top-14 lg:top-[52px] left-4 sm:left-6 right-4 sm:right-6 z-20 pointer-events-none">
+        <div className="relative sm:absolute sm:top-14 lg:top-[52px] sm:left-6 sm:right-6 z-20 pointer-events-none">
           {shown && (
             <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
               <div>
@@ -1091,7 +1093,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
             </div>
           )}
         </div>
-        <div ref={chartBoxRef} className="absolute left-4 sm:left-6 right-4 sm:right-6 top-[132px] lg:top-[120px] bottom-[150px] md:bottom-[160px]">
+        <div ref={chartBoxRef} className="relative flex-1 min-h-0 sm:absolute sm:left-6 sm:right-6 sm:top-[132px] lg:top-[120px] sm:bottom-[24px] md:bottom-[160px]">
           {loading && points.length === 0 ? (
             <div className={`flex items-center justify-center ${hero ? "h-full" : "h-[280px]"}`}>
               <LoadingSpinner size="md" />

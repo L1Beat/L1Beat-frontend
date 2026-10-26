@@ -973,6 +973,9 @@ export function ChainDetails() {
                                             font: { size: 11 },
                                             maxTicksLimit: 8,
                                             maxRotation: 0,
+                                            // Drop labels that would collide on narrow screens.
+                                            autoSkip: true,
+                                            autoSkipPadding: 12,
                                           },
                                         },
                                         y: {
@@ -1111,8 +1114,9 @@ export function ChainDetails() {
                       <table className="min-w-full text-[12px]">
                         <thead className="sticky top-0 z-10 bg-background">
                           <tr className="h-9 border-b border-border">
-                            <th className="pr-4 text-left text-[11px] font-medium text-muted-foreground w-24">
-                              Status
+                            {/* On phones the status is just the dot, so the stake column fits. */}
+                            <th className="pr-2 sm:pr-4 text-left text-[11px] font-medium text-muted-foreground w-5 sm:w-24">
+                              <span className="sr-only sm:not-sr-only">Status</span>
                             </th>
                             <th 
                               className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
@@ -1220,10 +1224,10 @@ export function ChainDetails() {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
                               >
-                                <td className="pr-4 whitespace-nowrap">
+                                <td className="pr-2 sm:pr-4 whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                                     <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/40'}`} />
-                                    {validator.active ? 'Active' : 'Inactive'}
+                                    <span className="sr-only sm:not-sr-only">{validator.active ? 'Active' : 'Inactive'}</span>
                                   </span>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
@@ -1256,7 +1260,7 @@ export function ChainDetails() {
                                 <td className="pr-4 whitespace-nowrap">
                                   {hasUptimeData ? (
                                   <div className="flex items-center justify-end gap-2.5">
-                                    <div className="w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
+                                    <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
                                       <div 
                                         className={`h-full rounded-sm ${
                                           (validator.uptime || 0) >= 90 ? 'bg-up' :
@@ -1274,7 +1278,7 @@ export function ChainDetails() {
                                   </div>
                                   ) : (
                                     <div className="flex items-center justify-end gap-2.5">
-                                      <div className="w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
+                                      <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
                                         {(() => {
                                           const raw = Number(validator.remainingBalance ?? 0);
                                           const avax = Number.isFinite(raw) ? toAvax(raw) : 0;
@@ -1464,7 +1468,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
               maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
               scales: {
-                x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 8, maxRotation: 0 } },
+                x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 8, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
                 y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)' }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 6, callback: tick } },
               },
               plugins: {

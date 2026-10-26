@@ -650,7 +650,8 @@ export function AvalancheNetworkMetrics({
   );
 
   const metricChips = (
-    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+    // On narrow screens the chips scroll sideways; the fade at the right edge says so.
+    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-32px),transparent)] lg:pr-0 lg:[mask-image:none]">
       {METRICS.map((metric) => {
         const Icon = metric.icon;
         const isSelected = selectedMetrics[0] === metric.id;
@@ -803,7 +804,8 @@ export function AvalancheNetworkMetrics({
           </div>
         </div>
         <div className="absolute left-4 sm:left-6 right-4 sm:right-6 top-24 lg:top-[60px] export-hide">{readout}</div>
-        <div className="absolute left-4 sm:left-6 right-4 sm:right-6 top-44 lg:top-[136px] bottom-[150px] md:bottom-[168px]">
+        {/* Below md the stat strip sits under the hero, so the chart runs to the bottom. */}
+        <div className="absolute left-4 sm:left-6 right-4 sm:right-6 top-44 lg:top-[136px] bottom-4 md:bottom-[168px]">
           {chart}
         </div>
         {summary && (

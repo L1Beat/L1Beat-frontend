@@ -37,7 +37,7 @@ export function StatStrip({
     items.length >= 4
       ? 'grid-cols-2 md:grid-cols-4'
       : items.length === 3
-        ? 'grid-cols-3'
+        ? 'grid-cols-1 sm:grid-cols-3'
         : items.length === 2
           ? 'grid-cols-2'
           : 'grid-cols-1';
@@ -47,7 +47,12 @@ export function StatStrip({
         <dl
           className={`grid ${cols} border border-border rounded-md overflow-hidden ${
             floating ? 'bg-card/85 supports-[backdrop-filter]:bg-card/70 backdrop-blur-md shadow-lg' : 'bg-card'
-          } [&>div]:border-border [&>div:not(:first-child)]:border-l ${
+          } [&>div]:border-border ${
+            items.length === 3
+              ? // Three cells stack on phones, where a third of the width truncates large numbers.
+                '[&>div:not(:first-child)]:border-t sm:[&>div:not(:first-child)]:border-t-0 sm:[&>div:not(:first-child)]:border-l'
+              : '[&>div:not(:first-child)]:border-l'
+          } ${
             items.length >= 4 ? '[&>div:nth-child(3)]:border-l-0 md:[&>div:nth-child(3)]:border-l [&>div:nth-child(n+3)]:border-t md:[&>div:nth-child(n+3)]:border-t-0' : ''
           }`}
         >

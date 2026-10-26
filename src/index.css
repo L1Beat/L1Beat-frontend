@@ -813,3 +813,69 @@
 .exporting .export-show {
   display: flex !important;
 }
+
+/* Liquid glass: a translucent surface that blurs and brightens what is
+   behind it, with a lit rim on top and a soft drop shadow. Used for
+   floating chrome (the mobile dock); content surfaces stay solid. */
+@layer components {
+  .liquid-glass {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.8), rgb(255 255 255 / 0.62));
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.08),
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 1px rgb(0 0 0 / 0.04),
+      0 12px 32px -10px rgb(15 20 30 / 0.28),
+      0 2px 8px rgb(15 20 30 / 0.08);
+  }
+  /* Rim light: a hairline gradient border, brightest at the top left. */
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(140deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.15) 40%, rgb(255 255 255 / 0.05) 65%, rgb(255 255 255 / 0.6));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+  /* Dark glass carries a graphite tint so text scrolling underneath never competes with the labels. */
+  .dark .liquid-glass {
+    background: linear-gradient(180deg, rgb(44 48 54 / 0.66), rgb(22 24 28 / 0.74));
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.6),
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      inset 0 -1px 1px rgb(0 0 0 / 0.35),
+      0 14px 36px -10px rgb(0 0 0 / 0.7),
+      0 2px 8px rgb(0 0 0 / 0.35);
+  }
+  .dark .liquid-glass::before {
+    background: linear-gradient(140deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.06) 40%, rgb(255 255 255 / 0.02) 65%, rgb(255 255 255 / 0.18));
+  }
+
+  /* The lens: a brighter glass bead marking the active item. */
+  .liquid-glass-lens {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.7));
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.06),
+      inset 0 1px 0 rgb(255 255 255 / 1),
+      0 4px 12px -4px rgb(15 20 30 / 0.25);
+  }
+  .dark .liquid-glass-lens {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.09));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.28),
+      inset 0 0 0 0.5px rgb(255 255 255 / 0.1),
+      0 4px 12px -4px rgb(0 0 0 / 0.6);
+  }
+  /* Browsers without backdrop-filter get an opaque surface instead. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .liquid-glass { background: var(--popover); }
+  }
+}

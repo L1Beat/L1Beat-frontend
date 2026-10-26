@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -26,10 +27,11 @@ export function Layout() {
   );
 }
 
-const dockItems: { id: string; path: string; icon: typeof LayoutGrid; label: string; disabled?: boolean }[] = [
+// Labels sit under the icons at phone width, so the longest one is shortened.
+const dockItems: { id: string; path: string; icon: typeof LayoutGrid; label: string }[] = [
   { id: 'overview', path: '/', icon: LayoutGrid, label: 'Overview' },
   { id: 'metrics', path: '/metrics', icon: BarChart3, label: 'Metrics' },
-  { id: 'stablecoins', path: '/stablecoins', icon: DollarSign, label: 'Stablecoins' },
+  { id: 'stablecoins', path: '/stablecoins', icon: DollarSign, label: 'Stables' },
   { id: 'burn', path: '/burn', icon: Flame, label: 'Burn' },
   { id: 'acps', path: '/acps', icon: FileText, label: 'ACPs' },
   { id: 'blog', path: '/blog', icon: BookOpen, label: 'Blog' },
@@ -38,6 +40,9 @@ const dockItems: { id: string; path: string; icon: typeof LayoutGrid; label: str
 
 function MobileDock() {
   const { pathname } = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+  const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+  const [lens, setLens] = useState<{ x: number; w: number } | null>(null);
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -45,35 +50,48 @@ function MobileDock() {
     }
     return pathname === path || pathname.startsWith(path + '/');
   };
+  const activeIndex = dockItems.findIndex((item) => isActive(item.path));
+
+  // The lens slides under the active tab; measure it after layout and on resize.
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = itemRefs.current[activeIndex];
+      setLens(el ? { x: el.offsetLeft, w: el.offsetWidth } : null);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    if (navRef.current) ro.observe(navRef.current);
+    return () => ro.disconnect();
+  }, [activeIndex]);
 
   return (
-    <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-0.5 px-1.5 py-1.5 rounded-md bg-popover border border-border shadow-lg">
-      {dockItems.map(({ id, path, icon: Icon, label, disabled }) => {
-        const active = isActive(path);
-        if (disabled) {
-          return (
-            <span
-              key={id}
-              title="Coming soon"
-              aria-disabled="true"
-              className="flex items-center px-3 py-2 rounded text-muted-foreground/30 cursor-not-allowed"
-            >
-              <Icon className="w-4 h-4" />
-            </span>
-          );
-        }
+    <nav
+      ref={navRef}
+      aria-label="Primary"
+      className="liquid-glass md:hidden fixed left-3 right-3 z-50 mx-auto max-w-[420px] flex items-stretch p-1 rounded-full"
+      style={{ bottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
+    >
+      {lens && (
+        <span
+          aria-hidden
+          className="liquid-glass-lens absolute top-1 bottom-1 left-0 rounded-full transition-[transform,width] duration-300 ease-[cubic-bezier(0.3,1.3,0.5,1)] motion-reduce:transition-none"
+          style={{ width: lens.w, transform: `translateX(${lens.x}px)` }}
+        />
+      )}
+      {dockItems.map(({ id, path, icon: Icon, label }, i) => {
+        const active = i === activeIndex;
         return (
           <Link
             key={id}
+            ref={(el) => (itemRefs.current[i] = el)}
             to={path}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded transition-colors ${
-              active
-                ? 'bg-foreground text-background'
-                : 'text-muted-foreground hover:text-foreground'
+            aria-current={active ? 'page' : undefined}
+            className={`relative z-10 flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-12 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${
+              active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Icon className="w-4 h-4" />
-            {active && <span className="text-[12px] font-medium">{label}</span>}
+            <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.25 : 1.75} />
+            <span className={`text-[10px] leading-3 truncate max-w-full px-0.5 ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
           </Link>
         );
       })}
