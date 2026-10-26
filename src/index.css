@@ -879,3 +879,23 @@
     .liquid-glass { background: var(--popover); }
   }
 }
+
+/* Liquid glass extras for the mobile dock. With edge refraction (Chromium)
+   the tint is lighter so the bent backdrop shows through; the lens squashes
+   as it lands on a new tab. */
+@layer components {
+  .liquid-glass.liquid-glass--refract {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.38));
+  }
+  .dark .liquid-glass.liquid-glass--refract {
+    background: linear-gradient(180deg, rgb(44 48 54 / 0.5), rgb(22 24 28 / 0.6));
+  }
+  @keyframes liquid-lens-squish {
+    0% { transform: scale(1, 1); }
+    35% { transform: scale(1.16, 0.86); }
+    65% { transform: scale(0.97, 1.04); }
+    100% { transform: scale(1, 1); }
+  }
+  .liquid-lens-squish { animation: liquid-lens-squish 420ms cubic-bezier(0.3, 1.2, 0.5, 1); }
+  @media (prefers-reduced-motion: reduce) { .liquid-lens-squish { animation: none; } }
+}

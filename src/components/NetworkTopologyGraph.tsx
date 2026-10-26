@@ -519,7 +519,7 @@ export function NetworkTopologyGraph({
               bulletsRef.current = newBullets;
               setRenderTrigger(n => n + 1);
             }}
-            className={`liquid-glass absolute z-30 inline-flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 ${fill ? 'top-3 right-4 sm:right-6' : 'top-2 right-3'}`}
+            className={`absolute right-3 z-30 inline-flex items-center justify-center w-7 h-7 rounded border border-border/60 bg-stage/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${fill ? 'top-3' : 'top-2'}`}
             title="Pulse the network"
             aria-label="Pulse the network"
           >

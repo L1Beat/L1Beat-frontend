@@ -535,7 +535,7 @@ export function AvalancheNetworkMetrics({
       // Check if any metric has data
       const hasData = Object.values(results).some(arr => arr.length > 0);
       if (!hasData) {
-        setError('No data available yet. The backend is still collecting historical data.');
+        setError('No data came back for this metric. The API may be busy; try again in a moment.');
       }
     } catch (err: any) {
       console.error('Failed to fetch metrics:', err);

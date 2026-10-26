@@ -576,22 +576,22 @@ export function Dashboard() {
         )}
         <div
           className={`absolute top-3 left-4 sm:left-6 z-30 flex items-center justify-between gap-3 pointer-events-none [&>*]:pointer-events-auto ${
-            heroView === 'map' ? 'right-16' : 'right-4 sm:right-6'
+            heroView === 'map' ? 'right-14' : 'right-4 sm:right-6'
           }`}
         >
           <div className="flex items-center gap-3">
             {/* The nav already says Overview; on phones the title would push the controls off screen. */}
             <h1 className="hidden sm:block text-[15px] leading-6 font-semibold text-foreground whitespace-nowrap">Avalanche L1s</h1>
-            <SegmentedControl value={heroView} options={HERO_VIEWS} onChange={setHeroView} ariaLabel="Hero view" glass />
+            <SegmentedControl value={heroView} options={HERO_VIEWS} onChange={setHeroView} ariaLabel="Hero view" />
             {heroView === 'flows' && flowSelection && (
-              <span className="liquid-glass inline-flex items-center gap-1.5 h-9 pl-3.5 pr-1.5 rounded-full text-[12px] text-foreground">
+              <span className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded border border-border bg-card/85 text-[12px] text-foreground">
                 {flowSelection.displayName}
                 <span className="text-muted-foreground">{flowSelection.direction}</span>
                 <button
                   type="button"
                   onClick={() => setFlowSelection(null)}
                   aria-label="Clear selection"
-                  className="inline-flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground hover:text-foreground hover:bg-foreground/10"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -599,9 +599,9 @@ export function Dashboard() {
             )}
           </div>
           {heroView === 'map' ? (
-            <SegmentedControl value={range} options={RANGES} onChange={setRange} ariaLabel="Time range" glass />
+            <SegmentedControl value={range} options={RANGES} onChange={setRange} ariaLabel="Time range" />
           ) : (
-            <SegmentedControl value={flowWindow} options={FLOW_WINDOWS} onChange={setFlowWindow} ariaLabel="Flow window" glass />
+            <SegmentedControl value={flowWindow} options={FLOW_WINDOWS} onChange={setFlowWindow} ariaLabel="Flow window" />
           )}
         </div>
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
@@ -754,7 +754,7 @@ function KpiCardsImpl({
   const txDelta = pctDelta(tx.current, tx.prior);
   const windowLabel = rangeWindowLabel(range);
   const priorLabel = range === 'ALL' ? undefined : `vs prior ${windowLabel}`;
-  const pending = 'Indexer is still backfilling';
+  const pending = 'Not available right now';
 
   const items: StatItem[] = [
     {

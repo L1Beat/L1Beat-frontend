@@ -241,9 +241,18 @@ async function fetchWithCache<T>(
   const sanitizedData = sanitizeResponse(data);
 
   // Cache the sanitized data (memory + sessionStorage)
-  writeCache(key, sanitizedData, now);
+  if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
 
   return sanitizedData;
+}
+
+// Fetchers swallow errors and return an empty list, so an empty result often
+// means "the request failed" (a 429, a timeout). Caching it would pin the
+// empty state for the whole cache window and make Retry a no-op.
+function isCacheable(data: unknown): boolean {
+  if (data == null) return false;
+  if (Array.isArray(data)) return data.length > 0;
+  return true;
 }
 
 async function fetchWithRetry<T>(
@@ -1566,7 +1575,7 @@ async function fetchExternalWithCache<T>(
   }
   const data = await fetcher();
   const sanitizedData = sanitizeResponse(data);
-  writeCache(key, sanitizedData, now);
+  if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
   return sanitizedData;
 }
 

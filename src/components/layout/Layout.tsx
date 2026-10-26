@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { TopNav } from './TopNav';
 import { Footer } from '../Footer';
+import { capsuleDisplacementMap, supportsBackdropRefraction } from './liquidRefraction';
 
 export function Layout() {
   return (
@@ -43,6 +44,8 @@ function MobileDock() {
   const navRef = useRef<HTMLElement>(null);
   const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const [lens, setLens] = useState<{ x: number; w: number } | null>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [refract] = useState(supportsBackdropRefraction);
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -57,6 +60,11 @@ function MobileDock() {
     const place = () => {
       const el = itemRefs.current[activeIndex];
       setLens(el ? { x: el.offsetLeft, w: el.offsetWidth } : null);
+      const nav = navRef.current;
+      // Only a visible dock has a size worth refracting.
+      if (nav && nav.offsetWidth > 0 && nav.offsetHeight > 0) {
+        setSize((prev) => (prev && prev.w === nav.offsetWidth && prev.h === nav.offsetHeight ? prev : { w: nav.offsetWidth, h: nav.offsetHeight }));
+      }
     };
     place();
     const ro = new ResizeObserver(place);
@@ -64,19 +72,61 @@ function MobileDock() {
     return () => ro.disconnect();
   }, [activeIndex]);
 
+  // Rim highlight follows the pointer or finger, like light catching glass.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const move = (e: PointerEvent) => {
+      const r = nav.getBoundingClientRect();
+      nav.style.setProperty('--lx', `${Math.min(Math.max(e.clientX - r.left, 0), r.width)}px`);
+      nav.style.setProperty('--ly', `${Math.min(Math.max(e.clientY - r.top, -40), r.height + 40)}px`);
+    };
+    window.addEventListener('pointermove', move, { passive: true });
+    window.addEventListener('pointerdown', move, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerdown', move);
+    };
+  }, []);
+
+  const filterId = 'dock-refraction';
+  const map = refract && size ? capsuleDisplacementMap(size.w, size.h) : '';
+  const backdrop = map ? `url(#${filterId}) saturate(170%)` : undefined;
+
   return (
     <nav
       ref={navRef}
       aria-label="Primary"
-      className="liquid-glass md:hidden fixed left-3 right-3 z-50 mx-auto max-w-[420px] flex items-stretch p-1 rounded-full"
-      style={{ bottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }}
+      className={`liquid-glass md:hidden fixed left-3 right-3 z-50 mx-auto max-w-[420px] flex items-stretch p-1 rounded-full ${map ? 'liquid-glass--refract' : ''}`}
+      style={{
+        bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+        backdropFilter: backdrop,
+        WebkitBackdropFilter: backdrop,
+      }}
     >
+      {map && size && (
+        <svg aria-hidden width="0" height="0" className="absolute">
+          <filter id={filterId} x="0" y="0" width={size.w} height={size.h} filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="soft" />
+            <feImage href={map} x="0" y="0" width={size.w} height={size.h} preserveAspectRatio="none" result="map" />
+            <feDisplacementMap in="soft" in2="map" scale="34" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </svg>
+      )}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-full mix-blend-screen"
+        style={{ background: 'radial-gradient(140px circle at var(--lx, 30%) var(--ly, 0px), rgb(255 255 255 / 0.22), transparent 65%)' }}
+      />
       {lens && (
         <span
           aria-hidden
-          className="liquid-glass-lens absolute top-1 bottom-1 left-0 rounded-full transition-[transform,width] duration-300 ease-[cubic-bezier(0.3,1.3,0.5,1)] motion-reduce:transition-none"
+          className="absolute top-1 bottom-1 left-0 transition-[transform,width] duration-300 ease-[cubic-bezier(0.3,1.3,0.5,1)] motion-reduce:transition-none"
           style={{ width: lens.w, transform: `translateX(${lens.x}px)` }}
-        />
+        >
+          {/* Keyed on the tab so the squash replays each time the lens lands. */}
+          <span key={activeIndex} className="liquid-glass-lens liquid-lens-squish block h-full w-full rounded-full" />
+        </span>
       )}
       {dockItems.map(({ id, path, icon: Icon, label }, i) => {
         const active = i === activeIndex;

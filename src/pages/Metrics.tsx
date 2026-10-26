@@ -296,7 +296,7 @@ export function Metrics() {
 
 function KpiStrip({ kpis, range, floating = false }: { kpis: Kpi[] | null; range: Range; floating?: boolean }) {
   const label = rangeLabel(range);
-  const pending = 'Indexer is still backfilling';
+  const pending = 'Not available right now';
   const placeholders: Kpi[] = [
     { label: `Avg network TPS, ${label}`, value: '—', delta: null, deltaSuffix: pending },
     { label: `Transactions, ${label}`, value: '—', delta: null, deltaSuffix: pending },
