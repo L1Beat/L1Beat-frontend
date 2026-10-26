@@ -229,15 +229,24 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
 
   const chainResults = useMemo<Result[]>(
     () =>
-      chains.map((c) => ({
-        id: `chain-${c.chainId}`,
-        type: 'chain',
-        title: c.chainName,
-        subtitle: [c.networkToken?.symbol, c.originalChainId && `EVM ${c.originalChainId}`]
-          .filter(Boolean)
-          .join(' · '),
-        to: `/chain/${c.chainId}`,
-      })),
+      // Retired deployments keep their old names, so live chains come first and
+      // inactive ones say so; otherwise two "Datagram Chain" rows look identical.
+      [...chains]
+        .sort((a, b) => Number(b.isActive ?? false) - Number(a.isActive ?? false))
+        .map((c) => ({
+          id: `chain-${c.chainId}`,
+          type: 'chain',
+          title: c.chainName,
+          subtitle: [
+            c.isActive ? null : 'Inactive',
+            c.networkToken?.symbol && c.networkToken.symbol !== 'N/A' ? c.networkToken.symbol : null,
+            // originalChainId falls back to the P-Chain id when there is no EVM chain id.
+            c.evmChainId ? `EVM ${c.evmChainId}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          to: `/chain/${c.chainId}`,
+        })),
     [chains],
   );
   const acpResults = useMemo<Result[]>(

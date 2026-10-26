@@ -12,13 +12,7 @@ const CACHE_KEY = 'l1beat:glacier-logos:v2';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Logos we know of that neither source carries, keyed by platform chain id. */
-const LOGO_OVERRIDES: Record<string, string> = {
-  // DOS Chain (second deployment; the first already carries this logo)
-  '2ewKoUrSjnviEgGmeTiELHBmNjxVTVczBPowST471rYUZvA9bk': 'https://cdn.snowpeer.io/dos.png',
-  // Frqtal, both deployments
-  '2FJM6WqyDGX2PZYipnatYXuXsNcKLio5fJMkEaGgpP4kHDTPw2': 'https://cdn.snowpeer.io/frqtal.png',
-  '2jQuqy3RpCmVQHZCdpz9SJD92yP5VL4GgKBGeGJPYJxm9vkNNH': 'https://cdn.snowpeer.io/frqtal.png',
-};
+const LOGO_OVERRIDES: Record<string, string> = {};
 
 type LogoMap = Record<string, string>;
 

@@ -379,24 +379,37 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
     try {
       const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' });
 
-      // Track seen slugs to prevent routing collisions
+      // URL slugs come from chain names, and names repeat (redeployments keep
+      // the old chain's name). Assign them in a fixed order, active chains
+      // first and then by P-Chain id, so a chain gets the same slug whether it
+      // was loaded with or without inactive chains, and active chains keep the
+      // plain name.
+      const baseSlugOf = (chain: any) => {
+        const name = chain.name || chain.chain_name || '';
+        const raw = (chain.evm_chain_id ? String(chain.evm_chain_id) : '') || chain.chain_id || '';
+        return name
+          ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+          : String(raw || Math.random().toString(36).substring(7));
+      };
+      const slugById = new Map<string, string>();
       const seenSlugs = new Map<string, number>();
+      [...allChains]
+        .sort((a, b) =>
+          Number(b.is_active ?? false) - Number(a.is_active ?? false) ||
+          String(a.chain_id ?? '').localeCompare(String(b.chain_id ?? '')))
+        .forEach((chain) => {
+          const base = baseSlugOf(chain);
+          const count = seenSlugs.get(base) ?? 0;
+          seenSlugs.set(base, count + 1);
+          slugById.set(String(chain.chain_id), count === 0 ? base : `${base}-${count + 1}`);
+        });
 
       const chains = allChains
         .map((chain) => {
           const chainName = chain.name || chain.chain_name || '';
           const evmChainId = chain.evm_chain_id ? String(chain.evm_chain_id) : '';
           const rawChainId = evmChainId || chain.chain_id || '';
-
-          // Generate URL-friendly slug from chain name
-          let baseSlug = chainName
-            ? chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-            : String(rawChainId || Math.random().toString(36).substring(7));
-
-          // Deduplicate slugs
-          const count = seenSlugs.get(baseSlug) ?? 0;
-          seenSlugs.set(baseSlug, count + 1);
-          const chainSlug = count === 0 ? baseSlug : `${baseSlug}-${count + 1}`;
+          const chainSlug = slugById.get(String(chain.chain_id)) ?? baseSlugOf(chain);
 
           const t = chain.network_token;
 
