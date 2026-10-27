@@ -1,24 +1,15 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { Line } from 'react-chartjs-2';
-import { Chart as ChartJSInstance } from 'chart.js';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
 import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { SeriesSummary } from './instrument';
+import { DailyBars, SeriesSummary, parseDay } from './instrument';
 import { LoadingSpinner } from './LoadingSpinner';
-import {
-  crosshairPlugin,
-  watermarkPlugin,
-  lineShadowPlugin,
-  prefersReducedMotion
-} from '../utils/chartConfig';
 
-type TimeframeOption = 7 | 14 | 30 | 90 | 360;
+type TimeframeOption = 30 | 90 | 360;
 
 interface MetricData {
   timestamp: number;
@@ -119,9 +110,7 @@ export function ChainSpecificMetrics() {
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
   const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
-  const chartRefs = useRef<Record<string, ChartJSInstance<'line'> | null>>({});
   const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const reducedMotion = prefersReducedMotion();
   const [copied, setCopied] = useState(false);
 
   // Range selection states for each metric
@@ -134,11 +123,11 @@ export function ChainSpecificMetrics() {
   // Read timeframe from URL
   const timeframeParam = searchParams.get('chainMetricsTimeframe');
   const timeframe = useMemo(() => {
-    const parsed = parseInt(timeframeParam || '7', 10);
-    if ([7, 14, 30, 90, 360].includes(parsed)) {
+    const parsed = parseInt(timeframeParam || '30', 10);
+    if ([30, 90, 360].includes(parsed)) {
       return parsed as TimeframeOption;
     }
-    return 7 as TimeframeOption;
+    return 30 as TimeframeOption;
   }, [timeframeParam]);
 
   // Read chain from URL
@@ -152,9 +141,9 @@ export function ChainSpecificMetrics() {
     } else {
       newParams.delete('chainMetricsChain');
     }
-    if (newTimeframe && newTimeframe !== 7) {
+    if (newTimeframe && newTimeframe !== 30) {
       newParams.set('chainMetricsTimeframe', String(newTimeframe));
-    } else if (newTimeframe === 7) {
+    } else if (newTimeframe === 30) {
       newParams.delete('chainMetricsTimeframe');
     }
     setSearchParams(newParams, { replace: true });
@@ -181,7 +170,6 @@ export function ChainSpecificMetrics() {
       console.warn('Clipboard write failed');
     });
   }, []);
-  const isMobile = useMediaQuery(breakpoints.sm);
 
   // Note: there's no bulk "active addresses latest" endpoint; we compute this client-side
   // with a bounded number of requests (cached) to avoid hammering the API.
@@ -346,6 +334,11 @@ export function ChainSpecificMetrics() {
       const chainId = selectedChain.originalChainId || selectedChain.chainId;
       const evmChainIdStr = selectedChain.evmChainId ? String(selectedChain.evmChainId) : chainId;
 
+      // Each series drops today's unfinished day; ask for one more so the
+      // window is full.
+      const fetchDays = timeframe + 1;
+      const full = <T,>(xs: T[]) => xs.slice(-timeframe);
+
       try {
         const [
           activeAddresses,
@@ -355,12 +348,12 @@ export function ChainSpecificMetrics() {
           avgGasPrice,
           feesPaid
         ] = await Promise.all([
-          getDailyActiveAddresses(evmChainIdStr, timeframe).catch(() => []),
-          getChainTxCountHistory(chainId, timeframe).catch(() => []),
-          getChainMaxTPSHistory(chainId, timeframe).catch(() => []),
-          getChainGasUsedHistory(chainId, timeframe).catch(() => []),
-          getChainAvgGasPriceHistory(chainId, timeframe).catch(() => []),
-          getChainFeesPaidHistory(chainId, timeframe).catch(() => [])
+          getDailyActiveAddresses(evmChainIdStr, fetchDays).catch(() => []),
+          getChainTxCountHistory(chainId, fetchDays).catch(() => []),
+          getChainMaxTPSHistory(chainId, fetchDays).catch(() => []),
+          getChainGasUsedHistory(chainId, fetchDays).catch(() => []),
+          getChainAvgGasPriceHistory(chainId, fetchDays).catch(() => []),
+          getChainFeesPaidHistory(chainId, fetchDays).catch(() => [])
         ]);
 
         // Transform all data to MetricData format
@@ -374,12 +367,12 @@ export function ChainSpecificMetrics() {
         };
 
         const newMetricsData: Record<string, MetricData[]> = {
-          dailyActiveAddresses: transformData(activeAddresses),
-          dailyTxCount: transformData(dailyTxCount),
-          maxTPS: transformData(maxTPS),
-          gasUsed: transformData(gasUsed),
-          avgGasPrice: transformData(avgGasPrice),
-          feesPaid: transformData(feesPaid),
+          dailyActiveAddresses: full(transformData(activeAddresses)),
+          dailyTxCount: full(transformData(dailyTxCount)),
+          maxTPS: full(transformData(maxTPS)),
+          gasUsed: full(transformData(gasUsed)),
+          avgGasPrice: full(transformData(avgGasPrice)),
+          feesPaid: full(transformData(feesPaid)),
         };
 
         setMetricsData(newMetricsData);
@@ -486,151 +479,21 @@ export function ChainSpecificMetrics() {
     const { start, end } = rangeState;
     const filteredData = data.slice(start, end + 1);
 
-    const chartData = {
-      labels: filteredData.map(item => {
-        const [year, month, day] = item.date.split('-');
-        return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), isMobile ? 'd MMM' : 'MMM d');
-      }),
-      datasets: [{
-        label: metric.name,
-        data: filteredData.map(item => item.value),
-        fill: true,
-        // Each metric keeps one hue (none of them red) as its identity across
-        // the page; axes and grid stay neutral.
-        borderColor: metric.color.main,
-        backgroundColor: (context: any) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          const rgba = (a: number) => metric.color.main.replace('rgb', 'rgba').replace(')', `, ${a})`);
-          if (!chartArea) return rgba(0.06);
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, rgba(0.16));
-          gradient.addColorStop(0.5, rgba(0.06));
-          gradient.addColorStop(1, rgba(0));
-          return gradient;
-        },
-        borderWidth: 1.5,
-        tension: 0.2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        pointHoverBackgroundColor: isDark ? '#1a1d21' : '#ffffff',
-        pointHoverBorderColor: metric.color.main,
-        pointHoverBorderWidth: 1.5,
-      }],
-    };
-
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {
-        duration: reducedMotion ? 0 : 750,
-        easing: 'easeInOutQuart' as const,
-      },
-      interaction: {
-        mode: 'index' as const,
-        intersect: false,
-      },
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          enabled: true,
-          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.97)' : 'rgba(255, 255, 255, 0.98)',
-          titleColor: isDark ? '#f1f5f9' : '#0f172a',
-          bodyColor: isDark ? '#cbd5e1' : '#334155',
-          borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0, 0, 0, 0.1)',
-          borderWidth: 1,
-          padding: isMobile ? 12 : 16,
-          boxPadding: 8,
-          cornerRadius: 12,
-          titleFont: {
-            size: isMobile ? 13 : 15,
-            weight: 'bold' as const,
-          },
-          bodyFont: {
-            size: isMobile ? 12 : 14,
-          },
-          callbacks: {
-            title: (items: any[]) => {
-              if (items.length === 0) return '';
-              const dataIndex = items[0].dataIndex;
-              const dataPoint = filteredData[dataIndex];
-              if (!dataPoint) return '';
-              return format(parseISO(dataPoint.date), 'MMMM d, yyyy');
-            },
-            label: (context: any) => {
-              const value = context.parsed.y;
-              const formattedValue = metric.valueFormatter(value);
-              return `${metric.name}: ${formattedValue}${metric.unit ? ' ' + metric.unit : ''}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          grid: {
-            display: false,
-          },
-          ticks: {
-            color: isDark ? '#94a3b8' : '#64748b',
-            font: {
-              size: isMobile ? 10 : 11,
-            },
-            maxRotation: isMobile ? 45 : 0,
-            autoSkip: true,
-            autoSkipPadding: isMobile ? 20 : 30,
-            maxTicksLimit: isMobile ? 7 : undefined,
-          },
-        },
-        y: {
-          beginAtZero: true,
-          grid: {
-            color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-          },
-          ticks: {
-            color: isDark ? '#8b939c' : '#687078',
-            font: {
-              size: isMobile ? 10 : 11,
-            },
-            callback: (value: any) => {
-              const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
-              if (value >= 1e12) return `${trim(value / 1e12)}T`;
-              if (value >= 1e9) return `${trim(value / 1e9)}B`;
-              if (value >= 1e6) return `${trim(value / 1e6)}M`;
-              if (value >= 1e3) return `${trim(value / 1e3)}k`;
-              return value;
-            },
-            maxTicksLimit: isMobile ? 5 : 8,
-          },
-        },
-      },
-    };
-
-    const latestValue = filteredData[filteredData.length - 1]?.value || 0;
-    const Icon = metric.icon;
-
     return (
-      <div key={metricId} ref={(el) => { chartContainerRefs.current[metricId] = el; }} className="bg-card rounded-md border border-border p-4">
-        {/* Export-only chain name */}
-        <div className="export-show hidden items-center justify-between mb-2">
-          <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
-          <span className="text-sm text-muted-foreground">
-            {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
-          </span>
-        </div>
-        {/* Header: metric name, latest value, export */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="min-w-0">
-            <h3 className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
-              <Icon className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
-              {metric.name}
-            </h3>
-            <p className="num text-[22px] leading-7 font-medium" style={{ color: metric.color.main }}>
-              {metric.valueFormatter(latestValue)}
-              {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
-            </p>
+      <ChainMetricCard
+        key={metricId}
+        metric={metric}
+        data={filteredData}
+        containerRef={(el) => { chartContainerRefs.current[metricId] = el; }}
+        exportHeader={
+          <div className="export-show hidden items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
+            <span className="text-sm text-muted-foreground">
+              {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
+            </span>
           </div>
+        }
+        exportMenu={
           <div className="relative export-hide">
             <button
               onClick={() => toggleExportDropdown(metricId)}
@@ -659,28 +522,8 @@ export function ChainSpecificMetrics() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Chart */}
-        <div className="h-[220px]">
-          <Line
-            ref={(ref) => {
-              if (ref) chartRefs.current[metricId] = ref;
-            }}
-            data={chartData}
-            options={options}
-            plugins={[crosshairPlugin, watermarkPlugin, lineShadowPlugin]}
-          />
-        </div>
-
-        {filteredData.length > 1 && (
-          <SeriesSummary
-            values={filteredData.map((item) => item.value)}
-            format={(v) => metric.valueFormatter(v)}
-            className="mt-2 export-hide"
-          />
-        )}
-      </div>
+        }
+      />
     );
   };
 
@@ -789,7 +632,7 @@ export function ChainSpecificMetrics() {
 
             {/* Timeframe Selector + Share */}
             <div className="flex flex-wrap items-center gap-1.5 justify-start lg:justify-end">
-              {[7, 30, 90, 360].map((days) => (
+              {[30, 90, 360].map((days) => (
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days as TimeframeOption)}
@@ -825,6 +668,74 @@ export function ChainSpecificMetrics() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {METRICS.map(metric => renderMetricChart(metric.id))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One metric as daily bars. The headline shows the latest day, or the hovered
+ * day while the pointer is over the chart.
+ */
+function ChainMetricCard({
+  metric,
+  data,
+  containerRef,
+  exportHeader,
+  exportMenu,
+}: {
+  metric: (typeof METRICS)[number];
+  data: MetricData[];
+  containerRef: (el: HTMLDivElement | null) => void;
+  exportHeader: React.ReactNode;
+  exportMenu: React.ReactNode;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const values = useMemo(() => data.map((d) => d.value), [data]);
+  const dates = useMemo(() => data.map((d) => d.date), [data]);
+  const i = hoverIdx ?? data.length - 1;
+  const point = data[i];
+  const Icon = metric.icon;
+
+  return (
+    <div ref={containerRef} className="bg-card rounded-md border border-border p-4">
+      {exportHeader}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
+            <Icon className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
+            {metric.name}
+          </h3>
+          <p className="num text-[22px] leading-7 font-medium text-foreground">
+            {point ? metric.valueFormatter(point.value) : '—'}
+            {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
+          </p>
+          {point && (
+            <p className="text-[11px] text-muted-foreground leading-4">
+              {hoverIdx == null ? 'Latest, ' : ''}
+              {format(parseDay(point.date), hoverIdx == null ? 'MMM d' : 'EEE, MMM d, yyyy')}
+            </p>
+          )}
+        </div>
+        {exportMenu}
+      </div>
+
+      <div className="h-[220px]">
+        <DailyBars
+          values={values}
+          dates={dates}
+          color={metric.color.main}
+          format={(v) => metric.valueFormatter(v)}
+          onHover={setHoverIdx}
+        />
+      </div>
+
+      {data.length > 1 && (
+        <SeriesSummary
+          values={values}
+          format={(v) => metric.valueFormatter(v)}
+          className="mt-2 export-hide"
+        />
       )}
     </div>
   );

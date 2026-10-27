@@ -1602,7 +1602,9 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
       <header className="flex items-end justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second, last {points.length} days</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {points.length > 1 ? `Transactions per second, last ${points.length} days` : 'Transactions per second'}
+          </p>
         </div>
         {shown && (
           <div className="text-right">

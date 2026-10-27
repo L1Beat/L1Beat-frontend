@@ -505,8 +505,10 @@ export function AvalancheNetworkMetrics({
       await Promise.all(
         selectedMetrics.map(async (metricId) => {
           try {
-            const data = await fetchSingleMetric(metricId, daysToFetch);
-            results[metricId] = data;
+            // Most series drop today's unfinished day, so a 30 day request
+            // would chart 29. Ask for one more and keep the newest N.
+            const data = await fetchSingleMetric(metricId, daysToFetch + 1);
+            results[metricId] = data.slice(-daysToFetch);
           } catch (err) {
             console.error(`Failed to fetch ${metricId}:`, err);
             results[metricId] = [];
