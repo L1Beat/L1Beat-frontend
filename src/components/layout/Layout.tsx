@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -18,7 +18,10 @@ export function Layout() {
     <div className="flex min-h-screen flex-col bg-background">
       <TopNav />
       <main className="flex-1 min-w-0">
-        <Outlet />
+        {/* Pages load as separate chunks; this keeps the nav live while one loads. */}
+        <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
+          <Outlet />
+        </Suspense>
       </main>
       <Footer />
       {/* clears the floating mobile dock so the footer isn't hidden behind it */}

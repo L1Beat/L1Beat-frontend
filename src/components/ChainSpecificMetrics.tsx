@@ -6,7 +6,8 @@ import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory,
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { DailyBars, SeriesSummary, parseDay } from './instrument';
+import { SeriesSummary } from './instrument';
+import { DailyBars, parseDay } from './instrument/DailyBars';
 import { LoadingSpinner } from './LoadingSpinner';
 
 type TimeframeOption = 30 | 90 | 360;

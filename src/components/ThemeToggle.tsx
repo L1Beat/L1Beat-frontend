@@ -1,6 +1,5 @@
 import { useTheme } from '../hooks/useTheme';
 import { useEffect } from 'react';
-import * as d3 from 'd3';
 import { Moon, Sun } from 'lucide-react';
 
 interface ThemeToggleProps {
@@ -32,9 +31,11 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
       const newFill = newTheme === 'dark' ? '#ffffff' : '#000000';
       const newSecondaryFill = newTheme === 'dark' ? 'rgba(226, 232, 240, 0.7)' : 'rgba(30, 41, 59, 0.7)';
       
-      d3.selectAll('.node-label').attr('fill', newFill);
-      d3.selectAll('.value-label').attr('fill', newSecondaryFill);
-      d3.selectAll('.diagram-title').attr('fill', newSecondaryFill);
+      const fill = (selector: string, value: string) =>
+        document.querySelectorAll(selector).forEach((el) => el.setAttribute('fill', value));
+      fill('.node-label', newFill);
+      fill('.value-label', newSecondaryFill);
+      fill('.diagram-title', newSecondaryFill);
     } catch (err) {
       console.error('Error updating D3 elements immediately:', err);
     }

@@ -3,7 +3,7 @@ import { Terminal, AlertCircle, Copy, ChevronRight, ChevronDown, Link } from 'lu
 import { Link as RouterLink } from 'react-router-dom';
 import { Skeleton } from '../branding/ui/skeleton';
 import { EndpointDef } from './endpointCatalog';
-import { smoothLinePath } from '../../utils/chartConfig';
+import { smoothLinePath } from '../../utils/svgPath';
 import { fieldHint } from './fieldHints';
 import { ChartWatermark } from '../ChartWatermark';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../branding/ui/tooltip';

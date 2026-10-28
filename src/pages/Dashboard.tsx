@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SEO } from '../components/SEO';
@@ -6,8 +6,13 @@ import { ChevronRight, GitCompareArrows, Info, Search, Star, X } from 'lucide-re
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/branding/ui/tooltip';
 import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
-import { TeleporterSankeyDiagram } from '../components/TeleporterSankeyDiagram';
 import type { SankeySelection } from '../components/TeleporterSankeyDiagram';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+
+// Flows is the second hero view; loading it on demand keeps d3 off the Overview's first load.
+const TeleporterSankeyDiagram = lazy(() =>
+  import('../components/TeleporterSankeyDiagram').then((m) => ({ default: m.TeleporterSankeyDiagram })),
+);
 import { summarizeFlows, flowChainLabel } from '../utils/flowStats';
 import type { TeleporterMessageData } from '../types';
 import { PLACEHOLDER_CHAIN_LOGO } from '../api';
@@ -61,6 +66,16 @@ const VALID_DIRS: SortDir[] = ['asc', 'desc'];
 function pickEnum<T extends string>(value: string | null, allowed: T[], fallback: T): T {
   if (!value) return fallback;
   return (allowed as string[]).includes(value) ? (value as T) : fallback;
+}
+
+// sessionStorage is missing during the SSG pre-render and can throw in private
+// windows; either way the screener starts from its defaults.
+function readSession(key: string): string | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
 function loadWatchlist(): Set<string> {
@@ -219,13 +234,13 @@ export function Dashboard() {
   const [retrying, setRetrying] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState(
-    () => searchParams.get('q') || sessionStorage.getItem('dashboardSearch') || '',
+    () => searchParams.get('q') || readSession('dashboardSearch') || '',
   );
   const [currentPage, setCurrentPage] = useState(
-    () => Number(searchParams.get('page')) || Number(sessionStorage.getItem('dashboardPage')) || 1,
+    () => Number(searchParams.get('page')) || Number(readSession('dashboardPage')) || 1,
   );
   const [selectedCategory, setSelectedCategory] = useState<string>(
-    () => searchParams.get('category') || sessionStorage.getItem('dashboardCategory') || '',
+    () => searchParams.get('category') || readSession('dashboardCategory') || '',
   );
   const [categories, setCategories] = useState<string[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -234,7 +249,7 @@ export function Dashboard() {
       pickEnum<ScreenerTab>(
         searchParams.get('tab'),
         VALID_TABS,
-        (sessionStorage.getItem('dashboardValidatorFilter') as ScreenerTab) || 'active',
+        (readSession('dashboardValidatorFilter') as ScreenerTab) || 'active',
       ),
   );
   const [range, setRange] = useState<Range>(() =>
@@ -604,13 +619,21 @@ export function Dashboard() {
           <NetworkTopologyGraph chains={chains} fill padTop={44} padBottom={isDesktop ? 124 : 0} />
         ) : (
           <div className="absolute inset-x-0 top-12 bottom-0 md:bottom-[124px]">
-            <TeleporterSankeyDiagram
-              timeframe={flowWindow}
-              onTimeframeChange={setFlowWindow}
-              fill
-              selection={flowSelection}
-              onSelectionChange={setFlowSelection}
-            />
+            <Suspense
+              fallback={
+                <div className="h-full flex items-center justify-center">
+                  <LoadingSpinner size="lg" />
+                </div>
+              }
+            >
+              <TeleporterSankeyDiagram
+                timeframe={flowWindow}
+                onTimeframeChange={setFlowWindow}
+                fill
+                selection={flowSelection}
+                onSelectionChange={setFlowSelection}
+              />
+            </Suspense>
           </div>
         )}
         <div

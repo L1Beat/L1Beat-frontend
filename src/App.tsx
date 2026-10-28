@@ -1,19 +1,30 @@
 import { Suspense, lazy, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { LoadingPage } from './components/LoadingSpinner';
 
-// Eager: pages that are pre-rendered by the SSG build (scripts/ssg.js).
-// renderToString emits the Suspense *fallback* for lazy components, so these
-// must stay eager to ship real HTML for SEO / no first-paint flash.
-import { Dashboard } from './pages/Dashboard';
-import { BlogList } from './pages/BlogList';
-import { BlogPost } from './pages/BlogPost';
-import ACPs from './pages/ACPs';
-import { NotFound } from './pages/NotFound';
+// Pages pre-rendered by the SSG build (scripts/ssg.js). renderToString emits
+// the Suspense fallback for lazy components, so entry-server passes these in
+// eagerly. The browser lazy-loads them like every other page: while a chunk
+// loads during hydration, React keeps the server HTML on screen.
+export interface PrerenderedPages {
+  Dashboard: ComponentType;
+  BlogList: ComponentType;
+  BlogPost: ComponentType;
+  ACPs: ComponentType;
+  NotFound: ComponentType;
+}
 
-// Lazy: client-only routes (not pre-rendered). Each becomes its own chunk, so
-// the initial bundle no longer carries mermaid, d3-sankey, charts, etc.
+const lazyPrerendered: PrerenderedPages = {
+  Dashboard: lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard }))),
+  BlogList: lazy(() => import('./pages/BlogList').then(m => ({ default: m.BlogList }))),
+  BlogPost: lazy(() => import('./pages/BlogPost').then(m => ({ default: m.BlogPost }))),
+  ACPs: lazy(() => import('./pages/ACPs')),
+  NotFound: lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound }))),
+};
+
+// Client-only routes (not pre-rendered), each its own chunk.
 const ChainDetails = lazy(() => import('./pages/ChainDetails').then(m => ({ default: m.ChainDetails })));
 const ACPDetails = lazy(() => import('./pages/ACPDetails'));
 const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
@@ -23,7 +34,8 @@ const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ de
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 
-function App() {
+function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
+  const { Dashboard, BlogList, BlogPost, ACPs, NotFound } = pages;
   const location = useLocation();
   const navigate = useNavigate();
 
