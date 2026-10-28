@@ -1,21 +1,26 @@
-import { cloneElement, isValidElement, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { ArrowLeft, Copy, Check, ExternalLink, Clock, AlertTriangle, Shield, Coins, Timer, TrendingUp } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeft, Copy, Check, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
 import { getL1BeatValidator, getL1BeatValidatorDeposits, getChainBySubnetId, getL1BeatSubnetType } from '../api';
 import type { L1BeatValidator } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { useToast } from '../components/Toaster';
-import { useTheme } from '../hooks/useTheme';
+import { StatStrip } from '../components/instrument';
+import type { StatItem } from '../components/instrument';
 
 const PRIMARY_NETWORK_SUBNET_ID = '11111111111111111111111111111111LpoYY';
 const NAVAX_TO_AVAX = 1_000_000_000;
-const DAILY_FEE_RATE = 44_236_800; // nAVAX per day — used as local fallback
+const DAILY_FEE_RATE = 44_236_800; // nAVAX per day, local fallback when the indexer gives no estimate
+const EXPLORER = 'https://subnets.avax.network';
+// Darker amber in light mode: the dark-mode tone fails contrast on white.
+const WARN_TEXT = 'text-[#9a6b00] dark:text-[#d4a017]';
 
 type ValidatorKind = 'l1' | 'legacy' | 'primary';
+type CopyKey = 'node' | 'validation' | 'bls' | 'owner' | 'tx';
 
 function formatAvax(nAvax: number): string {
   return (nAvax / NAVAX_TO_AVAX).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -33,25 +38,40 @@ function getDaysRemaining(balance: number): number {
   return Math.floor(balance / DAILY_FEE_RATE);
 }
 
-function getDaysColor(days: number): string {
-  if (days > 90) return 'text-up';
-  if (days >= 30) return 'text-yellow-500';
-  return 'text-red-500';
+function daysTone(days: number): string {
+  if (days < 30) return 'text-down';
+  if (days <= 90) return WARN_TEXT;
+  return 'text-foreground';
 }
 
-const TX_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  RegisterL1Validator: { label: 'Registration', color: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-  IncreaseL1ValidatorBalance: { label: 'Top-up', color: 'text-green-700 dark:text-green-300', bg: 'bg-green-100 dark:bg-green-900/40' },
-  DisableL1Validator: { label: 'Disabled', color: 'text-red-700 dark:text-red-300', bg: 'bg-red-100 dark:bg-red-900/40' },
-  SetL1ValidatorWeight: { label: 'Weight Change', color: 'text-yellow-700 dark:text-yellow-300', bg: 'bg-yellow-100 dark:bg-yellow-900/40' },
-  ConvertSubnetToL1: { label: 'L1 Conversion', color: 'text-purple-700 dark:text-purple-300', bg: 'bg-purple-100 dark:bg-purple-900/40' },
+// Small unit after the number, so four AVAX values fit a two-column strip on phones.
+function avax(nAvax: number): ReactNode {
+  return (
+    <>
+      {formatAvax(nAvax)}
+      <span className="ml-1 text-[13px] text-muted-foreground">AVAX</span>
+    </>
+  );
+}
+
+function shortId(id: string, head = 8, tail = 6): string {
+  return id.length > head + tail + 1 ? `${id.slice(0, head)}…${id.slice(-tail)}` : id;
+}
+
+const TX_TYPE_LABEL: Record<string, string> = {
+  RegisterL1Validator: 'Registration',
+  IncreaseL1ValidatorBalance: 'Top-up',
+  DisableL1Validator: 'Disabled',
+  SetL1ValidatorWeight: 'Weight change',
+  ConvertSubnetToL1: 'L1 conversion',
 };
+
+const txLabel = (type: string) => TX_TYPE_LABEL[type.replace(/Tx$/, '')] ?? type;
 
 export function ValidatorDetails() {
   const { validatorId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { theme: _ } = useTheme();
   const { toast } = useToast();
 
   const subnetId = searchParams.get('subnet') || undefined;
@@ -62,7 +82,7 @@ export function ValidatorDetails() {
   const [kind, setKind] = useState<ValidatorKind>('l1');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<'node' | 'validation' | 'bls' | 'owner' | 'tx' | null>(null);
+  const [copied, setCopied] = useState<CopyKey | null>(null);
   const [showAllDeposits, setShowAllDeposits] = useState(false);
 
   useEffect(() => {
@@ -88,8 +108,12 @@ export function ValidatorDetails() {
       setKind(resolvedKind);
 
       if (resolvedKind === 'l1') {
-        const d = await getL1BeatValidatorDeposits(v.node_id);
+        // By validation ID: a node that validated more than once would otherwise
+        // list the deposits of every validation it ever had.
+        const d = await getL1BeatValidatorDeposits(v.validation_id);
         setDeposits(d.sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime()));
+      } else {
+        setDeposits([]);
       }
 
       const c = await getChainBySubnetId(v.subnet_id);
@@ -101,7 +125,7 @@ export function ValidatorDetails() {
     });
   }, [validatorId, subnetId]);
 
-  const copyToClipboard = async (text: string, type: 'node' | 'validation' | 'bls' | 'owner' | 'tx') => {
+  const copyToClipboard = async (text: string, type: CopyKey) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(type);
@@ -122,13 +146,12 @@ export function ValidatorDetails() {
   if (error || !validator) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
-          <AlertTriangle className="w-7 h-7 text-muted-foreground" />
-        </div>
-        <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Validator not found'}</h2>
+        <AlertTriangle className="w-6 h-6 mx-auto mb-4 text-muted-foreground" />
+        <h2 className="text-[18px] font-semibold text-foreground mb-1">{error || 'Validator not found'}</h2>
+        <p className="text-[13px] text-muted-foreground mb-5">Check the node ID or validation ID and try again.</p>
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-colors"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-foreground text-background hover:bg-foreground/90 text-[13px] font-medium transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Go back
@@ -143,11 +166,8 @@ export function ValidatorDetails() {
   const totalTopups = validator.total_topups ?? 0;
   const feesPaid = validator.fees_paid ?? 0;
   const refundAmount = validator.refund_amount ?? 0;
-  const uptimePercentage = validator.uptime_percentage ?? 0;
 
-  const daysRemaining = isL1
-    ? (validator.estimated_days_left ?? getDaysRemaining(balance))
-    : 0;
+  const daysRemaining = isL1 ? Math.floor(validator.estimated_days_left ?? getDaysRemaining(balance)) : 0;
   const totalDeposited = validator.total_deposited ?? (initialDeposit + totalTopups);
   const displayedDeposits = showAllDeposits ? deposits : deposits.slice(0, 10);
 
@@ -156,35 +176,93 @@ export function ValidatorDetails() {
     : kind === 'primary'
       ? validator.weight / NAVAX_TO_AVAX
       : 0;
+  const stakeText = `${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`;
 
-  const uptimeValue = kind === 'legacy'
-    ? (validator.primary_uptime ?? 0)
-    : uptimePercentage;
+  const uptimeValue = kind === 'legacy' ? (validator.primary_uptime ?? 0) : (validator.uptime_percentage ?? 0);
 
-  const backLabel = chain?.chainName
-    ? `Back to ${chain.chainName}`
-    : kind === 'primary'
-      ? 'Back to Primary Network'
-      : 'Back';
-
-  // Staking period remaining for non-L1 validators
-  const stakingPeriod = (() => {
+  // Staking term for Primary Network and legacy subnet validators.
+  const term = (() => {
     if (!validator.end_time || validator.end_time === '1970-01-01T00:00:00Z') return null;
     const startMs = new Date(validator.start_time).getTime();
     const endMs = new Date(validator.end_time).getTime();
-    const totalDays = Math.max(1, (endMs - startMs) / (1000 * 60 * 60 * 24));
-    const daysLeft = !validator.active ? 0 : (validator.days_remaining ?? Math.max(0, (endMs - Date.now()) / (1000 * 60 * 60 * 24)));
+    const totalDays = Math.max(1, (endMs - startMs) / 86_400_000);
+    const daysLeft = !validator.active ? 0 : (validator.days_remaining ?? Math.max(0, (endMs - Date.now()) / 86_400_000));
     const progress = Math.min(100, Math.max(0, ((totalDays - daysLeft) / totalDays) * 100));
-    return { daysLeft, totalDays, progress };
+    return { daysLeft: Math.floor(daysLeft), totalDays: Math.floor(totalDays), progress };
   })();
 
-  const kindConfig = {
-    l1: { label: 'L1 Validator', badgeBg: 'bg-blue-100 dark:bg-blue-900/40', badgeText: 'text-blue-700 dark:text-blue-300' },
-    primary: { label: 'Primary Network', badgeBg: 'bg-purple-100 dark:bg-purple-900/40', badgeText: 'text-purple-700 dark:text-purple-300' },
-    legacy: { label: 'Legacy Subnet', badgeBg: 'bg-orange-100 dark:bg-orange-900/40', badgeText: 'text-orange-700 dark:text-orange-300' },
-  }[kind];
+  const kindLabel = { l1: 'L1 validator', primary: 'Primary Network validator', legacy: 'Legacy subnet validator' }[kind];
+  const nodeShort = shortId(validator.node_id, 10, 6);
+  const backLabel = chain?.chainName ? chain.chainName : kind === 'primary' ? 'Primary Network' : 'Back';
 
-  const nodeShort = `${validator.node_id.slice(0, 10)}…${validator.node_id.slice(-6)}`;
+  const stats: StatItem[] = isL1
+    ? [
+        {
+          label: 'Balance',
+          value: avax(balance),
+          sub: validator.active ? 'Pays the daily validation fee' : 'Validation ended',
+        },
+        {
+          label: 'Days left',
+          value: validator.active
+            ? <span className={daysTone(daysRemaining)}>{daysRemaining.toLocaleString()}</span>
+            : '—',
+          sub: validator.active
+            ? daysRemaining >= 60 ? `About ${Math.floor(daysRemaining / 30)} months at the current fee` : 'At the current fee'
+            : 'Inactive',
+          tooltip: 'How long the balance lasts at the current daily validation fee.',
+        },
+        {
+          label: 'Total deposited',
+          value: avax(totalDeposited),
+          sub: totalTopups > 0 ? `${formatAvaxCompact(totalTopups)} of it in top-ups` : 'Initial deposit only',
+        },
+        {
+          label: 'Fees paid',
+          value: avax(feesPaid),
+          sub: totalDeposited > 0 ? `${Math.round((feesPaid / totalDeposited) * 100)}% of deposits` : undefined,
+        },
+      ]
+    : [
+        { label: kind === 'legacy' ? 'Primary Network stake' : 'Staked', value: avax(stakeAvax * NAVAX_TO_AVAX) },
+        {
+          label: kind === 'legacy' ? 'Primary uptime' : 'Uptime',
+          value: (
+            <span className={uptimeValue >= 80 ? 'text-foreground' : uptimeValue >= 50 ? WARN_TEXT : 'text-down'}>
+              {uptimeValue.toFixed(2)}%
+            </span>
+          ),
+          sub: uptimeValue < 80 ? 'Below the 80% needed for rewards' : undefined,
+        },
+        term
+          ? {
+              label: 'Staking term',
+              value: validator.active ? `${term.daysLeft.toLocaleString()} days left` : 'Ended',
+              sub: `${term.totalDays.toLocaleString()} day term`,
+            }
+          : { label: 'Weight', value: validator.weight.toLocaleString() },
+        ...(kind === 'primary' && validator.total_stake != null
+          ? [{
+              label: 'Total stake',
+              value: <>{formatAvaxCompact(validator.total_stake)}<span className="ml-1 text-[13px] text-muted-foreground">AVAX</span></>,
+              sub: validator.network_share_percent != null ? `${validator.network_share_percent.toFixed(4)}% of network` : 'Own stake plus delegations',
+            }]
+          : kind === 'legacy'
+            ? [{ label: 'Subnet weight', value: validator.weight.toLocaleString() }]
+            : []),
+      ];
+
+  const copyButton = (text: string, key: CopyKey, title: string) => (
+    <button
+      onClick={() => copyToClipboard(text, key)}
+      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+      title={title}
+      aria-label={title}
+    >
+      {copied === key ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
@@ -200,528 +278,300 @@ export function ValidatorDetails() {
         {backLabel}
       </button>
 
-      <header className="relative overflow-hidden rounded-md border border-border bg-card shadow-xl">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-muted/40 blur-3xl" />
-        </div>
-        <div className="relative p-6 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-md bg-muted flex items-center justify-center shrink-0">
-                <Shield className="w-7 h-7 text-muted-foreground" />
+      <header className="border-b border-border pb-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-11 h-11 rounded-md bg-muted flex items-center justify-center shrink-0">
+              <Shield className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-start gap-2 min-w-0">
+                <h1 className="num text-[17px] sm:text-[20px] leading-7 font-medium text-foreground break-all">
+                  {validator.node_id}
+                </h1>
+                <span className="pt-2">{copyButton(validator.node_id, 'node', 'Copy node ID')}</span>
               </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  {validator.active ? (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-up">
-                      <span className="w-1 h-1 rounded-full bg-green-500" />
-                      ACTIVE
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                      INACTIVE
-                    </span>
-                  )}
-                  <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-accent text-foreground">
-                    {kindConfig.label.toUpperCase()}
-                  </span>
-                  {chain && (
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/40'}`} />
+                  {validator.active ? 'Active' : 'Inactive'}
+                </span>
+                <span>·</span>
+                <span>{kindLabel}</span>
+                {chain && (
+                  <>
+                    <span>·</span>
                     <button
                       onClick={() => navigate(`/chain/${chain.chainId}`)}
-                      className="inline-flex items-center gap-1.5 h-5 px-2 rounded-full text-[11px] font-medium bg-background/40 hover:bg-background/70 transition-colors"
+                      className="inline-flex items-center gap-1 font-medium text-foreground hover:underline underline-offset-2"
                     >
-                      {chain.chainLogoUri && (
-                        <img src={chain.chainLogoUri} alt="" className="w-3 h-3 rounded-full" />
-                      )}
+                      {chain.chainLogoUri && <img src={chain.chainLogoUri} alt="" className="w-3.5 h-3.5 rounded-full" />}
                       {chain.chainName}
                     </button>
-                  )}
-                </div>
-                <h1 className="text-lg sm:text-xl font-semibold font-mono text-foreground tracking-tight break-all">
-                  {validator.node_id}
-                  <button
-                    onClick={() => copyToClipboard(validator.node_id, 'node')}
-                    className="ml-2 align-middle inline-flex text-muted-foreground hover:text-foreground transition-colors"
-                    title="Copy Node ID"
-                  >
-                    {copied === 'node' ? (
-                      <Check className="w-4 h-4 text-up" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </h1>
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-                    Validation ID
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(validator.validation_id, 'validation')}
-                    className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors text-[11px] font-mono text-foreground"
-                    title={validator.validation_id}
-                  >
-                    <span>
-                      {validator.validation_id.slice(0, 6)}…{validator.validation_id.slice(-4)}
-                    </span>
-                    {copied === 'validation' ? (
-                      <Check className="w-2.5 h-2.5 text-up" />
-                    ) : (
-                      <Copy className="w-2.5 h-2.5" />
-                    )}
-                  </button>
-                </div>
+                  </>
+                )}
+                <span>·</span>
+                <button
+                  onClick={() => copyToClipboard(validator.validation_id, 'validation')}
+                  className="num inline-flex items-center gap-1 h-5 px-1.5 rounded bg-muted hover:bg-accent transition-colors"
+                  title={`Validation ID ${validator.validation_id}`}
+                >
+                  <span>Validation {shortId(validator.validation_id, 6, 4)}</span>
+                  {copied === 'validation' ? <Check className="w-2.5 h-2.5 text-up" /> : <Copy className="w-2.5 h-2.5" />}
+                </button>
               </div>
             </div>
-            <a
-              href={`https://subnets.avax.network/validators/${validator.node_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded border border-border bg-background/40 hover:bg-background/70 transition-colors text-xs font-medium text-muted-foreground shrink-0 self-start"
-            >
-              Explorer <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
+          <a
+            href={`${EXPLORER}/validators/${validator.node_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-border hover:bg-accent transition-colors text-[12px] font-medium text-muted-foreground hover:text-foreground shrink-0 self-start"
+          >
+            Explorer <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       </header>
 
-        {/* ── Hero Metrics ── */}
-        <motion.div
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.08 }}
-        >
+      <StatStrip items={stats} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title={isL1 ? 'Balance' : 'Stake'}>
           {isL1 ? (
             <>
-              {/* L1 hero: Balance | Days Remaining | Total Deposited */}
-              <HeroCard
-                icon={<Coins className="w-5 h-5" />}
-                label="Current Balance"
-                value={`${formatAvax(balance)} AVAX`}
-                warning={daysRemaining < 30 && validator.active}
-              />
-              <HeroCard
-                icon={<Timer className="w-5 h-5" />}
-                label="Days Remaining"
-                value={validator.active ? daysRemaining.toLocaleString() : 'Inactive'}
-                valueColor={validator.active ? getDaysColor(daysRemaining) : 'text-muted-foreground'}
-                warning={daysRemaining < 30 && validator.active}
-                subtitle={validator.active && daysRemaining > 0 ? `~${Math.floor(daysRemaining / 30)} months` : undefined}
-              />
-              <HeroCard
-                icon={<TrendingUp className="w-5 h-5" />}
-                label="Total Deposited"
-                value={`${formatAvax(totalDeposited)} AVAX`}
-              />
+              {totalDeposited > 0 && (
+                <DepositSplit total={totalDeposited} fees={feesPaid} balance={balance} refund={refundAmount} />
+              )}
+              <dl>
+                <Row label="Initial deposit" value={`${formatAvax(initialDeposit)} AVAX`} />
+                <Row label="Top-ups" value={`${formatAvax(totalTopups)} AVAX`} />
+                <Row label="Fees paid" value={`${formatAvax(feesPaid)} AVAX`} />
+                {refundAmount > 0 && <Row label="Refunded" value={`${formatAvax(refundAmount)} AVAX`} />}
+                <Row label="Current balance" value={`${formatAvax(balance)} AVAX`} />
+                <Row label="Weight" value={validator.weight.toLocaleString()} />
+              </dl>
             </>
           ) : (
             <>
-              {/* Stake/Legacy hero: Staked Amount | Uptime | Total Stake or Staking Period */}
-              <HeroCard
-                icon={<Coins className="w-5 h-5" />}
-                label={kind === 'legacy' ? 'Primary Network Stake' : 'Staked Amount'}
-                value={`${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`}
-              />
-              <div className="rounded-md border border-border bg-card p-4 sm:p-5">
-                <div className="flex items-center justify-between mb-3 gap-2">
-                  <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
-                    {kind === 'legacy' ? 'Primary Uptime' : 'Uptime'}
-                  </span>
-                  <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0">
-                    <Shield className="w-3.5 h-3.5 text-muted-foreground" />
+              {term && (
+                <div className="mb-4">
+                  <div className="flex items-baseline justify-between text-[11px] text-muted-foreground mb-1.5">
+                    <span>Staking term</span>
+                    <span className="num">{Math.floor(term.progress)}% complete</span>
                   </div>
-                </div>
-                <p className={`text-2xl font-bold tracking-tight mb-2 ${
-                  uptimeValue >= 80 ? 'text-up' : uptimeValue >= 50 ? 'text-yellow-500' : 'text-red-500'
-                }`}>
-                  {uptimeValue.toFixed(2)}%
-                </p>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      uptimeValue >= 80 ? 'bg-green-500' : uptimeValue >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${Math.min(uptimeValue, 100)}%` }}
-                  />
-                </div>
-              </div>
-              {kind === 'primary' && validator.total_stake != null ? (
-                <HeroCard
-                  icon={<TrendingUp className="w-5 h-5" />}
-                  label="Total Stake"
-                  value={`${formatAvaxCompact(validator.total_stake)} AVAX`}
-                  subtitle={validator.network_share_percent != null ? `${validator.network_share_percent.toFixed(4)}% of network` : undefined}
-                />
-              ) : stakingPeriod !== null ? (
-                <StakingPeriodCard period={stakingPeriod} active={validator.active} />
-              ) : (
-                <HeroCard
-                  icon={<Shield className="w-5 h-5" />}
-                  label="Weight"
-                  value={validator.weight.toLocaleString()}
-                />
-              )}
-            </>
-          )}
-        </motion.div>
-
-        {/* ── Details Section ── */}
-        <motion.div
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.16 }}
-        >
-          {/* Left column: Financial / Staking details */}
-          <div className="bg-card rounded-md border border-border p-6">
-            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Coins className="w-4 h-4 text-muted-foreground" />
-              {isL1 ? 'Balance Details' : 'Staking Details'}
-            </h2>
-            <div className="space-y-3">
-              {isL1 ? (
-                <>
-                  <DetailRow label="Total Deposited" value={`${formatAvax(totalDeposited)} AVAX`} />
-                  <DetailRow label="Fees Paid" value={`${formatAvax(feesPaid)} AVAX`} valueColor="text-red-500" />
-                  <DetailRow label="Initial Deposit" value={`${formatAvax(initialDeposit)} AVAX`} />
-                  <DetailRow label="Total Top-ups" value={`${formatAvax(totalTopups)} AVAX`} valueColor="text-up" />
-                  {refundAmount > 0 && (
-                    <DetailRow label="Refund Amount" value={`${formatAvax(refundAmount)} AVAX`} />
-                  )}
-                  <DetailRow label="Weight" value={validator.weight.toLocaleString()} />
-
-                  {/* Balance Breakdown Bar */}
-                  {totalDeposited > 0 && (
-                    <div className="pt-3 mt-1">
-                      <p className="text-xs font-medium text-muted-foreground mb-2.5">Balance Breakdown</p>
-                      <div className="flex w-full h-2.5 rounded-full bg-muted overflow-hidden gap-0.5">
-                        <div
-                          className="h-full rounded-l-full bg-red-500 transition-all"
-                          style={{ width: `${(feesPaid / totalDeposited) * 100}%` }}
-                        />
-                        <div
-                          className="h-full rounded-r-full bg-green-500 transition-all"
-                          style={{ width: `${(balance / totalDeposited) * 100}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2 rounded-full bg-red-500" />
-                          <span className="text-[10px] text-muted-foreground">Fees Paid ({totalDeposited > 0 ? Math.round((feesPaid / totalDeposited) * 100) : 0}%)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2 rounded-full bg-green-500" />
-                          <span className="text-[10px] text-muted-foreground">Balance ({totalDeposited > 0 ? Math.round((balance / totalDeposited) * 100) : 0}%)</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <DetailRow
-                    label={kind === 'legacy' ? 'Primary Network Stake' : 'Staked Amount'}
-                    value={`${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`}
-                  />
-                  {kind === 'legacy' && (
-                    <DetailRow label="Subnet Weight" value={validator.weight.toLocaleString()} />
-                  )}
-                  {kind === 'primary' && validator.delegation_fee_percent != null && (
-                    <DetailRow label="Delegation Fee" value={`${validator.delegation_fee_percent.toFixed(2)}%`} />
-                  )}
-                  {kind === 'primary' && validator.delegator_count != null && (
-                    <DetailRow label="Delegators" value={validator.delegator_count.toLocaleString()} />
-                  )}
-                  {kind === 'primary' && validator.total_delegated != null && (
-                    <DetailRow label="Total Delegated" value={`${(validator.total_delegated / NAVAX_TO_AVAX).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`} />
-                  )}
-                  {kind === 'primary' && validator.total_stake != null && (
-                    <DetailRow label="Total Stake" value={`${(validator.total_stake / NAVAX_TO_AVAX).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`} />
-                  )}
-                  {kind === 'primary' && validator.network_share_percent != null && (
-                    <DetailRow label="Network Share" value={`${validator.network_share_percent.toFixed(4)}%`} />
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Right column: Validator Info */}
-          <div className="bg-card rounded-md border border-border p-6">
-            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-muted-foreground" />
-              Validator Info
-            </h2>
-            <div className="space-y-3">
-              <DetailRow
-                label="Start Time"
-                value={format(new Date(validator.start_time), 'MMM d, yyyy HH:mm')}
-                icon={<Clock className="w-3.5 h-3.5 text-muted-foreground" />}
-              />
-              {validator.end_time && validator.end_time !== '1970-01-01T00:00:00Z' && (
-                <DetailRow
-                  label="End Time"
-                  value={format(new Date(validator.end_time), 'MMM d, yyyy HH:mm')}
-                  icon={<Clock className="w-3.5 h-3.5 text-muted-foreground" />}
-                />
-              )}
-              {validator.created_time && (
-                <DetailRow
-                  label="Created"
-                  value={format(new Date(validator.created_time), 'MMM d, yyyy HH:mm')}
-                  icon={<Clock className="w-3.5 h-3.5 text-muted-foreground" />}
-                />
-              )}
-              {stakingPeriod !== null && !isL1 && (
-                <div className="flex flex-col gap-1.5 py-2 border-b border-border/50 last:border-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Staking Period</span>
-                    <span className={`text-sm font-medium ${
-                      !validator.active ? 'text-muted-foreground' : stakingPeriod.daysLeft > 30 ? 'text-foreground' : 'text-yellow-500'
-                    }`}>
-                      {validator.active ? `${Math.floor(stakingPeriod.daysLeft)} of ${Math.floor(stakingPeriod.totalDays)} days` : 'Ended'}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-2 rounded-sm bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        !validator.active ? 'bg-muted-foreground' : stakingPeriod.daysLeft > 30 ? 'bg-green-500' : 'bg-yellow-500'
-                      }`}
-                      style={{ width: `${stakingPeriod.progress}%` }}
+                      className={`h-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/50'}`}
+                      style={{ width: `${term.progress}%` }}
                     />
                   </div>
                 </div>
               )}
-              {validator.tx_hash && (
-                <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                  <span className="text-xs text-muted-foreground">Registration Tx</span>
-                  <div className="flex items-center gap-1.5">
-                    <a
-                      href={`https://subnets.avax.network/p-chain/tx/${validator.tx_hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-mono text-brand hover:underline"
-                    >
-                      {validator.tx_hash.slice(0, 8)}...{validator.tx_hash.slice(-6)}
-                    </a>
-                    <button
-                      onClick={() => copyToClipboard(validator.tx_hash!, 'tx')}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      title="Copy Tx Hash"
-                    >
-                      {copied === 'tx' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                    <a
-                      href={`https://subnets.avax.network/p-chain/tx/${validator.tx_hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              )}
-              {validator.tx_type && (() => {
-                const txKey = validator.tx_type!.replace('Tx', '');
-                const config = TX_TYPE_CONFIG[txKey] || { label: validator.tx_type, color: 'text-foreground', bg: 'bg-muted' };
-                return (
-                  <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                    <span className="text-xs text-muted-foreground">Tx Type</span>
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${config.color} ${config.bg}`}>
-                      {config.label}
-                    </span>
-                  </div>
-                );
-              })()}
-              {validator.bls_public_key && (
-                <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                  <span className="text-xs text-muted-foreground">BLS Public Key</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-mono text-foreground">
-                      {validator.bls_public_key.slice(0, 10)}...{validator.bls_public_key.slice(-8)}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(validator.bls_public_key!, 'bls')}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      title="Copy BLS Public Key"
-                    >
-                      {copied === 'bls' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {validator.remaining_balance_owner && (
-                <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                  <span className="text-xs text-muted-foreground">Balance Owner</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-mono text-foreground">
-                      {validator.remaining_balance_owner.slice(0, 10)}...{validator.remaining_balance_owner.slice(-8)}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(validator.remaining_balance_owner!, 'owner')}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                      title="Copy Address"
-                    >
-                      {copied === 'owner' ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </motion.div>
+              <dl>
+                <Row label={kind === 'legacy' ? 'Primary Network stake' : 'Staked'} value={stakeText} />
+                {kind === 'legacy' && <Row label="Subnet weight" value={validator.weight.toLocaleString()} />}
+                {kind === 'primary' && validator.delegation_fee_percent != null && (
+                  <Row label="Delegation fee" value={`${validator.delegation_fee_percent.toFixed(2)}%`} />
+                )}
+                {kind === 'primary' && validator.delegator_count != null && (
+                  <Row label="Delegators" value={validator.delegator_count.toLocaleString()} />
+                )}
+                {kind === 'primary' && validator.total_delegated != null && (
+                  <Row label="Delegated" value={`${formatAvax(validator.total_delegated)} AVAX`} />
+                )}
+                {kind === 'primary' && validator.total_stake != null && (
+                  <Row label="Total stake" value={`${formatAvax(validator.total_stake)} AVAX`} />
+                )}
+                {kind === 'primary' && validator.network_share_percent != null && (
+                  <Row label="Network share" value={`${validator.network_share_percent.toFixed(4)}%`} />
+                )}
+              </dl>
+            </>
+          )}
+        </Panel>
 
-        {/* ── Deposit History — L1 only ── */}
-        {isL1 && deposits.length > 0 && (
-          <motion.div
-            className="bg-card rounded-md border border-border p-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.24 }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                Deposit History
-              </h2>
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{deposits.length} transactions</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Date</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Type</th>
-                    <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Amount</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Tx ID</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayedDeposits.map((deposit) => {
-                    const typeConfig = TX_TYPE_CONFIG[deposit.tx_type] || { label: deposit.tx_type, color: 'text-foreground', bg: 'bg-muted' };
-                    return (
-                      <tr key={deposit.tx_id} className="hover:bg-muted/30 transition-colors">
-                        <td className="py-2.5 px-3 text-foreground whitespace-nowrap">
-                          {format(new Date(deposit.block_time), 'MMM d, yyyy HH:mm')}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${typeConfig.color} ${typeConfig.bg}`}>
-                            {typeConfig.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-medium text-foreground whitespace-nowrap">
-                          {formatAvax(deposit.amount)} AVAX
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-xs">
-                          <a
-                            href={`https://subnets.avax.network/p-chain/tx/${deposit.tx_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-brand hover:underline"
-                          >
-                            {deposit.tx_id.slice(0, 8)}...{deposit.tx_id.slice(-6)}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {deposits.length > 10 && (
+        <Panel title="Record">
+          <dl>
+            <Row label="Started" value={format(new Date(validator.start_time), 'MMM d, yyyy HH:mm')} />
+            {validator.end_time && validator.end_time !== '1970-01-01T00:00:00Z' && (
+              <Row label={validator.active ? 'Ends' : 'Ended'} value={format(new Date(validator.end_time), 'MMM d, yyyy HH:mm')} />
+            )}
+            {validator.created_time && validator.created_time !== validator.start_time && (
+              <Row label="Created" value={format(new Date(validator.created_time), 'MMM d, yyyy HH:mm')} />
+            )}
+            {validator.tx_type && <Row label="Registered by" value={txLabel(validator.tx_type)} mono={false} />}
+            {validator.tx_hash && (
+              <Row
+                label="Registration tx"
+                value={
+                  <span className="inline-flex items-center gap-1.5">
+                    <a
+                      href={`${EXPLORER}/p-chain/tx/${validator.tx_hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 hover:underline underline-offset-2"
+                    >
+                      {shortId(validator.tx_hash)}
+                      <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                    </a>
+                    {copyButton(validator.tx_hash, 'tx', 'Copy transaction ID')}
+                  </span>
+                }
+              />
+            )}
+            {validator.bls_public_key && (
+              <Row
+                label="BLS public key"
+                value={
+                  <span className="inline-flex items-center gap-1.5">
+                    {shortId(validator.bls_public_key, 10, 8)}
+                    {copyButton(validator.bls_public_key, 'bls', 'Copy BLS public key')}
+                  </span>
+                }
+              />
+            )}
+            {validator.remaining_balance_owner && (
+              <Row
+                label="Balance owner"
+                value={
+                  <span className="inline-flex items-center gap-1.5">
+                    {shortId(validator.remaining_balance_owner, 10, 8)}
+                    {copyButton(validator.remaining_balance_owner, 'owner', 'Copy address')}
+                  </span>
+                }
+              />
+            )}
+          </dl>
+        </Panel>
+      </div>
+
+      {isL1 && deposits.length > 0 && (
+        <Panel
+          title="Deposit history"
+          aside={<span className="num text-[11px] text-muted-foreground">{deposits.length} {deposits.length === 1 ? 'transaction' : 'transactions'}</span>}
+          flush
+        >
+          <table className="w-full text-[12px]">
+            <thead className="hidden sm:table-header-group">
+              <tr className="border-b border-border text-[11px] text-muted-foreground">
+                <th className="text-left font-normal py-2 px-4 sm:px-5">Date</th>
+                <th className="text-left font-normal py-2 px-3">Type</th>
+                <th className="text-right font-normal py-2 px-3">Amount</th>
+                <th className="text-right font-normal py-2 px-4 sm:px-5">Transaction</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {displayedDeposits.map((d) => (
+                <tr key={d.tx_id} className="hover:bg-muted/30 transition-colors">
+                  {/* Phones get one stacked cell; the table columns don't fit. */}
+                  <td className="sm:hidden px-4 py-2.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-foreground">{txLabel(d.tx_type)}</span>
+                      <span className="num text-foreground">{formatAvax(d.amount)} AVAX</span>
+                    </div>
+                    <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground">
+                      <span className="num">{format(new Date(d.block_time), 'MMM d, yyyy HH:mm')}</span>
+                      <TxLink id={d.tx_id} />
+                    </div>
+                  </td>
+                  <td className="hidden sm:table-cell num py-2.5 px-4 sm:px-5 text-muted-foreground whitespace-nowrap">
+                    {format(new Date(d.block_time), 'MMM d, yyyy HH:mm')}
+                  </td>
+                  <td className="hidden sm:table-cell py-2.5 px-3 text-foreground whitespace-nowrap">{txLabel(d.tx_type)}</td>
+                  <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">
+                    {formatAvax(d.amount)} AVAX
+                  </td>
+                  <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5 text-right">
+                    <TxLink id={d.tx_id} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {deposits.length > 10 && (
+            <div className="border-t border-border px-4 sm:px-5 py-2.5">
               <button
                 onClick={() => setShowAllDeposits(!showAllDeposits)}
-                className="mt-3 text-xs font-medium text-brand hover:text-foreground/80 transition-colors"
+                className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                {showAllDeposits ? 'Show less' : `Show all ${deposits.length} transactions`}
+                {showAllDeposits ? 'Show fewer' : `Show all ${deposits.length} transactions`}
               </button>
-            )}
-          </motion.div>
-        )}
-    </div>
-  );
-}
-
-/* ── Shared Components ── */
-
-function HeroCard({ icon, label, value, valueColor, subtitle, warning }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  valueColor?: string;
-  subtitle?: string;
-  warning?: boolean;
-}) {
-  const sizedIcon = isValidElement(icon)
-    ? cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-3.5 h-3.5 text-brand' })
-    : icon;
-  return (
-    <div className={`rounded-md border p-4 sm:p-5 bg-card ${warning ? 'border-red-500/40' : 'border-border'}`}>
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <span className="text-[11px] font-medium tracking-wide text-muted-foreground truncate">{label}</span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {warning && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
-          <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
-            {sizedIcon}
-          </div>
-        </div>
-      </div>
-      <p className={`text-2xl font-bold tracking-tight ${valueColor || 'text-foreground'}`}>
-        {value}
-      </p>
-      {subtitle && (
-        <p className="text-[11px] text-muted-foreground mt-1">{subtitle}</p>
+            </div>
+          )}
+        </Panel>
       )}
     </div>
   );
 }
 
-function StakingPeriodCard({ period, active }: {
-  period: { daysLeft: number; totalDays: number; progress: number };
-  active: boolean;
+function Panel({ title, aside, flush = false, children }: {
+  title: string;
+  aside?: ReactNode;
+  /** No body padding, for tables that run edge to edge. */
+  flush?: boolean;
+  children: ReactNode;
 }) {
-  const daysLeft = Math.floor(period.daysLeft);
-  const barColor = !active ? 'bg-muted-foreground' : daysLeft > 30 ? 'bg-green-500' : daysLeft > 7 ? 'bg-yellow-500' : 'bg-red-500';
-  const textColor = !active ? 'text-muted-foreground' : daysLeft > 30 ? 'text-up' : daysLeft > 7 ? 'text-yellow-500' : 'text-red-500';
-
   return (
-    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">Staking Period</span>
-        <div className="w-7 h-7 rounded bg-muted flex items-center justify-center shrink-0">
-          <Timer className="w-3.5 h-3.5 text-muted-foreground" />
-        </div>
-      </div>
-      <p className={`text-2xl font-bold tracking-tight mb-2 ${textColor}`}>
-        {active ? `${daysLeft} days left` : 'Ended'}
-      </p>
-      <div className="h-2 bg-muted rounded-full overflow-hidden mb-1.5">
-        <div
-          className={`h-full rounded-full transition-all ${barColor}`}
-          style={{ width: `${period.progress}%` }}
-        />
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        {Math.floor(period.progress)}% complete · {Math.floor(period.totalDays)} day term
-      </p>
+    <section className="rounded-md border border-border bg-card overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border">
+        <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+        {aside}
+      </header>
+      <div className={flush ? '' : 'px-4 sm:px-5 py-3'}>{children}</div>
+    </section>
+  );
+}
+
+function Row({ label, value, mono = true }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2 border-b border-border/60 last:border-0">
+      <dt className="text-[12px] text-muted-foreground shrink-0">{label}</dt>
+      <dd className={`text-[13px] text-foreground text-right min-w-0 truncate ${mono ? 'num' : ''}`}>{value}</dd>
     </div>
   );
 }
 
-function DetailRow({ label, value, valueColor, icon }: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  icon?: React.ReactNode;
-}) {
+function TxLink({ id }: { id: string }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-1.5">
-        {icon}
-        <span className={`text-sm font-medium ${valueColor || 'text-foreground'}`}>{value}</span>
+    <a
+      href={`${EXPLORER}/p-chain/tx/${id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="num inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+    >
+      {shortId(id)}
+      <ExternalLink className="w-3 h-3" />
+    </a>
+  );
+}
+
+/** Where the deposits went: spent on fees, still held, or refunded. */
+function DepositSplit({ total, fees, balance, refund }: { total: number; fees: number; balance: number; refund: number }) {
+  const parts = [
+    { label: 'Fees paid', value: fees, swatch: 'bg-foreground/35' },
+    { label: 'Balance', value: balance, swatch: 'bg-up' },
+    { label: 'Refunded', value: refund, swatch: 'bg-muted-foreground/25' },
+  ].filter((p) => p.value > 0);
+  const pct = (v: number) => (v / total) * 100;
+  return (
+    <div className="mb-3">
+      <div className="flex h-2 rounded-sm overflow-hidden bg-muted">
+        {parts.map((p, i) => (
+          <div
+            key={p.label}
+            className={`h-full ${p.swatch} ${i > 0 ? 'border-l border-card' : ''}`}
+            style={{ width: `${Math.min(100, pct(p.value))}%` }}
+            title={`${p.label}: ${pct(p.value).toFixed(1)}%`}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        {parts.map((p) => (
+          <span key={p.label} className="inline-flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-sm ${p.swatch}`} />
+            {p.label} <span className="num">{Math.round(pct(p.value))}%</span>
+          </span>
+        ))}
       </div>
     </div>
   );
