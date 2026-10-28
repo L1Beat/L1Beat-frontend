@@ -335,8 +335,22 @@ export function Dashboard() {
         getAllChainsTxCountLatest(),
       ]);
 
+      // A few EVM chain IDs are registered on two blockchains (a chain that moved
+      // subnets). Activity is keyed by EVM ID, so give it to one of them only,
+      // the one with more active validators, instead of counting it twice.
+      const evmOwner = new Map<string, Chain>();
+      for (const chain of chainsData) {
+        if (!chain.evmChainId) continue;
+        const key = String(chain.evmChainId);
+        const prev = evmOwner.get(key);
+        if (!prev || (chain.validatorCount ?? 0) > (prev.validatorCount ?? 0)) evmOwner.set(key, chain);
+      }
+      const ownsActivity = (chain: Chain) =>
+        !chain.evmChainId || evmOwner.get(String(chain.evmChainId)) === chain;
+
       const daily: Record<string, DailyTxLatest> = {};
       for (const chain of chainsData) {
+        if (!ownsActivity(chain)) continue;
         const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
           .map((k) => (k == null ? '' : String(k)))
           .find((k) => k && txMap[k]);
@@ -347,6 +361,7 @@ export function Dashboard() {
       const rank = (c: Chain) => (dailyOrNull ? dailyOrNull[c.chainId]?.value : c.tps?.value) ?? -1;
 
       const chainsWithLatestTps = chainsData.map((chain) => {
+        if (!ownsActivity(chain)) return chain;
         const lookupId =
           (chain.evmChainId ? String(chain.evmChainId) : undefined) ||
           chain.originalChainId ||

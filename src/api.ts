@@ -2032,6 +2032,23 @@ export async function getL1BeatValidator(id: string, subnetId?: string): Promise
   }, 5 * 60 * 1000);
 }
 
+// Every validation a node has run, active or ended, across all subnets.
+export async function getL1BeatNodeValidations(nodeId: string): Promise<L1BeatValidator[]> {
+  const cacheKey = `l1beat-node-validations-${nodeId}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      return await fetchAllL1BeatPages<L1BeatValidator>(
+        '/api/v1/data/validators',
+        { node_id: nodeId },
+        { maxPages: 5, pageSize: 1000 }
+      );
+    } catch (error) {
+      console.error(`L1Beat node validations fetch error (${nodeId}):`, error);
+      return [];
+    }
+  }, 5 * 60 * 1000);
+}
+
 // Fetch deposit history for a validator from L1Beat.
 export async function getL1BeatValidatorDeposits(id: string): Promise<ValidatorDeposit[]> {
   const cacheKey = `l1beat-validator-deposits-${id}`;

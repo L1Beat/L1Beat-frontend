@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Copy, Check, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
-import { getL1BeatValidator, getL1BeatValidatorDeposits, getChainBySubnetId, getL1BeatSubnetType } from '../api';
+import { getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType } from '../api';
 import type { L1BeatValidator } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -84,6 +84,8 @@ export function ValidatorDetails() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<CopyKey | null>(null);
   const [showAllDeposits, setShowAllDeposits] = useState(false);
+  const [history, setHistory] = useState<L1BeatValidator[]>([]);
+  const [historyChains, setHistoryChains] = useState<Record<string, Chain | null>>({});
 
   useEffect(() => {
     if (!validatorId) return;
@@ -124,6 +126,26 @@ export function ValidatorDetails() {
       setLoading(false);
     });
   }, [validatorId, subnetId]);
+
+  // Other validations by the same node. Loaded after the page, it only adds a panel.
+  const nodeId = validator?.node_id;
+  useEffect(() => {
+    if (!nodeId) return;
+    let cancelled = false;
+    setHistory([]);
+    getL1BeatNodeValidations(nodeId).then(async (all) => {
+      if (cancelled || all.length < 2) return;
+      const sorted = [...all].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+      const subnets = [...new Set(sorted.map((v) => v.subnet_id))].filter((s) => s !== PRIMARY_NETWORK_SUBNET_ID);
+      const chains = await Promise.all(subnets.map((s) => getChainBySubnetId(s).catch(() => null)));
+      if (cancelled) return;
+      setHistoryChains(Object.fromEntries(subnets.map((s, i) => [s, chains[i]])));
+      setHistory(sorted);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId]);
 
   const copyToClipboard = async (text: string, type: CopyKey) => {
     try {
@@ -500,7 +522,123 @@ export function ValidatorDetails() {
           )}
         </Panel>
       )}
+
+      {history.length > 1 && (
+        <ValidationHistory
+          validations={history}
+          current={validator.validation_id}
+          chains={historyChains}
+          onOpen={(v) => navigate(`/validator/${v.validation_id}?subnet=${v.subnet_id}`)}
+        />
+      )}
     </div>
+  );
+}
+
+function hasEnd(v: L1BeatValidator): boolean {
+  return !!v.end_time && v.end_time !== '1970-01-01T00:00:00Z';
+}
+
+function periodText(v: L1BeatValidator): string {
+  const start = format(new Date(v.start_time), 'MMM d, yyyy');
+  if (v.active) return `${start} to now`;
+  return hasEnd(v) ? `${start} to ${format(new Date(v.end_time!), 'MMM d, yyyy')}` : start;
+}
+
+function validationStake(v: L1BeatValidator): string {
+  if (v.staked_amount != null) {
+    const n = Number(v.staked_amount);
+    const amount = Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : v.staked_amount;
+    return `${amount} ${v.staked_token ?? ''}`.trim();
+  }
+  return `Weight ${v.weight.toLocaleString()}`;
+}
+
+/** Every validation the node has run, newest first; the one on screen is marked. */
+function ValidationHistory({ validations, current, chains, onOpen }: {
+  validations: L1BeatValidator[];
+  current: string;
+  chains: Record<string, Chain | null>;
+  onOpen: (v: L1BeatValidator) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? validations : validations.slice(0, 10);
+  const chainName = (v: L1BeatValidator) =>
+    v.subnet_id === PRIMARY_NETWORK_SUBNET_ID ? 'Primary Network' : chains[v.subnet_id]?.chainName ?? shortId(v.subnet_id);
+
+  return (
+    <Panel
+      title="Validation history"
+      aside={<span className="num text-[11px] text-muted-foreground">{validations.length} validations by this node</span>}
+      flush
+    >
+      <table className="w-full text-[12px]">
+        <thead className="hidden sm:table-header-group">
+          <tr className="border-b border-border text-[11px] text-muted-foreground">
+            <th className="text-left font-normal py-2 px-4 sm:px-5">Period</th>
+            <th className="text-left font-normal py-2 px-3">Chain</th>
+            <th className="text-right font-normal py-2 px-3">Stake</th>
+            <th className="text-right font-normal py-2 px-3">Uptime</th>
+            <th className="text-right font-normal py-2 px-4 sm:px-5">Validation</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {shown.map((v) => {
+            const isCurrent = v.validation_id === current;
+            const status = (
+              <span
+                aria-hidden
+                className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${v.active ? 'bg-up' : 'bg-muted-foreground/40'}`}
+              />
+            );
+            const id = isCurrent ? (
+              <span className="text-[11px] text-foreground">Viewing</span>
+            ) : (
+              <span className="num text-[11px] text-muted-foreground group-hover:text-foreground">{shortId(v.validation_id, 6, 4)}</span>
+            );
+            const uptime = v.uptime_percentage != null ? `${v.uptime_percentage.toFixed(2)}%` : '—';
+            return (
+              <tr
+                key={v.validation_id}
+                onClick={isCurrent ? undefined : () => onOpen(v)}
+                onKeyDown={isCurrent ? undefined : (e) => { if (e.key === 'Enter') onOpen(v); }}
+                tabIndex={isCurrent ? undefined : 0}
+                aria-current={isCurrent ? 'true' : undefined}
+                className={`group transition-colors ${isCurrent ? 'bg-muted/40' : 'cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:bg-muted/40'}`}
+              >
+                <td className="sm:hidden px-4 py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-foreground">{status}{chainName(v)}</span>
+                    {id}
+                  </div>
+                  <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground">
+                    <span className="num">{periodText(v)}</span>
+                    <span className="num">{uptime}</span>
+                  </div>
+                </td>
+                <td className="hidden sm:table-cell num py-2.5 px-4 sm:px-5 text-muted-foreground whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2">{status}{periodText(v)}</span>
+                </td>
+                <td className="hidden sm:table-cell py-2.5 px-3 text-foreground whitespace-nowrap">{chainName(v)}</td>
+                <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">{validationStake(v)}</td>
+                <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">{uptime}</td>
+                <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5 text-right whitespace-nowrap">{id}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {validations.length > 10 && (
+        <div className="border-t border-border px-4 sm:px-5 py-2.5">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAll ? 'Show fewer' : `Show all ${validations.length} validations`}
+          </button>
+        </div>
+      )}
+    </Panel>
   );
 }
 

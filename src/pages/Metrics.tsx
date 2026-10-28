@@ -36,6 +36,8 @@ interface HistoryStore {
   tx: { timestamp: number; value?: number }[];
   maxTps: { timestamp: number; value?: number }[];
   validatorTotal: number | null;
+  /** Chains counted in the latest network TPS total. */
+  chainCount: number | null;
 }
 
 function avg(nums: number[]): number {
@@ -81,6 +83,7 @@ function scrollToSection(id: string) {
 
 export function Metrics() {
   const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
+  const [activeChains, setActiveChains] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const comparisonRef = useRef<HTMLDivElement>(null);
   const hasScrolled = useRef(false);
@@ -94,6 +97,7 @@ export function Metrics() {
     async function fetchData() {
       try {
         const chains = await getChains();
+        setActiveChains(chains.filter((c) => c.isActive).length);
         const subnetIds = chains.map((c) => c.subnetId).filter(Boolean) as string[];
         const counts = await getL1BeatActiveValidatorCounts(subnetIds);
         setValidatorCountBySubnet(counts);
@@ -122,6 +126,7 @@ export function Metrics() {
           tx: sortDesc(tx),
           maxTps: sortDesc(maxTps),
           validatorTotal: valTotal?.totalValidators ?? null,
+          chainCount: sortDesc(tps)[0]?.chainCount ?? null,
         };
 
         // Skip the state update (and the Chart.js re-render it triggers) when an
@@ -131,6 +136,7 @@ export function Metrics() {
         setHistory((prev) =>
           prev &&
           prev.validatorTotal === next.validatorTotal &&
+          prev.chainCount === next.chainCount &&
           sameSeries(prev.tps, next.tps) &&
           sameSeries(prev.tx, next.tx) &&
           sameSeries(prev.maxTps, next.maxTps)
@@ -159,25 +165,28 @@ export function Metrics() {
     const txPrev = prior(history.tx).reduce((s, d) => s + (d.value ?? 0), 0);
     const peakCurr = Math.max(0, ...history.maxTps.slice(0, days).map((d) => d.value ?? 0));
     const peakPrev = Math.max(0, ...prior(history.maxTps).map((d) => d.value ?? 0));
+    const coverage = history.chainCount
+      ? ` Covers the ${history.chainCount} chains with activity data; chains with no public RPC or metrics source aren't counted.`
+      : '';
 
     return [
       {
         label: `Avg network TPS, ${label}`,
         value: tpsCurr ? Math.round(tpsCurr).toLocaleString() : '—',
         delta: pctDelta(tpsCurr, tpsPrev),
-        tooltip: `Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.`,
+        tooltip: `Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.${coverage}`,
       },
       {
         label: `Transactions, ${label}`,
         value: txCurr ? formatCount(txCurr) : '—',
         delta: pctDelta(txCurr, txPrev),
-        tooltip: `Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.`,
+        tooltip: `Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.${coverage}`,
       },
       {
         label: `Peak TPS, ${label}`,
         value: peakCurr ? Math.round(peakCurr).toLocaleString() : '—',
         delta: pctDelta(peakCurr, peakPrev),
-        tooltip: `The highest single-day network TPS observed during the last ${label}.`,
+        tooltip: `The highest single-day network TPS observed during the last ${label}. Only chains in Avalanche’s metrics API are counted, so this covers fewer chains than the other figures.`,
       },
       {
         label: 'Validators',
@@ -226,6 +235,8 @@ export function Metrics() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const coveredChains = history?.chainCount ?? null;
+
   const scrollToCompare = () => scrollToSection('compare');
 
   const compareButton = (
@@ -264,6 +275,12 @@ export function Metrics() {
         <div className="md:hidden">
           <KpiStrip kpis={kpis} range={range} />
         </div>
+        {coveredChains != null && activeChains != null && coveredChains < activeChains && (
+          <p className="text-[11px] text-muted-foreground">
+            Network figures add up the {coveredChains} of {activeChains} active L1s with activity data. The rest have no
+            public RPC and aren't in Avalanche's metrics API, so they aren't counted.
+          </p>
+        )}
 
         <section id="chains" className="scroll-mt-16">
           <SectionErrorBoundary label="chain metrics">
