@@ -868,23 +868,23 @@ export interface DailyTxLatest {
   timestamp: number;
 }
 
-// Latest complete day's transaction count for every chain, keyed by every id a
-// chain might be looked up by. Empty when the backend doesn't serve it yet.
-export async function getAllChainsTxCountLatest(): Promise<Record<string, DailyTxLatest>> {
-  return fetchWithCache('tx-count-all-latest', async () => {
+// Latest complete day of one metric for every chain, keyed by every id a chain
+// might be looked up by. Empty when the backend doesn't serve it yet.
+async function getAllChainsLatest(path: string, field: string): Promise<Record<string, DailyTxLatest>> {
+  return fetchWithCache(`${field}-all-latest`, async () => {
     try {
-      const response = await fetchWithRetry<any>(`${API_URL}/tx-count/all/latest`);
+      const response = await fetchWithRetry<any>(`${API_URL}/${path}/all/latest`);
       const rows = Array.isArray(response?.data) ? response.data : [];
       const map: Record<string, DailyTxLatest> = {};
       for (const row of rows) {
-        const tx = row?.txCount;
-        const value = Number(tx?.value);
-        if (!tx || !Number.isFinite(value)) continue;
-        const previous = tx.previous == null ? null : Number(tx.previous);
+        const latest = row?.[field];
+        const value = Number(latest?.value);
+        if (!latest || !Number.isFinite(value)) continue;
+        const previous = latest.previous == null ? null : Number(latest.previous);
         const entry = {
           value,
           previous: Number.isFinite(previous) ? previous : null,
-          timestamp: Number(tx.timestamp) || 0,
+          timestamp: Number(latest.timestamp) || 0,
         };
         for (const k of [row.evmChainId, row.subnetId, row.chainId]) {
           if (k != null && String(k).trim()) map[String(k).trim()] = entry;
@@ -892,11 +892,14 @@ export async function getAllChainsTxCountLatest(): Promise<Record<string, DailyT
       }
       return map;
     } catch (error) {
-      console.error('All chains tx count latest fetch error:', error);
+      console.error(`All chains ${field} latest fetch error:`, error);
       return {};
     }
   }, 60 * 1000);
 }
+
+export const getAllChainsTxCountLatest = () => getAllChainsLatest('tx-count', 'txCount');
+export const getAllChainsActiveAddressesLatest = () => getAllChainsLatest('active-addresses', 'activeAddresses');
 
 export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPSHistory[]> {
   return fetchWithCache(`network-max-tps-history-${days}`, async () => {
@@ -1518,6 +1521,63 @@ export async function getDailyActiveAddresses(chainId: string, days: number = 30
       return [];
     }
   });
+}
+
+export type ChainMetric = 'txCount' | 'maxTps' | 'activeAddresses' | 'gasUsed' | 'feesPaid' | 'avgGasPrice';
+
+export interface ChainMetricsHistory {
+  txCount?: DailyTxCount[];
+  maxTps?: MaxTPSHistory[];
+  activeAddresses?: DailyActiveAddresses[];
+  gasUsed?: GasUsedHistory[];
+  feesPaid?: FeesPaidHistory[];
+  avgGasPrice?: AvgGasPriceHistory[];
+}
+
+const singleMetricHistory: Record<ChainMetric, (chainId: string, days: number) => Promise<unknown[]>> = {
+  txCount: getChainTxCountHistory,
+  maxTps: getChainMaxTPSHistory,
+  activeAddresses: getDailyActiveAddresses,
+  gasUsed: getChainGasUsedHistory,
+  feesPaid: getChainFeesPaidHistory,
+  avgGasPrice: getChainAvgGasPriceHistory,
+};
+
+// Several of a chain's daily series in one request. A backend without the
+// batch route (404) gets one request per series instead.
+export async function getChainMetricsHistory(chainId: string, days: number, metrics: ChainMetric[]): Promise<ChainMetricsHistory> {
+  const wanted = [...new Set(metrics)].sort();
+  if (wanted.length === 0) return {};
+  let missingRoute = false;
+  const batch = await fetchWithCache(`chain-metrics-history-${chainId}-${days}-${wanted.join(',')}`, async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: Record<string, any[]> }>(
+        `${API_URL}/chains/${chainId}/metrics/history?days=${days}&metrics=${wanted.join(',')}`);
+      if (!response.success || !response.data) throw new Error('Invalid chain metrics history data format');
+      const result: Record<string, unknown[]> = {};
+      for (const metric of wanted) {
+        const points = (Array.isArray(response.data[metric]) ? response.data[metric] : [])
+          .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+          .map(item => ({ timestamp: Number(item.timestamp), value: Number(item.value) }))
+          .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
+        result[metric] = metric === 'activeAddresses'
+          ? points.map(p => ({ timestamp: p.timestamp, activeAddresses: p.value, transactions: 0 }))
+          // Same C-Chain scaling as getChainAvgGasPriceHistory.
+          : metric === 'avgGasPrice' && chainId === '43114'
+            ? points.map(p => ({ ...p, value: p.value / 10 }))
+            : points;
+      }
+      return result as ChainMetricsHistory;
+    } catch (error) {
+      missingRoute = error instanceof ClientError && error.message.includes('status: 404');
+      if (!missingRoute) console.error('Chain metrics history fetch error:', error);
+      return null;
+    }
+  });
+  if (batch) return batch;
+  if (!missingRoute) return {};
+  const series = await Promise.all(wanted.map(m => singleMetricHistory[m](chainId, days).catch(() => [])));
+  return Object.fromEntries(wanted.map((m, i) => [m, series[i]]));
 }
 
 export async function getHealth(): Promise<HealthStatus> {

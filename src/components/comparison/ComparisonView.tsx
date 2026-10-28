@@ -7,7 +7,8 @@ import { ChainSelector } from './ChainSelector';
 import { ComparisonChart, ComparisonMetricType, formatValue } from './ComparisonChart';
 import { seriesColor } from './colors';
 import { SegmentedControl } from '../instrument';
-import { recentlyRateLimited, getDailyActiveAddresses, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainFeesPaidHistory, getChains, getL1BeatFeeMetrics } from '../../api';
+import { recentlyRateLimited, getChainMetricsHistory, getChains, getL1BeatFeeMetrics } from '../../api';
+import type { ChainMetric } from '../../api';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 interface ComparisonViewProps {
@@ -31,6 +32,16 @@ interface ChainComparisonData {
   loaded: ComparisonMetricType[];
   pending: ComparisonMetricType[];
 }
+
+// The backend's name for each series. Average gas price isn't compared, so it isn't fetched.
+const BACKEND_METRIC: Record<ComparisonMetricType, ChainMetric | null> = {
+  dailyActiveAddresses: 'activeAddresses',
+  dailyTxCount: 'txCount',
+  maxTPS: 'maxTps',
+  gasUsed: 'gasUsed',
+  avgGasPrice: null,
+  feesPaid: 'feesPaid',
+};
 
 // The table always shows these; the chart's series load on demand.
 const TABLE_METRICS: ComparisonMetricType[] = ['dailyTxCount', 'maxTPS'];
@@ -203,15 +214,6 @@ export const ComparisonView = memo(function ComparisonView({
   const fetchChainData = useCallback(async (chain: Chain, metrics: ComparisonMetricType[], withFees: boolean) => {
     const targetChainId = chain.chainId;
     const apiChainId = chain.originalChainId || chain.chainId;
-    const evmChainIdStr = chain.evmChainId ? String(chain.evmChainId) : apiChainId;
-    const fetchers: Record<ComparisonMetricType, () => Promise<unknown[]>> = {
-      dailyActiveAddresses: () => getDailyActiveAddresses(evmChainIdStr, timeframe),
-      dailyTxCount: () => getChainTxCountHistory(apiChainId, timeframe),
-      maxTPS: () => getChainMaxTPSHistory(apiChainId, timeframe),
-      gasUsed: () => getChainGasUsedHistory(apiChainId, timeframe),
-      avgGasPrice: () => Promise.resolve([]),
-      feesPaid: () => getChainFeesPaidHistory(apiChainId, timeframe),
-    };
     const update = (fn: (c: ChainComparisonData) => ChainComparisonData) =>
       setComparisonChains(prev => {
         const idx = prev.findIndex(c => c.chain.chainId === targetChainId);
@@ -223,7 +225,8 @@ export const ComparisonView = memo(function ComparisonView({
 
     update(c => ({ ...c, pending: [...new Set([...c.pending, ...metrics])] }));
     const [series, fees] = await Promise.all([
-      Promise.all(metrics.map(m => fetchers[m]().catch(() => []))),
+      getChainMetricsHistory(apiChainId, timeframe,
+        metrics.map(m => BACKEND_METRIC[m]).filter((m): m is ChainMetric => m !== null)).catch(() => ({})),
       withFees && chain.subnetId
         ? getL1BeatFeeMetrics(chain.subnetId).then(r => r[0] ?? null).catch(() => null)
         : Promise.resolve(undefined),
@@ -231,7 +234,10 @@ export const ComparisonView = memo(function ComparisonView({
     update(c => {
       const next: ChainComparisonData = { ...c };
       // Each fetcher returns its own metric's row type.
-      metrics.forEach((m, i) => { (next as unknown as Record<string, unknown[]>)[m] = series[i]; });
+      metrics.forEach(m => {
+        const key = BACKEND_METRIC[m];
+        (next as unknown as Record<string, unknown[]>)[m] = (key && (series as Record<string, unknown[]>)[key]) || [];
+      });
       if (fees !== undefined) next.feeMetrics = fees;
       next.loaded = [...new Set([...c.loaded, ...metrics])];
       next.pending = c.pending.filter(m => !metrics.includes(m));

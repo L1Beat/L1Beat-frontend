@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
-import { getAllChainsCumulativeTxCountLatest, getAllChainsTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
+import { getAllChainsActiveAddressesLatest, getAllChainsCumulativeTxCountLatest, getAllChainsTxCountLatest, getChains, getChainMetricsHistory } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
@@ -110,7 +110,7 @@ export function ChainSpecificMetrics() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
-  const [latestTxByChainId, setLatestTxByChainId] = useState<Record<string, number>>({});
+  const [ranking, setRanking] = useState<{ by: 'active addresses' | 'transactions'; latest: Record<string, number> }>({ by: 'active addresses', latest: {} });
   const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [copied, setCopied] = useState(false);
 
@@ -172,9 +172,9 @@ export function ChainSpecificMetrics() {
     });
   }, []);
 
-  // Ranked by the latest day's transactions, from one bulk request.
-  const topChainsByTx = useMemo(() => {
-    const getLatest = (c: Chain) => Number(latestTxByChainId[c.chainId] ?? 0);
+  // Ranked by the latest day's active addresses, from one bulk request.
+  const topChains = useMemo(() => {
+    const getLatest = (c: Chain) => Number(ranking.latest[c.chainId] ?? 0);
     const sorted = [...chains].sort((a, b) => {
       const aVal = getLatest(a);
       const bVal = getLatest(b);
@@ -185,7 +185,7 @@ export function ChainSpecificMetrics() {
     const top = sorted.slice(0, 6);
     if (selectedChain && !top.some(c => c.chainId === selectedChain.chainId)) top.push(selectedChain);
     return top;
-  }, [chains, selectedChain, latestTxByChainId]);
+  }, [chains, selectedChain, ranking]);
 
   // Load chains on mount
   useEffect(() => {
@@ -281,11 +281,7 @@ export function ChainSpecificMetrics() {
 
     let cancelled = false;
 
-    // One bulk request. Ranking by active addresses took a request per chain
-    // (25 on every visit) because the backend has no bulk endpoint for them.
-    async function run() {
-      const latest = await getAllChainsTxCountLatest();
-      if (cancelled) return;
+    const byChain = (latest: Record<string, { value: number }>) => {
       const results: Record<string, number> = {};
       for (const chain of chains) {
         const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
@@ -293,7 +289,20 @@ export function ChainSpecificMetrics() {
           .find(k => k && latest[k]);
         if (hit) results[chain.chainId] = latest[hit].value;
       }
-      setLatestTxByChainId(results);
+      return results;
+    };
+
+    // One bulk request. Daily transactions stand in when no chain has an
+    // active-address count yet.
+    async function run() {
+      const active = byChain(await getAllChainsActiveAddressesLatest());
+      if (cancelled) return;
+      if (Object.keys(active).length > 0) {
+        setRanking({ by: 'active addresses', latest: active });
+        return;
+      }
+      const tx = byChain(await getAllChainsTxCountLatest());
+      if (!cancelled) setRanking({ by: 'transactions', latest: tx });
     }
 
     run();
@@ -310,7 +319,6 @@ export function ChainSpecificMetrics() {
     async function fetchMetrics() {
       if (!selectedChain) return;
       const chainId = selectedChain.originalChainId || selectedChain.chainId;
-      const evmChainIdStr = selectedChain.evmChainId ? String(selectedChain.evmChainId) : chainId;
 
       // Each series drops today's unfinished day; ask for one more so the
       // window is full.
@@ -318,21 +326,8 @@ export function ChainSpecificMetrics() {
       const full = <T,>(xs: T[]) => xs.slice(-timeframe);
 
       try {
-        const [
-          activeAddresses,
-          dailyTxCount,
-          maxTPS,
-          gasUsed,
-          avgGasPrice,
-          feesPaid
-        ] = await Promise.all([
-          getDailyActiveAddresses(evmChainIdStr, fetchDays).catch(() => []),
-          getChainTxCountHistory(chainId, fetchDays).catch(() => []),
-          getChainMaxTPSHistory(chainId, fetchDays).catch(() => []),
-          getChainGasUsedHistory(chainId, fetchDays).catch(() => []),
-          getChainAvgGasPriceHistory(chainId, fetchDays).catch(() => []),
-          getChainFeesPaidHistory(chainId, fetchDays).catch(() => [])
-        ]);
+        const history = await getChainMetricsHistory(chainId, fetchDays,
+          ['activeAddresses', 'txCount', 'maxTps', 'gasUsed', 'avgGasPrice', 'feesPaid']);
 
         // Transform all data to MetricData format
         const transformData = (data: any[]): MetricData[] => {
@@ -346,12 +341,12 @@ export function ChainSpecificMetrics() {
         };
 
         const newMetricsData: Record<string, MetricData[]> = {
-          dailyActiveAddresses: full(transformData(activeAddresses)),
-          dailyTxCount: full(transformData(dailyTxCount)),
-          maxTPS: full(transformData(maxTPS)),
-          gasUsed: full(transformData(gasUsed)),
-          avgGasPrice: full(transformData(avgGasPrice)),
-          feesPaid: full(transformData(feesPaid)),
+          dailyActiveAddresses: full(transformData(history.activeAddresses ?? [])),
+          dailyTxCount: full(transformData(history.txCount ?? [])),
+          maxTPS: full(transformData(history.maxTps ?? [])),
+          gasUsed: full(transformData(history.gasUsed ?? [])),
+          avgGasPrice: full(transformData(history.avgGasPrice ?? [])),
+          feesPaid: full(transformData(history.feesPaid ?? [])),
         };
 
         setMetricsData(newMetricsData);
@@ -565,18 +560,18 @@ export function ChainSpecificMetrics() {
 
           {/* Second row: Top chains + timeframe */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Quick select: top chains by daily transactions */}
-            {topChainsByTx.length > 0 && (
+            {/* Quick select: top chains by the latest day */}
+            {topChains.length > 0 && (
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
                   <div className="text-xs font-medium text-muted-foreground">Top chains</div>
-                  <div className="text-[11px] text-muted-foreground">by daily transactions</div>
+                  <div className="text-[11px] text-muted-foreground">by daily {ranking.by}</div>
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                  {topChainsByTx.map((chain) => {
+                  {topChains.map((chain) => {
                     const isActive = selectedChain?.chainId === chain.chainId;
                     const logoSrc = chain.chainLogoUri || '/icon-dark-animated.svg';
-                    const latestDAA = Number(latestTxByChainId[chain.chainId] ?? 0);
+                    const latest = Number(ranking.latest[chain.chainId] ?? 0);
                     return (
                       <button
                         key={chain.chainId}
@@ -584,7 +579,7 @@ export function ChainSpecificMetrics() {
                           handleChainChange(chain);
                           setIsDropdownOpen(false);
                         }}
-                        title={`${chain.chainName}${Number.isFinite(latestDAA) && latestDAA > 0 ? ` • ${latestDAA.toLocaleString()} DAA` : ''}`}
+                        title={`${chain.chainName}${Number.isFinite(latest) && latest > 0 ? `: ${latest.toLocaleString()} ${ranking.by}` : ''}`}
                         className={[
                           'h-9 w-9 rounded border transition-colors flex items-center justify-center shrink-0',
                           'bg-background hover:bg-accent/50',
