@@ -1,13 +1,14 @@
 import { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Chain, DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory, L1BeatFeeMetrics } from '../../types';
-import { Info, Plus, X, Trash2, Share2, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { Plus, X, Share2, Check } from 'lucide-react';
 import { ChainSelector } from './ChainSelector';
-import { ComparisonChart, ComparisonMetricType } from './ComparisonChart';
+import { ComparisonChart, ComparisonMetricType, formatValue } from './ComparisonChart';
+import { seriesColor } from './colors';
+import { SegmentedControl } from '../instrument';
 import { getDailyActiveAddresses, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getChains, getL1BeatFeeMetrics } from '../../api';
 import { LoadingSpinner } from '../LoadingSpinner';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../branding/ui/tooltip';
 
 interface ComparisonViewProps {
   currentChain?: Chain;
@@ -27,19 +28,13 @@ interface ChainComparisonData {
   loading: boolean;
 }
 
-const CHAIN_COLORS = [
-  { border: 'border-indigo-500', bg: 'bg-indigo-500', bgFaint: 'bg-indigo-500/10', dot: 'bg-indigo-500', barTrack: 'bg-indigo-500/20', text: 'text-indigo-400' },
-  { border: 'border-emerald-500', bg: 'bg-emerald-500', bgFaint: 'bg-emerald-500/10', dot: 'bg-emerald-500', barTrack: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  { border: 'border-amber-500', bg: 'bg-amber-500', bgFaint: 'bg-amber-500/10', dot: 'bg-amber-500', barTrack: 'bg-amber-500/20', text: 'text-amber-400' },
-  { border: 'border-red-500', bg: 'bg-red-500', bgFaint: 'bg-red-500/10', dot: 'bg-red-500', barTrack: 'bg-red-500/20', text: 'text-red-400' },
-];
 
 const COMPARISON_METRICS: { id: ComparisonMetricType; name: string; shortName: string; valueLabel: string }[] = [
-  { id: 'dailyActiveAddresses', name: 'Daily Active Addresses', shortName: 'Active Addresses', valueLabel: 'addresses' },
+  { id: 'dailyActiveAddresses', name: 'Daily Active Addresses', shortName: 'Active addresses', valueLabel: 'addresses' },
   { id: 'dailyTxCount', name: 'Daily Transaction Count', shortName: 'Transactions', valueLabel: 'transactions' },
   { id: 'maxTPS', name: 'Daily Max TPS', shortName: 'Max TPS', valueLabel: 'TPS' },
-  { id: 'gasUsed', name: 'Daily Gas Used', shortName: 'Gas Used', valueLabel: 'gas' },
-  { id: 'feesPaid', name: 'Daily Fees Paid', shortName: 'Fees Paid', valueLabel: '' },
+  { id: 'gasUsed', name: 'Daily Gas Used', shortName: 'Gas used', valueLabel: 'gas' },
+  { id: 'feesPaid', name: 'Daily Fees Paid', shortName: 'Fees paid', valueLabel: '' },
 ];
 
 function formatCompact(value: number): string {
@@ -66,8 +61,8 @@ function getMetricSeries(data: ChainComparisonData, metric: ComparisonMetricType
   return points.map(v => Number(v) || 0);
 }
 
-function Sparkline({ values, colorClass }: { values: number[]; colorClass: string }) {
-  if (values.length < 2) return <div className="h-7" />;
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) return <span className="text-muted-foreground">—</span>;
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
@@ -83,15 +78,16 @@ function Sparkline({ values, colorClass }: { values: number[]; colorClass: strin
     <svg
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
-      className={`w-full h-7 ${colorClass}`}
+      className="w-full h-5 block"
+      style={{ color }}
       aria-hidden="true"
     >
-      <path d={areaPath} fill="currentColor" fillOpacity={0.15} />
+      <path d={areaPath} fill="currentColor" fillOpacity={0.1} />
       <polyline
         points={points}
         fill="none"
         stroke="currentColor"
-        strokeWidth={2}
+        strokeWidth={1.25}
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
@@ -324,411 +320,245 @@ export const ComparisonView = memo(function ComparisonView({
   }, [presets, comparisonChains]);
 
   const selectedChainIds = comparisonChains.map(c => c.chain.chainId);
-  const canAddMore = comparisonChains.length < 4;
-  const hasMultipleChains = comparisonChains.length >= 2;
 
   const currentMetricConfig = COMPARISON_METRICS.find(m => m.id === selectedMetric) || COMPARISON_METRICS[0];
 
   // Compute per-chain stats for cards
   const NAVAX_TO_AVAX = 1_000_000_000;
 
+  // null means the chain has no data for it, shown as '—' rather than 0.
   const chainStats = useMemo(() => {
-    const stats = comparisonChains.map(data => {
-      const maxTps = data.maxTPS.length > 0 ? data.maxTPS[data.maxTPS.length - 1].value : 0;
-      const validators = (data.chain.subnetId ? validatorCountBySubnet[data.chain.subnetId] : undefined) ?? data.chain.validatorCount ?? 0;
-      const dailyTx = data.dailyTxCount.length > 0 ? data.dailyTxCount[data.dailyTxCount.length - 1].value : 0;
-      const totalFeesPaid = data.feeMetrics ? data.feeMetrics.total_fees_paid / NAVAX_TO_AVAX : 0;
-      const totalDeposited = data.feeMetrics ? data.feeMetrics.total_deposited / NAVAX_TO_AVAX : 0;
-      const currentBalance = data.feeMetrics ? data.feeMetrics.current_balance / NAVAX_TO_AVAX : 0;
-      return { maxTps, validators, dailyTx, totalFeesPaid, totalDeposited, currentBalance, hasFeeData: !!data.feeMetrics, loading: data.loading };
-    });
-    const maxTps = Math.max(...stats.map(s => s.maxTps), 0);
-    const maxValidators = Math.max(...stats.map(s => s.validators), 0);
-    const maxDailyTx = Math.max(...stats.map(s => s.dailyTx), 0);
-    const maxFees = Math.max(...stats.map(s => s.totalFeesPaid), 0);
-
-    const minOf = (vals: number[]) => {
-      const nonZero = vals.filter(v => v > 0);
-      return nonZero.length > 0 ? Math.min(...nonZero) : 0;
-    };
-    const minTps = minOf(stats.map(s => s.maxTps));
-    const minValidators = minOf(stats.map(s => s.validators));
-    const minDailyTx = minOf(stats.map(s => s.dailyTx));
-    const minFees = minOf(stats.filter(s => s.hasFeeData).map(s => s.totalFeesPaid));
-    const canRank = stats.length >= 2;
-    const spreadTps = canRank && maxTps > minTps;
-    const spreadValidators = canRank && maxValidators > minValidators;
-    const spreadDailyTx = canRank && maxDailyTx > minDailyTx;
-    const spreadFees = canRank && maxFees > minFees && minFees > 0;
-
-    return stats.map(s => ({
-      ...s,
-      tpsPercent: maxTps > 0 ? (s.maxTps / maxTps) * 100 : 0,
-      isBestTps: s.maxTps === maxTps && maxTps > 0 && canRank,
-      isWorstTps: spreadTps && s.maxTps === minTps,
-      isBestValidators: s.validators === maxValidators && maxValidators > 0 && canRank,
-      isWorstValidators: spreadValidators && s.validators === minValidators,
-      isBestDailyTx: s.dailyTx === maxDailyTx && maxDailyTx > 0 && canRank,
-      isWorstDailyTx: spreadDailyTx && s.dailyTx === minDailyTx,
-      isMostFees: s.totalFeesPaid === maxFees && maxFees > 0 && canRank,
-      isLeastFees: spreadFees && s.hasFeeData && s.totalFeesPaid === minFees,
+    const last = <T extends { value: number }>(xs: T[]) => (xs.length > 0 ? xs[xs.length - 1].value : null);
+    return comparisonChains.map(data => ({
+      maxTps: last(data.maxTPS),
+      validators: (data.chain.subnetId ? validatorCountBySubnet[data.chain.subnetId] : undefined) ?? data.chain.validatorCount ?? null,
+      dailyTx: last(data.dailyTxCount),
+      feesBurned: data.feeMetrics ? data.feeMetrics.total_fees_paid / NAVAX_TO_AVAX : null,
+      loading: data.loading,
     }));
   }, [comparisonChains, validatorCountBySubnet]);
 
+  // The largest value in each column, set in a heavier weight when two or more chains are compared.
+  const leaders = useMemo(() => {
+    const top = (vals: (number | null)[]) => {
+      const nums = vals.filter((v): v is number => v != null && v > 0);
+      return comparisonChains.length >= 2 && nums.length >= 2 ? Math.max(...nums) : null;
+    };
+    return {
+      maxTps: top(chainStats.map(s => s.maxTps)),
+      validators: top(chainStats.map(s => s.validators)),
+      dailyTx: top(chainStats.map(s => s.dailyTx)),
+      feesBurned: top(chainStats.map(s => s.feesBurned)),
+    };
+  }, [chainStats, comparisonChains.length]);
+
   if (chainsLoading) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-md p-12 flex flex-col items-center justify-center">
+      <div className="rounded-md border border-border bg-card h-40 flex items-center justify-center">
         <LoadingSpinner size="lg" />
-        <p className="mt-4 text-muted-foreground">Loading chains...</p>
-      </motion.div>
+      </div>
     );
   }
 
+  const cell = (value: number | null, leader: number | null, fmt: (v: number) => string) =>
+    value == null ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      <span className={value === leader ? 'font-semibold text-foreground' : 'text-foreground'}>{fmt(value)}</span>
+    );
+  const slotsLeft = 4 - comparisonChains.length;
+  const metricLabel = currentMetricConfig.shortName.toLowerCase();
+
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-[15px] font-semibold text-foreground">Compare chains</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {comparisonChains.length === 0
-              ? 'Select up to 4 L1s to compare performance metrics'
-              : comparisonChains.length === 1
-              ? 'Add more chains to start comparing'
-              : `Comparing ${comparisonChains.length} chains`}
+          <p className="text-[12px] text-muted-foreground mt-0.5">
+            {comparisonChains.length < 2
+              ? 'Pick up to 4 L1s, or start from a preset.'
+              : `${comparisonChains.length} chains, ${timeframe} days`}
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <AnimatePresence>
-            {comparisonChains.length > 0 && (
-              <motion.button
-                initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
-                onClick={handleClearAll}
-                className="flex items-center gap-2 px-3.5 py-2 border border-border rounded text-sm font-medium text-muted-foreground hover:bg-muted transition-all"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Clear All
-              </motion.button>
-            )}
-          </AnimatePresence>
-          <motion.button
-            onClick={() => setIsModalOpen(!isModalOpen)}
-            disabled={!canAddMore}
-            whileHover={canAddMore ? { scale: 1.03 } : {}}
-            whileTap={canAddMore ? { scale: 0.97 } : {}}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-              canAddMore ? 'bg-foreground text-background hover:bg-foreground/90 hover:bg-foreground/90' : 'bg-muted text-muted-foreground cursor-not-allowed'
-            }`}
-          >
-            <Plus className="w-4 h-4" /> Add Chain
-          </motion.button>
-        </div>
-      </div>
-
-      {/* Quick-compare Presets */}
-      {presets.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-          <span className="shrink-0 text-[11px] text-muted-foreground mr-1">
-            Quick compare
-          </span>
-          {presets.map(p => {
-            const isActive = activePresetId === p.id;
-            return (
+        {presets.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            {presets.map(p => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => handleApplyPreset(p.chains)}
                 disabled={p.chains.length === 0}
-                className={`shrink-0 inline-flex items-center h-7 px-3 rounded-full text-[12px] font-semibold tracking-wide transition-colors ${
-                  isActive
-                    ? 'bg-foreground text-background'
-                    : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                aria-pressed={activePresetId === p.id}
+                className={`shrink-0 h-7 px-2.5 rounded border text-[12px] font-medium transition-colors disabled:opacity-50 ${
+                  activePresetId === p.id
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
               >
                 {p.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-md border border-border bg-card overflow-hidden">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-border text-[11px] text-muted-foreground">
+              <th className="text-left font-normal py-2 pl-4 pr-3">Chain</th>
+              <th className="hidden sm:table-cell text-right font-normal py-2 px-3">Max TPS</th>
+              <th className="hidden sm:table-cell text-right font-normal py-2 px-3">Validators</th>
+              <th className="text-right font-normal py-2 px-3">Txs, last day</th>
+              <th className="hidden md:table-cell text-right font-normal py-2 px-3" title="All-time validation fees paid to the P-Chain. Legacy subnets don't pay them.">Fees burned</th>
+              <th className="hidden lg:table-cell text-left font-normal py-2 px-3 w-[22%]">{currentMetricConfig.shortName}, {timeframe}d</th>
+              <th className="py-2 pr-3 w-8"><span className="sr-only">Remove</span></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {comparisonChains.map((data, index) => {
+              const color = seriesColor(index);
+              const st = chainStats[index];
+              const dim = hoveredChainId != null && hoveredChainId !== data.chain.chainId;
+              return (
+                <tr
+                  key={data.chain.chainId}
+                  onMouseEnter={() => setHoveredChainId(data.chain.chainId)}
+                  onMouseLeave={() => setHoveredChainId(null)}
+                  className={`h-10 transition-opacity ${dim ? 'opacity-50' : ''}`}
+                >
+                  <td className="pl-4 pr-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span aria-hidden className="w-[3px] h-4 rounded-sm shrink-0" style={{ background: color }} />
+                      {data.chain.chainLogoUri ? (
+                        <img src={data.chain.chainLogoUri} alt="" className="w-4 h-4 rounded-full object-cover bg-muted shrink-0" loading="lazy" />
+                      ) : (
+                        <span className="w-4 h-4 rounded-full bg-muted shrink-0" />
+                      )}
+                      <Link to={`/chain/${data.chain.chainId}`} className="truncate font-medium text-foreground hover:underline underline-offset-2">
+                        {data.chain.chainName}
+                      </Link>
+                    </div>
+                  </td>
+                  {st.loading ? (
+                    <td colSpan={5} className="px-3 text-right text-muted-foreground">Loading…</td>
+                  ) : (
+                    <>
+                      <td className="hidden sm:table-cell num px-3 text-right">{cell(st.maxTps, leaders.maxTps, v => v.toFixed(2))}</td>
+                      <td className="hidden sm:table-cell num px-3 text-right">{cell(st.validators, leaders.validators, v => v.toLocaleString())}</td>
+                      <td className="num px-3 text-right">{cell(st.dailyTx, leaders.dailyTx, formatCompact)}</td>
+                      <td className="hidden md:table-cell num px-3 text-right">
+                        {cell(st.feesBurned, leaders.feesBurned, v => `${formatCompact(v)} AVAX`)}
+                      </td>
+                      <td className="hidden lg:table-cell px-3">
+                        <Sparkline values={getMetricSeries(data, selectedMetric)} color={color} />
+                      </td>
+                    </>
+                  )}
+                  <td className="pr-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveChain(data.chain.chainId)}
+                      aria-label={`Remove ${data.chain.chainName}`}
+                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {slotsLeft > 0 && (
+              <tr className="h-10">
+                <td colSpan={7} className="px-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add chain
+                    <span className="font-normal">({slotsLeft} of 4 open)</span>
+                  </button>
+                  {comparisonChains.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      className="ml-4 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {comparisonChains.length > 0 && (
+        <div className="rounded-md border border-border bg-card overflow-hidden">
+          <div className="flex flex-col gap-2 px-4 py-3 border-b border-border lg:flex-row lg:items-center lg:justify-between">
+            <div className="overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 shrink-0 max-w-full">
+              <SegmentedControl
+                value={selectedMetric}
+                options={COMPARISON_METRICS.map(m => ({ value: m.id, label: m.shortName }))}
+                onChange={handleMetricChange}
+                ariaLabel="Metric"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <SegmentedControl
+                value={viewMode}
+                options={[{ value: 'absolute', label: 'Values' }, { value: 'normalized', label: 'Shape' }] as const}
+                onChange={setViewMode}
+                ariaLabel="Scale"
+              />
+              <SegmentedControl
+                value={String(timeframe) as '7' | '30'}
+                options={[{ value: '7', label: '7D' }, { value: '30', label: '30D' }] as const}
+                onChange={v => handleTimeframeChange(Number(v) as 7 | 30)}
+                ariaLabel="Range"
+              />
+              <button
+                type="button"
+                onClick={handleCopyShareUrl}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded border border-border text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                {copied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
+                {copied ? 'Link copied' : 'Share'}
+              </button>
+            </div>
+          </div>
+          <div className="px-2 pt-3 sm:px-4">
+            <ComparisonChart
+              comparisonChains={comparisonChains}
+              metricType={selectedMetric}
+              valueLabel={currentMetricConfig.valueLabel}
+              hoveredChainId={hoveredChainId}
+              onHoverChain={setHoveredChainId}
+              viewMode={viewMode}
+            />
+          </div>
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 px-4 py-3 text-[11px]">
+            <div className="text-muted-foreground">
+              {viewMode === 'normalized' ? `Latest ${metricLabel}; each line is scaled to its own range` : `Latest ${metricLabel}`}
+            </div>
+            {comparisonChains.map((data, index) => {
+              const series = getMetricSeries(data, selectedMetric);
+              const latest = series.length > 0 ? series[series.length - 1] : null;
+              return (
+                <div key={data.chain.chainId} className="flex items-center gap-1.5">
+                  <span aria-hidden className="w-2 h-2 rounded-sm" style={{ background: seriesColor(index) }} />
+                  <dt className="text-muted-foreground">{data.chain.chainName}</dt>
+                  <dd className="num text-foreground">{latest == null ? '—' : formatValue(latest, selectedMetric)}</dd>
+                </div>
+              );
+            })}
+          </dl>
         </div>
       )}
 
-      {/* Chain Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <AnimatePresence mode="popLayout">
-          {comparisonChains.map((data, index) => {
-            const color = CHAIN_COLORS[index % CHAIN_COLORS.length];
-            const stats = chainStats[index];
-            return (
-              <motion.div
-                key={data.chain.chainId}
-                layout
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{
-                  scale: 1,
-                  opacity: hoveredChainId != null && hoveredChainId !== data.chain.chainId ? 0.45 : 1,
-                }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 28, delay: index * 0.05 }}
-                onMouseEnter={() => setHoveredChainId(data.chain.chainId)}
-                onMouseLeave={() => setHoveredChainId(null)}
-                className={`bg-card rounded-md border ${color.border} p-4 flex flex-col gap-3.5 transition-shadow ${
-                  hoveredChainId === data.chain.chainId ? 'shadow-lg shadow-black/30' : ''
-                }`}
-              >
-                {/* Card Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {data.chain.chainLogoUri ? (
-                      <img
-                        src={data.chain.chainLogoUri}
-                        alt=""
-                        className={`w-6 h-6 rounded-full object-cover bg-muted ring-2 ${color.border} shrink-0`}
-                        loading="lazy"
-                        onError={(e) => {
-                          const img = e.currentTarget;
-                          const fallback = img.nextElementSibling as HTMLElement | null;
-                          img.style.display = 'none';
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={`w-6 h-6 rounded-full ${color.bgFaint} ring-2 ${color.border} items-center justify-center shrink-0 ${data.chain.chainLogoUri ? 'hidden' : 'flex'}`}
-                    >
-                      <span className={`text-[10px] font-bold ${color.text}`}>
-                        {data.chain.chainName.slice(0, 1).toUpperCase()}
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground truncate">{data.chain.chainName}</span>
-                  </div>
-                  <motion.button
-                    onClick={() => handleRemoveChain(data.chain.chainId)}
-                    whileHover={{ scale: 1.2, rotate: 90 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
-                  >
-                    <X className="w-3.5 h-3.5 text-muted-foreground" />
-                  </motion.button>
-                </div>
-
-                {/* Stats */}
-                {stats?.loading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Max TPS</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestTps ? 'text-up' : stats?.isWorstTps ? 'text-red-500' : 'text-foreground'}`}>
-                        {stats ? (stats.maxTps < 1 && stats.maxTps > 0 ? '< 1.0' : stats.maxTps.toFixed(2)) : '–'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Validators</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestValidators ? 'text-up' : stats?.isWorstValidators ? 'text-red-500' : 'text-foreground'}`}>
-                        {stats?.validators.toLocaleString() ?? '–'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Daily Tx</span>
-                      <span className={`text-xs font-semibold ${stats?.isBestDailyTx ? 'text-up' : stats?.isWorstDailyTx ? 'text-red-500' : 'text-foreground'}`}>
-                        {stats ? formatCompact(stats.dailyTx) : '–'}
-                      </span>
-                    </div>
-                    <div className="border-t border-border/50 my-1" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Fees Burned 🔥</span>
-                      {stats?.hasFeeData ? (
-                        <span className={`text-xs font-semibold ${stats.isMostFees ? 'text-red-500' : 'text-foreground'}`}>
-                          {formatCompact(stats.totalFeesPaid)} AVAX
-                        </span>
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Why no fee data?"
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <span>—</span>
-                              <Info className="w-3 h-3" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="top"
-                            align="end"
-                            className="max-w-[260px] bg-popover border border-border text-foreground text-[11px] leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
-                          >
-                            This chain is a legacy subnet, not a converted L1. It doesn’t pay continuous validation fees to the P-Chain, so no fee burn is reported. Only chains converted via ACP-77 report this metric.
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sparkline of selected metric */}
-                <div className="-mx-1">
-                  {stats?.loading ? (
-                    <div className={`h-7 w-full rounded ${color.bgFaint} animate-pulse`} />
-                  ) : (
-                    <Sparkline
-                      values={getMetricSeries(data, selectedMetric)}
-                      colorClass={color.text}
-                    />
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-
-        {/* Add Chain Placeholder Card(s) — fill remaining slots up to 4 */}
-        {Array.from({ length: Math.max(0, 4 - comparisonChains.length) }).map((_, i) => {
-          const slotNumber = comparisonChains.length + i + 1;
-          const isPrimary = i === 0;
-          return (
-            <motion.button
-              key={`placeholder-${slotNumber}`}
-              onClick={() => setIsModalOpen(true)}
-              whileHover={{ scale: 1.02, borderColor: 'rgba(113,113,122,0.5)' }}
-              whileTap={{ scale: 0.98 }}
-              className={`relative rounded-md border border-dashed p-4 flex flex-col items-center justify-center gap-2 min-h-[140px] transition-all cursor-pointer ${
-                isPrimary
-                  ? 'border-border hover:bg-muted/30'
-                  : 'border-border/50 hover:bg-muted/20'
-              }`}
-            >
-              <span className="absolute top-3 right-3 text-[10px] font-semibold tracking-wider text-muted-foreground/60">
-                {slotNumber}
-              </span>
-              <div
-                className={`w-8 h-8 rounded-full border flex items-center justify-center ${
-                  isPrimary ? 'border-border' : 'border-border/60'
-                }`}
-              >
-                <Plus className={`w-4 h-4 ${isPrimary ? 'text-muted-foreground' : 'text-muted-foreground/60'}`} />
-              </div>
-              <span
-                className={`text-xs font-medium ${
-                  isPrimary ? 'text-muted-foreground' : 'text-muted-foreground/60'
-                }`}
-              >
-                {isPrimary
-                  ? comparisonChains.length === 0
-                    ? 'Select a chain'
-                    : 'Add chain'
-                  : 'Empty slot'}
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
-
-      {/* Chart Section */}
-      <AnimatePresence mode="wait">
-        {hasMultipleChains ? (
-          <motion.div
-            key="chart-section"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.35 }}
-            className="bg-card border border-border rounded-md overflow-hidden"
-          >
-            {/* Chart Controls Bar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-5 py-3 border-b border-border">
-              <div className="flex flex-wrap gap-1 p-1 bg-muted/50 rounded">
-                {COMPARISON_METRICS.map(metric => (
-                  <button
-                    key={metric.id}
-                    onClick={() => handleMetricChange(metric.id)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      selectedMetric === metric.id
-                        ? 'bg-foreground text-background hover:bg-foreground/90'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {metric.shortName}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1 p-1 bg-muted/50 rounded">
-                  {(['absolute', 'normalized'] as const).map(mode => (
-                    <button
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
-                      title={mode === 'normalized' ? 'Scale each chain to its own 0–100% range to compare shape, not magnitude' : 'Show raw values'}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${
-                        viewMode === mode
-                          ? 'bg-secondary text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {mode === 'absolute' ? 'Abs' : 'Norm'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1 p-1 bg-muted/50 rounded">
-                  {([7, 30] as const).map(days => (
-                    <button
-                      key={days}
-                      onClick={() => handleTimeframeChange(days)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                        timeframe === days
-                          ? 'bg-secondary text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {days}D
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={handleCopyShareUrl}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                >
-                  <Share2 className="w-3 h-3" />
-                  {copied ? 'Copied!' : 'Share'}
-                </button>
-              </div>
-            </div>
-
-            {/* Chart */}
-            <div className="p-4">
-              <ComparisonChart
-                comparisonChains={comparisonChains}
-                metricType={selectedMetric}
-                title={currentMetricConfig.name}
-                valueLabel={currentMetricConfig.valueLabel}
-                hoveredChainId={hoveredChainId}
-                onHoverChain={setHoveredChainId}
-                viewMode={viewMode}
-              />
-            </div>
-          </motion.div>
-        ) : comparisonChains.length > 0 ? (
-          <motion.div
-            key="empty-state"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-card border border-border rounded-md p-10 text-center"
-          >
-            <p className="text-muted-foreground text-sm">Add at least one more chain to see the comparison chart</p>
-            <motion.button
-              onClick={() => setIsModalOpen(true)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-all"
-            >
-              <Plus className="w-4 h-4" /> Add Another Chain
-            </motion.button>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      {/* Chain Selector Modal */}
       <ChainSelector
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
