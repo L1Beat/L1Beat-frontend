@@ -19,13 +19,12 @@ import {
   List,
   Copy,
   Check,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
   RefreshCw,
   Info
 } from 'lucide-react';
 import { acpService } from '../services/acpService';
+import { AcpStatus } from '../components/acp/AcpStatus';
 import type { Author, EnhancedACP } from '../types';
 
 // Lazy-load mermaid (and its diagram renderers + cytoscape) only when an ACP
@@ -392,46 +391,7 @@ export default function ACPDetails() {
     );
   };
 
-  const getCleanStatus = (status: string) => {
-    if (!status) return 'Unknown';
-    const match = status.match(/^[a-zA-Z]+/);
-    return match ? match[0] : 'Unknown';
-  };
 
-  const getStatusIcon = (status: string) => {
-      const cleanStatus = getCleanStatus(status); // Add this line
-      switch (cleanStatus?.toLowerCase()) {
-      case 'activated':
-      case 'final':
-        return <CheckCircle className="w-5 h-5 text-up" />;
-      case 'draft':
-      case 'review':
-        return <Clock className="w-5 h-5 text-yellow-500" />;
-      case 'stagnant':
-      case 'withdrawn':
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <AlertTriangle className="w-5 h-5 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-      const cleanStatus = getCleanStatus(status);
-    switch (cleanStatus?.toLowerCase()) {
-      case 'activated':
-      case 'final':
-        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30';
-      case 'draft':
-        return 'bg-accent text-foreground border-brand/20 dark:bg-brand/20 dark:text-brand dark:border-brand/30';
-      case 'review':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-500/30';
-      case 'stagnant':
-      case 'withdrawn':
-        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30';
-      default:
-        return 'bg-muted text-muted-foreground border-border border';
-    }
-  };
 
   if (loading) {
     return (
@@ -473,7 +433,7 @@ export default function ACPDetails() {
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand hover:bg-foreground/90"
+                className="inline-flex items-center h-8 px-3 rounded bg-foreground text-background hover:bg-foreground/90 text-[13px] font-medium"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -516,10 +476,7 @@ export default function ACPDetails() {
                     <span className="num text-[13px] text-muted-foreground">
                       ACP-{acp.number}
                     </span>
-                    <span className={`px-2 h-6 rounded text-[11px] font-medium flex items-center gap-1.5 ${getStatusColor(acp.status)}`}>
-                      {getStatusIcon(acp.status)}
-                      {acp.status}
-                    </span>
+                    <AcpStatus status={acp.status} className="text-[12px] text-foreground" />
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -629,7 +586,7 @@ export default function ACPDetails() {
     a: ({ children, ...props }) => (
       <a
         {...props}
-        className="text-brand hover:text-foreground-hover underline underline-offset-4 decoration-brand/30"
+        className="text-foreground underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -691,7 +648,7 @@ export default function ACPDetails() {
     blockquote: ({ children, ...props }) => (
       <blockquote
         {...props}
-        className="my-6 rounded-r border-l-4 border-brand/30 bg-brand/5 px-4 py-3 text-muted-foreground"
+        className="my-6 border-l-2 border-border pl-4 py-1 text-muted-foreground"
       >
         {children}
       </blockquote>
@@ -747,10 +704,10 @@ export default function ACPDetails() {
       if (text.startsWith(':::note')) {
         const noteContent = text.replace(/^:::note\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 rounded overflow-hidden border-l-4 border-brand bg-brand/5 dark:bg-brand/10">
+          <div className="my-6 rounded-md border border-border bg-muted/40">
             <div className="p-4">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-5 h-5 text-brand mt-0.5">
+                <div className="flex-shrink-0 w-5 h-5 text-muted-foreground mt-0.5">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="flex-1 text-sm leading-relaxed text-muted-foreground">
@@ -846,7 +803,7 @@ function ACPSideRail({
                   {title}
                 </a>
                 {active && (
-                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-brand" />
+                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-foreground" />
                 )}
               </li>
             );

@@ -68,13 +68,8 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     if (!isCoreInstalled()) {
       return (
         <>
-          <motion.div
-            whileHover={{ rotate: 15 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
-            <ExternalLink className="w-4 h-4" />
-          </motion.div>
-          {variant === 'compact' ? 'CORE' : 'Install CORE'}
+          <ExternalLink className="w-4 h-4" />
+          {variant === 'compact' ? 'Get Core' : 'Install Core'}
         </>
       );
     }
@@ -120,12 +115,7 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       default:
         return (
           <>
-            <motion.div
-              whileHover={{ y: -1 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <Wallet className="w-4 h-4" />
-            </motion.div>
+            <Wallet className="w-4 h-4" />
             {variant === 'compact' ? 'Add' : 'Add to Wallet'}
           </>
         );
@@ -160,33 +150,21 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
 
   return (
     <div className={`relative ${className}`}>
-      <motion.button
+      <button
+        type="button"
         onClick={handleAddToWallet}
         disabled={status === 'adding' || status === 'success'}
         className={getButtonStyles()}
         title={
           !isCoreInstalled()
-            ? "Install CORE wallet to add this network"
+            ? "Install the Core wallet to add this network"
             : `Add ${chain.chainName} network to wallet`
         }
-        whileHover={{
-          scale: status === 'adding' || status === 'success' ? 1 : 1.02,
-          y: status === 'adding' || status === 'success' ? 0 : -1,
-          transition: { duration: 0.2, ease: "easeOut" }
-        }}
-        whileTap={{
-          scale: status === 'adding' || status === 'success' ? 1 : 0.98,
-          transition: { duration: 0.1, ease: "easeOut" }
-        }}
-        animate={{
-          scale: status === 'success' ? [1, 1.05, 1] : 1,
-          transition: status === 'success' ? { duration: 0.6, ease: "easeOut" } : { duration: 0.2 }
-        }}
       >
         <div className="flex items-center gap-2">
           {getButtonContent()}
         </div>
-      </motion.button>
+      </button>
       
       {/* Error tooltip */}
       <AnimatePresence>

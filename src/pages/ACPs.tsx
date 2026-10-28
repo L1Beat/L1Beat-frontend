@@ -8,6 +8,7 @@ import { RefreshCw, Search, X } from 'lucide-react';
 import { acpService } from '../services/acpService';
 import type { EnhancedACP, ACPStats } from '../types';
 import EnhancedACPCard from '../components/ACPCard';
+import { AcpStatus, ComplexityDots } from '../components/acp/AcpStatus';
 
 
 type ViewMode = 'list' | 'grid';
@@ -22,28 +23,7 @@ const MAIN_STATUSES = new Set(['Proposed', 'Implementable', 'Activated']);
 const TRACKS = ['Standards Track', 'Best Practices Track', 'Meta Track', 'Subnet Track'];
 const COMPLEXITIES = ['Low', 'Medium', 'High', 'Very High'];
 
-const statusDot: Record<string, string> = {
-  Activated: 'bg-up',
-  Active: 'bg-up',
-  Implementable: 'bg-[#3987e5]',
-  Proposed: 'bg-[#d4a017]',
-  Review: 'bg-[#d4a017]',
-  Draft: 'bg-muted-foreground/60',
-  Stale: 'bg-muted-foreground/40',
-  Withdrawn: 'bg-muted-foreground/40',
-  Rejected: 'bg-muted-foreground/40',
-};
 
-function complexityDots(level?: string) {
-  const n = level === 'Very High' ? 4 : level === 'High' ? 3 : level === 'Medium' ? 2 : level === 'Low' ? 1 : 0;
-  return (
-    <span className="inline-flex items-center gap-0.5" title={level ? `${level} complexity` : 'Unknown complexity'} aria-label={level ? `${level} complexity` : undefined}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <span key={i} aria-hidden className={`w-1.5 h-1.5 rounded-full ${i < n ? 'bg-foreground/70' : 'bg-muted'}`} />
-      ))}
-    </span>
-  );
-}
 
 type SortOption = 'number' | 'title' | 'status' | 'track';
 type SortOrder = 'asc' | 'desc';
@@ -470,7 +450,6 @@ export default function ACPs() {
                   </thead>
                   <tbody>
                     {filteredAndSortedACPs.map((acp) => {
-                      const clean = getCleanStatus(acp.status);
                       const authors = acp.authors?.map((a) => a.name).filter(Boolean) ?? [];
                       return (
                         <tr
@@ -483,13 +462,10 @@ export default function ACPs() {
                             <span className="text-[12.5px] font-medium text-foreground line-clamp-1">{acp.title}</span>
                           </td>
                           <td>
-                            <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                              <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${statusDot[clean] ?? 'bg-muted-foreground/40'}`} />
-                              {clean}
-                            </span>
+                            <AcpStatus status={acp.status} />
                           </td>
                           <td className="text-[11px] text-muted-foreground hidden lg:table-cell">{(acp.track || '').replace(' Track', '') || '—'}</td>
-                          <td className="hidden md:table-cell">{complexityDots(acp.complexity)}</td>
+                          <td className="hidden md:table-cell"><ComplexityDots level={acp.complexity} /></td>
                           <td className="text-[11px] text-muted-foreground hidden xl:table-cell">
                             <span className="line-clamp-1">
                               {authors.length === 0 ? '—' : authors.length <= 2 ? authors.join(', ') : `${authors[0]}, ${authors[1]} +${authors.length - 2}`}
@@ -507,7 +483,7 @@ export default function ACPs() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
                 {filteredAndSortedACPs.map((acp) => (
-                  <EnhancedACPCard key={acp.number} acp={acp} viewMode="grid" onClick={(a) => navigate(`/acps/${a.number}`)} />
+                  <EnhancedACPCard key={acp.number} acp={acp} onClick={(a) => navigate(`/acps/${a.number}`)} />
                 ))}
               </div>
             )}

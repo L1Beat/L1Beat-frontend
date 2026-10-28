@@ -1,205 +1,52 @@
 import ReactMarkdown from 'react-markdown';
-import { motion } from 'framer-motion';
-import {
-  Users,
-  ArrowRight,
-  BookOpen,
-  type LucideIcon,
-} from 'lucide-react';
+import { Users, BookOpen } from 'lucide-react';
 import type { EnhancedACP } from '../types';
+import { AcpStatus, ComplexityDots } from './acp/AcpStatus';
 
 interface EnhancedACPCardProps {
   acp: EnhancedACP;
-  viewMode?: 'grid' | 'list';
   onClick: (acp: EnhancedACP) => void;
 }
 
-const EnhancedACPCard = ({ acp, viewMode = 'grid', onClick }: EnhancedACPCardProps) => {
-
-  const getStatusColor = (status: string) => {
-    const cleanStatus = status?.toLowerCase() || '';
-    
-    switch (cleanStatus) {
-      case 'final':
-      case 'active':
-      case 'activated':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-      case 'draft':
-      case 'proposed':
-        return 'bg-muted text-foreground';
-      case 'review':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
-      case 'withdrawn':
-      case 'rejected':
-      case 'stagnant':
-      case 'stale':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      default:
-        // Avoid bg-muted/xx opacity: CSS vars are not RGB, can break in dark mode.
-        return 'bg-muted text-muted-foreground border border-border';
-    }
-  };
-
-  const getComplexityIndicator = (complexity?: string) => {
-    const levels = {
-      'Low': { bars: 1, color: 'bg-green-500' },
-      'Medium': { bars: 2, color: 'bg-yellow-500' },
-      'High': { bars: 3, color: 'bg-orange-500' },
-      'Very High': { bars: 4, color: 'bg-red-500' },
-    };
-    const config = levels[complexity as keyof typeof levels] || levels['Medium'];
-
-    return (
-      <div className="flex items-center gap-1" title={`Complexity: ${complexity}`}>
-        <span className="text-xs text-muted-foreground">Complexity:</span>
-        <div className="flex gap-0.5 items-center">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 w-1.5 rounded-full ${
-                i < config.bars ? config.color : 'bg-muted'
-              }`}
-            />
-          ))}
-        </div>
+const EnhancedACPCard = ({ acp, onClick }: EnhancedACPCardProps) => (
+  <div
+    role="link"
+    tabIndex={0}
+    onClick={() => onClick(acp)}
+    onKeyDown={(e) => { if (e.key === 'Enter') onClick(acp); }}
+    className="cursor-pointer h-full w-full text-left flex flex-col rounded-md border border-border bg-card p-5 transition-colors hover:border-foreground/25 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30"
+  >
+    <div className="flex-1">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <span className="num text-[13px] text-muted-foreground">ACP-{acp.number}</span>
+        <AcpStatus status={acp.status} />
       </div>
-    );
-  };
-
-  interface MetadataItemProps {
-    icon: LucideIcon;
-    label: string;
-    value?: string | number;
-    colorClass?: string;
-  }
-
-  const MetadataItem = ({ icon: Icon, label, value, colorClass = '' }: MetadataItemProps) => (
-    <div className={`flex items-center gap-1.5 text-muted-foreground ${colorClass}`}>
-      <Icon className="w-4 h-4" />
-      <span className="text-xs font-medium">{label}</span>
-      {value && <span className="text-xs font-semibold text-foreground">{value}</span>}
+      <h3 className="text-[16px] font-semibold text-foreground mb-2 leading-snug">
+        <ReactMarkdown disallowedElements={['p', 'a']} unwrapDisallowed>{acp.title}</ReactMarkdown>
+      </h3>
+      <div className="text-[13px] text-muted-foreground mb-4 line-clamp-4 leading-relaxed">
+        {/* The whole card is the link, so links in the abstract are unwrapped. */}
+        <ReactMarkdown disallowedElements={['a']} unwrapDisallowed>{acp.abstract}</ReactMarkdown>
+      </div>
     </div>
-  );
 
-
-  if (viewMode === 'list') {
-    return (
-      <motion.div
-        onClick={() => onClick(acp)}
-        className="bg-card rounded-md border border-border p-4 cursor-pointer group"
-        whileHover={{
-          boxShadow: "0 10px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
-          borderColor: "rgb(232, 65, 66)",
-          y: -2
-        }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-      >
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-2">
-              <span className="num text-[15px] font-medium text-foreground">
-                ACP-{acp.number}
-              </span>
-              <motion.h3
-                className="text-base font-semibold text-foreground"
-                whileHover={{}}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <ReactMarkdown>{acp.title}</ReactMarkdown>
-              </motion.h3>
-            </div>
-            <div className="text-sm text-muted-foreground line-clamp-2">
-              <ReactMarkdown>{acp.abstract}</ReactMarkdown>
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-4">
-                <MetadataItem icon={Users} label={`${acp.authors?.length || 0} authors`} />
-                <MetadataItem icon={BookOpen} label={`${acp.readingTime} min read`} />
-                
-              </div>
-              <div className="flex items-center gap-4">
-                <span className={`px-2 py-1 rounded-md text-xs font-medium ${getStatusColor(acp.status)}`}>
-                {acp.status}
-                </span>
-                {getComplexityIndicator(acp.complexity)}
-              </div>
-            </div>
-            <motion.div
-              whileHover={{ x: 4 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <ArrowRight className="w-6 h-6 text-muted-foreground" />
-            </motion.div>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      onClick={() => onClick(acp)}
-      className="bg-card rounded-md border border-border p-5 cursor-pointer group h-full flex flex-col"
-      whileHover={{
-        boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04)",
-        borderColor: "#e84142",
-        y: -4,
-        scale: 1.02
-      }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-    >
-      <div className="flex-1">
-        <div className="flex items-start justify-between mb-3">
-          <span className="num text-[17px] font-medium text-foreground">
-            ACP-{acp.number}
-          </span>
-          <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(acp.status)}`}>
-          {acp.status}
-          </span>
-        </div>
-
-        <motion.h3
-          className="text-lg font-semibold text-foreground mb-2 leading-tight"
-          whileHover={{}}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-        >
-          <ReactMarkdown>{acp.title}</ReactMarkdown>
-        </motion.h3>
-
-        <div className="text-sm text-muted-foreground mb-4 line-clamp-4 leading-relaxed">
-          <ReactMarkdown>{acp.abstract}</ReactMarkdown>
-        </div>
+    <div className="pt-3 border-t border-border space-y-2.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5">
+          <Users className="w-3.5 h-3.5" />
+          {acp.authors?.length || 0} {acp.authors?.length === 1 ? 'author' : 'authors'}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <BookOpen className="w-3.5 h-3.5" />
+          {acp.readingTime} min read
+        </span>
       </div>
-
-      <div className="pt-4 border-t border-border">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Users className="w-4 h-4" />
-            <span className="text-xs font-medium">{acp.authors?.length || 0} authors</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <BookOpen className="w-4 h-4" />
-            <span className="text-xs font-medium">{acp.readingTime} min read</span>
-          </div>
-          
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
-              {acp.track}
-            </span>
-            <span className="px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
-              {acp.category}
-            </span>
-          </div>
-          {getComplexityIndicator(acp.complexity)}
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="truncate">{[(acp.track || '').replace(' Track', ''), acp.category].filter(Boolean).join(', ')}</span>
+        <ComplexityDots level={acp.complexity} />
       </div>
-    </motion.div>
-  );
-};
+    </div>
+  </div>
+);
 
 export default EnhancedACPCard;

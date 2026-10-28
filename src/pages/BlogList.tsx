@@ -132,7 +132,8 @@ export function BlogList() {
         )}
       </header>
 
-      {/* Toolbar: topic tabs. Full-text search lives in the global ⌘K palette. */}
+      {/* Toolbar: topic tabs, only once posts carry tags. Full-text search lives in the global ⌘K palette. */}
+      {tags.length > 0 && (
       <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 py-2">
         <nav className="flex items-center gap-0.5 -ml-2.5 overflow-x-auto no-scrollbar" aria-label="Topics">
           <TopicTab label="All" count={posts.length} active={!selectedTag} onClick={() => handleTagFilter(null)} />
@@ -141,6 +142,7 @@ export function BlogList() {
           ))}
         </nav>
       </div>
+      )}
 
       {error && (
         <div className="border-y border-border py-3 flex items-center gap-3 text-[12px]">

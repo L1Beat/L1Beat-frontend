@@ -13,7 +13,7 @@ const markdownComponents = {
     <a
       {...props}
       className={[
-        'text-brand underline underline-offset-4 decoration-brand/30 hover:text-foreground-hover transition-colors',
+        'text-foreground underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground transition-colors',
         className
       ]
         .filter(Boolean)
@@ -267,10 +267,9 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({ blocks }) => {
         return (
           <blockquote 
             key={index}
-            className="border-l-4 border-brand/30 bg-brand/5 pl-8 py-6 my-8 rounded-r relative"
+            className="border-l-2 border-border pl-5 py-1 my-8"
           >
-            <div className="absolute top-4 left-2 text-brand/40 text-4xl font-serif">"</div>
-            <div className="italic text-lg leading-relaxed text-muted-foreground">
+            <div className="text-lg leading-relaxed text-muted-foreground">
               <ReactMarkdown components={markdownComponents as any}>{block.content}</ReactMarkdown>
             </div>
           </blockquote>

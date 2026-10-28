@@ -31,7 +31,6 @@ import {
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import type { DailyTxLatest } from '../api';
-import { FilterModal } from '../components/FilterModal';
 
 type Range = '24H' | '7D' | '30D' | 'ALL';
 type HeroView = 'map' | 'flows';
@@ -244,7 +243,6 @@ export function Dashboard() {
     () => searchParams.get('category') || readSession('dashboardCategory') || '',
   );
   const [categories, setCategories] = useState<string[]>([]);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [validatorFilter, setValidatorFilter] = useState<ScreenerTab>(
     () =>
       pickEnum<ScreenerTab>(
@@ -766,19 +764,6 @@ export function Dashboard() {
           />
         )}
       </section>
-
-      <FilterModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-        categories={categories}
-        // The modal only offers active/all/inactive; when the tab is 'watchlist'
-        // it simply renders with nothing selected. Narrow cast preserves that.
-        validatorFilter={validatorFilter as 'active' | 'all' | 'inactive'}
-        onValidatorFilterChange={setValidatorFilter}
-      />
-
       </div>
 
       {selected.size > 0 && (

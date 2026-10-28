@@ -402,7 +402,7 @@ function TocRail({
                 {title}
               </a>
               {active && (
-                <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-brand" />
+                <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-foreground" />
               )}
             </li>
           );
@@ -506,7 +506,7 @@ function AuthorAvatar({
   const initial = name.charAt(0).toUpperCase();
   return (
     <div
-      className="relative rounded-full overflow-hidden shrink-0 bg-brand/15"
+      className="relative rounded-full overflow-hidden shrink-0 bg-muted"
       style={{ width: size, height: size }}
     >
       {profile?.avatar ? (
@@ -517,7 +517,7 @@ function AuthorAvatar({
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-brand">
+        <div className="w-full h-full flex items-center justify-center text-sm font-bold text-muted-foreground">
           {initial}
         </div>
       )}
