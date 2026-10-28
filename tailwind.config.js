@@ -41,6 +41,7 @@ export default {
         'popover-foreground': 'var(--popover-foreground)',
         primary: 'var(--primary)',
         'primary-foreground': 'var(--primary-foreground)',
+        'switch-background': 'var(--switch-background)',
         secondary: 'rgb(var(--secondary-rgb) / <alpha-value>)',
         'secondary-foreground': 'var(--secondary-foreground)',
         muted: 'rgb(var(--muted-rgb) / <alpha-value>)',

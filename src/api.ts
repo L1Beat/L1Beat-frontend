@@ -9,8 +9,10 @@ export const PLACEHOLDER_CHAIN_LOGO = '/icon-dark-animated.svg';
 // Filter predicate to exclude today's partial data from time-series arrays.
 // Data for the current day is incomplete and causes misleading dips in charts.
 function isNotToday(d: { timestamp: number }): boolean {
+  // Daily points are UTC days. Measuring from local midnight let the unfinished
+  // UTC day through for anyone east of UTC, in the hours after their midnight.
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000;
   return d.timestamp < todayStart;
 }
 

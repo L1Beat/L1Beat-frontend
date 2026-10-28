@@ -151,7 +151,8 @@ export function ChainDetails() {
         // monthly (full history 2020→now, for the "All" view).
         const [sType, history, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
           sid ? getL1BeatSubnetType(sid) : Promise.resolve(null),
-          getTPSHistory(30, apiChainId),
+          // One extra day: the unfinished current day is dropped, leaving 30.
+          getTPSHistory(31, apiChainId),
           sid && !isPrimary ? getL1BeatDailyFeeBurn(sid) : Promise.resolve([]),
           sid && !isPrimary ? getL1BeatFeeMetrics(sid) : Promise.resolve([]),
           isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'day', limit: 100 }) : Promise.resolve(null),
@@ -159,7 +160,7 @@ export function ChainDetails() {
         ]);
         if (cancelled) return;
         setSubnetType(sType);
-        setTPSHistory(history);
+        setTPSHistory(history.slice(-30));
         if (isPrimary && cchainDaily) {
           // Map the C-Chain burn series into the shared DailyFeeBurn shape so it
           // reuses the same cumulative-burn chart. Daily nAVAX is well under

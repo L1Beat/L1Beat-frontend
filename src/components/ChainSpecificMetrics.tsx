@@ -360,7 +360,8 @@ export function ChainSpecificMetrics() {
         const transformData = (data: any[]): MetricData[] => {
           return data.map(item => {
             const timestamp = item.timestamp;
-            const date = format(new Date(timestamp * 1000), 'yyyy-MM-dd');
+            // UTC day: a local format would label every bar a day early west of UTC.
+            const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
             const value = item.value !== undefined ? item.value : (item.activeAddresses || 0);
             return { timestamp, date, value };
           });
