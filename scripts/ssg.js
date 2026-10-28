@@ -76,9 +76,10 @@ async function generate() {
     // crawlers don't see two conflicting sets. A page with only a title keeps
     // the default previews but not the default title.
     const withHead = (html, head) => {
+      head = head.replace(/<title[^>]*><\/title>/g, '');
       if (head.includes('og:title')) {
         html = html.replace(/<!--default-meta-->[\s\S]*?<!--\/default-meta-->/, '');
-      } else if (head.includes('<title')) {
+      } else if (/<title[^>]*>[^<]+<\/title>/.test(head)) {
         html = html.replace(/(<!--default-meta-->[\s\S]*?)<title>[^<]*<\/title>/, '$1');
       }
       return html.replace('<!--head-meta-->', head);

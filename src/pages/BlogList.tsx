@@ -92,9 +92,19 @@ export function BlogList() {
     return newest?.publishedAt ?? null;
   }, [posts]);
 
+  // Rendered in the loading state too: the SSG build only sees that state.
+  const seo = (
+    <SEO
+      title="Blog"
+      description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
+      url="/blog"
+    />
+  );
+
   if (loading && posts.length === 0) {
     return (
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-12 flex items-center justify-center">
+        {seo}
         <div className="text-center">
           <LoadingSpinner size="lg" />
           <p className="mt-4 text-muted-foreground">Loading articles…</p>
@@ -107,11 +117,7 @@ export function BlogList() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
-      <SEO
-        title="Blog"
-        description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
-        url="/blog"
-      />
+      {seo}
       <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-[18px] leading-6 font-semibold text-foreground">Research and notes</h1>

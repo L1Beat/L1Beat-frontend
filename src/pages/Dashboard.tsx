@@ -585,7 +585,16 @@ export function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paginatedChains]);
 
-  if (loading) return <DashboardSkeleton />;
+  // Rendered in the loading state too: the SSG build only sees that state.
+  const seo = (
+    <SEO
+      title="Overview"
+      description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
+      url="/"
+    />
+  );
+
+  if (loading) return <>{seo}<DashboardSkeleton /></>;
 
   if (error) {
     return (
@@ -610,11 +619,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <SEO
-        title="Overview"
-        description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
-        url="/"
-      />
+      {seo}
 
       {/* Hero: the network map fills the first screen. Title and range float
           top-left, headline numbers float along the bottom. */}

@@ -292,9 +292,19 @@ export default function ACPs() {
     setStatusTab('All');
   };
 
+  // Rendered in the loading state too: the SSG build only sees that state.
+  const seo = (
+    <SEO
+      title="Avalanche Community Proposals"
+      description="Browse, filter, and track every ACP (Avalanche Community Proposals) from draft through final, with status, track, and authors."
+      url="/acps"
+    />
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
+        {seo}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <LoadingSpinner size="lg" />
@@ -331,11 +341,7 @@ export default function ACPs() {
   }
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <SEO
-        title="Avalanche Community Proposals"
-        description="Browse, filter, and track every ACP (Avalanche Community Proposals) from draft through final, with status, track, and authors."
-        url="/acps"
-      />
+      {seo}
       <div className="flex-1">
         <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
           {/* Header */}
