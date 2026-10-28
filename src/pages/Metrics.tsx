@@ -33,8 +33,8 @@ interface Kpi {
 
 interface HistoryStore {
   tps: { timestamp: number; totalTps?: number }[];
-  tx: { timestamp: number; value?: number }[];
-  maxTps: { timestamp: number; value?: number }[];
+  tx: { timestamp: number; value?: number; chainCount?: number }[];
+  maxTps: { timestamp: number; value?: number; chainCount?: number }[];
   validatorTotal: number | null;
   /** Chains counted in the latest network TPS total. */
   chainCount: number | null;
@@ -165,28 +165,28 @@ export function Metrics() {
     const txPrev = prior(history.tx).reduce((s, d) => s + (d.value ?? 0), 0);
     const peakCurr = Math.max(0, ...history.maxTps.slice(0, days).map((d) => d.value ?? 0));
     const peakPrev = Math.max(0, ...prior(history.maxTps).map((d) => d.value ?? 0));
-    const coverage = history.chainCount
-      ? ` Covers the ${history.chainCount} chains with activity data; chains with no public RPC or metrics source aren't counted.`
-      : '';
+    // Each series reports how many chains its latest day adds up.
+    const coverage = (n: number | null | undefined) =>
+      n ? ` Covers the ${n} chains with data for it; chains with no public RPC or metrics source aren't counted.` : '';
 
     return [
       {
         label: `Avg network TPS, ${label}`,
         value: tpsCurr ? Math.round(tpsCurr).toLocaleString() : '—',
         delta: pctDelta(tpsCurr, tpsPrev),
-        tooltip: `Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.${coverage}`,
+        tooltip: `Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.${coverage(history.chainCount)}`,
       },
       {
         label: `Transactions, ${label}`,
         value: txCurr ? formatCount(txCurr) : '—',
         delta: pctDelta(txCurr, txPrev),
-        tooltip: `Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.${coverage}`,
+        tooltip: `Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.${coverage(history.tx[0]?.chainCount ?? history.chainCount)}`,
       },
       {
         label: `Peak TPS, ${label}`,
         value: peakCurr ? Math.round(peakCurr).toLocaleString() : '—',
         delta: pctDelta(peakCurr, peakPrev),
-        tooltip: `The highest single-day network TPS observed during the last ${label}. Only chains in Avalanche’s metrics API are counted, so this covers fewer chains than the other figures.`,
+        tooltip: `The highest single-day network TPS observed during the last ${label}.${coverage(history.maxTps[0]?.chainCount)}`,
       },
       {
         label: 'Validators',
@@ -236,6 +236,7 @@ export function Metrics() {
   }, []);
 
   const coveredChains = history?.chainCount ?? null;
+  const peakChains = history?.maxTps[0]?.chainCount ?? null;
 
   const scrollToCompare = () => scrollToSection('compare');
 
@@ -279,6 +280,7 @@ export function Metrics() {
           <p className="text-[11px] text-muted-foreground">
             Network figures add up the {coveredChains} of {activeChains} active L1s with activity data. The rest have no
             public RPC and aren't in Avalanche's metrics API, so they aren't counted.
+            {peakChains != null && peakChains !== coveredChains && ` Peak TPS covers ${peakChains} of them.`}
           </p>
         )}
 

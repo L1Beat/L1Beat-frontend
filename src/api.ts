@@ -900,7 +900,8 @@ export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPS
         .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
         .map(item => ({
           timestamp: Number(item.timestamp),
-          value: Number(item.value)
+          value: Number(item.value),
+          chainCount: typeof item.chainCount === 'number' ? item.chainCount : undefined,
         }))
         .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
@@ -1037,7 +1038,8 @@ export async function getNetworkTxCountHistory(days: number = 30): Promise<Daily
         .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
         .map(item => ({
           timestamp: Number(item.timestamp),
-          value: Number(item.value)
+          value: Number(item.value),
+          chainCount: typeof item.chainCount === 'number' ? item.chainCount : undefined,
         }))
         .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {

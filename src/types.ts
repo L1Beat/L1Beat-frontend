@@ -187,6 +187,8 @@ export interface DailyActiveAddresses {
 export interface DailyTxCount {
   timestamp: number;
   value: number;
+  /** Network rows only: how many chains the day's value adds up. */
+  chainCount?: number;
 }
 
 export interface DailyTxCountLatest {
@@ -199,6 +201,8 @@ export interface DailyTxCountLatest {
 export interface MaxTPSHistory {
   timestamp: number;
   value: number;
+  /** Network rows only: how many chains the day's value adds up. */
+  chainCount?: number;
 }
 
 export interface MaxTPSLatest {
