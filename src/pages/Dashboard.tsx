@@ -15,6 +15,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { StatItem } from '../components/instrument';
 import {
   getAllChainsTPSLatest,
+  getAllChainsTxCountLatest,
   getCategories,
   getChains,
   getNetworkTxCountHistory,
@@ -23,6 +24,7 @@ import {
   getTeleporterMessages,
 } from '../api';
 import type { Chain } from '../types';
+import type { DailyTxLatest } from '../api';
 import { FilterModal } from '../components/FilterModal';
 
 type Range = '24H' | '7D' | '30D' | 'ALL';
@@ -143,12 +145,24 @@ function formatCount(n: number): string {
   return n.toLocaleString();
 }
 
+function dayLabel(daily: Record<string, DailyTxLatest>): string {
+  const ts = Object.values(daily).reduce((m, d) => Math.max(m, d.timestamp), 0);
+  return ts ? new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+}
+
 function formatTps(value: number | undefined | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
+  if (value <= 0) return '0';
   if (value < 0.01) return '<0.01';
   if (value < 1) return value.toFixed(2);
   if (value < 10) return value.toFixed(1);
   return Math.round(value).toLocaleString();
+}
+
+function txColor(value: number | undefined | null): string {
+  if (value == null || !Number.isFinite(value) || value < 10) return 'text-muted-foreground';
+  if (value < 1000) return 'text-foreground/70';
+  return 'text-foreground';
 }
 
 function tpsColor(value: number | undefined | null): string {
@@ -283,6 +297,9 @@ export function Dashboard() {
     validators: null,
   });
   const [tpsHistoryByChain, setTpsHistoryByChain] = useState<Record<string, number[]>>({});
+  // Daily transactions per chain, keyed by chain slug. Null until the backend
+  // serves them; the table falls back to TPS meanwhile.
+  const [dailyTx, setDailyTx] = useState<Record<string, DailyTxLatest> | null>(null);
 
   async function fetchData() {
     try {
@@ -296,11 +313,23 @@ export function Dashboard() {
       const filters: { category?: string; includeInactive?: boolean } = { includeInactive: true };
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, categoriesData, tpsMap] = await Promise.all([
+      const [chainsData, categoriesData, tpsMap, txMap] = await Promise.all([
         getChains(filters),
         getCategories(),
         getAllChainsTPSLatest(),
+        getAllChainsTxCountLatest(),
       ]);
+
+      const daily: Record<string, DailyTxLatest> = {};
+      for (const chain of chainsData) {
+        const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
+          .map((k) => (k == null ? '' : String(k)))
+          .find((k) => k && txMap[k]);
+        if (hit) daily[chain.chainId] = txMap[hit];
+      }
+      const dailyOrNull = Object.keys(daily).length > 0 ? daily : null;
+      setDailyTx(dailyOrNull);
+      const rank = (c: Chain) => (dailyOrNull ? dailyOrNull[c.chainId]?.value : c.tps?.value) ?? -1;
 
       const chainsWithLatestTps = chainsData.map((chain) => {
         const lookupId =
@@ -325,8 +354,8 @@ export function Dashboard() {
         const isCb = b.chainName.toLowerCase().includes('c-chain');
         if (isCa && !isCb) return -1;
         if (!isCa && isCb) return 1;
-        const aTps = a.tps?.value ?? -1;
-        const bTps = b.tps?.value ?? -1;
+        const aTps = rank(a);
+        const bTps = rank(b);
         if (aTps !== bTps) return bTps - aTps;
         return a.chainName.localeCompare(b.chainName);
       });
@@ -433,9 +462,14 @@ export function Dashboard() {
     () => chains.filter((c) => watchlist.has(c.chainId)).length,
     [chains, watchlist],
   );
+  // What the table ranks by: yesterday's transactions when available, else live TPS.
+  const activityOf = useCallback(
+    (c: Chain) => (dailyTx ? dailyTx[c.chainId]?.value : c.tps?.value),
+    [dailyTx],
+  );
   const totalNetworkTps = useMemo(
-    () => chains.reduce((sum, c) => sum + (c.tps?.value ?? 0), 0),
-    [chains],
+    () => chains.reduce((sum, c) => sum + (activityOf(c) ?? 0), 0),
+    [chains, activityOf],
   );
   const tabCounts: Record<ScreenerTab, number> = useMemo(
     () => ({
@@ -468,17 +502,17 @@ export function Dashboard() {
           if (isCa && !isCb) return -1;
           if (!isCa && isCb) return 1;
           if (sortBy === 'name') return a.chainName.localeCompare(b.chainName) * dir;
-          if (sortBy === 'tps') return ((a.tps?.value ?? -1) - (b.tps?.value ?? -1)) * dir;
+          if (sortBy === 'tps') return ((activityOf(a) ?? -1) - (activityOf(b) ?? -1)) * dir;
           if (sortBy === 'validators') return ((a.validatorCount ?? 0) - (b.validatorCount ?? 0)) * dir;
           return 0;
         }),
-    [chains, validatorFilter, watchlist, searchTerm, sortBy, sortDir],
+    [chains, validatorFilter, watchlist, searchTerm, sortBy, sortDir, activityOf],
   );
   // Bars in the table are relative to the busiest chain in the current list,
   // not the page, so paging doesn't rescale them.
   const maxTps = useMemo(
-    () => filteredChains.reduce((m, c) => Math.max(m, c.tps?.value ?? 0), 0),
-    [filteredChains],
+    () => filteredChains.reduce((m, c) => Math.max(m, activityOf(c) ?? 0), 0),
+    [filteredChains, activityOf],
   );
   const maxValidators = useMemo(
     () => filteredChains.reduce((m, c) => Math.max(m, c.validatorCount ?? 0), 0),
@@ -660,6 +694,7 @@ export function Dashboard() {
                 historyByChain={tpsHistoryByChain}
                 totalTps={totalNetworkTps}
                 maxTps={maxTps}
+                dailyTx={dailyTx}
                 maxValidators={maxValidators}
                 sortBy={sortBy}
                 sortDir={sortDir}
@@ -950,6 +985,7 @@ function ScreenerTableImpl({
   historyByChain,
   totalTps,
   maxTps,
+  dailyTx,
   maxValidators,
   sortBy,
   sortDir,
@@ -965,6 +1001,7 @@ function ScreenerTableImpl({
   historyByChain: Record<string, number[]>;
   totalTps: number;
   maxTps: number;
+  dailyTx: Record<string, DailyTxLatest> | null;
   maxValidators: number;
   sortBy: SortKey;
   sortDir: SortDir;
@@ -993,14 +1030,15 @@ function ScreenerTableImpl({
             />
             <SortableTh
               align="right"
-              label="TPS"
+              // The column names the UTC day it counts, e.g. "Txs Oct 27".
+              label={dailyTx ? `Txs ${dayLabel(dailyTx) || '1d'}` : 'TPS'}
               sortKey="tps"
               active={sortBy === 'tps'}
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="right" className="hidden md:table-cell" info="Change in TPS (transactions per second) versus the prior day, not token price.">Δ 24h</Th>
-            <Th align="right" className="hidden lg:table-cell" info="This L1's share of total network TPS.">Share</Th>
+            <Th align="right" className="hidden md:table-cell" info={dailyTx ? 'Change in daily transactions versus the day before, not token price.' : 'Change in TPS (transactions per second) versus the prior day, not token price.'}>Δ 24h</Th>
+            <Th align="right" className="hidden lg:table-cell" info={dailyTx ? "This L1's share of the network's daily transactions." : "This L1's share of total network TPS."}>Share</Th>
             <SortableTh
               align="right"
               label="Validators"
@@ -1021,7 +1059,8 @@ function ScreenerTableImpl({
             const isSelected = selected.has(chain.chainId);
             const disabled = !isSelected && selectionFull;
             const active = chain.isActive ?? false;
-            const tps = chain.tps?.value;
+            const day = dailyTx?.[chain.chainId];
+            const tps = dailyTx ? day?.value : chain.tps?.value;
             const share = totalTps > 0 ? ((tps ?? 0) / totalTps) * 100 : 0;
             return (
               <tr
@@ -1054,14 +1093,24 @@ function ScreenerTableImpl({
                 </td>
                 <td className="text-right">
                   <CellBar value={tps ?? 0} max={maxTps}>
-                    <span className={`num text-[12px] w-12 inline-block ${tpsColor(tps)}`}>{formatTps(tps)}</span>
+                    {dailyTx ? (
+                      <span className={`num text-[12px] w-14 inline-block ${txColor(tps)}`}>
+                        {tps == null ? '—' : formatCount(tps)}
+                      </span>
+                    ) : (
+                      <span className={`num text-[12px] w-12 inline-block ${tpsColor(tps)}`}>{formatTps(tps)}</span>
+                    )}
                   </CellBar>
                 </td>
                 <td className="text-right hidden md:table-cell">
-                  <DeltaCell history={history} loaded={chain.chainId in historyByChain} />
+                  {dailyTx ? (
+                    <DeltaCell history={day && day.previous != null ? [day.previous, day.value] : undefined} loaded={!!day} />
+                  ) : (
+                    <DeltaCell history={history} loaded={chain.chainId in historyByChain} />
+                  )}
                 </td>
                 <td className="num text-right text-[12px] text-muted-foreground hidden lg:table-cell">
-                  {share < 0.05 ? '<0.05%' : share < 1 ? `${share.toFixed(2)}%` : `${share.toFixed(1)}%`}
+                  {!tps ? '—' : share < 0.05 ? '<0.05%' : share < 1 ? `${share.toFixed(2)}%` : `${share.toFixed(1)}%`}
                 </td>
                 <td className="text-right">
                   <CellBar value={chain.validatorCount ?? 0} max={maxValidators}>

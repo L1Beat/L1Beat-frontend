@@ -842,6 +842,45 @@ export async function getAllChainsTPSLatest(): Promise<Record<string, { value: n
   }, 60 * 1000); // Cache for 1 minute
 }
 
+export interface DailyTxLatest {
+  /** Transactions on the latest complete UTC day. */
+  value: number;
+  /** The day before, for day-over-day change. */
+  previous: number | null;
+  /** UTC midnight (seconds) of the day `value` covers. */
+  timestamp: number;
+}
+
+// Latest complete day's transaction count for every chain, keyed by every id a
+// chain might be looked up by. Empty when the backend doesn't serve it yet.
+export async function getAllChainsTxCountLatest(): Promise<Record<string, DailyTxLatest>> {
+  return fetchWithCache('tx-count-all-latest', async () => {
+    try {
+      const response = await fetchWithRetry<any>(`${API_URL}/tx-count/all/latest`);
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const map: Record<string, DailyTxLatest> = {};
+      for (const row of rows) {
+        const tx = row?.txCount;
+        const value = Number(tx?.value);
+        if (!tx || !Number.isFinite(value)) continue;
+        const previous = tx.previous == null ? null : Number(tx.previous);
+        const entry = {
+          value,
+          previous: Number.isFinite(previous) ? previous : null,
+          timestamp: Number(tx.timestamp) || 0,
+        };
+        for (const k of [row.evmChainId, row.subnetId, row.chainId]) {
+          if (k != null && String(k).trim()) map[String(k).trim()] = entry;
+        }
+      }
+      return map;
+    } catch (error) {
+      console.error('All chains tx count latest fetch error:', error);
+      return {};
+    }
+  }, 60 * 1000);
+}
+
 export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPSHistory[]> {
   return fetchWithCache(`network-max-tps-history-${days}`, async () => {
     try {

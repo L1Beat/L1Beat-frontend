@@ -227,7 +227,9 @@ export function NetworkTopologyGraph({
   // Format TPS value for UI (avoid rounding <1 to 0)
   const formatTPS = (tpsValue: number): string => {
     if (!Number.isFinite(tpsValue)) return 'N/A';
-    if (tpsValue < 1) return '< 1.0';
+    if (tpsValue <= 0) return '0';
+    if (tpsValue < 0.01) return '<0.01';
+    if (tpsValue < 1) return tpsValue.toFixed(2);
     // whole numbers for readability in dense UI
     return Math.round(tpsValue).toString();
   };

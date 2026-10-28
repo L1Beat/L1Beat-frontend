@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
+import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   Shield,
   Globe,
   MessageCircle,
+  Send,
   Github,
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
@@ -48,6 +49,7 @@ export function ChainDetails() {
   const { toast } = useToast();
   const [chain, setChain] = useState<Chain | null>(null);
   const [tpsHistory, setTPSHistory] = useState<TPSHistory[]>([]);
+  const [txHistory, setTxHistory] = useState<{ timestamp: number; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   // Shell (header + KPIs) renders as soon as the chain is found; the heavy
   // per-chain data (validators, TPS history, fees) streams in afterwards while
@@ -93,6 +95,7 @@ export function ChainDetails() {
       setDetailsLoading(true);
       setValidatorsLoading(true);
       setTPSHistory([]);
+      setTxHistory([]);
       setDailyFeeBurn([]);
       setFeeBurnAllSeries([]);
       setAllTimeFeesBurned(0);
@@ -107,6 +110,16 @@ export function ChainDetails() {
         const chains = await getChains({ includeInactive: true });
         if (cancelled) return;
         foundChain = chains.find(c => c.chainId === chainId);
+        if (!foundChain && chainId) {
+          // Registry renames that only add word breaks ("turingchain" became
+          // "Turing Chain") changed the slug; send old links to the new one.
+          const bare = chainId.replace(/-/g, '');
+          const renamed = chains.find(c => c.chainId.replace(/-/g, '') === bare);
+          if (renamed) {
+            navigate(`/chain/${renamed.chainId}${window.location.search}`, { replace: true });
+            return;
+          }
+        }
       } catch {
         if (!cancelled) {
           setError('Failed to load chain details');
@@ -149,10 +162,11 @@ export function ChainDetails() {
       try {
         // C-Chain: fetch daily (recent, for 7/30/90 — capped at 100 points) AND
         // monthly (full history 2020→now, for the "All" view).
-        const [sType, history, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
+        const [sType, history, txCounts, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
           sid ? getL1BeatSubnetType(sid) : Promise.resolve(null),
           // One extra day: the unfinished current day is dropped, leaving 30.
           getTPSHistory(31, apiChainId),
+          getChainTxCountHistory(apiChainId, 31),
           sid && !isPrimary ? getL1BeatDailyFeeBurn(sid) : Promise.resolve([]),
           sid && !isPrimary ? getL1BeatFeeMetrics(sid) : Promise.resolve([]),
           isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'day', limit: 100 }) : Promise.resolve(null),
@@ -161,6 +175,7 @@ export function ChainDetails() {
         if (cancelled) return;
         setSubnetType(sType);
         setTPSHistory(history.slice(-30));
+        setTxHistory(txCounts.slice(-30));
         if (isPrimary && cchainDaily) {
           // Map the C-Chain burn series into the shared DailyFeeBurn shape so it
           // reuses the same cumulative-burn chart. Daily nAVAX is well under
@@ -244,14 +259,8 @@ export function ChainDetails() {
 
   const getCurrentTPS = () => {
     if (!tpsHistory.length) return 'N/A';
-    const latestTPS = tpsHistory[tpsHistory.length - 1].totalTps;
-    if (latestTPS === 0) {
-      return '< 1.00';
-    }
-    if (latestTPS < 1 && latestTPS > 0) {
-      return '< 1.00';
-    }
-    return latestTPS.toFixed(2);
+    // The real figure: quiet chains run well under 1 TPS, and "< 1.00" hid how far under.
+    return formatTpsExact(tpsHistory[tpsHistory.length - 1].totalTps);
   };
 
   const tokenDecimals = chain?.networkToken?.decimals ?? 18;
@@ -464,6 +473,13 @@ export function ChainDetails() {
   }
 
   const tpsValue = getCurrentTPS();
+  // Quiet chains read as 0 TPS, which hides real activity, so they get daily
+  // transaction counts instead. Busy chains stay on TPS.
+  const quiet = txHistory.length > 0 && Math.max(...txHistory.map((d) => d.value)) < QUIET_TX_PER_DAY;
+  const activityPoints = quiet
+    ? txHistory.map((d) => ({ t: d.timestamp, v: d.value }))
+    : tpsHistory.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
+  const latestTx = txHistory.length ? txHistory[txHistory.length - 1] : null;
   const lastUpdate = tpsHistory.length > 0 ? tpsHistory[tpsHistory.length - 1].timestamp : null;
 
   // Validators stream in after the shell. Until they arrive, derive active/
@@ -486,7 +502,8 @@ export function ChainDetails() {
     }
     if (lowerName.includes('discord')) return MessageCircle;
     if (lowerName.includes('github')) return Github;
-    if (lowerName.includes('telegram')) return MessageCircle;
+    // Paper plane, so Telegram and Discord don't share the speech bubble.
+    if (lowerName.includes('telegram')) return Send;
     if (lowerName.includes('youtube')) return ({ className }: { className?: string }) => (
       <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
@@ -700,11 +717,17 @@ export function ChainDetails() {
 
       <StatStrip
         items={[
-          {
-            label: 'Current TPS',
-            value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
-            sub: 'transactions per second',
-          },
+          quiet && latestTx
+            ? {
+                label: 'Transactions',
+                value: latestTx.value.toLocaleString(),
+                sub: `on ${format(new Date(latestTx.timestamp * 1000), 'MMM d')}`,
+              }
+            : {
+                label: 'Current TPS',
+                value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
+                sub: 'transactions per second',
+              },
           {
             label: 'Active validators',
             value: (chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString(),
@@ -753,7 +776,7 @@ export function ChainDetails() {
             <div className="flex flex-col gap-4 sm:gap-6">
               <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
-                  <ChainActivityCard history={tpsHistory} loading={detailsLoading && tpsHistory.length === 0} />
+                  <ChainActivityCard points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} />
                 </SectionErrorBoundary>
               </section>
 
@@ -1529,17 +1552,24 @@ const ACT_H = 180;
 const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 
 // Daily TPS trend — uses the history already fetched for the headline number.
-function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]; loading?: boolean }) {
+// Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
+const QUIET_TX_PER_DAY = 864;
+
+function ChainActivityCard({ points: raw, unit, loading = false }: {
+  points: { t: number; v: number }[];
+  unit: 'tps' | 'tx';
+  loading?: boolean;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const isTx = unit === 'tx';
+  const fmt = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTpsExact(v));
+  const fmtTick = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTps(v));
+  const subtitle = isTx ? 'Transactions per day' : 'Transactions per second';
 
   const points = useMemo(
-    () =>
-      history
-        .map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }))
-        .filter((p) => Number.isFinite(p.t))
-        .sort((a, b) => a.t - b.t),
-    [history],
+    () => raw.filter((p) => Number.isFinite(p.t)).sort((a, b) => a.t - b.t),
+    [raw],
   );
 
   const geom = useMemo(() => {
@@ -1548,23 +1578,31 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
     const ys = points.map((p) => p.v);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
-    const maxY = Math.max(...ys, 0.0001);
+    const peak = Math.max(...ys, 0);
+    // Whole-number steps for counts; an all-zero series gets a single 0 line.
+    const maxY = peak === 0 ? 1 : isTx ? Math.max(3, Math.ceil(peak / 3) * 3) : peak;
     const iw = ACT_W - ACT_M.left - ACT_M.right;
     const ih = ACT_H - ACT_M.top - ACT_M.bottom;
-    const sx = (t: number) => ACT_M.left + ((t - minX) / (maxX - minX || 1)) * iw;
+    // Bars sit inside their day slot, so the outer ones don't spill past the axis.
+    const slot = iw / points.length;
+    const pad = isTx ? slot / 2 : 0;
+    const sx = (t: number) => ACT_M.left + pad + ((t - minX) / (maxX - minX || 1)) * (iw - 2 * pad);
     const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
     const line = smoothLinePath(points.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
     const floor = ACT_M.top + ih;
     const area = `${line} L${sx(maxX).toFixed(1)},${floor} L${sx(minX).toFixed(1)},${floor} Z`;
-    const yTicks = Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
-    return { sx, sy, line, area, yTicks, floor };
-  }, [points]);
+    const yTicks = peak === 0 ? [0] : Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
+    // Counts are whole days, so they're bars; a smoothed line would dip below zero between them.
+    const barW = Math.max(2, slot * 0.7);
+    return { sx, sy, line, area, yTicks, floor, barW };
+  }, [points, isTx]);
 
   const latest = points.length ? points[points.length - 1] : null;
   const active = hover != null && points[hover] ? points[hover] : null;
   const shown = active ?? latest;
   const first = points[0];
-  const delta = first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
+  // Day-to-day counts on a quiet chain swing by hundreds of percent; the delta would be noise.
+  const delta = !isTx && first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
   const positive = delta != null && delta >= 0;
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -1589,7 +1627,7 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
         <header className="flex items-end justify-between gap-3 mb-3">
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second, last 30 days</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}, last 30 days</p>
           </div>
           <div className="h-7 w-16 rounded-md bg-muted animate-pulse" />
         </header>
@@ -1604,12 +1642,12 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            {points.length > 1 ? `Transactions per second, last ${points.length} days` : 'Transactions per second'}
+            {points.length > 1 ? `${subtitle}, last ${points.length} days` : subtitle}
           </p>
         </div>
         {shown && (
           <div className="text-right">
-            <div className="num text-[22px] font-medium text-foreground leading-none">{formatTpsExact(shown.v)}</div>
+            <div className="num text-[22px] font-medium text-foreground leading-none">{fmt(shown.v)}</div>
             <div className="text-[11px] mt-1">
               {active ? (
                 <span className="text-muted-foreground">{format(new Date(active.t * 1000), 'MMM d')}</span>
@@ -1637,7 +1675,7 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
           onMouseMove={handleMove}
           onMouseLeave={() => setHover(null)}
           role="img"
-          aria-label="TPS over time"
+          aria-label={isTx ? 'Daily transactions over time' : 'TPS over time'}
         >
           <defs>
             <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
@@ -1649,14 +1687,31 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
             <g key={i}>
               <line x1={ACT_M.left} x2={ACT_W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
               <text x={ACT_M.left - 8} y={geom.sy(tick)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
-                {formatTps(tick)}
+                {fmtTick(tick)}
               </text>
             </g>
           ))}
-          <path d={geom.area} fill="url(#chain-tps-fill)" />
-          <path d={geom.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="var(--ink)" />}
-          {active && (
+          {isTx ? (
+            points.map((p, i) => (
+              <rect
+                key={p.t}
+                x={geom.sx(p.t) - geom.barW / 2}
+                y={geom.sy(p.v)}
+                width={geom.barW}
+                height={Math.max(0, geom.floor - geom.sy(p.v))}
+                rx={1}
+                fill="var(--ink)"
+                fillOpacity={hover == null || hover === i ? 0.75 : 0.3}
+              />
+            ))
+          ) : (
+            <>
+              <path d={geom.area} fill="url(#chain-tps-fill)" />
+              <path d={geom.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            </>
+          )}
+          {!isTx && latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="var(--ink)" />}
+          {active && !isTx && (
             <g>
               <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="rgb(148, 163, 184)" strokeOpacity={0.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
               <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="var(--ink)" stroke="var(--card, #fff)" strokeWidth={2} />
