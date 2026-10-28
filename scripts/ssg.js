@@ -85,8 +85,11 @@ async function generate() {
     };
     const helmetTags = (helmet) => [helmet?.title, helmet?.meta, helmet?.link, helmet?.script]
       .map((t) => t?.toString() || '').join('\n');
+    // /chain/beam is written as chain/beam.html, not chain/beam/index.html:
+    // Netlify serves the .html file at the bare path, while a directory index
+    // costs a 301 to the trailing-slash URL.
     const writePage = async (url, html) => {
-      const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}/index.html`);
+      const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}.html`);
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(filePath, html);
     };
