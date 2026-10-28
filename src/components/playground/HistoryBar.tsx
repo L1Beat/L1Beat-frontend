@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: number }) {
       ? 'bg-red-500/15 text-red-600 dark:text-red-400'
       : status >= 400
       ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
-      : 'bg-green-500/15 text-up';
+      : 'bg-green-500/15 text-green-800 dark:text-up';
   return (
     <span className={`text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${color}`}>
       {status}

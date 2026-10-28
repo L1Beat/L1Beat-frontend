@@ -368,6 +368,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search chains, ACPs, articles and validators"
             placeholder="Search chains, ACPs, articles, validator node ID…"
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder-muted-foreground"
           />

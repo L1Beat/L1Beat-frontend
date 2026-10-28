@@ -67,8 +67,8 @@ Tokens live in `src/index.css` and are exposed through Tailwind (`bg-card`, `tex
 | Token | Dark | Light | Usage |
 |-------|------|-------|-------|
 | `--brand` | `#e84142` | `#e84142` | Logo, active nav rule. Also the `down` color |
-| `--up` | `#3dbe7a` | `#1f9d5b` | Positive deltas, "live" dot |
-| `--down` | `#e84142` | `#e84142` | Negative deltas |
+| `--up` | `#3dbe7a` | `#15803d` | Positive deltas, "live" dot (4.5:1 as small text) |
+| `--down` | `#f05f5f` | `#c93234` | Negative deltas (4.5:1 as small text; brand red stays `#e84142`) |
 
 ### Categorical (charts and category keys)
 

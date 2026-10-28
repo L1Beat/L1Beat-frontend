@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ParamDef } from './endpointCatalog';
 import { Switch } from '../branding/ui/switch';
@@ -40,6 +40,7 @@ interface DropdownSelectProps {
   required: boolean;
   errorClass: string;
   placeholder?: string;
+  id?: string;
 }
 
 function DropdownSelect({
@@ -49,6 +50,7 @@ function DropdownSelect({
   required,
   errorClass,
   placeholder,
+  id,
 }: DropdownSelectProps) {
   const selectValue = toSelectValue(value);
 
@@ -58,10 +60,11 @@ function DropdownSelect({
       onValueChange={(v) => onChange(fromSelectValue(v))}
     >
       <SelectTrigger
+        id={id}
         className={[
           'group w-full rounded bg-muted border text-foreground text-sm',
           'h-auto px-3 py-2',
-          'focus:outline-none focus-visible:ring-1 focus-visible:ring-brand focus-visible:border-brand',
+          'focus:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30',
           'data-[placeholder]:text-muted-foreground',
           '[&>svg:last-child]:hidden',
           'transition-colors duration-150',
@@ -176,6 +179,7 @@ function ChainIdInput() {
 
 export function SmartParamInput(props: SmartParamInputProps) {
   const { param, value, onChange, hasError } = props;
+  const inputId = useId();
 
   const errorClass = hasError
     ? 'border-red-500 ring-1 ring-red-500'
@@ -192,6 +196,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
         const opts = (param.options ?? []).map((opt) => ({ value: opt, label: opt }));
         return (
           <DropdownSelect
+            id={inputId}
             value={value}
             onChange={onChange}
             options={opts}
@@ -218,7 +223,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
             <span
               className={`num text-[11px] px-1.5 h-5 inline-flex items-center rounded ${
                 isOn
-                  ? 'bg-green-500/15 text-up'
+                  ? 'bg-green-500/15 text-green-800 dark:text-up'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
@@ -246,6 +251,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
         return (
           <>
             <input
+            id={inputId}
               type="text"
               inputMode="numeric"
               value={value}
@@ -266,6 +272,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
       case 'date':
         return (
           <input
+            id={inputId}
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -277,6 +284,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
       default:
         return (
           <input
+            id={inputId}
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -289,7 +297,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
 
   return (
     <div className="space-y-1">
-      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+      <label htmlFor={inputId} className="flex items-center gap-1 text-xs font-medium text-foreground">
         <span className="font-mono text-muted-foreground">{param.name}</span>
         {param.required && (
           <span className="text-muted-foreground ml-0.5">*</span>

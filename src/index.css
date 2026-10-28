@@ -53,10 +53,11 @@
        for the logo, the active nav rule, and negative deltas. */
     --brand-rgb: 232 65 66;
     --brand-hover: #d23536;
-    --up: #1f9d5b;
-    --up-rgb: 31 157 91;
-    --down: #e84142;
-    --down-rgb: 232 65 66;
+    /* Darker than the brand red/green so small delta text passes 4.5:1. */
+    --up: #15803d;
+    --up-rgb: 21 128 61;
+    --down: #c93234;
+    --down-rgb: 201 50 52;
     /* Default single-series chart ink. Neutral, so green/red keep meaning. */
     --ink: #3a3f45;
     --ink-rgb: 58 63 69;
@@ -109,6 +110,9 @@
 
     --up: #3dbe7a;
     --up-rgb: 61 190 122;
+    /* Lighter than the brand red so small delta text passes 4.5:1 on cards. */
+    --down: #f05f5f;
+    --down-rgb: 240 95 95;
     --ink: #c9ced4;
     --ink-rgb: 201 206 212;
 
@@ -761,6 +765,13 @@
 }
 
 /* Reduced motion support for accessibility */
+/* One visible focus mark for keyboard users; the browser default is faint on
+   graphite. Components with their own ring keep it. */
+:focus-visible {
+  outline: 2px solid rgb(var(--foreground-rgb) / 0.55);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

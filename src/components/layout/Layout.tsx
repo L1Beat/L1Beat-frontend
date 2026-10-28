@@ -16,8 +16,14 @@ import { capsuleDisplacementMap, supportsBackdropRefraction } from './liquidRefr
 export function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <a
+        href="#content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-2 focus:z-[100] focus:rounded focus:bg-foreground focus:px-3 focus:py-1.5 focus:text-[13px] focus:font-medium focus:text-background"
+      >
+        Skip to content
+      </a>
       <TopNav />
-      <main className="flex-1 min-w-0">
+      <main id="content" tabIndex={-1} className="flex-1 min-w-0 focus:outline-none">
         {/* Pages load as separate chunks; this keeps the nav live while one loads. */}
         <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
           <Outlet />

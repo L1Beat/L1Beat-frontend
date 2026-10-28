@@ -1,6 +1,6 @@
 import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from '../utils/motion';
 import { SEO } from '../components/SEO';
 import { ChevronRight, GitCompareArrows, Info, Search, Star, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/branding/ui/tooltip';
@@ -957,7 +957,7 @@ function ScreenerToolbarImpl({
 
       <div className="relative w-full sm:w-64">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <input
+        <input aria-label="Search by name or chain ID"
           type="text"
           placeholder="Search by name or chain ID"
           value={searchTerm}
@@ -1111,7 +1111,7 @@ function ScreenerTableImpl({
                   isSelected ? 'bg-accent/60' : 'hover:bg-accent/40'
                 }`}
               >
-                <td className="num pr-2 text-right text-[11px] text-muted-foreground/70">{startRank + idx + 1}</td>
+                <td className="num pr-2 text-right text-[11px] text-muted-foreground">{startRank + idx + 1}</td>
                 <td>
                   <div className="flex items-center gap-2.5 min-w-0">
                     <ChainAvatar chain={chain} />

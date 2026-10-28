@@ -29,13 +29,13 @@ const ICON_MAP: Record<string, LucideIcon> = {
 function MethodBadge({ method }: { method: 'GET' | 'WS' }) {
   if (method === 'WS') {
     return (
-      <span className="bg-purple-500/15 text-purple-600 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded">
+      <span className="bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded">
         WS
       </span>
     );
   }
   return (
-    <span className="bg-green-500/15 text-up text-xs font-mono px-1.5 py-0.5 rounded">
+    <span className="bg-green-500/15 text-green-800 dark:text-up text-xs font-mono px-1.5 py-0.5 rounded">
       GET
     </span>
   );

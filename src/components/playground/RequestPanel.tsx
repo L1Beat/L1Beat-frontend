@@ -137,7 +137,7 @@ export function RequestPanel({
         {/* Endpoint header */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-green-500/15 text-up text-xs font-mono px-1.5 py-0.5 rounded">
+            <span className="bg-green-500/15 text-green-800 dark:text-up text-xs font-mono px-1.5 py-0.5 rounded">
               GET
             </span>
             <code className="text-sm font-mono text-foreground break-all flex-1">

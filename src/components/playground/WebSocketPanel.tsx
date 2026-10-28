@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from '../../utils/motion';
 import { WsEndpointDef } from './endpointCatalog';
 import { SmartParamInput } from './SmartParamInput';
 import { PLAYGROUND_WS_BASE } from './constants';
@@ -206,7 +206,7 @@ export function WebSocketPanel({
       {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="bg-purple-500/15 text-purple-600 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded">
+          <span className="bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded">
             WS
           </span>
           <code className="text-sm font-mono text-foreground">{endpoint.path}</code>
@@ -334,7 +334,7 @@ export function WebSocketPanel({
                         initial={{ opacity: 1 }}
                         animate={{ opacity: 0 }}
                         transition={{ delay: 2, duration: 0.5 }}
-                        className="text-xs px-1.5 py-0.5 rounded bg-green-500/15 text-up"
+                        className="text-xs px-1.5 py-0.5 rounded bg-green-500/15 text-green-800 dark:text-up"
                       >
                         NEW
                       </motion.span>

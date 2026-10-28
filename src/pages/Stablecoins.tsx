@@ -476,6 +476,7 @@ export function Stablecoins() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search symbol or issuer"
                   placeholder="Search symbol or issuer"
                   className="w-full h-8 pl-8 pr-2 rounded border border-border bg-background text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
                 />
@@ -1795,7 +1796,7 @@ function OriginCard({ nativeUsd, bridgedUsd }: { nativeUsd: number; bridgedUsd: 
         <h2 className="text-[14px] font-semibold text-foreground">Native vs bridged</h2>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button type="button" className="text-muted-foreground/70 hover:text-foreground">
+            <button type="button" aria-label="About native and bridged supply" className="text-muted-foreground/70 hover:text-foreground">
               <Info className="w-3 h-3" />
             </button>
           </TooltipTrigger>
@@ -1923,14 +1924,14 @@ function SortableTh({
 // Every tracked peg gets its own tint so the Peg column reads as a quick colour
 // key (currency at a glance) rather than a wall of identical gray badges.
 const PEG_TINT: Record<string, string> = {
-  USD: 'bg-[#22c55e]/10 text-up',
-  EUR: 'bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400',
-  SGD: 'bg-[#a855f7]/10 text-purple-600 dark:text-purple-400',
-  JPY: 'bg-[#f97316]/10 text-orange-600 dark:text-orange-400',
-  BRL: 'bg-[#14b8a6]/10 text-teal-600 dark:text-teal-400',
-  CHF: 'bg-[#ec4899]/10 text-pink-600 dark:text-pink-400',
-  GBP: 'bg-[#6366f1]/10 text-indigo-600 dark:text-indigo-400',
-  TRY: 'bg-[#06b6d4]/10 text-cyan-600 dark:text-cyan-400',
+  USD: 'bg-[#22c55e]/10 text-green-800 dark:text-up',
+  EUR: 'bg-[#3b82f6]/10 text-blue-700 dark:text-blue-400',
+  SGD: 'bg-[#a855f7]/10 text-purple-700 dark:text-purple-400',
+  JPY: 'bg-[#f97316]/10 text-orange-800 dark:text-orange-400',
+  BRL: 'bg-[#14b8a6]/10 text-teal-700 dark:text-teal-400',
+  CHF: 'bg-[#ec4899]/10 text-pink-700 dark:text-pink-400',
+  GBP: 'bg-[#6366f1]/10 text-indigo-700 dark:text-indigo-400',
+  TRY: 'bg-[#06b6d4]/10 text-cyan-700 dark:text-cyan-400',
 };
 
 function CoinRow({
@@ -1958,14 +1959,14 @@ function CoinRow({
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-bold text-foreground">{coin.symbol}</span>
               {coin.bridged && (
-                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
+                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-700 dark:text-blue-400 inline-flex items-center">
                   Bridged
                 </span>
               )}
               {coin.doublecounted && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 inline-flex items-center cursor-help">
+                    <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-400 inline-flex items-center cursor-help">
                       Double-counted
                     </span>
                   </TooltipTrigger>
@@ -2064,7 +2065,7 @@ function MobileCoinCard({
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[14px] font-bold text-foreground">{coin.symbol}</span>
               {coin.bridged && (
-                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-600 dark:text-blue-400 inline-flex items-center">
+                <span className="text-[10px] font-medium px-1.5 h-4 rounded-full bg-[#3b82f6]/10 text-blue-700 dark:text-blue-400 inline-flex items-center">
                   Bridged
                 </span>
               )}
@@ -2083,7 +2084,7 @@ function MobileCoinCard({
             <div className="flex items-center gap-2 mt-1.5">
               <Sparkline data={coin.trend.spark} width={64} height={16} />
               <ChangeBadge value={coin.trend.change7d} className="text-[10px]" />
-              <span className="text-[9px] text-muted-foreground/70">7d</span>
+              <span className="text-[9px] text-muted-foreground">7d</span>
             </div>
           )}
         </div>
@@ -2301,7 +2302,7 @@ function AvgHolderCell({ value }: { value: number }) {
   // >= $100k avg = clearly whale/institutional concentration
   const tone =
     value >= 100_000
-      ? 'text-[#d4a017]'
+      ? 'text-[#8a6100] dark:text-[#d4a017]'
       : value >= 1_000
         ? 'text-foreground'
         : 'text-muted-foreground';

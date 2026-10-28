@@ -1136,7 +1136,7 @@ export function ChainDetails() {
                         <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
                         <div className="relative w-full sm:w-72">
                           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                          <input
+                          <input aria-label="Search by node ID or address"
                             type="text"
                             placeholder="Search by node ID or address"
                             value={searchTerm}
@@ -1258,9 +1258,15 @@ export function ChainDetails() {
                                 key={validator.address}
                                 data-index={index}
                                 ref={rowVirtualizer.measureElement}
-                                className="h-10 border-b border-border/50 hover:bg-accent/40 transition-colors cursor-pointer"
+                                className="h-10 border-b border-border/50 hover:bg-accent/40 focus-visible:bg-accent/40 transition-colors cursor-pointer"
+                                tabIndex={0}
+                                role="link"
+                                aria-label={`Validator ${validator.address}`}
                                 onClick={() => {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
                               >
                                 <td className="pr-2 sm:pr-4 whitespace-nowrap">
@@ -2008,7 +2014,7 @@ function DecentralizationCard({
                   <div className="text-[11px] text-muted-foreground">{r.label}</div>
                   <div className={`text-[13px] font-medium ${r.tone}`}>{r.value}</div>
                   {r.sub && (
-                    <div className="num text-[10px] text-muted-foreground/70 mt-0.5 truncate">{r.sub}</div>
+                    <div className="num text-[10px] text-muted-foreground mt-0.5 truncate">{r.sub}</div>
                   )}
                 </div>
               ))}
@@ -2026,7 +2032,7 @@ function DecentralizationCard({
           })()}
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground/70">
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
           A signal, not a security audit. Distribution is from on-chain stake weights; control is read
           from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label}: ${perm.note}` : ''}
         </p>

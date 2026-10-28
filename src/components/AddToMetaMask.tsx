@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from '../utils/motion';
 import { Chain } from '../types';
 import { isCoreInstalled, addNetworkToWallet, switchToNetwork } from '../utils/metamask';
 import { useToast } from './Toaster';

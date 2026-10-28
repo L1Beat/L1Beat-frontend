@@ -208,8 +208,8 @@ function StatusBadge({ status }: { status: number }) {
       : status >= 400
       ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
       : status >= 300
-      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-      : 'bg-green-500/15 text-up';
+      ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+      : 'bg-green-500/15 text-green-800 dark:text-up';
   const label =
     status >= 400
       ? `${status} Error`
@@ -907,7 +907,7 @@ export function ResponsePanel({
               <span className="text-foreground/80 break-all">{v}</span>
             </div>
           ))}
-          <div className="text-[10px] text-muted-foreground/70 font-sans pt-1">
+          <div className="text-[10px] text-muted-foreground font-sans pt-1">
             Only CORS-safelisted headers are visible to the browser (Cache-Control, Content-Type, …).
           </div>
         </div>

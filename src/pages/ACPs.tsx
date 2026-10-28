@@ -382,7 +382,7 @@ export default function ACPs() {
               <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <input
+                <input aria-label="Search by number, title, or author"
                   type="text"
                   placeholder="Search by number, title, or author"
                   value={searchQuery}
@@ -455,7 +455,11 @@ export default function ACPs() {
                         <tr
                           key={acp.number}
                           onClick={() => navigate(`/acps/${acp.number}`)}
-                          className="h-10 cursor-pointer border-b border-border/50 hover:bg-accent/40 transition-colors"
+                          onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/acps/${acp.number}`); }}
+                          tabIndex={0}
+                          role="link"
+                          aria-label={`ACP-${acp.number}: ${acp.title}`}
+                          className="h-10 cursor-pointer border-b border-border/50 hover:bg-accent/40 focus-visible:bg-accent/40 transition-colors"
                         >
                           <td className="num text-[12px] text-muted-foreground pr-3">{acp.number}</td>
                           <td className="pr-4">
