@@ -29,6 +29,7 @@ import {
   getTeleporterMessages,
 } from '../api';
 import type { Chain } from '../types';
+import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import type { DailyTxLatest } from '../api';
 import { FilterModal } from '../components/FilterModal';
 
@@ -335,18 +336,9 @@ export function Dashboard() {
         getAllChainsTxCountLatest(),
       ]);
 
-      // A few EVM chain IDs are registered on two blockchains (a chain that moved
-      // subnets). Activity is keyed by EVM ID, so give it to one of them only,
-      // the one with more active validators, instead of counting it twice.
-      const evmOwner = new Map<string, Chain>();
-      for (const chain of chainsData) {
-        if (!chain.evmChainId) continue;
-        const key = String(chain.evmChainId);
-        const prev = evmOwner.get(key);
-        if (!prev || (chain.validatorCount ?? 0) > (prev.validatorCount ?? 0)) evmOwner.set(key, chain);
-      }
-      const ownsActivity = (chain: Chain) =>
-        !chain.evmChainId || evmOwner.get(String(chain.evmChainId)) === chain;
+      // Chains sharing an EVM ID get its activity once, not twice.
+      const owners = activityOwners(chainsData);
+      const ownsActivity = (chain: Chain) => activityOwnerOf(owners, chain) === chain;
 
       const daily: Record<string, DailyTxLatest> = {};
       for (const chain of chainsData) {

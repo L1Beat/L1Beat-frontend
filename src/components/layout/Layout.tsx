@@ -9,7 +9,7 @@ import {
   Code,
   Flame,
 } from 'lucide-react';
-import { TopNav } from './TopNav';
+import { TopNav, isNavActive } from './TopNav';
 import { Footer } from '../Footer';
 import { capsuleDisplacementMap, supportsBackdropRefraction } from './liquidRefraction';
 
@@ -50,13 +50,7 @@ function MobileDock() {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [refract] = useState(supportsBackdropRefraction);
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return pathname === '/' || pathname.startsWith('/chain/');
-    }
-    return pathname === path || pathname.startsWith(path + '/');
-  };
-  const activeIndex = dockItems.findIndex((item) => isActive(item.path));
+  const activeIndex = dockItems.findIndex((item) => isNavActive(pathname, item.path));
 
   // The lens slides under the active tab; measure it after layout and on resize.
   useLayoutEffect(() => {

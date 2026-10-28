@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
@@ -68,6 +69,7 @@ export function ChainDetails() {
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
   const [activeSection, setActiveSection] = useState<string>('activity');
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
+  const [activityOwner, setActivityOwner] = useState<Chain | null>(null);
   const [risk, setRisk] = useState<ChainRisk | null>(null);
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
   // Full-history series used for the "All" timeframe. For L1s this is the same
@@ -103,13 +105,16 @@ export function ChainDetails() {
       setCchainBurnDaily([]);
       setCchainBurnMonthly([]);
       setSubnetType(null);
+      setActivityOwner(null);
 
       // Phase 1 — find the chain and paint the shell (header + KPIs) immediately.
       let foundChain;
+      let owner: Chain | undefined;
       try {
         const chains = await getChains({ includeInactive: true });
         if (cancelled) return;
         foundChain = chains.find(c => c.chainId === chainId);
+        if (foundChain) owner = activityOwnerOf(activityOwners(chains), foundChain);
         if (!foundChain && chainId) {
           // Registry renames that only add word breaks ("turingchain" became
           // "Turing Chain") changed the slug; send old links to the new one.
@@ -139,6 +144,9 @@ export function ChainDetails() {
       }
 
       setChain({ ...foundChain, validators: [] });
+      // Its EVM ID's activity is counted on another blockchain's page.
+      const activityElsewhere = !!owner && owner !== foundChain;
+      setActivityOwner(activityElsewhere ? owner! : null);
       setError(null);
       setLoading(false);
       setValidatorsLoading(!!foundChain.subnetId);
@@ -165,8 +173,8 @@ export function ChainDetails() {
         const [sType, history, txCounts, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
           sid ? getL1BeatSubnetType(sid) : Promise.resolve(null),
           // One extra day: the unfinished current day is dropped, leaving 30.
-          getTPSHistory(31, apiChainId),
-          getChainTxCountHistory(apiChainId, 31),
+          activityElsewhere ? Promise.resolve([]) : getTPSHistory(31, apiChainId),
+          activityElsewhere ? Promise.resolve([]) : getChainTxCountHistory(apiChainId, 31),
           sid && !isPrimary ? getL1BeatDailyFeeBurn(sid) : Promise.resolve([]),
           sid && !isPrimary ? getL1BeatFeeMetrics(sid) : Promise.resolve([]),
           isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'day', limit: 100 }) : Promise.resolve(null),
@@ -717,7 +725,14 @@ export function ChainDetails() {
 
       <StatStrip
         items={[
-          !detailsLoading && tpsHistory.length === 0 && txHistory.length === 0
+          activityOwner
+            ? {
+                label: 'Activity',
+                value: '—',
+                sub: `Counted under ${activityOwner.chainName}`,
+                tooltip: `This chain shares EVM chain ID ${activityOwner.evmChainId} with another ${activityOwner.chainName} blockchain, so its transactions are shown there.`,
+              }
+            : !detailsLoading && tpsHistory.length === 0 && txHistory.length === 0
             ? {
                 label: 'Activity',
                 value: '—',
@@ -783,7 +798,7 @@ export function ChainDetails() {
             <div className="flex flex-col gap-4 sm:gap-6">
               <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
-                  <ChainActivityCard points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} />
+                  <ChainActivityCard points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} elsewhere={activityOwner} />
                 </SectionErrorBoundary>
               </section>
 
@@ -1562,10 +1577,12 @@ const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 // Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
 const QUIET_TX_PER_DAY = 864;
 
-function ChainActivityCard({ points: raw, unit, loading = false }: {
+function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = null }: {
   points: { t: number; v: number }[];
   unit: 'tps' | 'tx';
   loading?: boolean;
+  /** The chain that carries this EVM ID's activity, when it isn't this one. */
+  elsewhere?: Chain | null;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1669,7 +1686,18 @@ function ChainActivityCard({ points: raw, unit, loading = false }: {
           </div>
         )}
       </header>
-      {!geom ? (
+      {!geom && elsewhere ? (
+        <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
+          <p className="text-[13px] text-foreground">Activity is counted under another blockchain</p>
+          <p className="text-[12px] text-muted-foreground max-w-md">
+            This chain shares EVM chain ID {elsewhere.evmChainId} with{' '}
+            <Link to={`/chain/${elsewhere.chainId}`} className="text-foreground underline underline-offset-2">
+              {elsewhere.chainName}
+            </Link>
+            , which has more active validators, so its transactions are shown there.
+          </p>
+        </div>
+      ) : !geom ? (
         <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
           <p className="text-[13px] text-foreground">No activity data for this chain yet</p>
           <p className="text-[12px] text-muted-foreground max-w-md">
