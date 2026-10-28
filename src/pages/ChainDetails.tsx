@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
+import { chainSeo } from '../utils/chainSeo';
 import { format } from 'date-fns';
 import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
@@ -537,15 +538,7 @@ export function ChainDetails() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-      <SEO
-        title={chain.chainName}
-        description={
-          chain.description?.slice(0, 200) ||
-          `${chain.chainName} on Avalanche: current TPS, validators, economics, and a side-by-side compare against other L1s.`
-        }
-        image={chain.chainLogoUri}
-        url={`/chain/${chain.chainId}`}
-      />
+      <SEO {...chainSeo(chain)} />
       <button
         onClick={() => navigate('/')}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -1665,9 +1658,11 @@ function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = nul
       <header className="flex items-end justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {points.length > 1 ? `${subtitle}, last ${points.length} days` : subtitle}
-          </p>
+          {points.length > 0 && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {points.length > 1 ? `${subtitle}, last ${points.length} days` : subtitle}
+            </p>
+          )}
         </div>
         {shown && (
           <div className="text-right">

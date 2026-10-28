@@ -70,7 +70,26 @@ async function generate() {
 
     // 3. Load server entry
     const template = await fs.readFile(path.resolve(root, 'dist/index.html'), 'utf-8');
-    const { render } = await import(path.resolve(root, 'dist/server/entry-server.js'));
+    const { render, renderHead, getChainPages } = await import(path.resolve(root, 'dist/server/entry-server.js'));
+
+    // When a page brings its own preview tags, drop the template's defaults so
+    // crawlers don't see two conflicting sets. A page with only a title keeps
+    // the default previews but not the default title.
+    const withHead = (html, head) => {
+      if (head.includes('og:title')) {
+        html = html.replace(/<!--default-meta-->[\s\S]*?<!--\/default-meta-->/, '');
+      } else if (head.includes('<title')) {
+        html = html.replace(/(<!--default-meta-->[\s\S]*?)<title>[^<]*<\/title>/, '$1');
+      }
+      return html.replace('<!--head-meta-->', head);
+    };
+    const helmetTags = (helmet) => [helmet?.title, helmet?.meta, helmet?.link, helmet?.script]
+      .map((t) => t?.toString() || '').join('\n');
+    const writePage = async (url, html) => {
+      const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}/index.html`);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, html);
+    };
 
     // 4. Get API URL
     const getApiUrl = async () => {
@@ -159,26 +178,29 @@ async function generate() {
                   <link rel="canonical" href="https://l1beat.io${url}" />
               `;
           } else {
-              // Use Helmet tags for non-blog routes
-              helmetHead = `
-                  ${helmet.title?.toString() || ''}
-                  ${helmet.meta?.toString() || ''}
-                  ${helmet.link?.toString() || ''}
-                  ${helmet.script?.toString() || ''}
-              `;
+              helmetHead = helmetTags(helmet);
           }
 
-          html = html.replace('<!--head-meta-->', helmetHead);
-
-          const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}/index.html`);
-          await fs.mkdir(path.dirname(filePath), { recursive: true });
-          await fs.writeFile(filePath, html);
+          await writePage(url, withHead(html, helmetHead));
           console.log(`Generated ${url}`);
       } catch (e) {
           console.error(`Error rendering ${url}:`, e);
       }
     }
     
+    // Chain pages render in the browser (their data is live), but each gets its
+    // own HTML file so search results and link previews name the chain. The root
+    // stays empty and unmarked, so the client renders it fresh.
+    try {
+      const chainPages = await getChainPages();
+      for (const seo of chainPages) {
+        await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+      }
+      console.log(`Generated ${chainPages.length} chain page heads`);
+    } catch (e) {
+      console.error('Failed to generate chain pages', e);
+    }
+
     // Cleanup server build
     // await fs.rm(path.resolve(root, 'dist/server'), { recursive: true, force: true });
     console.log('SSG Build Complete!');
