@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -22,6 +22,10 @@ let nextId = 1;
 
 export function ToasterProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // The portal waits for mount: the pre-rendered HTML has no toast container,
+  // and rendering one during hydration made React discard the whole page.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -36,7 +40,7 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {typeof document !== 'undefined' &&
+      {mounted &&
         createPortal(
           <div
             aria-live="polite"

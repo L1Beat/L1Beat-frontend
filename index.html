@@ -1,6 +1,15 @@
 <!doctype html>
 <html lang="en" class="light">
   <head>
+    <!-- Apply the saved theme before first paint; the pre-rendered HTML is always light. -->
+    <script>
+      try {
+        var t = localStorage.getItem('theme');
+        if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.classList.remove('light', 'dark');
+        document.documentElement.classList.add(t);
+      } catch (e) {}
+    </script>
     <meta charset="UTF-8" />
 
     <!-- IBM Plex Sans (UI) + IBM Plex Mono (numbers, IDs) -->

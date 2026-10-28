@@ -125,6 +125,9 @@ async function generate() {
           const { html: appHtml, helmet } = render(url, {});
 
           let html = template.replace('<!--app-html-->', appHtml);
+          // Record which route this HTML is for. Netlify serves the root index.html
+          // for client-only routes too, and hydrating it as another page fails.
+          html = html.replace('<div id="root">', `<div id="root" data-prerendered="${url}">`);
 
           // Check if this is a blog post route
           const blogSlug = url.match(/^\/blog\/(.+)$/)?.[1];
