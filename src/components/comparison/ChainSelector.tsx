@@ -62,7 +62,7 @@ export const ChainSelector = memo(function ChainSelector({
       >
         <div className="flex items-center gap-2 px-3 h-11 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
+          <input aria-label="Search chains"
             type="text"
             placeholder="Search chains"
             value={searchTerm}

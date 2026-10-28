@@ -32,6 +32,8 @@ interface ComparisonChartProps {
   hoveredChainId?: string | null;
   onHoverChain?: (chainId: string | null) => void;
   viewMode?: 'absolute' | 'normalized';
+  /** Replaces the default "no data" text, e.g. when requests are being rate limited. */
+  emptyMessage?: string;
 }
 
 function getDataPoints(data: ChainComparisonData, metricType: ComparisonMetricType): { timestamp: number }[] {
@@ -76,6 +78,7 @@ export const ComparisonChart = memo(function ComparisonChart({
   hoveredChainId = null,
   onHoverChain,
   viewMode = 'absolute',
+  emptyMessage,
 }: ComparisonChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -289,7 +292,7 @@ export const ComparisonChart = memo(function ComparisonChart({
   if (!hasData) {
     return (
       <div className="h-[320px] flex items-center justify-center text-center px-6">
-        <p className="text-[13px] text-muted-foreground">None of these chains have data for this metric yet.</p>
+        <p className="text-[13px] text-muted-foreground max-w-sm">{emptyMessage ?? 'None of these chains have data for this metric yet.'}</p>
       </div>
     );
   }

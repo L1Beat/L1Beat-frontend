@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
-import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
+import { getAllChainsCumulativeTxCountLatest, getAllChainsTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
@@ -110,7 +110,7 @@ export function ChainSpecificMetrics() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
-  const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
+  const [latestTxByChainId, setLatestTxByChainId] = useState<Record<string, number>>({});
   const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [copied, setCopied] = useState(false);
 
@@ -172,10 +172,9 @@ export function ChainSpecificMetrics() {
     });
   }, []);
 
-  // Note: there's no bulk "active addresses latest" endpoint; we compute this client-side
-  // with a bounded number of requests (cached) to avoid hammering the API.
-  const topChainsByDailyActive = useMemo(() => {
-    const getLatest = (c: Chain) => Number(dailyActiveLatestByChainId[c.chainId] ?? 0);
+  // Ranked by the latest day's transactions, from one bulk request.
+  const topChainsByTx = useMemo(() => {
+    const getLatest = (c: Chain) => Number(latestTxByChainId[c.chainId] ?? 0);
     const sorted = [...chains].sort((a, b) => {
       const aVal = getLatest(a);
       const bVal = getLatest(b);
@@ -186,7 +185,7 @@ export function ChainSpecificMetrics() {
     const top = sorted.slice(0, 6);
     if (selectedChain && !top.some(c => c.chainId === selectedChain.chainId)) top.push(selectedChain);
     return top;
-  }, [chains, selectedChain, dailyActiveLatestByChainId]);
+  }, [chains, selectedChain, latestTxByChainId]);
 
   // Load chains on mount
   useEffect(() => {
@@ -282,41 +281,19 @@ export function ChainSpecificMetrics() {
 
     let cancelled = false;
 
-    const getActiveAddressLookupId = (chain: Chain) =>
-      (chain.evmChainId ? String(chain.evmChainId) : undefined) || chain.originalChainId || chain.chainId;
-
-    // Limit to a reasonable subset first (already sorted with C-Chain first and by cumulative tx),
-    // so we don't fire a request for every chain on initial load.
-    const candidateChains = chains.slice(0, 25);
-
+    // One bulk request. Ranking by active addresses took a request per chain
+    // (25 on every visit) because the backend has no bulk endpoint for them.
     async function run() {
-      const concurrency = 6;
-      const queue = [...candidateChains];
-      const results: Record<string, number> = {};
-
-      async function worker() {
-        while (queue.length && !cancelled) {
-          const chain = queue.shift();
-          if (!chain) return;
-
-          const lookupId = getActiveAddressLookupId(chain);
-          if (!lookupId) continue;
-
-          try {
-            const data = await getDailyActiveAddresses(lookupId, 7);
-            const latest = data?.[data.length - 1];
-            const value = Number(latest?.activeAddresses ?? (latest as { value?: number } | undefined)?.value ?? 0);
-            results[chain.chainId] = Number.isFinite(value) ? value : 0;
-          } catch {
-            results[chain.chainId] = 0;
-          }
-        }
-      }
-
-      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      const latest = await getAllChainsTxCountLatest();
       if (cancelled) return;
-
-      setDailyActiveLatestByChainId(prev => ({ ...prev, ...results }));
+      const results: Record<string, number> = {};
+      for (const chain of chains) {
+        const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
+          .map(k => (k == null ? '' : String(k)))
+          .find(k => k && latest[k]);
+        if (hit) results[chain.chainId] = latest[hit].value;
+      }
+      setLatestTxByChainId(results);
     }
 
     run();
@@ -588,18 +565,18 @@ export function ChainSpecificMetrics() {
 
           {/* Second row: Top chains + timeframe */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Quick select: top chains by Daily Active Addresses */}
-            {topChainsByDailyActive.length > 0 && (
+            {/* Quick select: top chains by daily transactions */}
+            {topChainsByTx.length > 0 && (
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
                   <div className="text-xs font-medium text-muted-foreground">Top chains</div>
-                  <div className="text-[11px] text-muted-foreground/80">by daily active addresses</div>
+                  <div className="text-[11px] text-muted-foreground">by daily transactions</div>
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                  {topChainsByDailyActive.map((chain) => {
+                  {topChainsByTx.map((chain) => {
                     const isActive = selectedChain?.chainId === chain.chainId;
                     const logoSrc = chain.chainLogoUri || '/icon-dark-animated.svg';
-                    const latestDAA = Number(dailyActiveLatestByChainId[chain.chainId] ?? 0);
+                    const latestDAA = Number(latestTxByChainId[chain.chainId] ?? 0);
                     return (
                       <button
                         key={chain.chainId}

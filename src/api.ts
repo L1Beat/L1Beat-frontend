@@ -257,6 +257,15 @@ function isCacheable(data: unknown): boolean {
   return true;
 }
 
+// When the backend last answered 429. Fetchers turn failures into empty lists,
+// so views use this to tell "rate limited" apart from "no data".
+let lastRateLimitedAt = 0;
+export function recentlyRateLimited(withinMs = 60_000): boolean {
+  return Date.now() - lastRateLimitedAt < withinMs;
+}
+
+class ClientError extends Error {}
+
 async function fetchWithRetry<T>(
   url: string,
   options: RequestInit = {},
@@ -294,7 +303,11 @@ async function fetchWithRetry<T>(
           throw new Error('Server timeout - The request took too long to complete');
         }
         if (response.status === 429) {
-          throw new Error('Rate limit exceeded - Please try again later');
+          lastRateLimitedAt = Date.now();
+          throw new ClientError('Rate limit exceeded - Please try again later');
+        }
+        if (response.status >= 400 && response.status < 500) {
+          throw new ClientError(`HTTP error! status: ${response.status}`);
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -309,6 +322,10 @@ async function fetchWithRetry<T>(
     } catch (error) {
       clearTimeout(timeoutId);
       lastError = error as Error;
+
+      // A 4xx won't change on retry, and retrying a 429 only spends more of
+      // the rate limit.
+      if (error instanceof ClientError) break;
 
       // Check if the request was aborted (timeout)
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -1632,6 +1649,7 @@ async function fetchExternalWithRetry<T>(
   timeout: number = 30000
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error occurred');
+  let retryAfterMs: number | null = null;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     const controller = new AbortController();
@@ -1645,8 +1663,16 @@ async function fetchExternalWithRetry<T>(
         headers: { 'Accept': 'application/json' },
       });
 
+      if (response.status === 429) {
+        // The indexer's limit refills each second, so a wait usually clears it.
+        lastRateLimitedAt = Date.now();
+        const retryAfter = Number(response.headers.get('Retry-After'));
+        retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : null;
+        throw new Error('HTTP error! status: 429');
+      }
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const err = response.status < 500 ? new ClientError(`HTTP error! status: ${response.status}`) : new Error(`HTTP error! status: ${response.status}`);
+        throw err;
       }
 
       return await response.json() as T;
@@ -1654,10 +1680,13 @@ async function fetchExternalWithRetry<T>(
       lastError = error instanceof DOMException && error.name === 'AbortError'
         ? new Error('Request timeout')
         : error as Error;
+      // Other 4xx answers won't change on retry.
+      if (error instanceof ClientError) break;
 
       if (attempt < retries - 1) {
-        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const delay = retryAfterMs ?? Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
+        retryAfterMs = null;
+        await new Promise(resolve => setTimeout(resolve, Math.min(delay, 10000)));
       }
     } finally {
       clearTimeout(timeoutId);
