@@ -717,7 +717,14 @@ export function ChainDetails() {
 
       <StatStrip
         items={[
-          quiet && latestTx
+          !detailsLoading && tpsHistory.length === 0 && txHistory.length === 0
+            ? {
+                label: 'Activity',
+                value: '—',
+                sub: 'No data yet',
+                tooltip: "Transactions come from Avalanche's metrics API or the chain's public RPC. Neither has data for this chain yet.",
+              }
+            : quiet && latestTx
             ? {
                 label: 'Transactions',
                 value: latestTx.value.toLocaleString(),
@@ -1663,8 +1670,12 @@ function ChainActivityCard({ points: raw, unit, loading = false }: {
         )}
       </header>
       {!geom ? (
-        <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">
-          Not enough activity data to chart.
+        <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
+          <p className="text-[13px] text-foreground">No activity data for this chain yet</p>
+          <p className="text-[12px] text-muted-foreground max-w-md">
+            Transactions come from Avalanche's metrics API or the chain's public RPC. Neither has data for this
+            chain yet.
+          </p>
         </div>
       ) : (
         <div className="relative">

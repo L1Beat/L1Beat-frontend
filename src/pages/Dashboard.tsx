@@ -467,6 +467,11 @@ export function Dashboard() {
     (c: Chain) => (dailyTx ? dailyTx[c.chainId]?.value : c.tps?.value),
     [dailyTx],
   );
+  // Active chains with any activity figure; network totals only add these up.
+  const coveredChains = useMemo(
+    () => chains.filter((c) => c.isActive && activityOf(c) != null).length,
+    [chains, activityOf],
+  );
   const totalNetworkTps = useMemo(
     () => chains.reduce((sum, c) => sum + (activityOf(c) ?? 0), 0),
     [chains, activityOf],
@@ -640,7 +645,7 @@ export function Dashboard() {
         </div>
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
           {heroView === 'map' ? (
-            <KpiCards metrics={metrics} activeChains={activeCount} range={range} floating />
+            <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} range={range} floating />
           ) : (
             <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} floating />
           )}
@@ -650,7 +655,7 @@ export function Dashboard() {
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-4">
       <div className="md:hidden">
         {heroView === 'map' ? (
-          <KpiCards metrics={metrics} activeChains={activeCount} range={range} />
+          <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} range={range} />
         ) : (
           <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} />
         )}
@@ -708,6 +713,13 @@ export function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {coveredChains > 0 && coveredChains < activeCount && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Activity data covers {coveredChains} of {activeCount} active L1s. The rest have no public RPC and
+            aren't in Avalanche's metrics API, so they show "—".
+          </p>
+        )}
 
         {totalPages > 1 && (
           <ScreenerPagination
@@ -775,11 +787,13 @@ const ChainAvatar = memo(ChainAvatarImpl);
 function KpiCardsImpl({
   metrics,
   activeChains,
+  coveredChains,
   range,
   floating = false,
 }: {
   metrics: NetworkMetrics;
   activeChains: number;
+  coveredChains: number;
   range: Range;
   floating?: boolean;
 }) {
@@ -790,6 +804,9 @@ function KpiCardsImpl({
   const windowLabel = rangeWindowLabel(range);
   const priorLabel = range === 'ALL' ? undefined : `vs prior ${windowLabel}`;
   const pending = 'Not available right now';
+  const coverage = coveredChains > 0
+    ? ` Covers the ${coveredChains} chains with activity data; chains with no public RPC or metrics source aren't counted.`
+    : '';
 
   const items: StatItem[] = [
     {
@@ -804,7 +821,7 @@ function KpiCardsImpl({
       delta: tpsDelta,
       deltaLabel: priorLabel,
       sub: tps.current == null ? pending : 'transactions per second',
-      tooltip: 'Transactions per second summed across every L1 and the C-Chain.',
+      tooltip: `Transactions per second summed across L1s and the C-Chain.${coverage}`,
     },
     {
       label: 'Validators',
@@ -817,6 +834,7 @@ function KpiCardsImpl({
       delta: txDelta,
       deltaLabel: priorLabel,
       sub: tx.current == null ? pending : undefined,
+      tooltip: coverage ? `Daily transactions summed across chains.${coverage}` : undefined,
     },
   ];
   return <StatStrip items={items} floating={floating} />;
@@ -1094,7 +1112,10 @@ function ScreenerTableImpl({
                 <td className="text-right">
                   <CellBar value={tps ?? 0} max={maxTps}>
                     {dailyTx ? (
-                      <span className={`num text-[12px] w-14 inline-block ${txColor(tps)}`}>
+                      <span
+                        className={`num text-[12px] w-14 inline-block ${txColor(tps)}`}
+                        title={tps == null ? "No activity data. This chain has no public RPC and isn't in Avalanche's metrics API." : undefined}
+                      >
                         {tps == null ? '—' : formatCount(tps)}
                       </span>
                     ) : (
