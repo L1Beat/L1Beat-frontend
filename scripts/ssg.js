@@ -195,14 +195,50 @@ async function generate() {
     // Chain pages render in the browser (their data is live), but each gets its
     // own HTML file so search results and link previews name the chain. The root
     // stays empty and unmarked, so the client renders it fresh.
+    let chainPages = [];
     try {
-      const chainPages = await getChainPages();
+      chainPages = await getChainPages();
       for (const seo of chainPages) {
         await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
       }
       console.log(`Generated ${chainPages.length} chain page heads`);
     } catch (e) {
       console.error('Failed to generate chain pages', e);
+    }
+
+    // sitemap.xml and robots.txt. Without them Netlify answers both paths with
+    // the app's index.html.
+    try {
+      const siteUrl = 'https://l1beat.io';
+      const entries = ['/', '/metrics', '/stablecoins', '/burn', '/acps', '/blog', '/api', '/brand']
+        .map((url) => ({ url }));
+      try {
+        const { acps } = JSON.parse(await fs.readFile(path.resolve(root, 'dist/acps/processed-acps.json'), 'utf-8'));
+        for (const acp of acps ?? []) if (acp.number != null) entries.push({ url: `/acps/${acp.number}` });
+      } catch (e) {
+        console.error('Sitemap: no ACP list', e.message);
+      }
+      for (const [slug, post] of blogPosts) {
+        // publishedAt, not updatedAt: the backend bumps updatedAt on every sync.
+        const date = post.publishedAt;
+        entries.push({ url: `/blog/${slug}`, lastmod: date ? new Date(date).toISOString().slice(0, 10) : undefined });
+      }
+      for (const seo of chainPages) entries.push({ url: seo.url });
+
+      const xmlEscape = (v) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const sitemap = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...entries.map(({ url, lastmod }) =>
+          `  <url><loc>${xmlEscape(siteUrl + url)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`),
+        '</urlset>',
+        '',
+      ].join('\n');
+      await fs.writeFile(path.resolve(root, 'dist/sitemap.xml'), sitemap);
+      await fs.writeFile(path.resolve(root, 'dist/robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
+      console.log(`Generated sitemap.xml with ${entries.length} URLs`);
+    } catch (e) {
+      console.error('Failed to generate sitemap', e);
     }
 
     // Cleanup server build
