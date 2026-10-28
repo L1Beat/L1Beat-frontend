@@ -125,15 +125,9 @@ export default function ACPDetails() {
   useEffect(() => {
     // Only load on client side
     if (typeof window !== 'undefined') {
-      Promise.all([
-        import('react-syntax-highlighter').then(mod => mod.Prism),
-        import('react-syntax-highlighter/dist/esm/styles/prism').then(styles => ({
-          vscDarkPlus: styles.vscDarkPlus,
-          oneLight: styles.oneLight
-        }))
-      ]).then(([Highlighter, styles]) => {
+      import('../utils/codeHighlighter').then(({ SyntaxHighlighter: Highlighter, vscDarkPlus, oneLight }) => {
         setSyntaxHighlighter(() => Highlighter);
-        setSyntaxStyles(styles);
+        setSyntaxStyles({ vscDarkPlus, oneLight });
       }).catch(err => console.error('Failed to load syntax highlighter:', err));
     }
   }, []);
