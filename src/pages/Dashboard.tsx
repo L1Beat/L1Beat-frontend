@@ -26,6 +26,7 @@ import {
   getNetworkTxCountHistory,
   getNetworkValidatorTotal,
   getTPSHistory,
+  getAllChainsTpsHistory,
   getTeleporterMessages,
 } from '../api';
 import type { Chain } from '../types';
@@ -47,7 +48,8 @@ type SortKey = 'name' | 'tps' | 'validators';
 type SortDir = 'asc' | 'desc';
 
 const RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
-const TREND_FETCH_DAYS = 30;
+// The Δ 24h column compares the last two complete days.
+const TREND_FETCH_DAYS = 7;
 const RANGE_DAYS: Record<Range, number> = {
   '24H': 2,
   '7D': 7,
@@ -549,8 +551,28 @@ export function Dashboard() {
     [filteredChains, currentPage],
   );
 
+  // Every chain's trend in one request. Null means the backend can't serve
+  // it, and the table falls back to one request per visible chain.
+  const [bulkTrends, setBulkTrends] = useState<Record<string, number[]> | null | undefined>(undefined);
   useEffect(() => {
-    if (paginatedChains.length === 0) return;
+    let active = true;
+    getAllChainsTpsHistory(TREND_FETCH_DAYS).then((map) => { if (active) setBulkTrends(map); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!bulkTrends) return;
+    const updates: Record<string, number[]> = {};
+    for (const c of chains) {
+      const hit = [c.evmChainId, c.originalChainId, c.subnetId]
+        .map((k) => (k == null ? '' : String(k)))
+        .find((k) => k && bulkTrends[k]);
+      updates[c.chainId] = hit ? bulkTrends[hit] : [];
+    }
+    setTpsHistoryByChain(updates);
+  }, [bulkTrends, chains]);
+
+  useEffect(() => {
+    if (bulkTrends !== null || paginatedChains.length === 0) return;
     const missing = paginatedChains.filter((c) => !tpsHistoryByChain[c.chainId]);
     if (missing.length === 0) return;
     let active = true;
@@ -581,7 +603,7 @@ export function Dashboard() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paginatedChains]);
+  }, [paginatedChains, bulkTrends]);
 
   // Rendered in the loading state too: the SSG build only sees that state.
   const seo = (

@@ -673,6 +673,33 @@ export async function getTPSHistory(days: number = 7, chainId?: string): Promise
   });
 }
 
+// Daily TPS for every chain in one request, oldest first, keyed by every id a
+// chain might be looked up by. Null when the backend has no such route (404)
+// or the request fails, so callers can fall back to per-chain requests.
+export async function getAllChainsTpsHistory(days: number = 7): Promise<Record<string, number[]> | null> {
+  return fetchWithCache(`tps-all-history-${days}`, async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: any[] }>(`${API_URL}/tps/all/history?days=${days}`);
+      if (!response.success || !Array.isArray(response.data)) return null;
+      const map: Record<string, number[]> = {};
+      for (const row of response.data) {
+        const values = (Array.isArray(row?.history) ? row.history : [])
+          .filter((p: any) => p && typeof p.timestamp === 'number' && typeof p.value === 'number')
+          .sort((a: any, b: any) => a.timestamp - b.timestamp)
+          .filter(isNotToday)
+          .map((p: any) => Number(p.value));
+        for (const k of [row.evmChainId, row.subnetId, row.chainId]) {
+          if (k != null && String(k).trim()) map[String(k).trim()] = values;
+        }
+      }
+      return map;
+    } catch (error) {
+      console.error('All chains TPS history fetch error:', error);
+      return null;
+    }
+  });
+}
+
 export async function getCumulativeTxCount(chainId: string, days: number = 7): Promise<CumulativeTxCount[]> {
   return fetchWithCache(`cumulative-tx-${chainId}-${days}`, async () => {
     try {
