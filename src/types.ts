@@ -21,6 +21,8 @@ export interface Chain {
   } | null;
   isActive?: boolean;
   validatorCount?: number;
+  /** All-time P-Chain validation fees in nAVAX. Null for legacy subnets, which don't pay them. */
+  totalFeesPaid?: number | null;
   // Compact decentralization summary from the chains list (present only for
   // chains with active L1 validators). Full detail comes from getChainRisk.
   decentralization?: ChainDecentralization;

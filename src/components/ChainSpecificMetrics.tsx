@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
 import { getAllChainsActiveAddressesLatest, getAllChainsCumulativeTxCountLatest, getAllChainsTxCountLatest, getChains, getChainMetricsHistory } from '../api';
+import type { ChainMetricsHistory } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
@@ -327,7 +328,7 @@ export function ChainSpecificMetrics() {
 
       try {
         const history = await getChainMetricsHistory(chainId, fetchDays,
-          ['activeAddresses', 'txCount', 'maxTps', 'gasUsed', 'avgGasPrice', 'feesPaid']);
+          ['activeAddresses', 'txCount', 'maxTps', 'gasUsed', 'avgGasPrice', 'feesPaid']).catch((): ChainMetricsHistory => ({}));
 
         // Transform all data to MetricData format
         const transformData = (data: any[]): MetricData[] => {

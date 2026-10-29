@@ -1,20 +1,19 @@
 import { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Chain, DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory, L1BeatFeeMetrics } from '../../types';
+import { Chain, DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { Link } from 'react-router-dom';
 import { Plus, X, Share2, Check } from 'lucide-react';
 import { ChainSelector } from './ChainSelector';
 import { ComparisonChart, ComparisonMetricType, formatValue } from './ComparisonChart';
 import { seriesColor } from './colors';
 import { SegmentedControl } from '../instrument';
-import { recentlyRateLimited, getChainMetricsHistory, getChains, getL1BeatFeeMetrics } from '../../api';
+import { recentlyRateLimited, getChainMetricsHistory, getChains } from '../../api';
 import type { ChainMetric } from '../../api';
 import { LoadingSpinner } from '../LoadingSpinner';
 
 interface ComparisonViewProps {
   currentChain?: Chain;
   availableChains?: Chain[];
-  validatorCountBySubnet?: Record<string, number>;
 }
 
 interface ChainComparisonData {
@@ -25,7 +24,8 @@ interface ChainComparisonData {
   gasUsed: GasUsedHistory[];
   avgGasPrice: AvgGasPriceHistory[];
   feesPaid: FeesPaidHistory[];
-  feeMetrics: L1BeatFeeMetrics | null;
+  /** A request for this chain's series failed (not the same as no data). */
+  failed: boolean;
   /** The table's series (transactions, max TPS) are still loading. */
   loading: boolean;
   /** Series fetched so far, and series in flight. Others load when their tab is opened. */
@@ -48,7 +48,7 @@ const TABLE_METRICS: ComparisonMetricType[] = ['dailyTxCount', 'maxTPS'];
 
 const emptyData = (chain: Chain): ChainComparisonData => ({
   chain, dailyActiveAddresses: [], dailyTxCount: [], maxTPS: [], gasUsed: [], avgGasPrice: [], feesPaid: [],
-  feeMetrics: null, loading: true, loaded: [], pending: [],
+  failed: false, loading: true, loaded: [], pending: [],
 });
 
 
@@ -122,7 +122,6 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 export const ComparisonView = memo(function ComparisonView({
   currentChain,
   availableChains: providedChains,
-  validatorCountBySubnet = {}
 }: ComparisonViewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -210,8 +209,8 @@ export const ComparisonView = memo(function ComparisonView({
   const selectedMetricRef = useRef(selectedMetric);
   selectedMetricRef.current = selectedMetric;
 
-  // Fetch only the given series for one chain (plus its fee totals on first load).
-  const fetchChainData = useCallback(async (chain: Chain, metrics: ComparisonMetricType[], withFees: boolean) => {
+  // Fetch only the given series for one chain.
+  const fetchChainData = useCallback(async (chain: Chain, metrics: ComparisonMetricType[]) => {
     const targetChainId = chain.chainId;
     const apiChainId = chain.originalChainId || chain.chainId;
     const update = (fn: (c: ChainComparisonData) => ChainComparisonData) =>
@@ -224,13 +223,10 @@ export const ComparisonView = memo(function ComparisonView({
       });
 
     update(c => ({ ...c, pending: [...new Set([...c.pending, ...metrics])] }));
-    const [series, fees] = await Promise.all([
-      getChainMetricsHistory(apiChainId, timeframe,
-        metrics.map(m => BACKEND_METRIC[m]).filter((m): m is ChainMetric => m !== null)).catch(() => ({})),
-      withFees && chain.subnetId
-        ? getL1BeatFeeMetrics(chain.subnetId).then(r => r[0] ?? null).catch(() => null)
-        : Promise.resolve(undefined),
-    ]);
+    let failed = false;
+    const series = await getChainMetricsHistory(apiChainId, timeframe,
+      metrics.map(m => BACKEND_METRIC[m]).filter((m): m is ChainMetric => m !== null))
+      .catch(() => { failed = true; return {}; });
     update(c => {
       const next: ChainComparisonData = { ...c };
       // Each fetcher returns its own metric's row type.
@@ -238,7 +234,8 @@ export const ComparisonView = memo(function ComparisonView({
         const key = BACKEND_METRIC[m];
         (next as unknown as Record<string, unknown[]>)[m] = (key && (series as Record<string, unknown[]>)[key]) || [];
       });
-      if (fees !== undefined) next.feeMetrics = fees;
+      // A later tab loading fine doesn't bring back the table's missing values.
+      next.failed = failed || (c.failed && !TABLE_METRICS.every(m => metrics.includes(m)));
       next.loaded = [...new Set([...c.loaded, ...metrics])];
       next.pending = c.pending.filter(m => !metrics.includes(m));
       if (TABLE_METRICS.every(m => next.loaded.includes(m))) next.loading = false;
@@ -247,7 +244,7 @@ export const ComparisonView = memo(function ComparisonView({
   }, [timeframe]);
 
   const loadChain = useCallback((chain: Chain) => {
-    fetchChainData(chain, [...new Set([...TABLE_METRICS, selectedMetricRef.current])], true);
+    fetchChainData(chain, [...new Set([...TABLE_METRICS, selectedMetricRef.current])]);
   }, [fetchChainData]);
 
   useEffect(() => {
@@ -278,15 +275,15 @@ export const ComparisonView = memo(function ComparisonView({
   useEffect(() => {
     if (prevTimeframeRef.current === timeframe) return;
     prevTimeframeRef.current = timeframe;
-    setComparisonChains(prev => prev.map(c => ({ ...emptyData(c.chain), feeMetrics: c.feeMetrics })));
-    comparisonChains.forEach(data => fetchChainData(data.chain, [...new Set([...TABLE_METRICS, selectedMetricRef.current])], false));
+    setComparisonChains(prev => prev.map(c => emptyData(c.chain)));
+    comparisonChains.forEach(data => fetchChainData(data.chain, [...new Set([...TABLE_METRICS, selectedMetricRef.current])]));
   }, [timeframe, fetchChainData]);
 
   // Opening a metric tab loads that series for chains that don't have it yet.
   useEffect(() => {
     comparisonChains.forEach(c => {
       if (!c.loaded.includes(selectedMetric) && !c.pending.includes(selectedMetric) && !c.loading) {
-        fetchChainData(c.chain, [selectedMetric], false);
+        fetchChainData(c.chain, [selectedMetric]);
       }
     });
   }, [selectedMetric, comparisonChains, fetchChainData]);
@@ -364,12 +361,12 @@ export const ComparisonView = memo(function ComparisonView({
     const last = <T extends { value: number }>(xs: T[]) => (xs.length > 0 ? xs[xs.length - 1].value : null);
     return comparisonChains.map(data => ({
       maxTps: last(data.maxTPS),
-      validators: (data.chain.subnetId ? validatorCountBySubnet[data.chain.subnetId] : undefined) ?? data.chain.validatorCount ?? null,
+      validators: data.chain.validatorCount ?? null,
       dailyTx: last(data.dailyTxCount),
-      feesBurned: data.feeMetrics ? data.feeMetrics.total_fees_paid / NAVAX_TO_AVAX : null,
+      feesBurned: data.chain.totalFeesPaid != null ? data.chain.totalFeesPaid / NAVAX_TO_AVAX : null,
       loading: data.loading,
     }));
-  }, [comparisonChains, validatorCountBySubnet]);
+  }, [comparisonChains]);
 
   // The largest value in each column, set in a heavier weight when two or more chains are compared.
   const leaders = useMemo(() => {
@@ -400,11 +397,12 @@ export const ComparisonView = memo(function ComparisonView({
       <span className={value === leader ? 'font-semibold text-foreground' : 'text-foreground'}>{fmt(value)}</span>
     );
   const slotsLeft = 4 - comparisonChains.length;
-  // Fetchers return [] on failure, so an empty chain after a recent 429 is
-  // probably a failed request rather than a chain without data.
-  const rateLimited = recentlyRateLimited() && comparisonChains.some(c =>
-    !c.loading && c.dailyTxCount.length === 0 && c.maxTPS.length === 0);
-  const rateLimitNote = 'The data API is limiting requests right now, so some values may be missing. Try again in a minute.';
+  // Only this view's own failed requests count; a 429 elsewhere on the page
+  // says nothing about these values.
+  const anyFailed = comparisonChains.some(c => c.failed);
+  const failureNote = recentlyRateLimited()
+    ? 'The data API is limiting requests right now, so some values are missing. Try again in a minute.'
+    : "Some values didn't load. Try again in a minute.";
 
   // The chart waits until every chain has the selected series.
   const chartChains = comparisonChains.map(c => ({
@@ -446,8 +444,8 @@ export const ComparisonView = memo(function ComparisonView({
         )}
       </div>
 
-      {rateLimited && (
-        <p role="status" className="text-[12px] text-muted-foreground">{rateLimitNote}</p>
+      {anyFailed && (
+        <p role="status" className="text-[12px] text-muted-foreground">{failureNote}</p>
       )}
 
       <div className="rounded-md border border-border bg-card overflow-hidden">
@@ -586,7 +584,7 @@ export const ComparisonView = memo(function ComparisonView({
               hoveredChainId={hoveredChainId}
               onHoverChain={setHoveredChainId}
               viewMode={viewMode}
-              emptyMessage={recentlyRateLimited() ? rateLimitNote : undefined}
+              emptyMessage={anyFailed ? failureNote : undefined}
             />
           </div>
           <dl className="flex flex-wrap gap-x-6 gap-y-1 px-4 py-3 text-[11px]">

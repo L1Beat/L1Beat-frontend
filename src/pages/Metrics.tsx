@@ -10,7 +10,6 @@ import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
 import { ComparisonView } from '../components/comparison';
 import {
   getChains,
-  getL1BeatActiveValidatorCounts,
   getNetworkMaxTPSHistory,
   getNetworkTxCountHistory,
   getNetworkValidatorTotal,
@@ -82,7 +81,6 @@ function scrollToSection(id: string) {
 }
 
 export function Metrics() {
-  const [validatorCountBySubnet, setValidatorCountBySubnet] = useState<Record<string, number>>({});
   const [activeChains, setActiveChains] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const comparisonRef = useRef<HTMLDivElement>(null);
@@ -98,9 +96,6 @@ export function Metrics() {
       try {
         const chains = await getChains();
         setActiveChains(chains.filter((c) => c.isActive).length);
-        const subnetIds = chains.map((c) => c.subnetId).filter(Boolean) as string[];
-        const counts = await getL1BeatActiveValidatorCounts(subnetIds);
-        setValidatorCountBySubnet(counts);
       } catch {
         // decorative
       }
@@ -291,7 +286,7 @@ export function Metrics() {
         </section>
         <section id="compare" ref={comparisonRef} className="scroll-mt-16">
           <SectionErrorBoundary label="chain comparison">
-            <ComparisonView validatorCountBySubnet={validatorCountBySubnet} />
+            <ComparisonView />
           </SectionErrorBoundary>
         </section>
       </div>

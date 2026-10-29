@@ -460,6 +460,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             rpcUrl: chain.rpc_url || '',
             explorerUrl: chain.explorer_url || '',
             validatorCount: chain.active_validators ?? chain.validator_count ?? 0,
+            totalFeesPaid: typeof chain.total_fees_paid === 'number' ? chain.total_fees_paid : null,
             decentralization: chain.decentralization || undefined,
             validators: [],
             tps: null,
@@ -1544,7 +1545,8 @@ const singleMetricHistory: Record<ChainMetric, (chainId: string, days: number) =
 };
 
 // Several of a chain's daily series in one request. A backend without the
-// batch route (404) gets one request per series instead.
+// batch route (404) gets one request per series instead. Throws when the
+// request fails, so callers can tell a failure from a chain without data.
 export async function getChainMetricsHistory(chainId: string, days: number, metrics: ChainMetric[]): Promise<ChainMetricsHistory> {
   const wanted = [...new Set(metrics)].sort();
   if (wanted.length === 0) return {};
@@ -1569,13 +1571,14 @@ export async function getChainMetricsHistory(chainId: string, days: number, metr
       }
       return result as ChainMetricsHistory;
     } catch (error) {
-      missingRoute = error instanceof ClientError && error.message.includes('status: 404');
-      if (!missingRoute) console.error('Chain metrics history fetch error:', error);
-      return null;
+      if (error instanceof ClientError && error.message.includes('status: 404')) {
+        missingRoute = true;
+        return null;
+      }
+      throw error;
     }
   });
-  if (batch) return batch;
-  if (!missingRoute) return {};
+  if (!missingRoute) return batch ?? {};
   const series = await Promise.all(wanted.map(m => singleMetricHistory[m](chainId, days).catch(() => [])));
   return Object.fromEntries(wanted.map((m, i) => [m, series[i]]));
 }
@@ -1802,42 +1805,6 @@ async function fetchAllL1BeatPages<T>(
     seen.add(key);
     return true;
   });
-}
-
-// Fetch the count of active validators for a single subnet by requesting
-// limit=1 and reading meta.total.  Cached per subnet for 5 minutes.
-export async function getL1BeatActiveValidatorCount(subnetId: string): Promise<number> {
-  const cacheKey = `l1beat-active-validators-${subnetId}`;
-  return fetchExternalWithCache(cacheKey, async () => {
-    try {
-      const params = new URLSearchParams({ subnet_id: subnetId, active: 'true', count: 'true', limit: '1' });
-      const response = await fetchExternalWithRetry<{ data: unknown[]; meta: { total: number } }>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?${params.toString()}`
-      );
-      return response.meta?.total ?? 0;
-    } catch (error) {
-      console.error(`L1Beat active validator count fetch error (${subnetId}):`, error);
-      return 0;
-    }
-  }, 5 * 60 * 1000);
-}
-
-// Fetch active validator counts for multiple subnets in batches to avoid 429s.
-// Returns a map of subnetId -> active validator count.
-export async function getL1BeatActiveValidatorCounts(subnetIds: string[]): Promise<Record<string, number>> {
-  const unique = [...new Set(subnetIds.filter(Boolean))];
-  const counts: Record<string, number> = {};
-  const BATCH_SIZE = 5;
-
-  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
-    const batch = unique.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (id) => ({ id, count: await getL1BeatActiveValidatorCount(id) }))
-    );
-    results.forEach(({ id, count }) => { counts[id] = count; });
-  }
-
-  return counts;
 }
 
 // L1Beat subnet record as returned by /api/v1/data/subnets/{id}
