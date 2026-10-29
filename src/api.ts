@@ -64,7 +64,7 @@ const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 // sessionStorage (not localStorage) is deliberate: it survives reloads but
 // clears when the tab closes, which bounds how stale data can get.
 // Bump PERSIST_VERSION whenever a cached response shape changes to bust old data.
-const PERSIST_VERSION = 'v1';
+const PERSIST_VERSION = 'v2';
 const PERSIST_PREFIX = `l1beat-cache-${PERSIST_VERSION}:`;
 
 const persistAvailable = (() => {
@@ -152,17 +152,14 @@ export function clearChainsCache() {
   clearPersistedCache((key) => key.startsWith('chains'));
 }
 
-// Clear chains cache on module load to ensure fresh data after code changes
-clearChainsCache();
-
 const BASE_URL = config.apiBaseUrl;
 const API_URL = `${BASE_URL}/api`;
 const EXPLORER_URL = 'https://subnets.avax.network';
 
+// Only CORS-safelisted headers, so a GET goes out without an OPTIONS preflight
+// first. Content-Type and Cache-Control each cost one; the browser sets Origin.
 const DEFAULT_HEADERS = {
   'Accept': 'application/json',
-  'Content-Type': 'application/json',
-  'Origin': typeof window !== 'undefined' ? window.location.origin : '',
 };
 
 // Define constants for rate limiting
@@ -210,17 +207,31 @@ const apiRequestTracker = {
   }
 };
 
+// Requests in flight by cache key. Two parts of a page asking for the same
+// data at once share one request instead of sending two.
+const inFlight = new Map<string, Promise<unknown>>();
+function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+  const promise = load().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
 async function fetchWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const now = Date.now();
-
   const fresh = readCache(key, duration);
   if (fresh !== undefined) {
     return fresh as T;
   }
+  return shared(key, () => loadIntoCache(key, fetcher));
+}
+
+async function loadIntoCache<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const now = Date.now();
 
   // Check if we're rate-limited
   if (apiRequestTracker.isRateLimited) {
@@ -291,7 +302,6 @@ async function fetchWithRetry<T>(
         headers: {
           ...DEFAULT_HEADERS,
           ...options.headers,
-          'Cache-Control': 'no-cache',
         },
       });
 
@@ -1718,15 +1728,17 @@ async function fetchExternalWithCache<T>(
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const now = Date.now();
   const fresh = readCache(key, duration);
   if (fresh !== undefined) {
     return fresh as T;
   }
-  const data = await fetcher();
-  const sanitizedData = sanitizeResponse(data);
-  if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
-  return sanitizedData;
+  return shared(key, async () => {
+    const now = Date.now();
+    const data = await fetcher();
+    const sanitizedData = sanitizeResponse(data);
+    if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
+    return sanitizedData;
+  });
 }
 
 // Fetch from external APIs with only CORS-safe headers (no Cache-Control /

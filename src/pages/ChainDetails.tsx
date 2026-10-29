@@ -35,6 +35,7 @@ import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { isStale, missingActivity } from '../utils/activityCoverage';
 
 // Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
 const NAV_SCROLL_OFFSET = 56 + 48 + 12;
@@ -490,6 +491,9 @@ export function ChainDetails() {
     : tpsHistory.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
   const latestTx = txHistory.length ? txHistory[txHistory.length - 1] : null;
   const lastUpdate = tpsHistory.length > 0 ? tpsHistory[tpsHistory.length - 1].timestamp : null;
+  // Old points shouldn't read as current; label them with their date.
+  const lastActivity = activityPoints.length ? activityPoints[activityPoints.length - 1].t : null;
+  const stale = isStale(lastActivity);
 
   // Validators stream in after the shell. Until they arrive, derive active/
   // inactive from the chain's validatorCount (already in the list payload) so
@@ -729,14 +733,22 @@ export function ChainDetails() {
             ? {
                 label: 'Activity',
                 value: '—',
-                sub: 'No data yet',
-                tooltip: "Transactions come from Avalanche's metrics API or the chain's public RPC. Neither has data for this chain yet.",
+                sub: missingActivity(chain).short,
+                tooltip: missingActivity(chain).detail,
               }
             : quiet && latestTx
             ? {
                 label: 'Transactions',
                 value: latestTx.value.toLocaleString(),
                 sub: `on ${format(new Date(latestTx.timestamp * 1000), 'MMM d')}`,
+                tooltip: stale ? missingActivity(chain, lastActivity).detail : undefined,
+              }
+            : stale
+            ? {
+                label: 'TPS',
+                value: String(tpsValue),
+                sub: missingActivity(chain, lastActivity).short,
+                tooltip: missingActivity(chain, lastActivity).detail,
               }
             : {
                 label: 'Current TPS',
@@ -791,7 +803,7 @@ export function ChainDetails() {
             <div className="flex flex-col gap-4 sm:gap-6">
               <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
-                  <ChainActivityCard points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} elsewhere={activityOwner} />
+                  <ChainActivityCard chain={chain} points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} elsewhere={activityOwner} />
                 </SectionErrorBoundary>
               </section>
 
@@ -1576,7 +1588,8 @@ const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 // Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
 const QUIET_TX_PER_DAY = 864;
 
-function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = null }: {
+function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewhere = null }: {
+  chain: Chain;
   points: { t: number; v: number }[];
   unit: 'tps' | 'tx';
   loading?: boolean;
@@ -1586,6 +1599,9 @@ function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = nul
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const isTx = unit === 'tx';
+  const lastPoint = raw.length ? raw[raw.length - 1].t : null;
+  const missing = missingActivity(chain, lastPoint);
+  const stale = isStale(lastPoint);
   const fmt = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTpsExact(v));
   const fmtTick = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTps(v));
   const subtitle = isTx ? 'Transactions per day' : 'Transactions per second';
@@ -1674,8 +1690,8 @@ function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = nul
           <div className="text-right">
             <div className="num text-[22px] font-medium text-foreground leading-none">{fmt(shown.v)}</div>
             <div className="text-[11px] mt-1">
-              {active ? (
-                <span className="text-muted-foreground">{format(new Date(active.t * 1000), 'MMM d')}</span>
+              {active || stale ? (
+                <span className="text-muted-foreground">{format(new Date((active ?? shown).t * 1000), 'MMM d')}</span>
               ) : delta != null ? (
                 <span className={positive ? 'text-up' : 'text-down'}>
                   {positive ? '+' : '−'}{Math.abs(delta).toFixed(0)}% over 30d
@@ -1700,11 +1716,8 @@ function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = nul
         </div>
       ) : !geom ? (
         <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
-          <p className="text-[13px] text-foreground">No activity data for this chain yet</p>
-          <p className="text-[12px] text-muted-foreground max-w-md">
-            Transactions come from Avalanche's metrics API or the chain's public RPC. Neither has data for this
-            chain yet.
-          </p>
+          <p className="text-[13px] text-foreground">{missing.title}</p>
+          <p className="text-[12px] text-muted-foreground max-w-md">{missing.detail}</p>
         </div>
       ) : (
         <div className="relative">
@@ -1760,6 +1773,11 @@ function ChainActivityCard({ points: raw, unit, loading = false, elsewhere = nul
         </svg>
         <ChartWatermark />
         </div>
+      )}
+      {geom && stale && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {missing.title}. {missing.detail}
+        </p>
       )}
     </div>
   );

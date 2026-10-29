@@ -31,6 +31,7 @@ import {
 } from '../api';
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
+import { missingActivity } from '../utils/activityCoverage';
 import type { DailyTxLatest } from '../api';
 
 type Range = '24H' | '7D' | '30D' | 'ALL';
@@ -1156,7 +1157,7 @@ function ScreenerTableImpl({
                     {dailyTx ? (
                       <span
                         className={`num text-[12px] w-14 inline-block ${txColor(tps)}`}
-                        title={tps == null ? "No activity data. This chain has no public RPC and isn't in Avalanche's metrics API." : undefined}
+                        title={tps == null ? missingActivity(chain).detail : undefined}
                       >
                         {tps == null ? '—' : formatCount(tps)}
                       </span>
