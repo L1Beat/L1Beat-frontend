@@ -680,7 +680,9 @@ export async function getTPSHistory(days: number = 7, chainId?: string): Promise
       console.error('TPS history fetch error:', error);
       return [];
     }
-  });
+  // The network series changes while chains are being backfilled; a short
+  // cache keeps headline figures in step with the per-chain table.
+  }, chainId ? CACHE_DURATION : 60 * 1000);
 }
 
 // Daily TPS for every chain in one request, oldest first, keyed by every id a
@@ -1104,7 +1106,7 @@ export async function getNetworkTxCountHistory(days: number = 30): Promise<Daily
       console.error('Network tx count history fetch error:', error);
       return [];
     }
-  });
+  }, 60 * 1000);
 }
 
 export async function getChainTxCountHistory(chainId: string, days: number = 30): Promise<DailyTxCount[]> {

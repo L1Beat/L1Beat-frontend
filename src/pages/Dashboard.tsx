@@ -31,7 +31,7 @@ import {
 } from '../api';
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
-import { missingActivity } from '../utils/activityCoverage';
+import { coverageChanged, missingActivity } from '../utils/activityCoverage';
 import type { DailyTxLatest } from '../api';
 
 type Range = '24H' | '7D' | '30D' | 'ALL';
@@ -117,6 +117,16 @@ function categoryClass(name: string): string {
 interface HistoryPoint {
   timestamp: number;
   value: number;
+  /** Network rows: how many chains the day's total adds up. */
+  chainCount?: number;
+}
+
+/** Yesterday vs the day before, summed over only the chains counted on both. */
+interface SameChainsChange {
+  current: number;
+  prior: number;
+  chains: number;
+  timestamp: number;
 }
 
 interface NetworkMetrics {
@@ -131,11 +141,18 @@ function pctDelta(curr: number | null, prev: number | null): number | null {
 }
 
 function rangeWindow(history: HistoryPoint[], range: Range, mode: 'avg' | 'sum') {
-  if (history.length === 0) return { current: null as number | null, prior: null as number | null };
+  const none: HistoryPoint[] = [];
+  if (history.length === 0) {
+    return { current: null as number | null, prior: null as number | null, currentPoints: none, priorPoints: none };
+  }
   if (range === '24H') {
+    const last = history.slice(-1);
+    const prior = history.slice(-2, -1);
     return {
-      current: history[history.length - 1]?.value ?? null,
-      prior: history[history.length - 2]?.value ?? null,
+      current: last[0]?.value ?? null,
+      prior: prior[0]?.value ?? null,
+      currentPoints: last,
+      priorPoints: prior,
     };
   }
   const w = range === 'ALL' ? history.length : RANGE_DAYS[range];
@@ -146,9 +163,8 @@ function rangeWindow(history: HistoryPoint[], range: Range, mode: 'avg' | 'sum')
     const sum = arr.reduce((s, p) => s + p.value, 0);
     return mode === 'sum' ? sum : sum / arr.length;
   };
-  return { current: aggregate(last), prior: aggregate(prior) };
+  return { current: aggregate(last), prior: aggregate(prior), currentPoints: last, priorPoints: prior };
 }
-
 function rangeWindowLabel(r: Range): string {
   if (r === '24H') return '24h';
   if (r === '7D') return '7d';
@@ -408,10 +424,10 @@ export function Dashboard() {
           getNetworkValidatorTotal(),
         ]);
         const tpsHistory: HistoryPoint[] = (tpsRaw || [])
-          .map((p) => ({ timestamp: p.timestamp, value: Number(p.totalTps) || 0 }))
+          .map((p) => ({ timestamp: p.timestamp, value: Number(p.totalTps) || 0, chainCount: p.chainCount }))
           .sort((a, b) => a.timestamp - b.timestamp);
         const txHistory: HistoryPoint[] = (txRaw || [])
-          .map((p) => ({ timestamp: p.timestamp, value: Number(p.value) || 0 }))
+          .map((p) => ({ timestamp: p.timestamp, value: Number(p.value) || 0, chainCount: p.chainCount }))
           .sort((a, b) => a.timestamp - b.timestamp);
         const validators = validatorTotal?.totalValidators ?? null;
         setMetrics((prev) => {
@@ -421,7 +437,7 @@ export function Dashboard() {
             if (a.length !== b.length) return false;
             const la = a[a.length - 1];
             const lb = b[b.length - 1];
-            return !la || !lb || (la.timestamp === lb.timestamp && la.value === lb.value);
+            return !la || !lb || (la.timestamp === lb.timestamp && la.value === lb.value && la.chainCount === lb.chainCount);
           };
           if (
             prev.validators === validators &&
@@ -495,6 +511,28 @@ export function Dashboard() {
     () => chains.filter((c) => c.isActive && activityOf(c) != null).length,
     [chains, activityOf],
   );
+  // Uncovered chains with a public RPC are ones the backend can count from
+  // it but hasn't yet (a busy chain's backfill takes days, or the RPC is down).
+  const uncoveredWithRpc = useMemo(
+    () => chains.filter((c) => c.isActive && activityOf(c) == null && c.rpcUrl).length,
+    [chains, activityOf],
+  );
+  const sameChainsTx = useMemo<SameChainsChange | null>(() => {
+    if (!dailyTx) return null;
+    let current = 0;
+    let prior = 0;
+    let count = 0;
+    let timestamp = 0;
+    for (const c of chains) {
+      const day = c.isActive ? dailyTx[c.chainId] : undefined;
+      if (!day || day.previous == null) continue;
+      current += day.value;
+      prior += day.previous;
+      count += 1;
+      timestamp = Math.max(timestamp, day.timestamp);
+    }
+    return count > 0 ? { current, prior, chains: count, timestamp } : null;
+  }, [chains, dailyTx]);
   const totalNetworkTps = useMemo(
     () => chains.reduce((sum, c) => sum + (activityOf(c) ?? 0), 0),
     [chains, activityOf],
@@ -701,7 +739,7 @@ export function Dashboard() {
         </div>
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
           {heroView === 'map' ? (
-            <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} range={range} floating />
+            <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} sameChainsTx={sameChainsTx} range={range} floating />
           ) : (
             <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} floating />
           )}
@@ -711,7 +749,7 @@ export function Dashboard() {
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-4">
       <div className="md:hidden">
         {heroView === 'map' ? (
-          <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} range={range} />
+          <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} sameChainsTx={sameChainsTx} range={range} />
         ) : (
           <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} />
         )}
@@ -772,8 +810,11 @@ export function Dashboard() {
 
         {coveredChains > 0 && coveredChains < activeCount && (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Activity data covers {coveredChains} of {activeCount} active L1s. The rest have no public RPC and
-            aren't in Avalanche's metrics API, so they show "—".
+            Activity data covers {coveredChains} of {activeCount} active L1s; the others show "—".{' '}
+            {uncoveredWithRpc > 0 &&
+              `${uncoveredWithRpc} of them aren't in Avalanche's metrics API and have no count from their public RPC yet. `}
+            {activeCount - coveredChains - uncoveredWithRpc > 0 &&
+              `${activeCount - coveredChains - uncoveredWithRpc} have neither a public RPC nor metrics API data.`}
           </p>
         )}
 
@@ -831,19 +872,30 @@ function KpiCardsImpl({
   metrics,
   activeChains,
   coveredChains,
+  sameChainsTx,
   range,
   floating = false,
 }: {
   metrics: NetworkMetrics;
   activeChains: number;
   coveredChains: number;
+  sameChainsTx: SameChainsChange | null;
   range: Range;
   floating?: boolean;
 }) {
   const tps = rangeWindow(metrics.tpsHistory, range, 'avg');
   const tx = rangeWindow(metrics.txHistory, range, 'sum');
-  const tpsDelta = pctDelta(tps.current, tps.prior);
-  const txDelta = pctDelta(tx.current, tx.prior);
+  // A change is only shown between periods that count the same chains.
+  const tpsGap = coverageChanged(tps.currentPoints, tps.priorPoints);
+  const tpsDelta = tpsGap ? null : pctDelta(tps.current, tps.prior);
+  // For a single day, the per-chain counts allow a like-for-like change even
+  // when the network total's coverage moved.
+  const latestTx = metrics.txHistory[metrics.txHistory.length - 1];
+  const sameChains = range === '24H' && sameChainsTx && latestTx?.timestamp === sameChainsTx.timestamp ? sameChainsTx : null;
+  const txGap = sameChains ? null : coverageChanged(tx.currentPoints, tx.priorPoints);
+  const txDelta = sameChains
+    ? pctDelta(sameChains.current, sameChains.prior)
+    : txGap ? null : pctDelta(tx.current, tx.prior);
   const windowLabel = rangeWindowLabel(range);
   const priorLabel = range === 'ALL' ? undefined : `vs prior ${windowLabel}`;
   const pending = 'Not available right now';
@@ -863,8 +915,8 @@ function KpiCardsImpl({
       value: tps.current != null ? Math.round(tps.current).toLocaleString() : '—',
       delta: tpsDelta,
       deltaLabel: priorLabel,
-      sub: tps.current == null ? pending : 'transactions per second',
-      tooltip: `Transactions per second summed across L1s and the C-Chain.${coverage}`,
+      sub: tps.current == null ? pending : tpsGap ? 'Not compared: coverage changed' : 'transactions per second',
+      tooltip: `Transactions per second summed across L1s and the C-Chain.${coverage}${tpsGap ? ` ${tpsGap}` : ''}`,
     },
     {
       label: 'Validators',
@@ -876,8 +928,10 @@ function KpiCardsImpl({
       value: tx.current != null ? formatCount(tx.current) : '—',
       delta: txDelta,
       deltaLabel: priorLabel,
-      sub: tx.current == null ? pending : undefined,
-      tooltip: coverage ? `Daily transactions summed across chains.${coverage}` : undefined,
+      sub: tx.current == null ? pending : txGap ? 'Not compared: coverage changed' : undefined,
+      tooltip: `Daily transactions summed across chains.${coverage}${
+        sameChains ? ` The change compares only the ${sameChains.chains} chains counted on both days.` : txGap ? ` ${txGap}` : ''
+      }`,
     },
   ];
   return <StatStrip items={items} floating={floating} />;

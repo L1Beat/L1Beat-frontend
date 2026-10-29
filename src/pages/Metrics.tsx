@@ -15,6 +15,7 @@ import {
   getNetworkValidatorTotal,
   getTPSHistory,
 } from '../api';
+import { coverageChanged } from '../utils/activityCoverage';
 
 // Mirrors the chart's range buttons (30D, 90D, 1Y).
 type Range = '30D' | '90D' | '1Y';
@@ -31,7 +32,7 @@ interface Kpi {
 }
 
 interface HistoryStore {
-  tps: { timestamp: number; totalTps?: number }[];
+  tps: { timestamp: number; totalTps?: number; chainCount?: number }[];
   tx: { timestamp: number; value?: number; chainCount?: number }[];
   maxTps: { timestamp: number; value?: number; chainCount?: number }[];
   validatorTotal: number | null;
@@ -126,8 +127,10 @@ export function Metrics() {
 
         // Skip the state update (and the Chart.js re-render it triggers) when an
         // unchanged poll returns the same data — compare length + latest point.
+        // The latest day's value can change while chains are backfilled, so
+        // compare its whole row, not just its date.
         const sameSeries = (a: { timestamp: number }[], b: { timestamp: number }[]) =>
-          a.length === b.length && (a.length === 0 || a[0].timestamp === b[0].timestamp);
+          a.length === b.length && (a.length === 0 || JSON.stringify(a[0]) === JSON.stringify(b[0]));
         setHistory((prev) =>
           prev &&
           prev.validatorTotal === next.validatorTotal &&
@@ -163,25 +166,34 @@ export function Metrics() {
     // Each series reports how many chains its latest day adds up.
     const coverage = (n: number | null | undefined) =>
       n ? ` Covers the ${n} chains with data for it; chains with no public RPC or metrics source aren't counted.` : '';
+    // A change is only shown between windows that count the same chains.
+    const gap = <T extends { chainCount?: number }>(xs: T[]) => coverageChanged(xs.slice(0, days), prior(xs));
+    const tpsGap = gap(history.tps);
+    const txGap = gap(history.tx);
+    const peakGap = gap(history.maxTps);
+    const withGap = (text: string, g: string | null) => (g ? `${text} ${g}` : text);
 
     return [
       {
         label: `Avg network TPS, ${label}`,
         value: tpsCurr ? Math.round(tpsCurr).toLocaleString() : '—',
-        delta: pctDelta(tpsCurr, tpsPrev),
-        tooltip: `Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.${coverage(history.chainCount)}`,
+        delta: tpsGap ? null : pctDelta(tpsCurr, tpsPrev),
+        deltaSuffix: tpsGap ? 'Not compared: coverage changed' : undefined,
+        tooltip: withGap(`Average daily transactions per second summed across all Avalanche L1s, taken over the last ${label}.${coverage(history.chainCount)}`, tpsGap),
       },
       {
         label: `Transactions, ${label}`,
         value: txCurr ? formatCount(txCurr) : '—',
-        delta: pctDelta(txCurr, txPrev),
-        tooltip: `Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.${coverage(history.tx[0]?.chainCount ?? history.chainCount)}`,
+        delta: txGap ? null : pctDelta(txCurr, txPrev),
+        deltaSuffix: txGap ? 'Not compared: coverage changed' : undefined,
+        tooltip: withGap(`Sum of daily transaction counts across all L1s over the last ${label}. Excludes today’s in-progress data.${coverage(history.tx[0]?.chainCount ?? history.chainCount)}`, txGap),
       },
       {
         label: `Peak TPS, ${label}`,
         value: peakCurr ? Math.round(peakCurr).toLocaleString() : '—',
-        delta: pctDelta(peakCurr, peakPrev),
-        tooltip: `The highest single-day network TPS observed during the last ${label}.${coverage(history.maxTps[0]?.chainCount)}`,
+        delta: peakGap ? null : pctDelta(peakCurr, peakPrev),
+        deltaSuffix: peakGap ? 'Not compared: coverage changed' : undefined,
+        tooltip: withGap(`The highest single-day network TPS observed during the last ${label}.${coverage(history.maxTps[0]?.chainCount)}`, peakGap),
       },
       {
         label: 'Validators',
