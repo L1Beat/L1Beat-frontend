@@ -6,7 +6,7 @@ import {
   DollarSign,
   FileText,
   BookOpen,
-  Code,
+  Coins,
   Flame,
 } from 'lucide-react';
 import { TopNav, isNavActive } from './TopNav';
@@ -42,10 +42,10 @@ const dockItems: { id: string; path: string; icon: typeof LayoutGrid; label: str
   { id: 'overview', path: '/', icon: LayoutGrid, label: 'Overview' },
   { id: 'metrics', path: '/metrics', icon: BarChart3, label: 'Metrics' },
   { id: 'stablecoins', path: '/stablecoins', icon: DollarSign, label: 'Stables' },
+  { id: 'staking', path: '/staking', icon: Coins, label: 'Staking' },
   { id: 'burn', path: '/burn', icon: Flame, label: 'Burn' },
   { id: 'acps', path: '/acps', icon: FileText, label: 'ACPs' },
   { id: 'blog', path: '/blog', icon: BookOpen, label: 'Blog' },
-  { id: 'api', path: '/api', icon: Code, label: 'API' },
 ];
 
 function MobileDock() {
