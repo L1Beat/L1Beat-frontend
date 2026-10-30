@@ -1584,6 +1584,19 @@ const ACT_W = 760;
 const ACT_H = 180;
 const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 
+const DAY_S = 86400;
+
+// Consecutive daily points; a step longer than a day and a half starts a new run.
+function splitRuns<P extends { t: number }>(points: P[]): P[][] {
+  const runs: P[][] = [];
+  for (const p of points) {
+    const run = runs[runs.length - 1];
+    if (run && p.t - run[run.length - 1].t <= DAY_S * 1.5) run.push(p);
+    else runs.push([p]);
+  }
+  return runs;
+}
+
 // Daily TPS trend — uses the history already fetched for the headline number.
 // Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
 const QUIET_TX_PER_DAY = 864;
@@ -1627,21 +1640,29 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
     const pad = isTx ? slot / 2 : 0;
     const sx = (t: number) => ACT_M.left + pad + ((t - minX) / (maxX - minX || 1)) * (iw - 2 * pad);
     const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
-    const line = smoothLinePath(points.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
     const floor = ACT_M.top + ih;
-    const area = `${line} L${sx(maxX).toFixed(1)},${floor} L${sx(minX).toFixed(1)},${floor} Z`;
+    // Missing days break the line, so a gap doesn't read as a straight trend.
+    const runs = splitRuns(points).map((run) => {
+      const line = smoothLinePath(run.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
+      const x0 = sx(run[0].t).toFixed(1);
+      const x1 = sx(run[run.length - 1].t).toFixed(1);
+      return { line, area: `${line} L${x1},${floor} L${x0},${floor} Z`, lone: run.length === 1 ? run[0] : null };
+    });
     const yTicks = peak === 0 ? [0] : Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
     // Counts are whole days, so they're bars; a smoothed line would dip below zero between them.
     const barW = Math.max(2, slot * 0.7);
-    return { sx, sy, line, area, yTicks, floor, barW };
+    return { sx, sy, runs, yTicks, floor, barW };
   }, [points, isTx]);
 
   const latest = points.length ? points[points.length - 1] : null;
   const active = hover != null && points[hover] ? points[hover] : null;
   const shown = active ?? latest;
   const first = points[0];
+  const spanDays = first && latest ? Math.round((latest.t - first.t) / DAY_S) + 1 : 0;
+  const gaps = points.length > 1 && spanDays > points.length;
   // Day-to-day counts on a quiet chain swing by hundreds of percent; the delta would be noise.
-  const delta = !isTx && first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
+  // With missing days the first point isn't 30 days back, so there's no honest delta either.
+  const delta = !isTx && !gaps && first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
   const positive = delta != null && delta >= 0;
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -1682,7 +1703,11 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
           {points.length > 0 && (
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {points.length > 1 ? `${subtitle}, last ${points.length} days` : subtitle}
+              {points.length < 2
+                ? subtitle
+                : gaps
+                  ? `${subtitle}, ${points.length} of the last ${spanDays} days`
+                  : `${subtitle}, last ${points.length} days`}
             </p>
           )}
         </div>
@@ -1694,7 +1719,7 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
                 <span className="text-muted-foreground">{format(new Date((active ?? shown).t * 1000), 'MMM d')}</span>
               ) : delta != null ? (
                 <span className={positive ? 'text-up' : 'text-down'}>
-                  {positive ? '+' : '−'}{Math.abs(delta).toFixed(0)}% over 30d
+                  {positive ? '+' : '−'}{Math.abs(delta).toFixed(0)}% over {spanDays}d
                 </span>
               ) : (
                 <span className="text-muted-foreground">latest</span>
@@ -1759,8 +1784,16 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
             ))
           ) : (
             <>
-              <path d={geom.area} fill="url(#chain-tps-fill)" />
-              <path d={geom.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              {geom.runs.map((r, i) =>
+                r.lone ? (
+                  <circle key={i} cx={geom.sx(r.lone.t)} cy={geom.sy(r.lone.v)} r={2} fill="var(--ink)" />
+                ) : (
+                  <g key={i}>
+                    <path d={r.area} fill="url(#chain-tps-fill)" />
+                    <path d={r.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                  </g>
+                ),
+              )}
             </>
           )}
           {!isTx && latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="var(--ink)" />}
@@ -1774,11 +1807,15 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
         <ChartWatermark />
         </div>
       )}
-      {geom && stale && (
+      {geom && stale ? (
         <p className="mt-3 text-[11px] text-muted-foreground">
           {missing.title}. {missing.detail}
         </p>
-      )}
+      ) : geom && gaps ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Breaks in the line are days without a count yet. Older days are still being filled in.
+        </p>
+      ) : null}
     </div>
   );
 }
