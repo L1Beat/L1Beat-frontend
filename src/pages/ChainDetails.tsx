@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import { watermarkPlugin, smoothLinePath, getInkRgb } from '../utils/chartConfig';
+import { NodeId } from '../components/NodeId';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
 
@@ -1294,9 +1295,7 @@ export function ChainDetails() {
                                       className="w-2 h-2 rounded-sm shrink-0"
                                       style={{ backgroundColor: getValidatorColor(index, theme === 'dark', 0.9) }}
                                     />
-                                    <span className="num text-[12px] text-foreground">
-                                      {validator.address.slice(0, 8)}…{validator.address.slice(-6)}
-                                    </span>
+                                    <NodeId id={validator.address} className="text-[12px]" />
                                   </div>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">

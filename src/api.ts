@@ -2075,6 +2075,107 @@ export interface BurnedTotal {
   updated_at: string;
 }
 
+// --- Staking (Primary Network) ----------------------------------------------
+// Stake amounts in these endpoints are nAVAX decimal strings: totals pass 2^53.
+
+export const PRIMARY_NETWORK_SUBNET_ID = '11111111111111111111111111111111LpoYY';
+
+export interface StakingSummary {
+  as_of: string;
+  validator_count: number;
+  /** Active delegations, not unique delegators. */
+  delegation_count: number;
+  own_stake: string;
+  delegated_stake: string;
+  total_stake: string;
+  /** Total AVAX supply (platform.getCurrentSupply), not circulating. */
+  total_supply: string;
+  staked_supply_percent: number;
+  delegation_fee: {
+    median_percent: number;
+    histogram: {
+      label: string;
+      min_percent: number;
+      max_percent: number | null;
+      validator_count: number;
+      total_stake: string;
+    }[];
+  };
+  concentration: {
+    top10_percent: number;
+    top50_percent: number;
+    top100_percent: number;
+    nakamoto_33: number;
+    nakamoto_50: number;
+  };
+}
+
+export interface StakingUnlockWeek {
+  /** Monday 00:00 UTC; the first row is the current week. */
+  week_start: string;
+  validator_stake: string;
+  delegated_stake: string;
+  validator_count: number;
+  delegation_count: number;
+}
+
+export interface PrimaryValidator {
+  validation_id: string;
+  node_id: string;
+  /** Own stake, nAVAX. */
+  weight: number;
+  start_time: string;
+  end_time?: string;
+  uptime_percentage?: number;
+  delegation_fee_percent?: number;
+  delegator_count?: number;
+  total_delegated?: number;
+  total_stake?: number;
+}
+
+export async function getStakingSummary(): Promise<StakingSummary | null> {
+  return fetchExternalWithCache('staking-summary', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: StakingSummary }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Staking summary fetch error:', error);
+      return null;
+    }
+  }, 60 * 1000);
+}
+
+export async function getStakingUnlocks(weeks: number): Promise<StakingUnlockWeek[] | null> {
+  return fetchExternalWithCache(`staking-unlocks-${weeks}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: StakingUnlockWeek[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking/unlocks?weeks=${weeks}`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Staking unlocks fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+/** Every active Primary Network validator with its delegation numbers, in one request. */
+export async function getPrimaryNetworkValidators(): Promise<PrimaryValidator[] | null> {
+  return fetchExternalWithCache('primary-validators', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: PrimaryValidator[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?subnet_id=${PRIMARY_NETWORK_SUBNET_ID}&active=true&limit=10000&sort=total_stake&order=desc`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Primary Network validators fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export async function getBurnedTotal(): Promise<BurnedTotal | null> {
   return fetchExternalWithCache('burned-total', async () => {
     try {

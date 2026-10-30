@@ -82,6 +82,7 @@ const PAGES: Result[] = [
   { id: 'page-metrics', type: 'page', title: 'Network Metrics', subtitle: 'Aggregate L1 metrics', to: '/metrics' },
   { id: 'page-flows', type: 'page', title: 'Cross-chain flows', subtitle: 'ICM and Teleporter activity, on the Overview', to: '/?view=flows' },
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
+  { id: 'page-staking', type: 'page', title: 'Staking', subtitle: 'AVAX staked, validators, delegations, unlocks', to: '/staking' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
   { id: 'page-api', type: 'page', title: 'API Playground', subtitle: 'Test the REST & WebSocket APIs', to: '/api' },

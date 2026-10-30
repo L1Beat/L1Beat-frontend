@@ -9,6 +9,7 @@ import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { useToast } from '../components/Toaster';
+import { shortNodeId } from '../utils/nodeId';
 import { StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 
@@ -214,7 +215,7 @@ export function ValidatorDetails() {
   })();
 
   const kindLabel = { l1: 'L1 validator', primary: 'Primary Network validator', legacy: 'Legacy subnet validator' }[kind];
-  const nodeShort = shortId(validator.node_id, 10, 6);
+  const nodeShort = shortNodeId(validator.node_id);
   const backLabel = chain?.chainName ? chain.chainName : kind === 'primary' ? 'Primary Network' : 'Back';
 
   const stats: StatItem[] = isL1
