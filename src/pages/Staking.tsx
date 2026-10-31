@@ -265,7 +265,7 @@ function StakeSkyline({ validators, state, loadedAt }: {
             <div className="mt-3 h-9 w-[min(560px,80vw)] rounded bg-muted animate-pulse" />
           )}
           <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
-            Each box is one Primary Network validator, sized by its stake, own plus delegated.
+            Each box is one Primary Network validator, sized by its stake, own plus delegated. The protocol caps each validator at 3M&nbsp;AVAX, so the largest boxes are close to the same size.
           </p>
         </div>
         <div className="sm:text-right shrink-0 sm:min-h-[64px]">
