@@ -2208,6 +2208,53 @@ export async function getValidatorDelegations(nodeId: string): Promise<Validator
   }, 5 * 60 * 1000);
 }
 
+export interface DelegatorDelegation {
+  tx_id: string;
+  node_id: string;
+  /** nAVAX. */
+  stake: string;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+}
+
+export interface DelegatorPage {
+  data: DelegatorDelegation[];
+  meta: {
+    /** Rows matching the active filter. */
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+    /** Always the address's full history, whatever the filter. */
+    summary: {
+      active_count: number;
+      active_stake: string;
+      validator_count: number;
+      first_delegation_time: string | null;
+    };
+  };
+}
+
+/** One page of a reward address's delegations. Addresses can have millions, so this never fetches them all. */
+export async function getDelegatorDelegations(
+  address: string,
+  opts: { active?: boolean; sort: 'stake' | 'start_time' | 'end_time'; order: 'asc' | 'desc'; limit: number; offset: number },
+): Promise<DelegatorPage | null> {
+  const params = new URLSearchParams({ sort: opts.sort, order: opts.order, limit: String(opts.limit), offset: String(opts.offset) });
+  if (opts.active != null) params.set('active', String(opts.active));
+  return fetchExternalWithCache(`delegator-${address}-${params.toString()}`, async () => {
+    try {
+      return await fetchExternalWithRetry<DelegatorPage>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/delegators/${encodeURIComponent(address)}/delegations?${params.toString()}`,
+      );
+    } catch (error) {
+      console.error('Delegator delegations fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export async function getBurnedTotal(): Promise<BurnedTotal | null> {
   return fetchExternalWithCache('burned-total', async () => {
     try {

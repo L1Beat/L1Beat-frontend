@@ -34,6 +34,7 @@ const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ de
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 const Staking = lazy(() => import('./pages/Staking').then(m => ({ default: m.Staking })));
+const DelegatorDetails = lazy(() => import('./pages/DelegatorDetails').then(m => ({ default: m.DelegatorDetails })));
 
 function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
   const { Dashboard, BlogList, BlogPost, ACPs, NotFound } = pages;
@@ -124,6 +125,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/blog" element={<BlogList />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/validator/:validatorId" element={<ValidatorDetails />} />
+        <Route path="/delegator/:address" element={<DelegatorDetails />} />
         <Route path="/api" element={<APIPlayground />} />
         <Route path="/brand" element={<BrandGuidelines />} />
         <Route path="/404" element={<NotFound />} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Copy, Check, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
 import { getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType, getValidatorDelegations } from '../api';
@@ -775,7 +775,7 @@ function DelegationsPanel({ nodeId }: { nodeId: string }) {
   );
 }
 
-/** The delegator's reward address, shortened, with a copy button for the full one. */
+/** The delegator's reward address, shortened and linked to its delegator page, with a copy button for the full one. */
 function RewardOwner({ owners }: { owners: string[] | null }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
@@ -792,9 +792,13 @@ function RewardOwner({ owners }: { owners: string[] | null }) {
   };
   return (
     <span className="inline-flex items-center gap-1 min-w-0">
-      <span className="num text-foreground truncate" title={owners.join(', ')}>
+      <Link
+        to={`/delegator/${first}`}
+        className="num text-foreground truncate hover:underline underline-offset-2"
+        title={owners.join(', ')}
+      >
         {shortId(first, 12, 6)}
-      </span>
+      </Link>
       {owners.length > 1 && <span className="num text-[11px] text-muted-foreground">+{owners.length - 1}</span>}
       <button
         type="button"

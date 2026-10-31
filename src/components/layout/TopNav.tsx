@@ -52,7 +52,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-40 h-12 border-b border-border bg-background">
-      <div className="h-full px-4 sm:px-6 flex items-center gap-6">
+      <div className="h-full px-4 sm:px-6 flex items-center gap-6 md:gap-4 lg:gap-6">
         <Link to="/" className="flex items-center gap-2 shrink-0" aria-label="L1Beat home">
           <L1BeatLogo size="small" theme={theme} variant="header" />
           <span
@@ -71,13 +71,13 @@ export function TopNav() {
                 key={id}
                 to={path}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex items-center h-12 px-3 text-[12.5px] transition-colors ${
+                className={`relative flex items-center h-12 px-2 lg:px-3 text-[12.5px] transition-colors ${
                   active ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
                 {/* Active rule: the one place brand red appears in the chrome. */}
-                {active && <span aria-hidden className="absolute left-3 right-3 bottom-0 h-0.5 bg-brand" />}
+                {active && <span aria-hidden className="absolute left-2 right-2 lg:left-3 lg:right-3 bottom-0 h-0.5 bg-brand" />}
               </Link>
             );
           })}
@@ -88,19 +88,22 @@ export function TopNav() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="hidden sm:flex items-center gap-2 h-7 w-56 lg:w-64 px-2.5 rounded border border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+          className="hidden sm:flex md:hidden lg:flex items-center gap-2.5 h-8 w-56 lg:w-64 xl:w-[26rem] 2xl:w-[32rem] px-3 rounded-md border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 hover:bg-muted/60 transition-colors"
         >
-          <Search className="w-3.5 h-3.5" />
-          <span className="text-[12px] flex-1 text-left">Search</span>
-          <kbd className="num text-[10px] text-muted-foreground">⌘K</kbd>
+          <Search className="w-4 h-4 shrink-0" />
+          <span className="text-[13px] flex-1 text-left truncate">
+            <span className="xl:hidden">Search</span>
+            <span className="hidden xl:inline">Search chains, validators, addresses, ACPs…</span>
+          </span>
+          <kbd className="num text-[10px] leading-4 px-1.5 rounded border border-border bg-background text-muted-foreground">⌘K</kbd>
         </button>
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Search"
-          className="sm:hidden inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground"
+          className="sm:hidden md:inline-flex lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-muted/40 text-muted-foreground"
         >
-          <Search className="w-3.5 h-3.5" />
+          <Search className="w-4 h-4" />
         </button>
         <ThemeToggle variant="compact" />
         <SearchPalette open={open} onClose={() => setOpen(false)} />
