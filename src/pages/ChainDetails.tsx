@@ -582,7 +582,9 @@ export function ChainDetails() {
                         const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
                         return isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy subnet';
                       })(),
-                      chain.sybilResistanceType
+                      risk?.validator_manager?.type === 'placeholder'
+                        ? 'Fixed validator set'
+                        : chain.sybilResistanceType
                         ? /proof of authority/i.test(chain.sybilResistanceType)
                           ? 'PoA'
                           : /proof of stake/i.test(chain.sybilResistanceType)
@@ -1842,6 +1844,14 @@ function formatDelay(seconds: number): string {
 // worst (and most common) case; shared control and/or upgrade delays are better.
 // Churn limits only count when upgrades aren't instant (else they're bypassable).
 function controlAssessment(vm: ValidatorManager | null | undefined) {
+  if (vm?.type === 'placeholder') {
+    return {
+      chip: 'Fixed set',
+      chipTone: 'text-muted-foreground bg-muted/50',
+      headline: 'The validator manager is a placeholder address, so no validators can join and weights can\'t change.',
+      rows: [] as { label: string; value: string; tone: string; sub?: string }[],
+    };
+  }
   if (!vm || (!vm.owner && !vm.proxy)) {
     return {
       chip: 'Unresolved',
@@ -1942,6 +1952,13 @@ const PERMISSIONED = {
   dot: 'bg-[#d95926]',
   note: 'The chain operator controls who can validate (PoA).',
 };
+const FIXED_SET = {
+  label: 'Fixed validator set',
+  text: 'text-muted-foreground',
+  ring: 'bg-muted/50',
+  dot: 'bg-muted-foreground',
+  note: 'The validator manager is a placeholder address that can never approve a change, so no validators can join and weights can\'t change. Existing validators can still leave.',
+};
 const PERMISSIONLESS = {
   label: 'Permissionless',
   text: 'text-up',
@@ -1958,6 +1975,8 @@ const PERMISSIONLESS = {
 // spread stake yet be entirely operator-controlled.
 function permissionModel(managerType?: string, sybil?: string) {
   const t = (managerType || '').toLowerCase();
+  // On-chain fact first: a placeholder manager fixes the set whatever the registry says.
+  if (t === 'placeholder') return FIXED_SET;
   if (t === 'poa') return PERMISSIONED;
   if (t.startsWith('pos')) return PERMISSIONLESS;
   const s = (sybil || '').toLowerCase();

@@ -98,7 +98,9 @@ export interface ChainRisk {
   chain_id: string;
   validator_manager: {
     address: string;
-    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'unknown';
+    // 'placeholder': an empty, zero or precompile address that can never sign a
+    // validator-set change, so the set is fixed.
+    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'placeholder' | 'unknown';
     // Where the ValidatorManager lives — a recoverability signal independent of
     // control: 'self' means the set can't be changed if this L1 halts.
     deployed_on: 'c-chain' | 'self' | 'unknown';

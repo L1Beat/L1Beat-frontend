@@ -2176,6 +2176,38 @@ export async function getPrimaryNetworkValidators(): Promise<PrimaryValidator[] 
   }, 5 * 60 * 1000);
 }
 
+export interface ValidatorDelegation {
+  tx_id: string;
+  /** P-avax1 reward addresses; null when the tx names none. */
+  reward_owner: string[] | null;
+  /** nAVAX. */
+  stake: string;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+}
+
+/** A Primary Network node's running delegations, all pages, largest first. */
+export async function getValidatorDelegations(nodeId: string): Promise<ValidatorDelegation[] | null> {
+  return fetchExternalWithCache(`validator-delegations-${nodeId}`, async () => {
+    try {
+      const rows: ValidatorDelegation[] = [];
+      // 500 is the endpoint's page cap; the busiest nodes need two or three pages.
+      for (let offset = 0; offset < 10_000; offset += 500) {
+        const response = await fetchExternalWithRetry<{ data: ValidatorDelegation[]; meta?: { has_more?: boolean } }>(
+          `${L1BEAT_EXTERNAL_API}/api/v1/data/validators/${encodeURIComponent(nodeId)}/delegations?active=true&sort=stake&order=desc&limit=500&offset=${offset}`,
+        );
+        rows.push(...(response.data ?? []));
+        if (!response.meta?.has_more) break;
+      }
+      return rows;
+    } catch (error) {
+      console.error('Validator delegations fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export async function getBurnedTotal(): Promise<BurnedTotal | null> {
   return fetchExternalWithCache('burned-total', async () => {
     try {

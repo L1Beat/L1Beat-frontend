@@ -3,14 +3,14 @@ import type { ReactNode } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Copy, Check, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
-import { getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType } from '../api';
-import type { L1BeatValidator } from '../api';
+import { getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType, getValidatorDelegations } from '../api';
+import type { L1BeatValidator, ValidatorDelegation } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { useToast } from '../components/Toaster';
 import { shortNodeId } from '../utils/nodeId';
-import { StatStrip } from '../components/instrument';
+import { SegmentedControl, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 
 const PRIMARY_NETWORK_SUBNET_ID = '11111111111111111111111111111111LpoYY';
@@ -524,6 +524,10 @@ export function ValidatorDetails() {
         </Panel>
       )}
 
+      {kind === 'primary' && validator.active && (validator.delegator_count ?? 0) > 0 && (
+        <DelegationsPanel nodeId={validator.node_id} />
+      )}
+
       {history.length > 1 && (
         <ValidationHistory
           validations={history}
@@ -640,6 +644,170 @@ function ValidationHistory({ validations, current, chains, onOpen }: {
         </div>
       )}
     </Panel>
+  );
+}
+
+type DelegationSort = 'stake' | 'end';
+const DELEGATION_SORTS = [
+  { value: 'stake' as const, label: 'Largest' },
+  { value: 'end' as const, label: 'Ending soon' },
+];
+
+/** Running delegations to a Primary Network validator. */
+function DelegationsPanel({ nodeId }: { nodeId: string }) {
+  const [rows, setRows] = useState<ValidatorDelegation[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [sort, setSort] = useState<DelegationSort>('stake');
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    setFailed(false);
+    getValidatorDelegations(nodeId).then((r) => {
+      if (cancelled) return;
+      if (r) setRows(r);
+      else setFailed(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId]);
+
+  const sorted = rows
+    ? [...rows].sort((a, b) =>
+        sort === 'stake'
+          ? Number(b.stake) - Number(a.stake)
+          : new Date(a.end_time).getTime() - new Date(b.end_time).getTime(),
+      )
+    : [];
+  const shown = showAll ? sorted : sorted.slice(0, 20);
+  const total = rows?.reduce((sum, r) => sum + Number(r.stake), 0) ?? 0;
+
+  return (
+    <Panel
+      title="Delegations"
+      aside={
+        rows && rows.length > 1 ? (
+          <SegmentedControl size="xs" value={sort} options={DELEGATION_SORTS} onChange={setSort} ariaLabel="Sort delegations" />
+        ) : undefined
+      }
+      flush
+    >
+      {failed ? (
+        <p className="px-4 sm:px-5 py-4 text-[12px] text-muted-foreground">Delegations couldn't be loaded. Try again in a minute.</p>
+      ) : !rows ? (
+        <div className="px-4 sm:px-5 py-4 space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-5 rounded bg-muted animate-pulse" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="px-4 sm:px-5 py-4 text-[12px] text-muted-foreground">No running delegations.</p>
+      ) : (
+        <>
+          <p className="px-4 sm:px-5 pt-3 pb-2 text-[12px] text-muted-foreground">
+            <span className="num text-foreground">{rows.length.toLocaleString()}</span> running{' '}
+            {rows.length === 1 ? 'delegation' : 'delegations'}, <span className="num text-foreground">{formatAvax(total)}</span> AVAX in total.
+          </p>
+          <table className="w-full text-[12px]">
+            <thead className="hidden sm:table-header-group">
+              <tr className="border-y border-border text-[11px] text-muted-foreground">
+                <th className="text-left font-normal py-2 px-4 sm:px-5">Delegator</th>
+                <th className="text-right font-normal py-2 px-3">Stake</th>
+                <th className="text-right font-normal py-2 px-3">Share</th>
+                <th className="text-right font-normal py-2 px-3">Started</th>
+                <th className="text-right font-normal py-2 px-3">Ends</th>
+                <th className="text-right font-normal py-2 px-4 sm:px-5">Transaction</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {shown.map((d) => {
+                const avaxAmount = `${formatAvax(Number(d.stake))} AVAX`;
+                const share = total > 0 ? (Number(d.stake) / total) * 100 : 0;
+                return (
+                  <tr key={d.tx_id} className="hover:bg-muted/30 transition-colors">
+                    {/* Phones get one stacked cell; the table columns don't fit. */}
+                    <td className="sm:hidden px-4 py-2.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <RewardOwner owners={d.reward_owner} />
+                        <span className="num text-foreground">{avaxAmount}</span>
+                      </div>
+                      <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground">
+                        <span className="num">Ends {format(new Date(d.end_time), 'MMM d, yyyy')}</span>
+                        <TxLink id={d.tx_id} />
+                      </div>
+                    </td>
+                    <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5">
+                      <RewardOwner owners={d.reward_owner} />
+                    </td>
+                    <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">{avaxAmount}</td>
+                    <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
+                      {share < 0.1 ? '<0.1' : share.toFixed(1)}%
+                    </td>
+                    <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
+                      {format(new Date(d.start_time), 'MMM d, yyyy')}
+                    </td>
+                    <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
+                      {format(new Date(d.end_time), 'MMM d, yyyy')}
+                    </td>
+                    <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5 text-right">
+                      <TxLink id={d.tx_id} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {rows.length > 20 && (
+            <div className="border-t border-border px-4 sm:px-5 py-2.5">
+              <button
+                onClick={() => setShowAll(!showAll)}
+                className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showAll ? 'Show fewer' : `Show all ${rows.length.toLocaleString()} delegations`}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/** The delegator's reward address, shortened, with a copy button for the full one. */
+function RewardOwner({ owners }: { owners: string[] | null }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  if (!owners || owners.length === 0) return <span className="text-muted-foreground">—</span>;
+  const first = owners[0];
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(first);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast('Failed to copy to clipboard', 'error');
+    }
+  };
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <span className="num text-foreground truncate" title={owners.join(', ')}>
+        {shortId(first, 12, 6)}
+      </span>
+      {owners.length > 1 && <span className="num text-[11px] text-muted-foreground">+{owners.length - 1}</span>}
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={copied ? 'Address copied' : `Copy address ${first}`}
+        title={copied ? 'Copied' : 'Copy address'}
+        className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded transition-colors hover:bg-accent ${
+          copied ? 'text-up' : 'text-muted-foreground/60 hover:text-foreground'
+        }`}
+      >
+        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      </button>
+    </span>
   );
 }
 
