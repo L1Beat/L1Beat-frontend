@@ -46,7 +46,9 @@ export function DelegatorDetails() {
   const { address: raw = '' } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const address = raw.startsWith('avax1') ? `P-${raw}` : raw;
+  // Bech32 is case-insensitive; the prefix is optional.
+  const bare = raw.trim().replace(/^p-/i, '').toLowerCase();
+  const address = bare.startsWith('avax1') ? `P-${bare}` : raw;
   const valid = ADDRESS_RE.test(address);
 
   const [status, setStatus] = useState<Status>('running');
@@ -59,6 +61,9 @@ export function DelegatorDetails() {
   const [allDelegated, setAllDelegated] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const tableRef = useRef<HTMLElement>(null);
+  // The address the empty Running view already fell back to All for, so
+  // choosing Running again afterwards stays put.
+  const fellBack = useRef<string | null>(null);
   const label = useLiquidStakingLabels()[address];
 
   useEffect(() => {
@@ -95,7 +100,14 @@ export function DelegatorDetails() {
       }
       setSummary(r.meta.summary);
       // Nothing running: open on the full history instead of an empty table.
-      if (status === 'running' && page === 0 && r.meta.summary.active_count === 0 && r.meta.summary.first_delegation_time) {
+      if (
+        status === 'running' &&
+        page === 0 &&
+        r.meta.summary.active_count === 0 &&
+        r.meta.summary.first_delegation_time &&
+        fellBack.current !== address
+      ) {
+        fellBack.current = address;
         setStatus('all');
         return;
       }
@@ -138,7 +150,8 @@ export function DelegatorDetails() {
     );
   }
 
-  const share = summary && allDelegated ? (Number(summary.active_stake) / allDelegated) * 100 : null;
+  const activeStake = summary ? Number(summary.active_stake) : 0;
+  const share = activeStake > 0 && allDelegated ? (activeStake / allDelegated) * 100 : null;
   const stats: StatItem[] = [
     {
       label: 'Delegated now',
@@ -277,7 +290,7 @@ export function DelegatorDetails() {
         {failed ? (
           <p className="px-4 sm:px-5 py-4 text-[12px] text-muted-foreground">Delegations couldn't be loaded. Try again in a minute.</p>
         ) : empty ? (
-          <p className="px-4 sm:px-5 py-4 text-[12px] text-muted-foreground">This address has never received delegation rewards.</p>
+          <p className="px-4 sm:px-5 py-4 text-[12px] text-muted-foreground">No delegations name this address as their reward address.</p>
         ) : !result ? (
           <div className="px-4 sm:px-5 py-4 space-y-2">
             {[0, 1, 2, 3].map((i) => (

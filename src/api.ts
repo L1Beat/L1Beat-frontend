@@ -136,9 +136,9 @@ function readCache(key: string, duration: number): any {
   return undefined;
 }
 
-function writeCache(key: string, data: any, timestamp: number): void {
+function writeCache(key: string, data: any, timestamp: number, persist = true): void {
   cache.set(key, { data, timestamp });
-  persistSet(key, { data, timestamp });
+  if (persist) persistSet(key, { data, timestamp });
 }
 
 // Export function to clear cache (for debugging/forcing refresh)
@@ -1728,7 +1728,9 @@ const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https:/
 async function fetchExternalWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  duration: number = CACHE_DURATION
+  duration: number = CACHE_DURATION,
+  /** false keeps the entry in memory only, for large one-off lists that would crowd sessionStorage. */
+  persist = true
 ): Promise<T> {
   const fresh = readCache(key, duration);
   if (fresh !== undefined) {
@@ -1738,7 +1740,7 @@ async function fetchExternalWithCache<T>(
     const now = Date.now();
     const data = await fetcher();
     const sanitizedData = sanitizeResponse(data);
-    if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
+    if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now, persist);
     return sanitizedData;
   });
 }
@@ -2205,7 +2207,9 @@ export async function getValidatorDelegations(nodeId: string): Promise<Validator
       console.error('Validator delegations fetch error:', error);
       return null;
     }
-  }, 5 * 60 * 1000);
+    // Busy nodes return hundreds of KB; persisting them would push the shared
+    // cache past its quota, which clears every persisted entry.
+  }, 5 * 60 * 1000, false);
 }
 
 export interface LiquidStakingProtocol {

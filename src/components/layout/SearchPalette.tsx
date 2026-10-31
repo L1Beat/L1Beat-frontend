@@ -305,7 +305,8 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
         .slice(0, 30);
       // A matched validator (full node-ID lookup) or a P-Chain address leads the results.
       const raw = query.trim();
-      const address = P_ADDRESS_RE.test(raw) ? (raw.startsWith('P-') ? raw : `P-${raw}`) : null;
+      const bare = raw.replace(/^p-/i, '').toLowerCase();
+      const address = P_ADDRESS_RE.test(bare) ? `P-${bare}` : null;
       const lead: Result[] = [
         ...(validatorResult ? [validatorResult] : []),
         ...(address
