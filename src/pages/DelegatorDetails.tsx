@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Wallet } from 'lucide-react';
 import { getDelegatorDelegations, getStakingSummary, PRIMARY_NETWORK_SUBNET_ID } from '../api';
@@ -9,6 +9,7 @@ import { NodeId } from '../components/NodeId';
 import { useToast } from '../components/Toaster';
 import { SegmentedControl, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
+import { useLiquidStakingLabels } from '../hooks/useLiquidStakingLabels';
 
 const EXPLORER = 'https://subnets.avax.network';
 const PAGE_SIZE = 50;
@@ -58,6 +59,7 @@ export function DelegatorDetails() {
   const [allDelegated, setAllDelegated] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const tableRef = useRef<HTMLElement>(null);
+  const label = useLiquidStakingLabels()[address];
 
   useEffect(() => {
     setStatus('running');
@@ -179,7 +181,7 @@ export function DelegatorDetails() {
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
       <SEO
-        title={`${shortId(address, 12, 6)} · Delegator`}
+        title={label ? `${label.name} ${label.token} · Delegator` : `${shortId(address, 12, 6)} · Delegator`}
         description={`Avalanche delegator ${shortId(address, 12, 6)}: AVAX delegated to Primary Network validators, running and ended.`}
         url={`/delegator/${address}`}
       />
@@ -194,9 +196,13 @@ export function DelegatorDetails() {
       <header className="border-b border-border pb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4 min-w-0">
-            <div className="w-11 h-11 rounded-md bg-muted flex items-center justify-center shrink-0">
-              <Wallet className="w-5 h-5 text-muted-foreground" />
-            </div>
+            {label?.logo ? (
+              <img src={label.logo} alt={`${label.name} logo`} className="w-11 h-11 rounded-full shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
             <div className="min-w-0">
               <div className="flex items-start gap-2 min-w-0">
                 <h1 className="num text-[17px] sm:text-[20px] leading-7 font-medium text-foreground break-all">{address}</h1>
@@ -209,7 +215,22 @@ export function DelegatorDetails() {
                   {copied ? <Check className="w-3 h-3 text-up" /> : <Copy className="w-3 h-3" />}
                 </button>
               </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">Primary Network delegator, by reward address</div>
+              {label ? (
+                <div className="mt-1 text-[12px] text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {label.name} {label.token}
+                  </span>{' '}
+                  liquid staking pool on the Primary Network.
+                  {label.attribution === 'unconfirmed' && (
+                    <> {label.name} doesn't publish this address; it was matched on-chain.</>
+                  )}{' '}
+                  <Link to="/staking" className="text-foreground underline underline-offset-2 decoration-border hover:decoration-foreground">
+                    Liquid staking on the Staking page
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-muted-foreground">Primary Network delegator, by reward address</div>
+              )}
             </div>
           </div>
           <a

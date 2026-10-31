@@ -9,6 +9,7 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { NodeId } from '../components/NodeId';
 import { shortNodeId } from '../utils/nodeId';
+import { LIQUID_STAKING_LOGOS } from '../hooks/useLiquidStakingLabels';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   getLiquidStaking,
@@ -654,7 +655,8 @@ function LiquidProtocol({ p, totalStake }: { p: LiquidStakingProtocol; totalStak
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 lg:gap-8">
       <div>
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
+          {LIQUID_STAKING_LOGOS[p.id] && <img src={LIQUID_STAKING_LOGOS[p.id]} alt="" className="w-5 h-5 rounded-full" />}
           <span className="text-[13px] font-semibold text-foreground">{p.name}</span>
           <span className="num text-[12px] text-muted-foreground">{p.token_symbol}</span>
         </div>

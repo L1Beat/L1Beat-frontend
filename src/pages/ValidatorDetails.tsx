@@ -10,6 +10,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { useToast } from '../components/Toaster';
 import { shortNodeId } from '../utils/nodeId';
+import { useLiquidStakingLabels } from '../hooks/useLiquidStakingLabels';
+import type { LiquidStakingLabel } from '../hooks/useLiquidStakingLabels';
 import { SegmentedControl, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 
@@ -659,6 +661,7 @@ function DelegationsPanel({ nodeId }: { nodeId: string }) {
   const [failed, setFailed] = useState(false);
   const [sort, setSort] = useState<DelegationSort>('stake');
   const [showAll, setShowAll] = useState(false);
+  const labels = useLiquidStakingLabels();
 
   useEffect(() => {
     let cancelled = false;
@@ -730,7 +733,7 @@ function DelegationsPanel({ nodeId }: { nodeId: string }) {
                     {/* Phones get one stacked cell; the table columns don't fit. */}
                     <td className="sm:hidden px-4 py-2.5">
                       <div className="flex items-baseline justify-between gap-3">
-                        <RewardOwner owners={d.reward_owner} />
+                        <RewardOwner owners={d.reward_owner} labels={labels} />
                         <span className="num text-foreground">{avaxAmount}</span>
                       </div>
                       <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground">
@@ -739,7 +742,7 @@ function DelegationsPanel({ nodeId }: { nodeId: string }) {
                       </div>
                     </td>
                     <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5">
-                      <RewardOwner owners={d.reward_owner} />
+                      <RewardOwner owners={d.reward_owner} labels={labels} />
                     </td>
                     <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">{avaxAmount}</td>
                     <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
@@ -776,11 +779,12 @@ function DelegationsPanel({ nodeId }: { nodeId: string }) {
 }
 
 /** The delegator's reward address, shortened and linked to its delegator page, with a copy button for the full one. */
-function RewardOwner({ owners }: { owners: string[] | null }) {
+function RewardOwner({ owners, labels }: { owners: string[] | null; labels: Record<string, LiquidStakingLabel> }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   if (!owners || owners.length === 0) return <span className="text-muted-foreground">—</span>;
   const first = owners[0];
+  const label = labels[first];
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(first);
@@ -800,6 +804,15 @@ function RewardOwner({ owners }: { owners: string[] | null }) {
         {shortId(first, 12, 6)}
       </Link>
       {owners.length > 1 && <span className="num text-[11px] text-muted-foreground">+{owners.length - 1}</span>}
+      {label && (
+        <span
+          className="shrink-0 inline-flex items-center gap-1 text-[10px] leading-4 pl-0.5 pr-1.5 rounded border border-border text-muted-foreground"
+          title={`${label.name} ${label.token} liquid staking${label.attribution === 'unconfirmed' ? ', matched on-chain' : ''}`}
+        >
+          {label.logo && <img src={label.logo} alt="" className="w-3 h-3 rounded-full" loading="lazy" />}
+          {label.name}
+        </span>
+      )}
       <button
         type="button"
         onClick={copy}
