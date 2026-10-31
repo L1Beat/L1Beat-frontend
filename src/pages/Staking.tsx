@@ -108,7 +108,7 @@ export function Staking() {
     <div>
       <SEO
         title="Avalanche Staking"
-        description="AVAX staked on the Primary Network, validators and delegations, stake concentration, delegation fees and upcoming unlocks."
+        description="AVAX staked on the Primary Network, validators and delegations, stake concentration, delegation fees and upcoming staking period ends."
         url="/staking"
       />
 
@@ -132,7 +132,7 @@ export function Staking() {
           <StatStrip items={stats} />
         </div>
 
-        <SectionErrorBoundary label="the unlock schedule">
+        <SectionErrorBoundary label="the staking periods ending chart">
           <UnlocksCard />
         </SectionErrorBoundary>
 
@@ -385,7 +385,7 @@ function CardMessage({ children }: { children: React.ReactNode }) {
   return <div className="flex items-center justify-center h-[160px] text-[12px] text-muted-foreground text-center px-6">{children}</div>;
 }
 
-// ── Unlocks ──────────────────────────────────────────────────────────────────
+// ── Staking periods ending ──────────────────────────────────────────────────────────────
 
 // Phones get a narrower canvas so the labels stay readable when it scales down.
 const UNLOCK_SIZE = { wide: { w: 820, h: 220 }, narrow: { w: 400, h: 220 } };
@@ -463,7 +463,7 @@ function UnlocksCard() {
 
   return (
     <Card
-      title="Unlocks"
+      title="Staking periods ending"
       subtitle="AVAX whose staking period ends each week, validators' own stake and delegations"
       right={
         <SegmentedControl
@@ -471,14 +471,14 @@ function UnlocksCard() {
           value={weeks}
           options={WEEK_OPTIONS}
           onChange={(v) => setWeeks(v)}
-          ariaLabel="Unlock window"
+          ariaLabel="How many weeks ahead"
         />
       }
     >
       {state === 'loading' && !geom ? (
         <div className="h-[220px] rounded bg-muted animate-pulse" />
       ) : state === 'error' || !geom ? (
-        <CardMessage>The unlock schedule couldn't be loaded. Try again in a minute.</CardMessage>
+        <CardMessage>Staking end dates couldn't be loaded. Try again in a minute.</CardMessage>
       ) : (
         <>
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 mb-2">
@@ -510,7 +510,7 @@ function UnlocksCard() {
             onMouseMove={handleMove}
             onMouseLeave={() => setHover(null)}
             role="img"
-            aria-label={`AVAX unlocking per week over the next ${bars.length} weeks`}
+            aria-label={`AVAX whose staking period ends, per week, over the next ${bars.length} weeks`}
           >
             {geom.ticks.map((t) => (
               <g key={t}>
@@ -538,7 +538,7 @@ function UnlocksCard() {
             })}
           </svg>
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Validators set to renew automatically are counted at the end of their current period, so later weeks can overstate what actually unlocks.
+            Validators set to renew automatically are counted at the end of their current period, so later weeks can overstate how much AVAX is actually returned.
           </p>
         </>
       )}
