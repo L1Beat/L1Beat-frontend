@@ -2208,6 +2208,53 @@ export async function getValidatorDelegations(nodeId: string): Promise<Validator
   }, 5 * 60 * 1000);
 }
 
+export interface LiquidStakingProtocol {
+  id: string;
+  name: string;
+  token_symbol: string;
+  token_contract: string;
+  token_decimals: number;
+  status: 'live' | 'ended';
+  /** Whether the protocol has confirmed its P-Chain addresses, or they were matched on-chain. */
+  attribution: 'confirmed' | 'unconfirmed';
+  p_chain_addresses: string[];
+  // Live figures: null until sampled, always null once ended.
+  pooled_avax: string | null;
+  token_supply: string | null;
+  /** AVAX per token, decimal string. */
+  exchange_rate: string | null;
+  active_delegated: string | null;
+  active_delegations: number | null;
+  validator_count: number | null;
+  share_of_delegated_percent: number | null;
+  as_of: string | null;
+}
+
+export interface LiquidStaking {
+  protocols: LiquidStakingProtocol[];
+  totals: {
+    pooled_avax: string;
+    active_delegated: string;
+    active_delegations: number;
+    share_of_delegated_percent: number;
+  };
+  network_delegated_stake: string;
+}
+
+export async function getLiquidStaking(): Promise<LiquidStaking | null> {
+  return fetchExternalWithCache('staking-liquid', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: LiquidStaking }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking/liquid`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Liquid staking fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;

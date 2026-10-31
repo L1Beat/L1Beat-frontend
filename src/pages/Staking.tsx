@@ -11,12 +11,13 @@ import { NodeId } from '../components/NodeId';
 import { shortNodeId } from '../utils/nodeId';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
+  getLiquidStaking,
   getPrimaryNetworkValidators,
   getStakingSummary,
   getStakingUnlocks,
   PRIMARY_NETWORK_SUBNET_ID,
 } from '../api';
-import type { PrimaryValidator, StakingSummary, StakingUnlockWeek } from '../api';
+import type { LiquidStakingProtocol, PrimaryValidator, StakingSummary, StakingUnlockWeek } from '../api';
 
 const NAVAX = 1e9;
 
@@ -131,6 +132,10 @@ export function Staking() {
         <div className="md:hidden">
           <StatStrip items={stats} />
         </div>
+
+        <SectionErrorBoundary label="liquid staking">
+          <LiquidStakingCard totalStake={summary ? toAvax(summary.total_stake) : null} />
+        </SectionErrorBoundary>
 
         <SectionErrorBoundary label="the staking periods ending chart">
           <UnlocksCard />
@@ -590,6 +595,105 @@ function ConcentrationCard({ summary, state }: { summary: StakingSummary | null;
         </div>
       )}
     </Card>
+  );
+}
+
+// ── Liquid staking ───────────────────────────────────────────────────────────
+
+function LiquidStakingCard({ totalStake }: { totalStake: number | null }) {
+  const [protocols, setProtocols] = useState<LiquidStakingProtocol[] | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    getLiquidStaking().then((d) => {
+      if (cancelled) return;
+      setProtocols(d ? d.protocols.filter((p) => p.status === 'live' && p.active_delegated != null) : null);
+      setState(d ? 'ready' : 'error');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <Card
+      title="Liquid staking"
+      subtitle="AVAX staked through a liquid staking token, which holders can keep using in DeFi while the AVAX is delegated"
+    >
+      {state === 'loading' ? (
+        <div className="h-[140px] rounded bg-muted animate-pulse" />
+      ) : !protocols || protocols.length === 0 ? (
+        <CardMessage>Liquid staking data couldn't be loaded. Try again in a minute.</CardMessage>
+      ) : (
+        <div className="space-y-5">
+          {protocols.map((p) => (
+            <LiquidProtocol key={p.id} p={p} totalStake={totalStake} />
+          ))}
+          <p className="text-[11px] text-muted-foreground max-w-3xl">
+            Hypha (formerly GoGoPool) shut down its stAVAX token in August 2026. Smaller protocols, such as Yield Yak's
+            yyAVAX, aren't tracked yet.
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function LiquidProtocol({ p, totalStake }: { p: LiquidStakingProtocol; totalStake: number | null }) {
+  const delegated = toAvax(p.active_delegated);
+  const share = p.share_of_delegated_percent ?? 0;
+  const rate = p.exchange_rate != null ? Number(p.exchange_rate) : null;
+  const address = p.p_chain_addresses[0];
+  const facts = [
+    { label: 'AVAX in the pool', value: p.pooled_avax != null ? `${compact(toAvax(p.pooled_avax))}` : '—' },
+    { label: `1 ${p.token_symbol} is worth`, value: rate != null ? `${rate.toFixed(4)} AVAX` : '—' },
+    { label: 'Share of all staked AVAX', value: totalStake ? pct((delegated / totalStake) * 100) : '—' },
+    { label: 'Running delegations', value: p.active_delegations?.toLocaleString() ?? '—' },
+  ];
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 lg:gap-8">
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-[13px] font-semibold text-foreground">{p.name}</span>
+          <span className="num text-[12px] text-muted-foreground">{p.token_symbol}</span>
+        </div>
+        <div className="mt-2 num text-[26px] leading-8 font-medium text-foreground">
+          {compact(delegated)} <span className="text-[14px] text-muted-foreground">AVAX delegated</span>
+        </div>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          Spread across <span className="num text-foreground">{p.validator_count?.toLocaleString() ?? '—'}</span> validators,{' '}
+          <span className="num text-foreground">{pct(share)}</span> of all delegated AVAX.
+        </p>
+        <div className="mt-3 h-2 rounded-sm bg-muted overflow-hidden" role="img" aria-label={`${pct(share)} of all delegated AVAX`}>
+          <div className="h-full rounded-sm" style={{ width: `${Math.min(100, share)}%`, background: DELEGATED }} />
+        </div>
+        {address && (
+          <Link
+            to={`/delegator/${address}`}
+            className="mt-3 inline-block text-[12px] font-medium text-foreground underline underline-offset-2 decoration-border hover:decoration-foreground"
+          >
+            See every {p.name} delegation
+          </Link>
+        )}
+      </div>
+      <div className="flex flex-col gap-3">
+        <dl className="grid grid-cols-2 gap-px rounded border border-border bg-border overflow-hidden">
+          {facts.map((f) => (
+            <div key={f.label} className="bg-card px-3 py-2">
+              <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+              <dd className="num text-[18px] text-foreground">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {p.attribution === 'unconfirmed' && (
+          <p className="text-[11px] text-muted-foreground">
+            {p.name} doesn't publish its P-Chain address. We matched it on-chain: the wallet that moves AVAX in and out of
+            the {p.token_symbol} contract also signs these delegations.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
