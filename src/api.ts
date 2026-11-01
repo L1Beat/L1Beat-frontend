@@ -2259,6 +2259,54 @@ export async function getLiquidStaking(): Promise<LiquidStaking | null> {
   }, 5 * 60 * 1000);
 }
 
+export interface RestakingVault {
+  address: string;
+  collateral: { address: string; wrapper: string | null; symbol: string; decimals: number };
+  // Token base units.
+  deposited: string;
+  allocated: string;
+  idle: string;
+  limit: string | null;
+}
+
+export interface RestakedL1 {
+  subnet_id: string;
+  blockchain_id: string;
+  protocol_id: string;
+  is_active: boolean;
+  active_validators: number;
+  /** P-Chain weight of active validators registered through the restaking middleware. */
+  restaked_weight: number;
+  restaked_validators: number;
+  total_pchain_weight: number;
+  share_of_weight_percent: number | null;
+  operator_count: number;
+  vaults: RestakingVault[];
+  sampled_at: string;
+}
+
+export interface Restaking {
+  protocols: { id: string; name: string; url: string }[];
+  l1s: RestakedL1[];
+}
+
+/** Restaked collateral securing one L1, or null when none is registered. */
+export async function getChainRestaking(subnetId: string): Promise<{ l1: RestakedL1; protocol: Restaking['protocols'][number] | null } | null> {
+  return fetchExternalWithCache(`restaking-${subnetId}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: Restaking }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/restaking?subnet_id=${encodeURIComponent(subnetId)}`,
+      );
+      const l1 = response.data?.l1s?.[0];
+      if (!l1) return null;
+      return { l1, protocol: response.data.protocols.find((p) => p.id === l1.protocol_id) ?? null };
+    } catch (error) {
+      console.error('Restaking fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;

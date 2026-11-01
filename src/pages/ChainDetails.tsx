@@ -4,7 +4,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import { chainSeo } from '../utils/chainSeo';
 import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
+import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, getChainRestaking, DailyFeeBurn } from '../api';
+import type { RestakedL1 } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
   ArrowLeft,
@@ -74,6 +75,7 @@ export function ChainDetails() {
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
   const [activityOwner, setActivityOwner] = useState<Chain | null>(null);
   const [risk, setRisk] = useState<ChainRisk | null>(null);
+  const [restaking, setRestaking] = useState<Awaited<ReturnType<typeof getChainRestaking>>>(null);
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
   // Full-history series used for the "All" timeframe. For L1s this is the same
   // daily data; for C-Chain it's monthly, because daily is capped at 100 points
@@ -399,6 +401,19 @@ export function ChainDetails() {
       alive = false;
     };
   }, [chain?.platformChainId]);
+
+  useEffect(() => {
+    const id = chain?.subnetId || '';
+    setRestaking(null);
+    if (!id) return;
+    let alive = true;
+    getChainRestaking(id).then((r) => {
+      if (alive) setRestaking(r);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chain?.subnetId]);
 
   // Scroll-spy sections for the sticky nav. Validators now leads with the
   // decentralization summary, so it's a single validator-set section.
@@ -1083,6 +1098,7 @@ export function ChainDetails() {
                       data={decentralization}
                       sybil={chain.sybilResistanceType}
                       vm={risk?.validator_manager ?? null}
+                      restaking={restaking?.l1.is_active ? restaking : null}
                     />
                   )}
 
@@ -1989,10 +2005,12 @@ function DecentralizationCard({
   data,
   sybil,
   vm,
+  restaking,
 }: {
   data: { count: number; nak33: number | null; nak50: number | null; shares: number[]; hasData: boolean };
   sybil?: string;
   vm?: ValidatorManager | null;
+  restaking?: { l1: RestakedL1; protocol: { name: string; url: string } | null } | null;
 }) {
   const perm = permissionModel(vm?.type, sybil);
   const control = controlAssessment(vm);
@@ -2105,6 +2123,8 @@ function DecentralizationCard({
           })()}
         </div>
 
+        {restaking && <RestakedCollateral l1={restaking.l1} protocol={restaking.protocol} />}
+
         <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
           A signal, not a security audit. Distribution is from on-chain stake weights; control is read
           from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label}: ${perm.note}` : ''}
@@ -2114,6 +2134,74 @@ function DecentralizationCard({
   );
 }
 
+function compactAmount(v: number): string {
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+  return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+// Token collateral posted through a restaking protocol (Suzaku) by the
+// operators running this L1's validators.
+function RestakedCollateral({ l1, protocol }: { l1: RestakedL1; protocol: { name: string; url: string } | null }) {
+  const name = protocol?.name ?? 'restaking';
+  const sum = (k: 'deposited' | 'allocated') =>
+    l1.vaults.reduce((t, v) => t + unitsToNumber(v[k], v.collateral.decimals), 0);
+  const allocated = sum('allocated');
+  const deposited = sum('deposited');
+  const symbols = [...new Set(l1.vaults.map((v) => v.collateral.symbol))].join(' + ');
+  const share = l1.share_of_weight_percent;
+  const shareText = share == null ? null : share >= 99.95 ? '100%' : `${share < 1 ? share.toFixed(1) : Math.round(share)}%`;
+  const rows = [
+    {
+      label: 'Allocated to validators',
+      value: `${compactAmount(allocated)} ${symbols}`,
+      sub: shareText ? `${shareText} of validator weight` : undefined,
+    },
+    {
+      label: 'Deposited in vaults',
+      value: `${compactAmount(deposited)} ${symbols}`,
+      sub: deposited > allocated ? `${compactAmount(deposited - allocated)} not allocated yet` : undefined,
+    },
+    {
+      label: 'Node operators',
+      value: l1.operator_count.toLocaleString(),
+      sub: `running ${l1.restaked_validators.toLocaleString()} of ${l1.active_validators.toLocaleString()} validators`,
+    },
+  ];
+  return (
+    <div className="mt-5 pt-4 border-t border-border/60">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
+        <div className="text-[11px] font-medium text-muted-foreground">Restaked collateral</div>
+        {protocol && (
+          <a
+            href={protocol.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            {protocol.name}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+      <p className="text-[12px] text-foreground/90 mb-3">
+        {shareText
+          ? `${compactAmount(allocated)} ${symbols} restaked through ${name} backs ${shareText} of this chain's validator weight.`
+          : `${compactAmount(allocated)} ${symbols} is restaked through ${name} for this chain's validators.`}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {rows.map((r) => (
+          <div key={r.label} className="border border-border rounded px-3 py-2">
+            <div className="text-[11px] text-muted-foreground">{r.label}</div>
+            <div className="num text-[13px] font-medium text-foreground">{r.value}</div>
+            {r.sub && <div className="text-[10px] text-muted-foreground mt-0.5 truncate">{r.sub}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ChainDetailsSkeleton() {
   return (
