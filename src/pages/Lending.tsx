@@ -28,7 +28,7 @@ function compact(v: number): string {
   return Math.round(v).toLocaleString();
 }
 const usd = (v: number | null | undefined) => (v == null ? '—' : `$${compact(v)}`);
-const apy = (v: number | null | undefined) => (v == null ? '—' : `${v > 0 && v < 0.1 ? v.toFixed(2) : v.toFixed(1)}%`);
+const apy = (v: number | null | undefined) => (v == null ? '—' : v <= 0 ? '0%' : v < 0.1 ? '<0.1%' : `${v.toFixed(1)}%`);
 /** A 0% borrow rate with nothing borrowed means borrowing is off, not free. */
 const borrowApy = (m: LendingMarket) => (!m.borrow_apy_percent && !Number(m.total_borrowed) ? '—' : apy(m.borrow_apy_percent));
 const pct = (v: number | null | undefined, d = 0) => (v == null ? '—' : `${v.toFixed(d)}%`);
@@ -177,7 +177,7 @@ export function Lending() {
         {state === 'ready' && data && (
           <>
             <SectionErrorBoundary label="the rate comparison">
-              <RatesCard rows={rows} protocols={data.protocols} />
+              <RatesCard rows={rows} />
             </SectionErrorBoundary>
             <SectionErrorBoundary label="markets near their limits">
               <LimitsCard rows={rows} />
@@ -275,8 +275,9 @@ function ProtocolDot({ id }: { id: string }) {
   return <span className="w-2 h-2 rounded-[2px] shrink-0 inline-block" style={{ background: st.color, opacity: st.opacity }} aria-hidden />;
 }
 
-// The same asset across protocols, so the best place to supply or borrow is one glance.
-function RatesCard({ rows, protocols }: { rows: Row[]; protocols: LendingData['protocols'] }) {
+// The same asset across protocols, answered in words: where it pays most to
+// supply, where it's cheapest to borrow, and what the alternatives charge.
+function RatesCard({ rows }: { rows: Row[] }) {
   const assets = useMemo(() => {
     const by = new Map<string, Row[]>();
     for (const r of rows) {
@@ -286,87 +287,94 @@ function RatesCard({ rows, protocols }: { rows: Row[]; protocols: LendingData['p
     return [...by.entries()]
       .filter(([, list]) => list.length > 1)
       .map(([asset, list]) => {
-        // A winner only when it pays something: all-zero rates (sAVAX) have none.
-        const supply = list
-          .filter((r) => (r.supply_apy_percent ?? 0) >= 0.05)
-          .sort((a, b) => (b.supply_apy_percent ?? 0) - (a.supply_apy_percent ?? 0))[0];
-        // Cheapest borrow among markets people actually borrow from. Aave V4 quotes a
-        // base rate before each borrower's premium, so it would win unfairly.
-        const borrow = list
-          .filter((r) => r.borrow_apy_percent != null && r.protocol_id !== 'aave-v4' && (r.borrowed_usd ?? 0) >= MIN_COMPARE_USD && r.borrowCap.kind !== 'closed')
-          .sort((a, b) => (a.borrow_apy_percent ?? 0) - (b.borrow_apy_percent ?? 0))[0];
-        return { asset, list, bestSupply: supply?.market, bestBorrow: borrow?.market, size: list.reduce((s, r) => s + (r.supplied_usd ?? 0), 0) };
+        const supplies = list
+          .filter((r) => r.supply_apy_percent != null)
+          .sort((a, b) => (b.supply_apy_percent ?? 0) - (a.supply_apy_percent ?? 0));
+        // Only markets people actually borrow from. Aave V4 quotes a base rate before
+        // each borrower's premium, so it's listed but can't be the cheapest.
+        const borrows = list
+          .filter((r) => r.borrow_apy_percent != null && (r.borrowed_usd ?? 0) >= MIN_COMPARE_USD && r.borrowCap.kind !== 'closed')
+          .sort((a, b) => (a.borrow_apy_percent ?? 0) - (b.borrow_apy_percent ?? 0));
+        const bestSupply = (supplies[0]?.supply_apy_percent ?? 0) >= 0.05 ? supplies[0] : undefined;
+        const bestBorrow = borrows.find((r) => r.protocol_id !== 'aave-v4');
+        return {
+          asset,
+          bestSupply,
+          otherSupplies: supplies.filter((r) => r !== bestSupply),
+          bestBorrow,
+          otherBorrows: borrows.filter((r) => r !== bestBorrow),
+          size: list.reduce((s, r) => s + (r.supplied_usd ?? 0), 0),
+        };
       })
+      // Nothing to compare when no protocol pays to supply and nobody borrows it.
+      .filter((a) => a.bestSupply || a.bestBorrow)
       .sort((a, b) => b.size - a.size);
   }, [rows]);
 
   if (!assets.length) return null;
+  const others = (list: Row[], key: 'supply_apy_percent' | 'borrow_apy_percent') =>
+    list.length === 0
+      ? 'Only option'
+      : list
+          .map((r) => `${r.protocolName.replace(' Lending', '')} ${apy(r[key])}${key === 'borrow_apy_percent' && r.protocol_id === 'aave-v4' ? ' + premium' : ''}`)
+          .join(', ');
+  const best = (r: Row | undefined, key: 'supply_apy_percent' | 'borrow_apy_percent', none: string) =>
+    r ? (
+      <span className="inline-flex items-baseline gap-2">
+        <span className="num text-[15px] font-medium text-foreground">{apy(r[key])}</span>
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-foreground/90">
+          <ProtocolDot id={r.protocol_id} />
+          {r.protocolName.replace(' Lending', '')}
+        </span>
+      </span>
+    ) : (
+      <span className="text-[12px] text-muted-foreground">{none}</span>
+    );
+
   return (
-    <Card title="Rates by asset" subtitle="Supply and borrow APY for assets on more than one protocol. Bold marks the best supply rate and the cheapest borrow among markets with real borrowing.">
-      {/* Phones: one block per asset. */}
-      <ul className="md:hidden divide-y divide-border border-t border-border">
+    <Card title="Rates by asset" subtitle="For assets on more than one protocol: where supplying pays the most and where borrowing costs the least, with the other options beside it.">
+      <div className="hidden md:grid grid-cols-[100px_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-x-6 px-5 py-2 border-y border-border text-[11px] text-muted-foreground">
+        <span>Asset</span>
+        <span>Best to supply</span>
+        <span>Other options</span>
+        <span>Cheapest to borrow</span>
+        <span>Other options</span>
+      </div>
+      <ul className="divide-y divide-border border-t border-border md:border-t-0">
         {assets.map((a) => (
-          <li key={a.asset} className="px-4 py-3">
-            <div className="num text-[14px] font-medium text-foreground">{a.asset}</div>
-            <div className="mt-1.5 space-y-1">
-              {protocols.map((p) => {
-                const r = a.list.find((x) => x.protocol_id === p.id);
-                if (!r) return null;
-                return (
-                  <div key={p.id} className="flex items-center justify-between gap-3 text-[12px]">
-                    <span className="inline-flex items-center gap-2 text-muted-foreground"><ProtocolDot id={p.id} />{p.name}</span>
-                    <span className="num">
-                      <span className={r.market === a.bestSupply ? 'font-semibold text-foreground' : 'text-foreground/80'}>{apy(r.supply_apy_percent)}</span>
-                      <span className="text-muted-foreground"> / </span>
-                      <span className={r.market === a.bestBorrow ? 'font-semibold text-foreground' : 'text-foreground/80'}>{borrowApy(r)}</span>
-                    </span>
-                  </div>
-                );
-              })}
+          <li key={a.asset} className="px-4 sm:px-5 py-3 md:py-2.5">
+            {/* Phones: two sentences per asset. */}
+            <div className="md:hidden space-y-1.5">
+              <div className="num text-[14px] font-medium text-foreground">{a.asset}</div>
+              <div className="flex items-baseline justify-between gap-3 text-[12px]">
+                <span className="text-muted-foreground shrink-0">Supply</span>
+                {best(a.bestSupply, 'supply_apy_percent', 'Pays nearly nothing')}
+              </div>
+              {a.bestSupply && a.otherSupplies.length > 0 && (
+                <div className="text-right text-[11px] text-muted-foreground">{others(a.otherSupplies, 'supply_apy_percent')}</div>
+              )}
+              <div className="flex items-baseline justify-between gap-3 text-[12px]">
+                <span className="text-muted-foreground shrink-0">Borrow</span>
+                {best(a.bestBorrow, 'borrow_apy_percent', 'Hardly borrowed')}
+              </div>
+              {a.bestBorrow && a.otherBorrows.length > 0 && (
+                <div className="text-right text-[11px] text-muted-foreground">{others(a.otherBorrows, 'borrow_apy_percent')}</div>
+              )}
+            </div>
+            <div className="hidden md:grid grid-cols-[100px_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-x-6 items-baseline">
+              <span className="num text-[13px] font-medium text-foreground">{a.asset}</span>
+              {best(a.bestSupply, 'supply_apy_percent', 'Pays nearly nothing')}
+              <span className="num text-[12px] text-muted-foreground truncate">{a.bestSupply ? others(a.otherSupplies, 'supply_apy_percent') : ''}</span>
+              {best(a.bestBorrow, 'borrow_apy_percent', 'Hardly borrowed')}
+              <span className="num text-[12px] text-muted-foreground truncate">{a.bestBorrow ? others(a.otherBorrows, 'borrow_apy_percent') : ''}</span>
             </div>
           </li>
         ))}
-        <li className="px-4 py-2 text-[11px] text-muted-foreground">Supply APY / borrow APY</li>
       </ul>
-
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-[12px] whitespace-nowrap">
-          <thead>
-            <tr className="border-y border-border text-[11px] text-muted-foreground">
-              <th className="text-left font-normal px-5 py-2" rowSpan={2}>Asset</th>
-              {protocols.map((p) => (
-                <th key={p.id} className="text-center font-normal px-3 pt-2" colSpan={2}>
-                  <span className="inline-flex items-center gap-1.5"><ProtocolDot id={p.id} />{p.name}</span>
-                </th>
-              ))}
-            </tr>
-            <tr className="border-b border-border text-[10px] text-muted-foreground">
-              {protocols.flatMap((p) => [
-                <th key={`${p.id}-s`} className="text-right font-normal px-3 pb-1.5">Supply</th>,
-                <th key={`${p.id}-b`} className="text-right font-normal px-3 pb-1.5">Borrow</th>,
-              ])}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {assets.map((a) => (
-              <tr key={a.asset}>
-                <td className="num px-5 py-2.5 text-[13px] font-medium text-foreground">{a.asset}</td>
-                {protocols.map((p) => {
-                  const r = a.list.find((x) => x.protocol_id === p.id);
-                  return [
-                    <td key={`${p.id}-s`} className={`num text-right px-3 py-2.5 ${r?.market === a.bestSupply ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
-                      {r ? apy(r.supply_apy_percent) : <span className="text-muted-foreground/50">—</span>}
-                    </td>,
-                    <td key={`${p.id}-b`} className={`num text-right px-3 py-2.5 ${r?.market === a.bestBorrow ? 'font-semibold text-foreground' : 'text-foreground/80'}`}>
-                      {r ? borrowApy(r) : <span className="text-muted-foreground/50">—</span>}
-                    </td>,
-                  ];
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <p className="px-4 sm:px-5 py-2.5 border-t border-border text-[11px] text-muted-foreground">
+        Variable APYs. Aave V4 shows its base borrow rate; each borrower pays a premium on top, so it isn't ranked cheapest.
+        Markets under $100K are left out.
+      </p>
     </Card>
   );
 }
