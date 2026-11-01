@@ -2384,6 +2384,69 @@ export async function getTreasuries(): Promise<Treasuries | null> {
   }, 5 * 60 * 1000);
 }
 
+export interface LendingMarket {
+  protocol_id: string;
+  market: string;
+  /** Zero address for native AVAX (BENQI qiAVAX). */
+  asset: string;
+  symbol: string;
+  decimals: number;
+  // Token base units.
+  total_supplied: string;
+  total_borrowed: string;
+  utilization_percent: number | null;
+  supply_apy_percent: number | null;
+  /** Aave V4: the base drawn rate, before each borrower's risk premium. */
+  borrow_apy_percent: number | null;
+  collateral_enabled: boolean | null;
+  ltv_percent: number | null;
+  liquidation_threshold_percent: number | null;
+  price_usd: number | null;
+  supplied_usd: number | null;
+  borrowed_usd: number | null;
+  supply_cap: string | null;
+  borrow_cap: string | null;
+  sampled_at: string;
+}
+
+interface LendingAssetSummary {
+  supplied: string;
+  borrowed: string;
+  by_protocol: { protocol_id: string; supplied: string; borrowed: string }[];
+}
+
+export interface Lending {
+  protocols: { id: string; name: string; url: string }[];
+  markets: LendingMarket[];
+  summary: {
+    /** WAVAX on Aave, native AVAX on BENQI. */
+    avax: LendingAssetSummary;
+    savax: LendingAssetSummary & { share_of_savax_supply_percent: number | null };
+    totals: {
+      supplied_usd: number;
+      borrowed_usd: number;
+      by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number }[];
+    };
+  };
+  sampled_at: string;
+}
+
+/** C-Chain lending markets (Aave V3, Aave V4, BENQI), sampled every few minutes. */
+export async function getLending(): Promise<Lending | null> {
+  return fetchExternalWithCache('lending', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data?: Lending } & Partial<Lending>>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/lending`,
+      );
+      const data = response.data ?? (response.markets ? (response as Lending) : null);
+      return data?.summary ? data : null;
+    } catch (error) {
+      console.error('Lending fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;

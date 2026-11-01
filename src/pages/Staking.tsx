@@ -12,13 +12,14 @@ import { shortNodeId } from '../utils/nodeId';
 import { LIQUID_STAKING_LOGOS } from '../hooks/useLiquidStakingLabels';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
+  getLending,
   getLiquidStaking,
   getPrimaryNetworkValidators,
   getStakingSummary,
   getStakingUnlocks,
   PRIMARY_NETWORK_SUBNET_ID,
 } from '../api';
-import type { LiquidStakingProtocol, PrimaryValidator, StakingSummary, StakingUnlockWeek } from '../api';
+import type { Lending, LendingMarket, LiquidStakingProtocol, PrimaryValidator, StakingSummary, StakingUnlockWeek } from '../api';
 
 const NAVAX = 1e9;
 
@@ -136,6 +137,10 @@ export function Staking() {
 
         <SectionErrorBoundary label="liquid staking">
           <LiquidStakingCard totalStake={summary ? toAvax(summary.total_stake) : null} />
+        </SectionErrorBoundary>
+
+        <SectionErrorBoundary label="lending markets">
+          <LendingCard />
         </SectionErrorBoundary>
 
         <SectionErrorBoundary label="the staking periods ending chart">
@@ -644,6 +649,233 @@ function LiquidStakingCard({ totalStake }: { totalStake: number | null }) {
         </div>
       )}
     </Card>
+  );
+}
+
+// ── Lending markets ─────────────────────────────────────────────────────────
+
+// One colour per lending protocol; Aave's two versions share a hue.
+const LENDING_COLOR: Record<string, { color: string; opacity: number }> = {
+  'aave-v3': { color: '#d95926', opacity: 1 },
+  'aave-v4': { color: '#d95926', opacity: 0.5 },
+  benqi: { color: '#199e70', opacity: 1 },
+};
+const lendingStyle = (id: string) => LENDING_COLOR[id] ?? { color: '#6b7280', opacity: 1 };
+const WEI = 1e18;
+const fromWei = (v: string | null | undefined) => (v == null ? 0 : Number(v) / WEI);
+const apy = (v: number | null | undefined) => (v == null ? '—' : `${v < 0.1 && v > 0 ? v.toFixed(2) : v.toFixed(1)}%`);
+
+function LendingCard() {
+  const [data, setData] = useState<Lending | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let alive = true;
+    getLending().then((r) => {
+      if (!alive) return;
+      setData(r);
+      setState(r ? 'ready' : 'error');
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const totals = data?.summary.totals;
+  return (
+    <Card
+      title="Lending markets"
+      subtitle="sAVAX and AVAX supplied to and borrowed from Aave and BENQI on the C-Chain"
+      right={
+        totals ? (
+          <span className="hidden sm:inline text-[11px] text-muted-foreground text-right">
+            All markets: <span className="num text-foreground">${compact(totals.supplied_usd)}</span> supplied,{' '}
+            <span className="num text-foreground">${compact(totals.borrowed_usd)}</span> borrowed
+          </span>
+        ) : undefined
+      }
+    >
+      {state === 'loading' ? (
+        <div className="h-[220px] rounded bg-muted/50 animate-pulse" />
+      ) : state === 'error' || !data ? (
+        <CardMessage>Lending data couldn't be loaded. Try again in a minute.</CardMessage>
+      ) : (
+        <LendingBody data={data} />
+      )}
+    </Card>
+  );
+}
+
+function LendingBody({ data }: { data: Lending }) {
+  const { avax, savax } = data.summary;
+  const name = (id: string) => data.protocols.find((p) => p.id === id)?.name ?? id;
+  const share = savax.share_of_savax_supply_percent;
+  // Per protocol: its AVAX market (WAVAX on Aave, native AVAX on BENQI) and its sAVAX market.
+  const rows = data.protocols.map((p) => {
+    const mine = data.markets.filter((m) => m.protocol_id === p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      avax: mine.find((m) => m.symbol === 'WAVAX' || m.symbol === 'AVAX') as LendingMarket | undefined,
+      savax: mine.find((m) => m.symbol === 'sAVAX') as LendingMarket | undefined,
+    };
+  });
+  const avaxBorrowedShare = fromWei(avax.supplied) > 0 ? (fromWei(avax.borrowed) / fromWei(avax.supplied)) * 100 : null;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+        <AssetSplit
+          title="sAVAX"
+          lead={share != null ? `${share.toFixed(0)}%` : `${compact(fromWei(savax.supplied))}`}
+          leadUnit={share != null ? 'of all sAVAX is supplied to lending markets' : 'sAVAX supplied'}
+          detail={
+            <>
+              <span className="num text-foreground">{compact(fromWei(savax.supplied))}</span> sAVAX supplied, and only{' '}
+              <span className="num text-foreground">{compact(fromWei(savax.borrowed))}</span> borrowed.
+            </>
+          }
+          parts={savax.by_protocol.map((b) => ({ id: b.protocol_id, name: name(b.protocol_id), value: fromWei(b.supplied) }))}
+          unit="sAVAX"
+        />
+        <AssetSplit
+          title="AVAX"
+          lead={compact(fromWei(avax.supplied))}
+          leadUnit="AVAX supplied"
+          detail={
+            <>
+              <span className="num text-foreground">{compact(fromWei(avax.borrowed))}</span> AVAX borrowed
+              {avaxBorrowedShare != null && (
+                <>, <span className="num text-foreground">{pct(avaxBorrowedShare, 0)}</span> of what's supplied</>
+              )}
+              .
+            </>
+          }
+          parts={avax.by_protocol.map((b) => ({ id: b.protocol_id, name: name(b.protocol_id), value: fromWei(b.supplied) }))}
+          unit="AVAX"
+        />
+      </div>
+
+      {/* Phones: a stacked row per protocol. */}
+      <ul className="md:hidden divide-y divide-border border-y border-border">
+        {rows.map((r) => (
+          <li key={r.id} className="py-3">
+            <ProtocolName id={r.id} name={r.name} />
+            <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+              <LendFact label="AVAX supplied" value={r.avax ? compact(fromWei(r.avax.total_supplied)) : '—'} />
+              <LendFact label="AVAX borrowed" value={r.avax ? compact(fromWei(r.avax.total_borrowed)) : '—'} />
+              <LendFact label="Supply APY" value={apy(r.avax?.supply_apy_percent)} />
+              <LendFact label="Borrow APY" value={apy(r.avax?.borrow_apy_percent)} />
+              <LendFact label="sAVAX supplied" value={r.savax ? compact(fromWei(r.savax.total_supplied)) : '—'} />
+              <LendFact label="AVAX used" value={r.avax?.utilization_percent != null ? pct(r.avax.utilization_percent, 0) : '—'} />
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-y border-border text-[11px] text-muted-foreground">
+              <th className="text-left font-normal py-2 pr-3">Protocol</th>
+              <th className="text-right font-normal px-3 py-2">AVAX supplied</th>
+              <th className="text-right font-normal px-3 py-2">AVAX borrowed</th>
+              <th className="text-right font-normal px-3 py-2" title="Share of supplied AVAX that is borrowed">Used</th>
+              <th className="text-right font-normal px-3 py-2">Supply APY</th>
+              <th className="text-right font-normal px-3 py-2">Borrow APY</th>
+              <th className="text-right font-normal pl-3 py-2">sAVAX supplied</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td className="py-2.5 pr-3"><ProtocolName id={r.id} name={r.name} /></td>
+                <td className="num text-right px-3 py-2.5 text-foreground">{r.avax ? compact(fromWei(r.avax.total_supplied)) : '—'}</td>
+                <td className="num text-right px-3 py-2.5 text-foreground">{r.avax ? compact(fromWei(r.avax.total_borrowed)) : '—'}</td>
+                <td className="num text-right px-3 py-2.5 text-muted-foreground">
+                  {r.avax?.utilization_percent != null ? pct(r.avax.utilization_percent, 0) : '—'}
+                </td>
+                <td className="num text-right px-3 py-2.5 text-foreground">{apy(r.avax?.supply_apy_percent)}</td>
+                <td className="num text-right px-3 py-2.5 text-foreground">{apy(r.avax?.borrow_apy_percent)}</td>
+                <td className="num text-right pl-3 py-2.5 text-foreground">{r.savax ? compact(fromWei(r.savax.total_supplied)) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground max-w-3xl">
+        <span className="sm:hidden">
+          All markets: <span className="num text-foreground">${compact(data.summary.totals.supplied_usd)}</span> supplied,{' '}
+          <span className="num text-foreground">${compact(data.summary.totals.borrowed_usd)}</span> borrowed.{' '}
+        </span>
+        Read from each protocol's contracts every few minutes. AVAX means WAVAX on Aave and native AVAX on BENQI. Aave V4's
+        borrow rate is its base rate; each borrower pays a premium on top, and its supply rate is an estimate.
+      </p>
+    </div>
+  );
+}
+
+function AssetSplit({ title, lead, leadUnit, detail, parts, unit }: {
+  title: string;
+  lead: string;
+  leadUnit: string;
+  detail: React.ReactNode;
+  parts: { id: string; name: string; value: number }[];
+  unit: string;
+}) {
+  const total = parts.reduce((s, p) => s + p.value, 0) || 1;
+  return (
+    <div>
+      <div className="text-[13px] font-semibold text-foreground">{title}</div>
+      <div className="mt-2 num text-[26px] leading-8 font-medium text-foreground">
+        {lead} <span className="font-sans text-[14px] text-muted-foreground">{leadUnit}</span>
+      </div>
+      <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
+      <div className="mt-3 flex h-2 rounded-sm overflow-hidden bg-muted" role="img" aria-label={`${title} supplied by protocol`}>
+        {parts.map((p, i) => {
+          const st = lendingStyle(p.id);
+          return (
+            <div
+              key={p.id}
+              className={i > 0 ? 'border-l border-card' : ''}
+              style={{ width: `${(p.value / total) * 100}%`, background: st.color, opacity: st.opacity }}
+              title={`${p.name}: ${compact(p.value)} ${unit}`}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        {parts.map((p) => {
+          const st = lendingStyle(p.id);
+          return (
+            <span key={p.id} className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-[2px]" style={{ background: st.color, opacity: st.opacity }} />
+              {p.name} <span className="num text-foreground">{compact(p.value)}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProtocolName({ id, name }: { id: string; name: string }) {
+  const st = lendingStyle(id);
+  return (
+    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
+      <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: st.color, opacity: st.opacity }} aria-hidden />
+      {name}
+    </span>
+  );
+}
+
+function LendFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="num text-foreground">{value}</dd>
+    </div>
   );
 }
 
