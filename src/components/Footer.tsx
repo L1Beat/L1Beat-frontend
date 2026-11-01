@@ -16,7 +16,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
       { label: 'Stablecoins', to: '/stablecoins' },
       { label: 'Staking', to: '/staking' },
       { label: 'Treasuries & ETFs', to: '/treasuries' },
-      { label: 'DEX volume', to: '/dex' },
+      { label: 'Trading', to: '/trading' },
       { label: 'Burn', to: '/burn' },
     ],
   },

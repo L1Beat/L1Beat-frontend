@@ -100,9 +100,9 @@ export function Dex() {
   return (
     <div>
       <SEO
-        title="Avalanche DEX Volume"
+        title="Avalanche Trading Volume"
         description="Daily trading volume, swaps and top pools on Avalanche C-Chain DEXes: Pharaoh, Uniswap, Blackhole, LFJ and Pangolin, indexed from the chain."
-        url="/dex"
+        url="/trading"
       />
 
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
@@ -114,7 +114,7 @@ export function Dex() {
         <div className="absolute inset-0 flex flex-col">
           <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <h1 className="text-[18px] leading-6 font-semibold text-foreground">DEX volume</h1>
+              <h1 className="text-[18px] leading-6 font-semibold text-foreground">Trading</h1>
               {m ? (
                 <>
                   <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">

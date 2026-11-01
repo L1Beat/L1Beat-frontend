@@ -123,7 +123,8 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/burn" element={<Burn />} />
         <Route path="/staking" element={<Staking />} />
         <Route path="/treasuries" element={<Treasuries />} />
-        <Route path="/dex" element={<Dex />} />
+        <Route path="/trading" element={<Dex />} />
+        <Route path="/dex" element={<Navigate to="/trading" replace />} />
         <Route path="/acps" element={<ACPs />} />
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />
         <Route path="/blog" element={<BlogList />} />

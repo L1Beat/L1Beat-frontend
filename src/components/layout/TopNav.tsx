@@ -1,29 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { L1BeatLogo } from '../L1BeatLogo';
 import { ThemeToggle } from '../ThemeToggle';
 import { useTheme } from '../../hooks/useTheme';
 import { SearchPalette } from './SearchPalette';
 
-interface NavItem {
+interface NavLink {
   id: string;
   label: string;
   path: string;
+  /** One line under the label in a menu. */
+  hint?: string;
 }
 
-// Ten destinations fit a top bar as flat links. No menus, no badges.
-export const PRIMARY_NAV: NavItem[] = [
+type NavEntry = NavLink | { id: string; label: string; items: NavLink[] };
+
+// Direct links for the pages people come back to; related pages grouped in
+// small menus so the bar stays short as pages are added.
+export const PRIMARY_NAV: NavEntry[] = [
   { id: 'overview', label: 'Overview', path: '/' },
-  { id: 'metrics', label: 'Metrics', path: '/metrics' },
-  { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins' },
+  {
+    id: 'network',
+    label: 'Network',
+    items: [
+      { id: 'metrics', label: 'Metrics', path: '/metrics', hint: 'Activity and fees across every L1' },
+      { id: 'burn', label: 'Burn', path: '/burn', hint: 'AVAX burned on the C-Chain, live' },
+    ],
+  },
+  {
+    id: 'markets',
+    label: 'Markets',
+    items: [
+      { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', hint: 'Supply, volume and holders' },
+      { id: 'trading', label: 'Trading', path: '/trading', hint: 'DEX volume and top pools' },
+      { id: 'treasuries', label: 'Treasuries & ETFs', path: '/treasuries', hint: 'AVAX held by companies and funds' },
+    ],
+  },
   { id: 'staking', label: 'Staking', path: '/staking' },
-  { id: 'treasuries', label: 'Treasuries', path: '/treasuries' },
-  { id: 'dex', label: 'DEX', path: '/dex' },
-  { id: 'burn', label: 'Burn', path: '/burn' },
   { id: 'acps', label: 'ACPs', path: '/acps' },
-  { id: 'blog', label: 'Blog', path: '/blog' },
-  { id: 'api', label: 'API', path: '/api' },
+  {
+    id: 'more',
+    label: 'More',
+    items: [
+      { id: 'blog', label: 'Blog', path: '/blog', hint: 'Research and updates' },
+      { id: 'api', label: 'API', path: '/api', hint: 'Query L1Beat data' },
+    ],
+  },
 ];
 
 export function isNavActive(pathname: string, path: string) {
@@ -60,23 +83,21 @@ export function TopNav() {
         </Link>
 
         <nav className="hidden md:flex items-center h-full" aria-label="Primary">
-          {PRIMARY_NAV.map(({ id, label, path }) => {
-            const active = isNavActive(pathname, path);
-            return (
+          {PRIMARY_NAV.map((entry) =>
+            'items' in entry ? (
+              <NavMenu key={entry.id} label={entry.label} items={entry.items} pathname={pathname} />
+            ) : (
               <Link
-                key={id}
-                to={path}
-                aria-current={active ? 'page' : undefined}
-                className={`relative flex items-center h-12 px-2 lg:px-3 text-[12.5px] transition-colors ${
-                  active ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                key={entry.id}
+                to={entry.path}
+                aria-current={isNavActive(pathname, entry.path) ? 'page' : undefined}
+                className={navItemCls(isNavActive(pathname, entry.path))}
               >
-                {label}
-                {/* Active rule: the one place brand red appears in the chrome. */}
-                {active && <span aria-hidden className="absolute left-2 right-2 lg:left-3 lg:right-3 bottom-0 h-0.5 bg-brand" />}
+                {entry.label}
+                {isNavActive(pathname, entry.path) && <ActiveRule />}
               </Link>
-            );
-          })}
+            ),
+          )}
         </nav>
 
         <div className="flex-1" />
@@ -105,5 +126,83 @@ export function TopNav() {
         <SearchPalette open={open} onClose={() => setOpen(false)} />
       </div>
     </header>
+  );
+}
+
+const navItemCls = (active: boolean) =>
+  `relative flex items-center gap-1 h-12 px-2 lg:px-3 text-[12.5px] transition-colors ${
+    active ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+  }`;
+
+// Active rule: the one place brand red appears in the chrome.
+function ActiveRule() {
+  return <span aria-hidden className="absolute left-2 right-2 lg:left-3 lg:right-3 bottom-0 h-0.5 bg-brand" />;
+}
+
+function NavMenu({ label, items, pathname }: { label: string; items: NavLink[]; pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number>();
+  const active = items.some((i) => isNavActive(pathname, i.path));
+
+  // Close on navigation, Escape and clicks outside.
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  // Hover opens; a short delay before closing lets the pointer cross the gap.
+  const enter = () => {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const leave = () => {
+    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+  };
+
+  return (
+    <div ref={ref} className="relative h-full" onMouseEnter={enter} onMouseLeave={leave}>
+      <button
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={navItemCls(active)}
+      >
+        {label}
+        <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        {active && <ActiveRule />}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full pt-1 z-50">
+          <ul className="min-w-[240px] rounded-md border border-border bg-card shadow-lg p-1">
+            {items.map((item) => {
+              const current = isNavActive(pathname, item.path);
+              return (
+                <li key={item.id}>
+                  <Link
+                    to={item.path}
+                    aria-current={current ? 'page' : undefined}
+                    className={`block rounded px-3 py-2 transition-colors hover:bg-accent focus-visible:bg-accent outline-none ${current ? 'bg-accent/60' : ''}`}
+                  >
+                    <span className={`block text-[13px] ${current ? 'font-medium text-foreground' : 'text-foreground'}`}>{item.label}</span>
+                    {item.hint && <span className="block text-[11px] text-muted-foreground">{item.hint}</span>}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
