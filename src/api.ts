@@ -415,7 +415,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
 
   return fetchExternalWithCache(cacheKey, async () => {
     try {
-      const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' });
+      const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' }, { parallel: true });
 
       // URL slugs come from chain names, and names repeat (redeployments keep
       // the old chain's name). Assign them in a fixed order, active chains
@@ -1808,12 +1808,14 @@ async function fetchExternalWithRetry<T>(
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
   extraParams: Record<string, string> = {},
-  opts: { throttleMs?: number; maxPages?: number; pageSize?: number } = {}
+  opts: { throttleMs?: number; maxPages?: number; pageSize?: number; parallel?: boolean } = {}
 ): Promise<T[]> {
   // throttleMs: pause between pages to stay under the API's rate limit on
   //   endpoints with many pages (e.g. the Primary Network has 3000+ validators).
   // maxPages: hard safety bound on the number of requests.
-  const { throttleMs = 0, maxPages = Infinity, pageSize = 100 } = opts;
+  // parallel: once the first page reports meta.total (sent with count=true),
+  //   request the remaining pages together instead of one after another.
+  const { throttleMs = 0, maxPages = Infinity, pageSize = 100, parallel = false } = opts;
   const all: T[] = [];
   let offset = 0;
   const limit = pageSize;
@@ -1821,9 +1823,9 @@ async function fetchAllL1BeatPages<T>(
 
   while (page < maxPages) {
     const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
-    let response: { data: T[]; meta: { has_more: boolean } };
+    let response: { data: T[]; meta: { has_more: boolean; total?: number } };
     try {
-      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean; total?: number } }>(
         `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
       );
     } catch (error) {
@@ -1837,6 +1839,24 @@ async function fetchAllL1BeatPages<T>(
     page += 1;
     if (chunk.length === 0 || !response.meta?.has_more) break;
     offset += limit;
+    const total = response.meta?.total;
+    if (parallel && page === 1 && typeof total === 'number' && total > offset) {
+      const offsets: number[] = [];
+      for (let o = offset; o < total && offsets.length < maxPages - 1; o += limit) offsets.push(o);
+      // Pages stay in order; a failed page is skipped rather than discarding the rest.
+      const pages = await Promise.allSettled(
+        offsets.map((o) =>
+          fetchExternalWithRetry<{ data: T[] }>(
+            `${L1BEAT_EXTERNAL_API}${endpoint}?${new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(o) })}`,
+          ),
+        ),
+      );
+      pages.forEach((r, i) => {
+        if (r.status === 'fulfilled') all.push(...(r.value.data ?? []));
+        else console.warn(`fetchAllL1BeatPages: page at offset ${offsets[i]} failed for ${endpoint}:`, r.reason);
+      });
+      break;
+    }
     if (throttleMs > 0) await new Promise((r) => setTimeout(r, throttleMs));
   }
 
