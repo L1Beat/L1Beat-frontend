@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowLeft, Copy, Check, ExternalLink, AlertTriangle, Shield } from 'lucide-react';
-import { getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType, getValidatorDelegations } from '../api';
+import { getChains, getL1BeatValidator, getL1BeatValidatorDeposits, getL1BeatNodeValidations, getChainBySubnetId, getL1BeatSubnetType, getValidatorDelegations } from '../api';
 import type { L1BeatValidator, ValidatorDelegation } from '../api';
 import type { Chain, ValidatorDeposit } from '../types';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -95,6 +95,10 @@ export function ValidatorDetails() {
     setLoading(true);
     setError(null);
 
+    // The chain list is only needed for the chain name, but it's the slowest
+    // request: start it now, alongside the validator, instead of after it.
+    void getChains().catch(() => null);
+
     getL1BeatValidator(validatorId, subnetId).then(async (v) => {
       if (!v) {
         setError('Validator not found');
@@ -103,25 +107,19 @@ export function ValidatorDetails() {
       }
       setValidator(v);
 
-      let resolvedKind: ValidatorKind = 'l1';
-      if (v.subnet_id === PRIMARY_NETWORK_SUBNET_ID) {
-        resolvedKind = 'primary';
-      } else {
-        const subnetType = await getL1BeatSubnetType(v.subnet_id);
-        resolvedKind = subnetType === 'legacy' ? 'legacy' : 'l1';
-      }
+      const primary = v.subnet_id === PRIMARY_NETWORK_SUBNET_ID;
+      // Deposits only apply to L1 validators, but fetching them alongside the
+      // subnet type saves a round trip; they're dropped for legacy subnets.
+      const [subnetType, d, c] = await Promise.all([
+        primary ? Promise.resolve(null) : getL1BeatSubnetType(v.subnet_id),
+        primary ? Promise.resolve([]) : getL1BeatValidatorDeposits(v.validation_id),
+        getChainBySubnetId(v.subnet_id),
+      ]);
+      const resolvedKind: ValidatorKind = primary ? 'primary' : subnetType === 'legacy' ? 'legacy' : 'l1';
       setKind(resolvedKind);
-
-      if (resolvedKind === 'l1') {
-        // By validation ID: a node that validated more than once would otherwise
-        // list the deposits of every validation it ever had.
-        const d = await getL1BeatValidatorDeposits(v.validation_id);
-        setDeposits(d.sort((a, b) => new Date(b.block_time).getTime() - new Date(a.block_time).getTime()));
-      } else {
-        setDeposits([]);
-      }
-
-      const c = await getChainBySubnetId(v.subnet_id);
+      // By validation ID: a node that validated more than once would otherwise
+      // list the deposits of every validation it ever had.
+      setDeposits(resolvedKind === 'l1' ? [...d].sort((x, y) => new Date(y.block_time).getTime() - new Date(x.block_time).getTime()) : []);
       setChain(c);
       setLoading(false);
     }).catch(() => {
