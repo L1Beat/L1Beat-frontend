@@ -2310,6 +2310,60 @@ export async function getChainRestaking(subnetId: string): Promise<{ l1: Restake
   return { l1, protocol: data.protocols?.find((p) => p.id === l1.protocol_id) ?? null };
 }
 
+export interface TreasuryHolder {
+  id: string;
+  name: string;
+  ticker: string;
+  exchange: string;
+  kind: 'treasury' | 'etf';
+  sponsor: string | null;
+  /** Null until first fetched; never 0. */
+  avax_held: number | null;
+  /** The fund's own reported assets, not avax_held × price. */
+  aum_usd: number | null;
+  nav_per_share: number | null;
+  sponsor_fee_pct: number | null;
+  staking_pct: number | null;
+  staking_max_pct: number | null;
+  /** Date the figure is valid for (YYYY-MM-DD), not when it was fetched. */
+  as_of: string | null;
+  /** live: read from the issuer or CoinGecko; manual: taken from the latest filing. */
+  source: 'live' | 'manual';
+  source_url: string | null;
+  website_url: string | null;
+}
+
+export interface Treasuries {
+  holders: TreasuryHolder[];
+  totals: {
+    treasury_avax: number;
+    etf_avax: number;
+    combined_avax: number;
+    treasury_count: number;
+    etf_count: number;
+    avax_price_usd: number | null;
+    circulating_supply_avax: number | null;
+    combined_usd: number | null;
+    combined_share_of_circulating_percent: number | null;
+    market_as_of: string | null;
+  };
+  updated_at: string;
+}
+
+/** Companies and ETFs holding AVAX. */
+export async function getTreasuries(): Promise<Treasuries | null> {
+  return fetchWithCache('treasuries', async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean } & Treasuries>(`${API_URL}/treasuries`);
+      if (!response?.success || !Array.isArray(response.holders)) return null;
+      return { holders: response.holders, totals: response.totals, updated_at: response.updated_at };
+    } catch (error) {
+      console.error('Treasuries fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;

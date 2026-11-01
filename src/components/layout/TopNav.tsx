@@ -12,12 +12,13 @@ interface NavItem {
   path: string;
 }
 
-// Eight destinations fit a top bar as flat links. No menus, no badges.
+// Nine destinations fit a top bar as flat links. No menus, no badges.
 export const PRIMARY_NAV: NavItem[] = [
   { id: 'overview', label: 'Overview', path: '/' },
   { id: 'metrics', label: 'Metrics', path: '/metrics' },
   { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins' },
   { id: 'staking', label: 'Staking', path: '/staking' },
+  { id: 'treasuries', label: 'Treasuries', path: '/treasuries' },
   { id: 'burn', label: 'Burn', path: '/burn' },
   { id: 'acps', label: 'ACPs', path: '/acps' },
   { id: 'blog', label: 'Blog', path: '/blog' },

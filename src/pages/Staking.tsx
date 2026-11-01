@@ -635,7 +635,11 @@ function LiquidStakingCard({ totalStake }: { totalStake: number | null }) {
           ))}
           <p className="text-[11px] text-muted-foreground max-w-3xl">
             Hypha (formerly GoGoPool) shut down its stAVAX token in August 2026. Smaller protocols, such as Yield Yak's
-            yyAVAX, aren't tracked yet.
+            yyAVAX, aren't tracked yet. U.S. spot ETFs stake most of their AVAX too; see{' '}
+            <Link to="/treasuries" className="text-foreground underline underline-offset-2 decoration-border hover:decoration-foreground">
+              Treasuries &amp; ETFs
+            </Link>
+            .
           </p>
         </div>
       )}

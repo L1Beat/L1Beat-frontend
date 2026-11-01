@@ -34,6 +34,7 @@ const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ de
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 const Staking = lazy(() => import('./pages/Staking').then(m => ({ default: m.Staking })));
+const Treasuries = lazy(() => import('./pages/Treasuries').then(m => ({ default: m.Treasuries })));
 const DelegatorDetails = lazy(() => import('./pages/DelegatorDetails').then(m => ({ default: m.DelegatorDetails })));
 
 function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
@@ -120,6 +121,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/stablecoins" element={<Stablecoins />} />
         <Route path="/burn" element={<Burn />} />
         <Route path="/staking" element={<Staking />} />
+        <Route path="/treasuries" element={<Treasuries />} />
         <Route path="/acps" element={<ACPs />} />
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />
         <Route path="/blog" element={<BlogList />} />
