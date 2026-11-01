@@ -102,9 +102,15 @@ export function Treasuries() {
         url="/treasuries"
       />
 
-      <section className="border-b border-border bg-stage" aria-label="AVAX held by treasuries and ETFs">
-        <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 pt-5 pb-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {/* Hero in the shared page frame: the chart fills the stage and the KPIs
+          float over its foot from md up. */}
+      <section
+        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),820px)] md:min-h-[600px]"
+        aria-label="AVAX held by treasuries and ETFs"
+      >
+        {/* Phones stack the six rows at their natural height; from md the chart fills the fixed stage. */}
+        <div className="md:absolute md:inset-0 flex flex-col">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h1 className="text-[18px] leading-6 font-semibold text-foreground">Treasuries &amp; ETFs</h1>
               {t ? (
@@ -145,14 +151,21 @@ export function Treasuries() {
             </div>
           </div>
 
-          <SectionErrorBoundary label="the holdings chart">
-            <HoldingsChart holders={holders} price={price} loading={state === 'loading'} />
-          </SectionErrorBoundary>
+          <div className="relative md:flex-1 md:min-h-0 mx-4 sm:mx-6 lg:mx-10 mt-5 mb-6 md:mt-4 md:mb-[128px]">
+            <SectionErrorBoundary label="the holdings chart">
+              <HoldingsChart holders={holders} price={price} loading={state === 'loading'} />
+            </SectionErrorBoundary>
+          </div>
+        </div>
+        <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
+          <StatStrip items={stats} floating />
         </div>
       </section>
 
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-5">
-        <StatStrip items={stats} />
+        <div className="md:hidden">
+          <StatStrip items={stats} />
+        </div>
         <SectionErrorBoundary label="the holders table">
           <HoldersTable holders={holders} price={price} state={state} />
         </SectionErrorBoundary>
@@ -187,7 +200,7 @@ function HoldingsChart({ holders, price, loading }: { holders: TreasuryHolder[];
 
   if (loading) {
     return (
-      <div className="mt-6 space-y-3">
+      <div className="h-full flex flex-col justify-around">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" style={{ width: `${90 - i * 12}%` }} />
         ))}
@@ -197,16 +210,16 @@ function HoldingsChart({ holders, price, loading }: { holders: TreasuryHolder[];
   if (!rows.length) return null;
 
   return (
-    <ol className="mt-6 space-y-3 sm:space-y-2.5">
+    <ol className="md:h-full flex flex-col justify-around gap-4 md:gap-2">
       {rows.map((h) => {
         const held = h.avax_held ?? 0;
         const color = KIND[h.kind].color;
         return (
-          <li key={h.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[150px_1fr_150px] items-center gap-x-4 gap-y-1.5">
+          <li key={h.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-[170px_1fr_170px] items-center gap-x-4 gap-y-1.5">
             <div className="min-w-0 flex items-center h-5">
               <Logo h={h} />
             </div>
-            <div className="order-3 col-span-2 sm:order-none sm:col-span-1 relative h-6 sm:h-8">
+            <div className="order-3 col-span-2 sm:order-none sm:col-span-1 relative h-6 sm:h-10">
               <div
                 className="absolute inset-y-0 left-0 rounded-[2px]"
                 style={{

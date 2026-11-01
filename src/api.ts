@@ -2447,6 +2447,65 @@ export async function getLending(): Promise<Lending | null> {
   }, 5 * 60 * 1000);
 }
 
+export interface DexVenue {
+  id: string;
+  name: string;
+  /** Groups versions of one protocol, e.g. Pharaoh V3 and Pharaoh DLMM. */
+  protocol: string;
+  volume_usd: number;
+  swaps: number;
+  /** 0–1: share of swaps that could be priced in USD. */
+  priced_share: number | null;
+  /** Distinct tx senders, bots included. */
+  unique_addresses: number;
+  flagged_swaps: number;
+}
+
+export interface DexSummary {
+  /** Last complete UTC day in the window; null before the first rollup. */
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  flag_threshold_usd: number;
+  dexes: DexVenue[];
+  totals: { volume_usd: number; swaps: number; priced_share: number | null; unique_addresses: number; flagged_swaps: number };
+}
+
+export interface DexDay {
+  date: string;
+  volume_usd: number;
+  swaps: number;
+  dexes: { id: string; volume_usd: number; swaps: number }[];
+}
+
+export interface DexPool {
+  pool: string;
+  dex: string;
+  protocol: string;
+  token0: { address: string; symbol: string };
+  token1: { address: string; symbol: string };
+  volume_usd: number;
+  swaps: number;
+}
+
+async function getDexData<T>(key: string, path: string): Promise<T | null> {
+  return fetchExternalWithCache(key, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: T }>(`${L1BEAT_EXTERNAL_API}${path}`);
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`DEX fetch error (${path}):`, error);
+      return null;
+    }
+  }, 10 * 60 * 1000);
+}
+
+/** Volume per tracked C-Chain DEX over the last `days` complete UTC days. */
+export const getDexSummary = (days: number) => getDexData<DexSummary>(`dex-${days}`, `/api/v1/metrics/dex?days=${days}`);
+export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-${days}`, `/api/v1/metrics/dex/timeseries?days=${days}`);
+export const getDexPools = (days: number, limit = 20) =>
+  getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;
