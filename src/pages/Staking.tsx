@@ -810,7 +810,11 @@ function LendingBody({ data }: { data: Lending }) {
           <span className="num text-foreground">${compact(data.summary.totals.borrowed_usd)}</span> borrowed.{' '}
         </span>
         Read from each protocol's contracts every few minutes. AVAX means WAVAX on Aave and native AVAX on BENQI. Aave V4's
-        borrow rate is its base rate; each borrower pays a premium on top, and its supply rate is an estimate.
+        borrow rate is its base rate; each borrower pays a premium on top, and its supply rate is an estimate.{' '}
+        <Link to="/lending" className="text-foreground underline underline-offset-2 decoration-border hover:decoration-foreground">
+          See every lending market
+        </Link>
+        .
       </p>
     </div>
   );
