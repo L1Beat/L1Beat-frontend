@@ -273,7 +273,7 @@ function HoldersTable({ holders, price, state }: { holders: TreasuryHolder[]; pr
           </ul>
 
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-[12px]">
+            <table className="w-full text-[12px] whitespace-nowrap">
               <thead>
                 <tr className="border-y border-border text-[11px] text-muted-foreground">
                   <th className="text-left font-normal px-5 py-2">Holder</th>

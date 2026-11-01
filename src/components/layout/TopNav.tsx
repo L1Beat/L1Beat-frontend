@@ -56,12 +56,6 @@ export function TopNav() {
       <div className="h-full px-4 sm:px-6 flex items-center gap-6 md:gap-4 lg:gap-6">
         <Link to="/" className="flex items-center gap-2 shrink-0" aria-label="L1Beat home">
           <L1BeatLogo size="small" theme={theme} variant="header" />
-          <span
-            className="hidden sm:inline text-[10px] leading-4 px-1 rounded border border-border text-muted-foreground"
-            title="L1Beat is in alpha. Data may be incomplete or inaccurate."
-          >
-            alpha
-          </span>
         </Link>
 
         <nav className="hidden md:flex items-center h-full" aria-label="Primary">

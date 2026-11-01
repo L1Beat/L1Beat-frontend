@@ -1,17 +1,50 @@
 import { Link } from 'react-router-dom';
-import { Github, Mail, Heart } from 'lucide-react';
+import { Github, Mail } from 'lucide-react';
 import { siX } from 'simple-icons/icons';
 import { useTheme } from '../hooks/useTheme';
 import { L1BeatLogo } from './L1BeatLogo';
 
-// External references only — internal pages already live in the sidebar.
-const RESOURCES: { label: string; href: string }[] = [
-  { label: 'Avalanche Docs', href: 'https://docs.avax.network/' },
-  { label: 'Avalanche Explorer', href: 'https://subnets.avax.network/' },
-  { label: 'Avalanche Network', href: 'https://www.avax.network/' },
+type FooterLink = { label: string; to?: string; href?: string };
+
+// Every page is listed here: on phones the dock only carries seven of them.
+const GROUPS: { title: string; links: FooterLink[] }[] = [
+  {
+    title: 'Data',
+    links: [
+      { label: 'Overview', to: '/' },
+      { label: 'Metrics', to: '/metrics' },
+      { label: 'Stablecoins', to: '/stablecoins' },
+      { label: 'Staking', to: '/staking' },
+      { label: 'Treasuries & ETFs', to: '/treasuries' },
+      { label: 'Burn', to: '/burn' },
+    ],
+  },
+  {
+    title: 'Protocol',
+    links: [
+      { label: 'ACPs', to: '/acps' },
+      { label: 'Blog', to: '/blog' },
+    ],
+  },
+  {
+    title: 'Developers',
+    links: [
+      { label: 'API', to: '/api' },
+      { label: 'Brand', to: '/brand' },
+      { label: 'GitHub', href: 'https://github.com/L1Beat' },
+    ],
+  },
+  {
+    title: 'Avalanche',
+    links: [
+      { label: 'Docs', href: 'https://docs.avax.network/' },
+      { label: 'Explorer', href: 'https://subnets.avax.network/' },
+      { label: 'avax.network', href: 'https://www.avax.network/' },
+    ],
+  },
 ];
 
-const linkCls = 'text-[12px] text-muted-foreground transition-colors hover:text-foreground';
+const linkCls = 'text-[13px] leading-6 text-muted-foreground transition-colors hover:text-foreground';
 
 function XIcon({ className }: { className?: string }) {
   return (
@@ -41,25 +74,27 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-auto border-t border-border bg-background text-foreground">
-      <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6">
-        {/* One row: identity on the left, destinations on the right. */}
-        <div className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            <L1BeatLogo size="small" theme={theme} />
-            <p className="text-[12px] text-muted-foreground truncate">
-              Real-time analytics for every Avalanche L1. Alpha: data may be incomplete.
+    <footer className="relative mt-auto border-t border-border bg-background text-foreground">
+      <div className="relative mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6">
+        {/* The L1Beat pulse, drawn into the footer's top rule. */}
+        <svg
+          aria-hidden
+          viewBox="0 0 56 20"
+          className="absolute -top-[10px] left-4 sm:left-6 w-14 h-5 text-muted-foreground/50"
+          fill="none"
+        >
+          <path d="M0 10H18L22 3L28 17L32 10H56" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" />
+        </svg>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 pt-10 pb-8 md:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]">
+          <div className="col-span-2 md:col-span-1 max-w-xs">
+            <div className="w-fit">
+              <L1BeatLogo size="small" theme={theme} />
+            </div>
+            <p className="mt-3 text-[13px] leading-5 text-muted-foreground">
+              Analytics for Avalanche and its L1s.
             </p>
-          </div>
-          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-label="Footer">
-            {RESOURCES.map((l) => (
-              <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={linkCls}>
-                {l.label}
-              </a>
-            ))}
-            <Link to="/brand" className={linkCls}>Brand</Link>
-            <span aria-hidden className="hidden sm:block w-px h-4 bg-border" />
-            <div className="flex items-center gap-1">
+            <div className="mt-4 -ml-1.5 flex items-center gap-1">
               {SOCIALS.map(({ label, href, Icon }) => (
                 <a
                   key={label}
@@ -68,23 +103,35 @@ export function Footer() {
                   rel="noopener noreferrer"
                   title={label}
                   aria-label={label}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" />
                 </a>
               ))}
             </div>
-          </nav>
+          </div>
+
+          {GROUPS.map((g) => (
+            <nav key={g.title} aria-label={g.title}>
+              <h2 className="text-[12px] font-medium text-foreground mb-2">{g.title}</h2>
+              <ul>
+                {g.links.map((l) => (
+                  <li key={l.label}>
+                    {l.to ? (
+                      <Link to={l.to} className={linkCls}>{l.label}</Link>
+                    ) : (
+                      <a href={l.href} target="_blank" rel="noopener noreferrer" className={linkCls}>{l.label}</a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-border py-3 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-t border-border py-4 text-[11px] text-muted-foreground">
           <p>
-            © <span className="num">{year}</span> L1Beat. All rights reserved.
-          </p>
-          <p className="flex items-center gap-1.5">
-            Built with
-            <Heart className="h-3 w-3 fill-current" />
-            for the Avalanche community
+            © <span className="num">{year}</span> L1Beat
           </p>
         </div>
       </div>
