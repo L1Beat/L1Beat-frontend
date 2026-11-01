@@ -1998,12 +1998,6 @@ const PERMISSIONLESS = {
   note: 'Anyone meeting the stake requirement can validate (PoS).',
 };
 
-// The one control fact we can derive today: PoA = permissioned validator set
-// (operator picks the validators), PoS = permissionless (stake to join). Prefer
-// the indexer's ValidatorManager type; fall back to the chain's sybil-resistance
-// label while that's still "unknown". We show this instead of a fabricated
-// "decentralization grade", which would mislead — a PoA chain can have well-
-// spread stake yet be entirely operator-controlled.
 // Share of module weight held by Suzaku restaking on a balancer chain, or null.
 function restakedShare(vm: ValidatorManager | null | undefined): number | null {
   const mods = vm?.type === 'balancer' ? vm.security_modules : null;
@@ -2013,6 +2007,12 @@ function restakedShare(vm: ValidatorManager | null | undefined): number | null {
   return mods.filter((m) => m.kind === 'suzaku_middleware').reduce((t, m) => t + m.weight, 0) / total;
 }
 
+// The one control fact we can derive today: PoA = permissioned validator set
+// (operator picks the validators), PoS = permissionless (stake to join). Prefer
+// the indexer's ValidatorManager type; fall back to the chain's sybil-resistance
+// label while that's still "unknown". We show this instead of a fabricated
+// "decentralization grade", which would mislead — a PoA chain can have well-
+// spread stake yet be entirely operator-controlled.
 function permissionModel(vm: ValidatorManager | null | undefined, sybil?: string) {
   const t = (vm?.type || '').toLowerCase();
   // On-chain fact first: a placeholder manager fixes the set whatever the registry says.
@@ -2172,23 +2172,32 @@ function compactAmount(v: number): string {
 // operators running this L1's validators.
 function RestakedCollateral({ l1, protocol }: { l1: RestakedL1; protocol: { name: string; url: string } | null }) {
   const name = protocol?.name ?? 'restaking';
-  const sum = (k: 'deposited' | 'allocated') =>
-    l1.vaults.reduce((t, v) => t + unitsToNumber(v[k], v.collateral.decimals), 0);
-  const allocated = sum('allocated');
-  const deposited = sum('deposited');
-  const symbols = [...new Set(l1.vaults.map((v) => v.collateral.symbol))].join(' + ');
+  // Totals per collateral token; vaults holding different tokens can't be added up.
+  const tokens = new Map<string, { allocated: number; deposited: number }>();
+  for (const v of l1.vaults) {
+    const t = tokens.get(v.collateral.symbol) ?? { allocated: 0, deposited: 0 };
+    t.allocated += unitsToNumber(v.allocated, v.collateral.decimals) || 0;
+    t.deposited += unitsToNumber(v.deposited, v.collateral.decimals) || 0;
+    tokens.set(v.collateral.symbol, t);
+  }
+  const list = (k: 'allocated' | 'deposited') =>
+    [...tokens].map(([sym, t]) => `${compactAmount(t[k])} ${sym}`).join(' + ') || '—';
+  const idle = [...tokens]
+    .filter(([, t]) => t.deposited > t.allocated)
+    .map(([sym, t]) => `${compactAmount(t.deposited - t.allocated)}${tokens.size > 1 ? ` ${sym}` : ''}`)
+    .join(' + ');
   const share = l1.share_of_weight_percent;
   const shareText = share == null ? null : share >= 99.95 ? '100%' : `${share < 1 ? share.toFixed(1) : Math.round(share)}%`;
   const rows = [
     {
       label: 'Allocated to validators',
-      value: `${compactAmount(allocated)} ${symbols}`,
+      value: list('allocated'),
       sub: shareText ? `${shareText} of validator weight` : undefined,
     },
     {
       label: 'Deposited in vaults',
-      value: `${compactAmount(deposited)} ${symbols}`,
-      sub: deposited > allocated ? `${compactAmount(deposited - allocated)} not allocated yet` : undefined,
+      value: list('deposited'),
+      sub: idle ? `${idle} not allocated yet` : undefined,
     },
     {
       label: 'Node operators',
@@ -2214,8 +2223,8 @@ function RestakedCollateral({ l1, protocol }: { l1: RestakedL1; protocol: { name
       </div>
       <p className="text-[12px] text-foreground/90 mb-3">
         {shareText
-          ? `${compactAmount(allocated)} ${symbols} restaked through ${name} backs ${shareText} of this chain's validator weight.`
-          : `${compactAmount(allocated)} ${symbols} is restaked through ${name} for this chain's validators.`}
+          ? `${list('allocated')} restaked through ${name} backs ${shareText} of this chain's validator weight.`
+          : `${list('allocated')} is restaked through ${name} for this chain's validators.`}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {rows.map((r) => (

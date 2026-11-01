@@ -2292,19 +2292,22 @@ export interface Restaking {
 
 /** Restaked collateral securing one L1, or null when none is registered. */
 export async function getChainRestaking(subnetId: string): Promise<{ l1: RestakedL1; protocol: Restaking['protocols'][number] | null } | null> {
-  return fetchExternalWithCache(`restaking-${subnetId}`, async () => {
+  // Cache the whole response, so chains without restaking (an empty l1s list)
+  // are cached too instead of refetched on every visit.
+  const data = await fetchExternalWithCache(`restaking-${subnetId}`, async () => {
     try {
       const response = await fetchExternalWithRetry<{ data: Restaking }>(
         `${L1BEAT_EXTERNAL_API}/api/v1/metrics/restaking?subnet_id=${encodeURIComponent(subnetId)}`,
       );
-      const l1 = response.data?.l1s?.[0];
-      if (!l1) return null;
-      return { l1, protocol: response.data.protocols.find((p) => p.id === l1.protocol_id) ?? null };
+      return response.data ?? null;
     } catch (error) {
       console.error('Restaking fetch error:', error);
       return null;
     }
   }, 5 * 60 * 1000);
+  const l1 = data?.l1s?.[0];
+  if (!l1) return null;
+  return { l1, protocol: data.protocols?.find((p) => p.id === l1.protocol_id) ?? null };
 }
 
 export interface DelegatorDelegation {
