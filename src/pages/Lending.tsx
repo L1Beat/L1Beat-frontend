@@ -45,6 +45,44 @@ function capUse(cap: string | null, amount: string, decimals: number): CapUse {
   return { kind: 'pct', value: (Number(amount) / 10 ** decimals / capTokens) * 100 };
 }
 
+/**
+ * How an asset works as collateral right now. An LTV of 0 with a liquidation
+ * threshold above 0 means new borrowing against it is switched off while
+ * existing positions stay open.
+ */
+function collateralState(m: LendingMarket) {
+  const groups = (m.emode ?? []).filter((e) => e.as_collateral);
+  const usable = groups.filter((e) => (e.ltv_percent ?? 0) > 0).sort((a, b) => (b.ltv_percent ?? 0) - (a.ltv_percent ?? 0))[0];
+  const pausedGroup = groups.find((e) => !(e.ltv_percent ?? 0) && ((e.configured_ltv_percent ?? 0) > 0 || (e.previous_ltv_percent ?? 0) > 0));
+  if (m.protocol_id === 'aave-v4') {
+    // V4 sets collateral per spoke, so the spokes are the whole story.
+    if (usable) return { kind: 'ok' as const, ltv: usable.ltv_percent, liq: usable.liquidation_threshold_percent, note: usable.label };
+    // A spoke that dropped the asset to 0 reports it as not collateral but keeps
+    // the factor older positions still use.
+    const was = Math.max(0, ...(m.emode ?? []).map((e) => e.previous_ltv_percent ?? e.configured_ltv_percent ?? 0));
+    if (was > 0) return { kind: 'paused' as const, liq: null, was, note: null };
+    return { kind: 'unknown' as const };
+  }
+  if (m.collateral_enabled === false) return { kind: 'none' as const };
+  if (m.ltv_percent == null && m.liquidation_threshold_percent == null) return { kind: 'unknown' as const };
+  if (!m.ltv_percent && (m.liquidation_threshold_percent ?? 0) > 0) {
+    // No "was" here: the API carries the E-Mode value before the change, not the
+    // normal-mode LTV, and quoting one as the other would overstate it.
+    return {
+      kind: 'paused' as const,
+      liq: m.liquidation_threshold_percent,
+      was: null,
+      note: usable ? `E-Mode ${pct(usable.ltv_percent)} (${usable.label})` : pausedGroup ? 'E-Mode paused too' : null,
+    };
+  }
+  return {
+    kind: 'ok' as const,
+    ltv: m.ltv_percent,
+    liq: m.liquidation_threshold_percent,
+    note: usable ? `E-Mode ${pct(usable.ltv_percent)}` : null,
+  };
+}
+
 interface Row extends LendingMarket {
   protocolName: string;
   asset: string;
@@ -176,6 +214,7 @@ export function Lending() {
         </div>
         {state === 'ready' && data && (
           <>
+            <PausedNotice rows={rows} />
             <SectionErrorBoundary label="the rate comparison">
               <RatesCard rows={rows} />
             </SectionErrorBoundary>
@@ -379,6 +418,26 @@ function RatesCard({ rows }: { rows: Row[] }) {
   );
 }
 
+// Lenders sometimes switch off new borrowing against an asset (LTV to 0) as a risk
+// measure. Said once, up top, so the table's "Paused" cells make sense.
+function PausedNotice({ rows }: { rows: Row[] }) {
+  const paused = rows.filter((r) => !r.closed && (r.supplied_usd ?? 0) >= MIN_COMPARE_USD && collateralState(r).kind === 'paused');
+  if (!paused.length) return null;
+  const assets = [...new Set(paused.map((r) => r.asset))];
+  const protocols = [...new Set(paused.map((r) => r.protocolName.replace(' Lending', '')))];
+  const list = (xs: string[]) => (xs.length <= 1 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-[#d4a017]/40 bg-[#d4a017]/[0.07] px-4 py-3">
+      <span className="mt-1.5 w-2 h-2 rounded-full bg-[#d4a017] shrink-0" aria-hidden />
+      <p className="text-[13px] leading-5 text-foreground">
+        New borrowing against <span className="font-medium">{list(assets)}</span> is switched off on {list(protocols)}: their
+        loan-to-value is set to 0. Existing positions keep their liquidation thresholds, so the change doesn't liquidate
+        anyone.
+      </p>
+    </div>
+  );
+}
+
 // Markets where depositing, withdrawing or borrowing is about to get harder.
 function LimitsCard({ rows }: { rows: Row[] }) {
   const items = useMemo(() => {
@@ -419,6 +478,28 @@ function LimitsCard({ rows }: { rows: Row[] }) {
         </ul>
       )}
     </Card>
+  );
+}
+
+function CollateralCell({ r }: { r: Row }) {
+  const c = collateralState(r);
+  if (c.kind === 'none') return <span className="text-[12px] text-muted-foreground">Not collateral</span>;
+  if (c.kind === 'unknown') return <span className="text-muted-foreground/50">—</span>;
+  if (c.kind === 'paused') {
+    return (
+      <span className="inline-flex flex-col items-end leading-tight" title="New borrowing against this asset is switched off (LTV 0). Existing positions keep the liquidation threshold.">
+        <span className="text-[12px] text-[#d4a017]">Paused{c.was != null ? ` (was ${pct(c.was)})` : ''}</span>
+        {(c.liq != null || c.note) && (
+          <span className="num text-[10px] text-muted-foreground">{[c.liq != null ? `liq. ${pct(c.liq)}` : null, c.note].filter(Boolean).join(', ')}</span>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex flex-col items-end leading-tight">
+      <span className="num text-[12px] text-muted-foreground">{pct(c.ltv)} / {pct(c.liq)}</span>
+      {c.note && <span className="num text-[10px] text-muted-foreground">{c.note}</span>}
+    </span>
   );
 }
 
@@ -473,7 +554,7 @@ function MarketsTable({ rows, protocols }: { rows: Row[]; protocols: LendingData
               {head('borrow_apy_percent', 'Borrow APY')}
               <th className="text-right font-normal px-3 py-2" title="Share of the supply cap used">Supply cap</th>
               <th className="text-right font-normal px-3 py-2" title="Share of the borrow cap used">Borrow cap</th>
-              <th className="text-right font-normal px-4 sm:px-5 py-2" title="Loan-to-value for new borrows, and the liquidation threshold">LTV / liq.</th>
+              <th className="text-right font-normal px-4 sm:px-5 py-2" title="Loan-to-value for new borrows / liquidation threshold. E-Mode is Aave's higher limit for related assets.">Collateral</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -494,12 +575,8 @@ function MarketsTable({ rows, protocols }: { rows: Row[]; protocols: LendingData
                 <td className="num text-right px-3 py-2 text-foreground">{borrowApy(r)}</td>
                 <td className="num text-right px-3 py-2 text-foreground">{capCell(r.supplyCap)}</td>
                 <td className="num text-right px-3 py-2 text-foreground">{capCell(r.borrowCap)}</td>
-                <td className="num text-right px-4 sm:px-5 py-2 text-muted-foreground">
-                  {r.collateral_enabled === false
-                    ? 'Not collateral'
-                    : r.ltv_percent == null && r.liquidation_threshold_percent == null
-                      ? '—'
-                      : `${pct(r.ltv_percent)} / ${pct(r.liquidation_threshold_percent)}`}
+                <td className="text-right px-4 sm:px-5 py-2">
+                  <CollateralCell r={r} />
                 </td>
               </tr>
             ))}

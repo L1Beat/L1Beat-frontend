@@ -2406,7 +2406,28 @@ export interface LendingMarket {
   borrowed_usd: number | null;
   supply_cap: string | null;
   borrow_cap: string | null;
+  /**
+   * Aave E-Mode categories (V3) or spokes (V4) that include this asset; empty for
+   * BENQI. Missing on responses from before the field existed.
+   */
+  emode?: LendingEmodeEntry[];
   sampled_at: string;
+}
+
+export interface LendingEmodeEntry {
+  /** Category id (V3) or spoke address (V4). */
+  id: string | number;
+  label: string;
+  /** Effective LTV, after any per-asset LTV-zero override. */
+  ltv_percent: number | null;
+  /** The category's own LTV before overrides. */
+  configured_ltv_percent?: number | null;
+  liquidation_threshold_percent: number | null;
+  liquidation_bonus_percent?: number | null;
+  as_collateral: boolean;
+  borrowable: boolean;
+  /** V4: the factor older positions keep from the previous config. */
+  previous_ltv_percent?: number | null;
 }
 
 interface LendingAssetSummary {
