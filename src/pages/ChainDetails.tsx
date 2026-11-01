@@ -599,6 +599,8 @@ export function ChainDetails() {
                       })(),
                       risk?.validator_manager?.type === 'placeholder'
                         ? 'Fixed validator set'
+                        : (restakedShare(risk?.validator_manager) ?? 0) > 0.5
+                        ? 'Restaked'
                         : chain.sybilResistanceType
                         ? /proof of authority/i.test(chain.sybilResistanceType)
                           ? 'PoA'
@@ -1876,8 +1878,12 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
       rows: [] as { label: string; value: string; tone: string; sub?: string }[],
     };
   }
-  const kind = vm.owner?.kind;
-  const ms = vm.owner?.multisig;
+  // On a balancer chain the manager's owner is the balancer contract; whoever
+  // owns the balancer decides how much weight each module may hold.
+  const balancer = vm.type === 'balancer' && vm.balancer_owner ? vm.balancer_owner : null;
+  const controller = balancer ?? vm.owner;
+  const kind = controller?.kind;
+  const ms = controller?.multisig;
   const isProxy = !!vm.proxy?.is_proxy;
   const delay = vm.proxy?.upgrade_delay_seconds ?? 0;
   const instant = isProxy && delay === 0;
@@ -1914,9 +1920,11 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
   if (singleKey && (instant || !isProxy)) {
     chip = 'Single-key control';
     chipTone = 'text-down bg-down/10';
-    headline = instant
-      ? 'A single key can instantly upgrade the manager and replace the validator set.'
-      : 'A single key directly controls the validator set.';
+    headline = balancer
+      ? 'A single key owns the balancer, so it can move validator weight between restaking and the PoA module.'
+      : instant
+        ? 'A single key can instantly upgrade the manager and replace the validator set.'
+        : 'A single key directly controls the validator set.';
   } else if (instant) {
     chip = 'Instantly upgradeable';
     chipTone = 'text-down bg-down/10';
@@ -1933,7 +1941,7 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
 
   const churnValue = vm.churn?.max_churn_percentage;
   const rows = [
-    { label: 'Validator-set control', value: ownerLabel, tone: ownerTone, sub: shortAddr(vm.owner?.address) },
+    { label: balancer ? 'Balancer control' : 'Validator-set control', value: ownerLabel, tone: ownerTone, sub: shortAddr(controller?.address) },
     { label: 'Upgradeable', value: upgradeLabel, tone: upgradeTone, sub: isProxy ? shortAddr(vm.proxy?.proxy_admin_owner) : undefined },
     {
       label: 'Churn limit',
@@ -1975,6 +1983,13 @@ const FIXED_SET = {
   dot: 'bg-muted-foreground',
   note: 'The validator manager is a placeholder address that can never approve a change, so no validators can join and weights can\'t change. Existing validators can still leave.',
 };
+const RESTAKED = {
+  label: 'Restaked',
+  text: 'text-[#3987e5]',
+  ring: 'bg-[#3987e5]/10',
+  dot: 'bg-[#3987e5]',
+  note: 'Validators are admitted through Suzaku restaking, so operators post token collateral to validate. The balancer owner sets how much weight restaking can hold.',
+};
 const PERMISSIONLESS = {
   label: 'Permissionless',
   text: 'text-up',
@@ -1989,10 +2004,22 @@ const PERMISSIONLESS = {
 // label while that's still "unknown". We show this instead of a fabricated
 // "decentralization grade", which would mislead — a PoA chain can have well-
 // spread stake yet be entirely operator-controlled.
-function permissionModel(managerType?: string, sybil?: string) {
-  const t = (managerType || '').toLowerCase();
+// Share of module weight held by Suzaku restaking on a balancer chain, or null.
+function restakedShare(vm: ValidatorManager | null | undefined): number | null {
+  const mods = vm?.type === 'balancer' ? vm.security_modules : null;
+  if (!mods?.length) return null;
+  const total = mods.reduce((t, m) => t + m.weight, 0);
+  if (total <= 0) return null;
+  return mods.filter((m) => m.kind === 'suzaku_middleware').reduce((t, m) => t + m.weight, 0) / total;
+}
+
+function permissionModel(vm: ValidatorManager | null | undefined, sybil?: string) {
+  const t = (vm?.type || '').toLowerCase();
   // On-chain fact first: a placeholder manager fixes the set whatever the registry says.
   if (t === 'placeholder') return FIXED_SET;
+  // A balancer is labelled by whichever module holds most of the weight.
+  const restaked = restakedShare(vm);
+  if (restaked != null) return restaked > 0.5 ? RESTAKED : PERMISSIONED;
   if (t === 'poa') return PERMISSIONED;
   if (t.startsWith('pos')) return PERMISSIONLESS;
   const s = (sybil || '').toLowerCase();
@@ -2012,7 +2039,7 @@ function DecentralizationCard({
   vm?: ValidatorManager | null;
   restaking?: { l1: RestakedL1; protocol: { name: string; url: string } | null } | null;
 }) {
-  const perm = permissionModel(vm?.type, sybil);
+  const perm = permissionModel(vm, sybil);
   const control = controlAssessment(vm);
   const stats: { value: string; label: string; title?: string }[] = [
     {

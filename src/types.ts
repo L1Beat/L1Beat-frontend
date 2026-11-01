@@ -94,21 +94,25 @@ export interface ChainDecentralization {
   weights?: string[]; // sorted desc, raw — detail endpoint only
 }
 
+export interface ValidatorManagerOwner {
+  address: string;
+  kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
+  multisig: { threshold: number; owners: number } | null;
+}
+
 export interface ChainRisk {
   chain_id: string;
   validator_manager: {
     address: string;
     // 'placeholder': an empty, zero or precompile address that can never sign a
     // validator-set change, so the set is fixed.
-    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'placeholder' | 'unknown';
+    // 'balancer': a Suzaku BalancerValidatorManager owns the manager and splits
+    // validator weight between security modules (PoA, Suzaku restaking).
+    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'placeholder' | 'balancer' | 'unknown';
     // Where the ValidatorManager lives — a recoverability signal independent of
     // control: 'self' means the set can't be changed if this L1 halts.
     deployed_on: 'c-chain' | 'self' | 'unknown';
-    owner: {
-      address: string;
-      kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
-      multisig: { threshold: number; owners: number } | null;
-    } | null;
+    owner: ValidatorManagerOwner | null;
     proxy: {
       is_proxy: boolean;
       implementation: string;
@@ -117,6 +121,16 @@ export interface ChainRisk {
       upgrade_delay_seconds: number;
     } | null;
     churn: { period_seconds: number; max_churn_percentage: number } | null;
+    // Balancer chains only; null elsewhere. The balancer owner is who can move
+    // weight between modules.
+    balancer_owner?: ValidatorManagerOwner | null;
+    security_modules?: {
+      address: string;
+      kind: 'suzaku_middleware' | 'poa' | 'unknown';
+      weight: number;
+      max_weight: number;
+      owner: ValidatorManagerOwner | null;
+    }[] | null;
   } | null;
   decentralization: ChainDecentralization | null;
   economic: {
