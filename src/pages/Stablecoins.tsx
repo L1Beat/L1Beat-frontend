@@ -55,6 +55,7 @@ interface SupplyTrend {
   change7d: number;  // fractional change over the last 7 days
   prev24h: number;   // absolute USD supply 1 day ago (for aggregate totals)
   prev7d: number;    // absolute USD supply 7 days ago
+  prev30d: number | null; // absolute USD supply 30 days ago; null with less history
 }
 
 interface EnrichedCoin extends Stablecoin {
@@ -137,7 +138,9 @@ function computeTrend(
   const prev24h = vals[vals.length - 2];
   // 7 daily buckets back, clamped to the oldest point we have.
   const prev7d = vals[Math.max(0, vals.length - 8)];
+  const prev30d = vals.length >= 31 ? vals[vals.length - 31] : null;
   return {
+    prev30d,
     spark: vals.slice(-30),
     change24h: prev24h > 0 ? (last - prev24h) / prev24h : 0,
     change7d: prev7d > 0 ? (last - prev7d) / prev7d : 0,
@@ -263,7 +266,7 @@ export function Stablecoins() {
     if (!enriched.length) {
       return {
         supply: 0, volume: 0, holders: 0, count: 0, nativeUsd: 0, bridgedUsd: 0,
-        change7d: 0, hasTrend: false,
+        change7d: 0, hasTrend: false, prev30d: 0, majorsUsd: 0,
       };
     }
     let supply = 0;
@@ -272,6 +275,8 @@ export function Stablecoins() {
     let nativeUsd = 0;
     let bridgedUsd = 0;
     let prev7d = 0;
+    let prev30d = 0;
+    let majorsUsd = 0;
     let hasTrend = false;
     for (const c of enriched) {
       volume += c.volumeUsd;
@@ -288,11 +293,14 @@ export function Stablecoins() {
       // Sum a coherent "7d ago" total: history where we have it, current
       // supply otherwise (a coin with no history contributes no change).
       prev7d += c.trend ? c.trend.prev7d : c.supplyUsd;
+      // A coin newer than 30 days counts from zero, so its arrival shows as growth.
+      prev30d += c.trend ? (c.trend.prev30d ?? 0) : c.supplyUsd;
+      if (/^(USDC|USDT)(\.e)?$/.test(c.symbol)) majorsUsd += c.supplyUsd;
     }
     const change7d = prev7d > 0 ? (supply - prev7d) / prev7d : 0;
     return {
       supply, volume, holders, count: enriched.length, nativeUsd, bridgedUsd,
-      change7d, hasTrend,
+      change7d, hasTrend, prev30d, majorsUsd,
     };
   }, [enriched]);
 
@@ -448,14 +456,14 @@ export function Stablecoins() {
           </div>
           <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
             <SectionErrorBoundary label="the stablecoin KPIs">
-              <KpiStrip totals={totals} floating />
+              <KpiStrip totals={totals} latestVolume={latestVolume} floating />
             </SectionErrorBoundary>
           </div>
         </section>
 
         <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-5">
         <div className="md:hidden">
-          <KpiStrip totals={totals} />
+          <KpiStrip totals={totals} latestVolume={latestVolume} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
@@ -1488,46 +1496,48 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
 }
 function KpiStrip({
   totals,
+  latestVolume,
   floating = false,
 }: {
   floating?: boolean;
   totals: {
     supply: number;
-    volume: number;
-    holders: number;
-    count: number;
-    change7d: number;
+    nativeUsd: number;
+    prev30d: number;
+    majorsUsd: number;
     hasTrend: boolean;
   };
+  latestVolume: { t: number; v: number } | null;
 }) {
+  const ready = totals.supply > 0;
+  const change30d = ready && totals.hasTrend && totals.prev30d > 0 ? ((totals.supply - totals.prev30d) / totals.prev30d) * 100 : null;
+  const pct = (part: number) => `${Math.round((part / totals.supply) * 100)}%`;
   const items: StatItem[] = [
     {
-      label: 'Total supply',
-      value: fmtUsd(totals.supply),
-      // Only annotate once history has loaded and there's a real total.
-      delta: totals.hasTrend && totals.supply > 0 ? totals.change7d : null,
-      deltaLabel: '7d',
-      sub: 'USD equivalent, net of double counting',
-      tooltip:
-        'Net stablecoin supply in USD (ECB reference rates for non-USD pegs). Excludes coins backed by other stablecoins already counted on-chain, so it reads below the table total, which lists every coin. This matches DefiLlama.',
+      label: 'Supply change, 30d',
+      value: change30d == null ? '—' : `${change30d >= 0 ? '+' : '−'}${Math.abs(change30d).toFixed(1)}%`,
+      sub: change30d == null ? 'Not available right now' : `from ${fmtUsd(totals.prev30d)} 30 days ago`,
+      tooltip: 'Change in net stablecoin supply against the daily close 30 days ago. A coin launched since then counts from zero.',
     },
     {
-      label: 'Stablecoins',
-      value: totals.count > 0 ? totals.count.toLocaleString() : '—',
-      sub: 'distinct contracts',
-      tooltip: 'Distinct stablecoin contracts indexed on Avalanche C-Chain.',
+      label: 'Volume, latest day',
+      value: latestVolume ? fmtUsd(latestVolume.v) : '—',
+      sub: latestVolume
+        ? `on ${new Date(latestVolume.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}, UTC`
+        : 'Not available right now',
+      tooltip: 'Transfer volume on the last complete UTC day, the same figure as the latest bar on the volume chart.',
     },
     {
-      label: 'Holders',
-      value: fmtCount(totals.holders),
-      sub: 'summed across coins',
-      tooltip: 'Sum of unique holders across every stablecoin. A wallet holding two stablecoins is counted twice.',
+      label: 'Native',
+      value: ready ? pct(totals.nativeUsd) : '—',
+      sub: 'not bridged in',
+      tooltip: 'Share of net supply issued directly on Avalanche, rather than bridged in from another chain (like USDC.e).',
     },
     {
-      label: 'Transfer volume, 24h',
-      value: fmtUsd(totals.volume),
-      sub: 'USD equivalent',
-      tooltip: 'On-chain transfer volume in the last 24 hours, USD-equivalent.',
+      label: 'USDC and USDT',
+      value: ready ? pct(totals.majorsUsd) : '—',
+      sub: ready ? `${fmtUsd(totals.majorsUsd)} of the total` : ' ',
+      tooltip: 'USDC and USDT together, native and bridged, as a share of net supply.',
     },
   ];
   return <StatStrip items={items} floating={floating} />;
