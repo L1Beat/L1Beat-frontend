@@ -636,26 +636,24 @@ export function Stablecoins() {
 // instead. The auto-zoom in the chart still guards any other narrow-band series.
 const METRIC_OPTIONS: { key: StablecoinMetric; label: string; monetary: boolean }[] = [
   { key: 'supply', label: 'Supply', monetary: true },
-  { key: 'volume', label: 'Volume', monetary: true },
-  { key: 'transfers', label: 'Transfers', monetary: false },
+  { key: 'volume', label: 'Volume, USD', monetary: true },
+  { key: 'transfers', label: 'Transfer count', monetary: false },
 ];
 
 // One request returns every token as a separate series; we aggregate them into
-// a single total line. `limit` is per-token data points — request generously so
-// every token has coverage, then clip the *displayed* range to `windowDays` so
-// the chart isn't skewed by tokens whose history reaches further back.
-const GRANULARITY_OPTIONS: {
-  key: StablecoinGranularity;
-  label: string;
-  limit: number;
-  windowDays: number;
-}[] = [
-  // All three show full available history (back to ~2021). limit is high enough
-  // to capture every coin's complete series (longest is ~1,800 daily points),
-  // and the window is effectively unbounded so nothing is clipped.
-  { key: 'day', label: 'Daily', limit: 5000, windowDays: 365 * 20 },
-  { key: 'week', label: 'Weekly', limit: 500, windowDays: 365 * 20 },
-  { key: 'month', label: 'Monthly', limit: 120, windowDays: 365 * 20 },
+// a single total line. `limit` is per-token data points, high enough to capture
+// every coin's complete series (the longest is ~1,900 daily points).
+const FETCH_LIMIT: Record<'day' | 'week', number> = { day: 5000, week: 500 };
+
+// The reader picks how far back to look; the grouping follows. Everything is
+// daily except volume and transfers across all history, where daily bars would
+// be thinner than a pixel, so they come as weeks.
+type StablecoinRange = '30' | '90' | '365' | 'all';
+const RANGE_OPTIONS: { key: StablecoinRange; label: string; days: number }[] = [
+  { key: '30', label: '30d', days: 30 },
+  { key: '90', label: '90d', days: 90 },
+  { key: '365', label: '1y', days: 365 },
+  { key: 'all', label: 'All', days: 365 * 20 },
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -752,8 +750,13 @@ function aggregateSeries(
 
 function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; fx: FxRates; hero?: boolean }) {
   const [metric, setMetric] = useState<StablecoinMetric>('supply');
-  const [granularity, setGranularity] = useState<StablecoinGranularity>('day');
+  const [range, setRange] = useState<StablecoinRange>('365');
+  const granularity: 'day' | 'week' = (metric === 'volume' || metric === 'transfers') && range === 'all' ? 'week' : 'day';
   const [series, setSeries] = useState<StablecoinSeries[]>([]);
+  // The metric and granularity `series` was fetched for. Until a new fetch
+  // lands, the chart keeps drawing the old view (dimmed) rather than summing
+  // supply snapshots as if they were volume.
+  const [view, setView] = useState<{ metric: StablecoinMetric; granularity: StablecoinGranularity }>({ metric, granularity });
   const [loading, setLoading] = useState(true);
   const [hover, setHover] = useState<number | null>(null);
   // Stacked-by-issuer composition view. Only meaningful for the supply metric;
@@ -782,8 +785,8 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
   const chartW = hero ? heroSize.w : CHART_W;
   const chartH = hero ? heroSize.h : CHART_H;
 
-  const monetary = metric === 'supply' || metric === 'volume';
-  const stackedView = stacked && metric === 'supply';
+  const monetary = view.metric === 'supply' || view.metric === 'volume';
+  const stackedView = stacked && view.metric === 'supply';
 
   const meta = useMemo(() => {
     const m = new Map<string, { decimals: number; peg: string; issuer: string; doublecounted: boolean }>();
@@ -801,10 +804,11 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    const g = GRANULARITY_OPTIONS.find((x) => x.key === granularity)!;
-    getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: g.limit })
+    getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: FETCH_LIMIT[granularity] })
       .then((s) => {
-        if (alive) setSeries(s);
+        if (!alive) return;
+        setSeries(s);
+        setView({ metric, granularity });
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -814,16 +818,17 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
     };
   }, [metric, granularity]);
 
+  // Volume and transfers are amounts per period, drawn as bars; supply is a level, drawn as a line.
+  const flow = view.metric === 'volume' || view.metric === 'transfers';
   const points = useMemo(() => {
-    const all = aggregateSeries(series, meta, metric, fx);
+    const all = aggregateSeries(series, meta, view.metric, fx);
     if (all.length < 2) return all;
-    // Clip to the recent window so a single deep-history token doesn't stretch
-    // the axis across years where most coins report nothing.
-    const g = GRANULARITY_OPTIONS.find((x) => x.key === granularity)!;
-    const start = all[all.length - 1].t - g.windowDays * DAY_MS;
+    // Clip to the chosen range.
+    const windowDays = RANGE_OPTIONS.find((x) => x.key === range)!.days;
+    const start = all[all.length - 1].t - windowDays * DAY_MS;
     const clipped = all.filter((p) => p.t >= start);
     return clipped.length >= 2 ? clipped : all;
-  }, [series, meta, metric, fx, granularity]);
+  }, [series, meta, view, fx, range]);
 
   const geom = useMemo(() => {
     if (points.length < 2) return null;
@@ -842,10 +847,14 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
       domainMin = Math.max(0, minV - pad);
       domainMax = maxV + pad;
     }
+    // Bars sit centred on their period, so inset the range by half a slot.
+    const slot = (chartW - CHART_M.left - CHART_M.right) / points.length;
+    const inset = flow ? slot / 2 : 0;
+    const barW = Math.max(1, slot * (points.length > 120 ? 0.85 : 0.7));
     const x = d3
       .scaleUtc()
       .domain([points[0].t, points[points.length - 1].t])
-      .range([CHART_M.left, chartW - CHART_M.right]);
+      .range([CHART_M.left + inset, chartW - CHART_M.right - inset]);
     const y = d3
       .scaleLinear()
       .domain([domainMin, domainMax])
@@ -880,8 +889,9 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
       yTicks: y.ticks(4),
       xTicks: x.ticks(6),
       fmtTick,
+      barW,
     };
-  }, [points]);
+  }, [points, flow, chartW, chartH]);
 
   // Per-issuer stacked bands aligned to the same periods as `points`. Each
   // token's supply is forward-filled (snapshot) and summed into its issuer; the
@@ -961,12 +971,14 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
 
   const fmtDate = useMemo(
     () =>
-      granularity === 'month'
+      view.granularity === 'month'
         ? d3.utcFormat('%B %Y')
-        : granularity === 'hour'
+        : view.granularity === 'week'
+          ? (d: Date) => `Week of ${d3.utcFormat('%b %d, %Y')(d)}`
+          : view.granularity === 'hour'
           ? d3.utcFormat('%b %d, %H:%M UTC')
           : d3.utcFormat('%b %d, %Y'),
-    [granularity],
+    [view.granularity],
   );
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -1037,10 +1049,10 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
       ))}
     </div>
   );
-  const granularityToggle = (
-    <div className={group} role="tablist" aria-label="Granularity">
-      {GRANULARITY_OPTIONS.map((g) => (
-        <button key={g.key} role="tab" aria-selected={granularity === g.key} onClick={() => setGranularity(g.key)} className={`num ${seg(granularity === g.key)}`}>
+  const rangeToggle = (
+    <div className={group} role="tablist" aria-label="Range">
+      {RANGE_OPTIONS.map((g) => (
+        <button key={g.key} role="tab" aria-selected={range === g.key} onClick={() => setRange(g.key)} className={`num ${seg(range === g.key)}`}>
           {g.label}
         </button>
       ))}
@@ -1058,7 +1070,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
             {metricToggle}
             {stackedToggle}
           </div>
-          {granularityToggle}
+          {rangeToggle}
         </div>
         <div className="relative sm:absolute sm:top-14 lg:top-[52px] sm:left-6 sm:right-6 z-20 pointer-events-none">
           {shown && (
@@ -1071,7 +1083,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
                   {active
                     ? fmtDate(new Date(active.t))
                     : latest
-                      ? `Latest, ${fmtDate(new Date(latest.t))}`
+                      ? `Latest, ${fmtDate(new Date(latest.t))}${flow && view.granularity === 'week' ? '; bars are weeks' : ''}`
                       : null}
                 </div>
               </div>
@@ -1106,7 +1118,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
               <svg
                 ref={svgRef}
                 viewBox={`0 0 ${chartW} ${chartH}`}
-                className={hero ? "w-full h-full block" : "w-full h-auto block"}
+                className={`${hero ? "w-full h-full block" : "w-full h-auto block"} transition-opacity ${loading ? "opacity-50" : ""}`}
                 onMouseMove={handleMove}
                 onMouseLeave={() => setHover(null)}
                 role="img"
@@ -1159,6 +1171,18 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
                   stack.bands.map((b) => (
                     <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
                   ))
+                ) : flow ? (
+                  points.map((p, i) => (
+                    <rect
+                      key={p.t}
+                      x={geom.x(p.t) - geom.barW / 2}
+                      y={geom.y(p.v)}
+                      width={geom.barW}
+                      height={Math.max(0, geom.y(0) - geom.y(p.v))}
+                      fill="var(--ink)"
+                      fillOpacity={hover != null && hover !== i ? 0.35 : 0.8}
+                    />
+                  ))
                 ) : (
                   <>
                     <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
@@ -1175,11 +1199,11 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
                 )}
 
                 {/* Persistent marker at the latest point */}
-                {!stack && latest && !active && (
+                {!stack && !flow && latest && !active && (
                   <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="var(--ink)" />
                 )}
 
-                {active && (
+                {active && !flow && (
                   <g>
                     <line
                       x1={geom.x(active.t)}
@@ -1231,7 +1255,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
         <div className="flex items-center gap-2 flex-wrap">
           {stackedToggle}
           {metricToggle}
-          {granularityToggle}
+          {rangeToggle}
         </div>
       </header>
 
@@ -1332,6 +1356,18 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
               stack.bands.map((b) => (
                 <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
               ))
+            ) : flow ? (
+              points.map((p, i) => (
+                <rect
+                  key={p.t}
+                  x={geom.x(p.t) - geom.barW / 2}
+                  y={geom.y(p.v)}
+                  width={geom.barW}
+                  height={Math.max(0, geom.y(0) - geom.y(p.v))}
+                  fill="var(--ink)"
+                  fillOpacity={hover != null && hover !== i ? 0.35 : 0.8}
+                />
+              ))
             ) : (
               <>
                 <path d={geom.areaPath} fill="url(#sc-supply-fill)" />
@@ -1348,11 +1384,11 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
             )}
 
             {/* Persistent marker at the latest point */}
-            {!stack && latest && !active && (
+            {!stack && !flow && latest && !active && (
               <circle cx={geom.x(latest.t)} cy={geom.y(latest.v)} r={3} fill="var(--ink)" />
             )}
 
-            {active && (
+            {active && !flow && (
               <g>
                 <line
                   x1={geom.x(active.t)}
