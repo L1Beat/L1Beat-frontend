@@ -75,15 +75,8 @@ export function Dex() {
   const series = useLoad(() => getDexTimeseries(Number(range)), [range]);
   const summary = useLoad(() => getDexSummary(Number(win)), [win]);
   // The headline describes the chart's range.
-  // "All" asks for exactly as many days as the history holds: the summary
-  // endpoint answers empty when the window reaches back past the first pool.
-  const month = useLoad(
-    () =>
-      range === '3650'
-        ? getDexTimeseries(3650).then((ts) => getDexSummary(ts?.length || 365))
-        : getDexSummary(Number(range)),
-    [range],
-  );
+  // The server clamps "All" (3650 days) to the first tracked day.
+  const month = useLoad(() => getDexSummary(Number(range)), [range]);
 
   const m = month.data;
   // From the loaded data, so the label never runs ahead of the numbers while a new range loads.
@@ -247,6 +240,8 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
   // Known venues in a fixed order, then any new ones the API adds, so bars always sum to the day's total.
   const seen = [...new Set((days ?? []).flatMap((d) => d.dexes.filter((x) => x.volume_usd > 0).map((x) => x.id)))];
   const ids = [...STACK.filter((id) => seen.includes(id)), ...seen.filter((id) => !STACK.includes(id))];
+  // The table can pick a DEX this range has no volume for; then show everything as normal.
+  const fx = focus && ids.includes(focus) ? focus : null;
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!geom || !svgRef.current || !days) return;
@@ -263,16 +258,16 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
       {days && days.length > 0 && (
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-2">
         <div>
-          {focus ? (
+          {fx ? (
             <>
               <div className="num text-[22px] leading-7 font-medium text-foreground">
-                {usd(active ? vol(active, focus) : days.reduce((sum, d) => sum + vol(d, focus), 0) / days.length)}
+                {usd(active ? vol(active, fx) : days.reduce((sum, d) => sum + vol(d, fx), 0) / days.length)}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {names[focus] ?? focus}
+                {names[fx] ?? fx}
                 {active
-                  ? ` on ${day(active.date, 'EEE, MMM d, yyyy')}, ${pct(active.volume_usd > 0 ? (vol(active, focus) / active.volume_usd) * 100 : 0)} of the day`
-                  : `, a day on average, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, focus), 0) / total) * 100 : 0)} of all volume`}
+                  ? ` on ${day(active.date, 'EEE, MMM d, yyyy')}, ${pct(active.volume_usd > 0 ? (vol(active, fx) / active.volume_usd) * 100 : 0)} of the day`
+                  : `, a day on average, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, fx), 0) / total) * 100 : 0)} of all volume`}
               </div>
             </>
           ) : (
@@ -287,7 +282,7 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
           {ids.map((id) => {
             const st = dexStyle(id);
-            const on = focus === id;
+            const on = fx === id;
             return (
               <button
                 key={id}
@@ -296,7 +291,7 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
                 aria-pressed={on}
                 title={on ? 'Show all DEXes' : `Highlight ${names[id] ?? id}`}
                 className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
-                  on ? 'bg-accent text-foreground' : focus ? 'opacity-50 hover:opacity-100' : ''
+                  on ? 'bg-accent text-foreground' : fx ? 'opacity-50 hover:opacity-100' : ''
                 }`}
               >
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
@@ -346,7 +341,7 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
                 run += v;
                 const y1 = geom.y(run);
                 const st = dexStyle(id);
-                const dim = focus != null && focus !== id;
+                const dim = fx != null && fx !== id;
                 return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={dim ? st.opacity * 0.15 : st.opacity} />;
               })}
               {i % geom.labelEvery === 0 && (

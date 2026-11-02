@@ -153,7 +153,7 @@ export function Lending() {
           sub: 'supplied minus borrowed',
           tooltip: "Includes markets that can't be borrowed, such as sAVAX, so it's more than anyone could borrow today.",
         },
-        { label: 'Markets', value: String(live.length), sub: 'with deposits, not winding down' },
+        { label: 'Markets', value: String(live.length), sub: 'with deposits' },
       ]
     : ['Supplied', 'Borrowed', 'Not borrowed', 'Markets'].map((label) => ({ label, value: '—', sub: state === 'error' ? 'Unavailable' : ' ' }));
 
@@ -652,14 +652,18 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const W = Math.max(box?.w ?? 0, 300);
+  // Drawn at the box's own width, so narrow phones never overflow sideways.
+  const W = Math.max(box?.w ?? 0, 1);
   const H = fill ? Math.max(box?.h ?? 0, 160) : height;
-  const ids = useMemo(() => {
+  const idsMemo = useMemo(() => {
     const seen = new Set<string>();
     days.forEach((d) => d.parts.forEach((p) => p.value > 0 && seen.add(p.id)));
     const order = ['aave-v3', 'aave-v4', 'benqi'];
     return [...order.filter((id) => seen.has(id)), ...[...seen].filter((id) => !order.includes(id))];
   }, [days]);
+  const ids = idsMemo;
+  // A focus on a protocol this range doesn't have would dim every bar with no way to clear it.
+  const activeFocus = focus && ids.includes(focus) ? focus : null;
 
   const geom = useMemo(() => {
     if (!days.length) return null;
@@ -685,8 +689,13 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
     setHover(i >= 0 && i < days.length ? i : null);
   };
   const active = hover != null ? days[hover] : null;
+  // A day without a value breaks the line instead of dropping it to zero.
   const linePath = geom && days.some((d) => d.line != null)
-    ? days.map((d, i) => `${i ? 'L' : 'M'}${(geom.x(i) + geom.barW / 2).toFixed(1)},${geom.y(d.line ?? 0).toFixed(1)}`).join('')
+    ? days
+        .map((d, i) =>
+          d.line == null ? '' : `${i === 0 || days[i - 1].line == null ? 'M' : 'L'}${(geom.x(i) + geom.barW / 2).toFixed(1)},${geom.y(d.line).toFixed(1)}`,
+        )
+        .join('')
     : null;
 
   return (
@@ -697,7 +706,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
           {ids.map((id) => {
             const st = protocolStyle(id);
             const v = active?.parts.find((p) => p.id === id)?.value;
-            const on = focus === id;
+            const on = activeFocus === id;
             return (
               <button
                 key={id}
@@ -706,7 +715,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                 aria-pressed={on}
                 title={on ? 'Show all protocols' : `Highlight ${names[id] ?? id}`}
                 className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
-                  on ? 'bg-accent text-foreground' : focus ? 'opacity-50 hover:opacity-100' : ''
+                  on ? 'bg-accent text-foreground' : activeFocus ? 'opacity-50 hover:opacity-100' : ''
                 }`}
               >
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
@@ -724,7 +733,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
           )}
         </div>
       </div>
-      <div ref={boxRef} className={`relative ${fill ? 'flex-1 min-h-0' : ''}`} style={fill ? undefined : { height }}>
+      <div ref={boxRef} className={`relative overflow-hidden ${fill ? 'flex-1 min-h-0' : ''}`} style={fill ? undefined : { height }}>
         {geom && box && (
           <svg width={W} height={H} className="absolute inset-0 block" onMouseMove={move} onMouseLeave={() => setHover(null)} role="img" aria-label="Daily values by protocol">
             {geom.ticks.map((t) => (
@@ -746,7 +755,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                     run += v;
                     const y1 = geom.y(run);
                     const st = protocolStyle(id);
-                    const dim = focus != null && focus !== id;
+                    const dim = activeFocus != null && activeFocus !== id;
                     return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={dim ? st.opacity * 0.15 : st.opacity} />;
                   })}
                   {i % geom.labelEvery === 0 && (
@@ -765,8 +774,13 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   );
 }
 
-function useLoadOnce<T>(load: () => Promise<T | null>, deps: unknown[]) {
+/**
+ * Loads on mount and whenever `key` changes. `loadedKey` is the key the current
+ * `data` belongs to, so labels follow the data, not a selection still loading.
+ */
+function useLoadOnce<T, K = unknown>(load: () => Promise<T | null>, key: K) {
   const [data, setData] = useState<T | null>(null);
+  const [loadedKey, setLoadedKey] = useState<K | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
     let alive = true;
@@ -774,19 +788,36 @@ function useLoadOnce<T>(load: () => Promise<T | null>, deps: unknown[]) {
     load().then((r) => {
       if (!alive) return;
       setData(r);
+      setLoadedKey(key);
       setState(r ? 'ready' : 'error');
     });
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return { data, state };
+  }, [key]);
+  return { data, state, loadedKey };
+}
+
+const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+/**
+ * One entry per UTC day from `from` to `to`, so a day with nothing to report is
+ * an empty slot instead of vanishing and squeezing the time axis.
+ */
+function fillDays(series: StackDay[], from: string, to: string): StackDay[] {
+  const by = new Map(series.map((d) => [d.date, d]));
+  const out: StackDay[] = [];
+  for (let t = Date.parse(`${from}T00:00:00Z`), end = Date.parse(`${to}T00:00:00Z`); t <= end; t += 86_400_000) {
+    const key = dayKey(new Date(t));
+    out.push(by.get(key) ?? { date: key, total: 0, parts: [] });
+  }
+  return out;
 }
 
 // Supplied per protocol, stacked by day, with total borrowed as a line.
 function HistoryChart({ days, names }: { days: number; names: Record<string, string> }) {
-  const { data, state } = useLoadOnce<LendingTotalsDay[]>(() => getLendingTotals(days), [days]);
+  const { data, state, loadedKey } = useLoadOnce<LendingTotalsDay[], number>(() => getLendingTotals(days), days);
+  const loadedDays = loadedKey ?? days;
   const series: StackDay[] = useMemo(
     () =>
       (data ?? []).map((d) => ({
@@ -801,7 +832,7 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
   if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded.</div>;
   const first = series[0];
   return (
-    <div className="h-[300px] md:h-full">
+    <div className={`h-[300px] md:h-full transition-opacity ${state === 'loading' ? 'opacity-50' : ''}`}>
       <DailyStack
         days={series}
         names={names}
@@ -814,7 +845,7 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
               {d
                 ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
                 : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
-              {series.length < days && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
+              {series.length < loadedDays && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
             </div>
           </>
         )}
@@ -832,23 +863,35 @@ const LIQ_RANGES = [
 
 function LiquidationsCard({ names }: { names: Record<string, string> }) {
   const [range, setRange] = useState<'30' | '90' | '365' | '3650'>('90');
-  const daily = useLoadOnce<LiquidationsDay[]>(() => getLiquidationsDaily(Number(range)), [range]);
-  const top = useLoadOnce<Liquidation[]>(() => getLiquidationsTop(Number(range), 8), [range]);
-  const recent = useLoadOnce<Liquidation[]>(() => getLiquidationsRecent(8), []);
+  const daily = useLoadOnce<LiquidationsDay[], string>(() => getLiquidationsDaily(Number(range)), range);
+  const top = useLoadOnce<Liquidation[], string>(() => getLiquidationsTop(Number(range), 8), range);
+  const recent = useLoadOnce<Liquidation[], string>(() => getLiquidationsRecent(8), 'recent');
 
-  const series: StackDay[] = useMemo(
-    () =>
-      (daily.data ?? []).map((d) => ({
-        date: d.date,
-        total: d.repaid_usd,
-        parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.repaid_usd })),
-      })),
-    [daily.data],
-  );
+  const rows = daily.data ?? [];
+  const loadedRange = daily.loadedKey ?? range;
+  const series: StackDay[] = useMemo(() => {
+    const raw = rows.map((d) => ({
+      date: d.date,
+      total: d.repaid_usd,
+      parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.repaid_usd })),
+    }));
+    if (!raw.length) return raw;
+    const last = raw[raw.length - 1].date;
+    // "All" starts at the first liquidation; the others span their whole window.
+    const from = loadedRange === '3650' ? raw[0].date : dayKey(new Date(Date.parse(`${last}T00:00:00Z`) - (Number(loadedRange) - 1) * 86_400_000));
+    return fillDays(raw, from, last);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daily.data, loadedRange]);
   const total = series.reduce((s, d) => s + d.total, 0);
-  const count = (daily.data ?? []).reduce((s, d) => s + d.count, 0);
+  const count = rows.reduce((s, d) => s + d.count, 0);
   const peak = series.reduce<StackDay | null>((m, d) => (!m || d.total > m.total ? d : m), null);
-  const label = range === '3650' ? 'since BENQI launched in 2021' : range === '365' ? 'in the last year' : `in the last ${range} days`;
+  // Labels describe the loaded data, so they never run ahead of a range still loading.
+  const label =
+    loadedRange === '3650'
+      ? rows.length ? `since ${format(parseISO(rows[0].date), 'MMMM yyyy')}` : 'in all history'
+      : loadedRange === '365' ? 'in the last year' : `in the last ${loadedRange} days`;
+  const topLabel =
+    (top.loadedKey ?? range) === '3650' ? 'Largest ever' : `Largest, ${label.replace('in the ', '')}`;
 
   return (
     <Card
@@ -875,7 +918,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
                   <div className="text-[11px] text-muted-foreground">
                     {d
                       ? `repaid on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${(daily.data?.find((x) => x.date === d.date)?.count ?? 0).toLocaleString()} liquidations`
-                      : `repaid across ${count.toLocaleString()} liquidations ${label}${peak && peak.total > 0 ? `; busiest day ${format(parseISO(peak.date), 'MMM d, yyyy')} (${usd(peak.total)})` : ''}`}
+                      : `repaid across ${count.toLocaleString()} liquidations ${label}${peak && peak.total > 0 ? `; most in a day ${usd(peak.total)} on ${format(parseISO(peak.date), 'MMM d, yyyy')}` : ''}`}
                   </div>
                 </>
               )}
@@ -884,26 +927,29 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
         )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-border lg:divide-x divide-border">
-        <LiquidationList title={`Largest ${label.replace('in the ', '')}`} items={top.data} state={top.state} names={names} />
-        <LiquidationList title="Latest" items={recent.data} state={recent.state} names={names} />
+        <LiquidationList title={topLabel} items={top.data} state={top.state} names={names} empty="None in this period." />
+        <LiquidationList title="Latest" items={recent.data} state={recent.state} names={names} empty="No liquidations recorded yet." />
       </div>
     </Card>
   );
 }
 
-function LiquidationList({ title, items, state, names }: {
+function LiquidationList({ title, items, state, names, empty }: {
   title: string;
   items: Liquidation[] | null;
   state: 'loading' | 'ready' | 'error';
   names: Record<string, string>;
+  empty: string;
 }) {
   return (
     <div className="min-w-0 border-t lg:border-t-0 border-border first:border-t-0">
       <div className="px-4 sm:px-5 pt-3 pb-1.5 text-[12px] font-medium text-foreground">{title}</div>
       {state === 'loading' && !items ? (
         <div className="px-4 sm:px-5 pb-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
+      ) : state === 'error' && !items ? (
+        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</div>
       ) : !items?.length ? (
-        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">None in this period.</div>
+        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">{empty}</div>
       ) : (
         <ul className="divide-y divide-border">
           {items.map((l) => (
@@ -916,7 +962,8 @@ function LiquidationList({ title, items, state, names }: {
                   </span>
                 </span>
                 <span className="block text-[11px] text-muted-foreground">
-                  {(names[l.protocol_id] ?? l.protocol_id).replace(' Lending', '')}, {format(new Date(l.block_time), 'MMM d, yyyy HH:mm')}
+                  {/* UTC, like the daily bars: format the timestamp's own digits, not local time. */}
+                  {(names[l.protocol_id] ?? l.protocol_id).replace(' Lending', '')}, {format(parseISO(l.block_time.slice(0, 19)), 'MMM d, yyyy HH:mm')} UTC
                 </span>
               </span>
               <a

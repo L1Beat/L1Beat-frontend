@@ -2514,7 +2514,7 @@ export interface DexPool {
   swaps: number;
 }
 
-async function getDexData<T>(key: string, path: string): Promise<T | null> {
+async function getDexData<T>(key: string, path: string, persist = true): Promise<T | null> {
   return fetchExternalWithCache(key, async () => {
     try {
       const response = await fetchExternalWithRetry<{ data: T }>(`${L1BEAT_EXTERNAL_API}${path}`);
@@ -2523,12 +2523,12 @@ async function getDexData<T>(key: string, path: string): Promise<T | null> {
       console.error(`DEX fetch error (${path}):`, error);
       return null;
     }
-  }, 10 * 60 * 1000);
+  }, 10 * 60 * 1000, persist);
 }
 
 /** Volume per tracked C-Chain DEX over the last `days` complete UTC days. */
 export const getDexSummary = (days: number) => getDexData<DexSummary>(`dex-${days}`, `/api/v1/metrics/dex?days=${days}`);
-export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-${days}`, `/api/v1/metrics/dex/timeseries?days=${days}`);
+export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-${days}`, `/api/v1/metrics/dex/timeseries?days=${days}`, days <= 365);
 export const getDexPools = (days: number, limit = 20) =>
   getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
 
@@ -2560,10 +2560,13 @@ export interface Liquidation {
   collateral: { address: string; symbol: string; decimals: number; amount: string; usd: number | null };
 }
 
-const lendingPath = (key: string, path: string) => getDexData(key, `/api/v1/metrics/lending${path}`);
+// Long windows run to megabytes; persisting them would overflow sessionStorage,
+// whose quota error clears every cached entry, so they stay in memory.
+const lendingPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/lending${path}`, persist);
 /** Daily supplied and borrowed USD per lending protocol. */
 export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`) as Promise<LendingTotalsDay[] | null>;
-export const getLiquidationsDaily = (days: number) => lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`) as Promise<LiquidationsDay[] | null>;
+export const getLiquidationsDaily = (days: number) =>
+  lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`, days <= 90) as Promise<LiquidationsDay[] | null>;
 export const getLiquidationsTop = (days: number, limit = 10) =>
   lendingPath(`liq-top-${days}-${limit}`, `/liquidations/top?days=${days}&limit=${limit}`) as Promise<Liquidation[] | null>;
 export const getLiquidationsRecent = (limit = 10) => lendingPath(`liq-recent-${limit}`, `/liquidations/recent?limit=${limit}`) as Promise<Liquidation[] | null>;
