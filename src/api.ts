@@ -2093,6 +2093,34 @@ export async function getEvmFeesBurned(
   }, 5 * 60 * 1000);
 }
 
+/**
+ * A burn series between two dates. The endpoint returns at most 100 points per
+ * call, so longer spans are fetched as parallel pages and joined.
+ */
+export async function getEvmFeesBurnedSpan(
+  chainId: number | string,
+  granularity: 'day' | 'week' | 'month',
+  from: Date,
+  to: Date,
+): Promise<FeeBurnPoint[] | null> {
+  const step = { day: 1, week: 7, month: 31 }[granularity] * 86_400_000;
+  const pages: [Date, Date][] = [];
+  // Contiguous pages: each starts the day after the previous one ends.
+  for (let end = to.getTime(); end >= from.getTime(); ) {
+    const start = Math.max(from.getTime(), end - step * 99);
+    pages.push([new Date(start), new Date(end)]);
+    end = start - 86_400_000;
+  }
+  const iso = (d: Date) => `${d.toISOString().slice(0, 10)}T00:00:00Z`;
+  const results = await Promise.all(
+    pages.map(([f, t]) => getEvmFeesBurned(chainId, { granularity, limit: 100, from: iso(f), to: iso(t) })),
+  );
+  if (results.some((r) => !r)) return null;
+  const byPeriod = new Map<string, FeeBurnPoint>();
+  for (const r of results) for (const p of r!.series) byPeriod.set(p.period, p);
+  return [...byPeriod.values()].sort((a, b) => a.period.localeCompare(b.period));
+}
+
 // Network-wide all-time AVAX burned (nAVAX strings). The authoritative cumulative
 // for the live burn page; the websocket layers new-block deltas on top.
 export interface BurnedTotal {
