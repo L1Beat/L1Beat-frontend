@@ -944,7 +944,7 @@ function KpiCardsImpl({
 }
 
 // A doorway to the Markets and Staking pages: one live figure each, each cell
-// linking through. Loads after the chain data, so it never delays the screener.
+// linking through. Its requests go to other endpoints, so they don't hold up the screener.
 function MarketsStrip() {
   const [figures, setFigures] = useState<{
     staking: Awaited<ReturnType<typeof getStakingSummary>>;

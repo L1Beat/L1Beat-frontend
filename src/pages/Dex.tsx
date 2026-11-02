@@ -212,7 +212,7 @@ export function Dex() {
 
 const M = { top: 10, right: 8, bottom: 24, left: 48 };
 
-/** Sums days into Monday-start weeks; each week is dated by its Monday. */
+/** Sums days into Sunday-start weeks; each week is dated by its Sunday. */
 function toWeeks(days: DexDay[]): DexDay[] {
   const out = new Map<string, DexDay>();
   for (const d of days) {

@@ -591,11 +591,12 @@ function BurnHistory() {
     const yesterday = new Date(Date.now() - 86_400_000);
     const load =
       range === 'all'
-        ? getEvmFeesBurnedSpan(43114, 'week', new Date('2020-09-21T00:00:00Z'), yesterday)
+        ? getEvmFeesBurnedSpan(43114, 'week', new Date('2020-09-01T00:00:00Z'), yesterday)
         : getEvmFeesBurnedSpan(43114, 'day', new Date(yesterday.getTime() - (Number(range) - 1) * 86_400_000), yesterday);
     load.then((points) => {
       if (!alive) return;
-      if (points) setData({ range, points });
+      // On failure, drop the old range too, so the chart never shows data the control no longer describes.
+      setData(points ? { range, points } : null);
       setState(points ? 'ready' : 'error');
     });
     return () => {

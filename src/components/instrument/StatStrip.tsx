@@ -61,7 +61,6 @@ export function StatStrip({
         >
           {items.map((it) => (
             <div key={it.label} className={`px-4 py-3 min-w-0 ${it.href ? 'group relative transition-colors hover:bg-accent/50' : ''}`}>
-              {it.href && <Link to={it.href} aria-label={`${it.label}: open the page`} className="absolute inset-0 rounded-[inherit]" />}
               <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground leading-4">
                 <span className="truncate">{it.label}</span>
                 {it.href && <ChevronRight className="w-3 h-3 shrink-0 -ml-0.5 opacity-60 group-hover:opacity-100 group-hover:text-foreground" aria-hidden />}
@@ -87,6 +86,8 @@ export function StatStrip({
                 )}
               </dt>
               <dd className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+                {/* Covers the whole cell (the nearest positioned box), and sits inside <dd> to keep the list valid. */}
+                {it.href && <Link to={it.href} aria-label={`${it.label}: open the page`} className="absolute inset-0 rounded-[inherit]" />}
                 <span className="num text-[22px] leading-7 font-medium text-foreground truncate">{it.value}</span>
                 {it.delta != null && Number.isFinite(it.delta) && (
                   <Delta value={it.delta} label={it.deltaLabel} />

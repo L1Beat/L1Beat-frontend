@@ -827,11 +827,7 @@ function useLoadOnce<T, K = unknown>(load: () => Promise<T | null>, key: K) {
 }
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-/**
- * One entry per UTC day from `from` to `to`, so a day with nothing to report is
- * an empty slot instead of vanishing and squeezing the time axis.
- */
-/** Sums days into Monday-start weeks, for flow charts over long ranges. */
+/** Sums days into Sunday-start weeks, for flow charts over long ranges. */
 function toWeeks(series: StackDay[]): StackDay[] {
   const out = new Map<string, StackDay>();
   for (const d of series) {
@@ -848,6 +844,10 @@ function toWeeks(series: StackDay[]): StackDay[] {
   return [...out.values()];
 }
 
+/**
+ * One entry per UTC day from `from` to `to`, so a day with nothing to report is
+ * an empty slot instead of vanishing and squeezing the time axis.
+ */
 function fillDays(series: StackDay[], from: string, to: string): StackDay[] {
   const by = new Map(series.map((d) => [d.date, d]));
   const out: StackDay[] = [];
@@ -912,7 +912,13 @@ const TOKEN_RANGES = [
   { value: '3650', label: 'All' },
 ] as const;
 // 18-decimal base units to whole tokens; exact enough for a chart.
-const tokens = (v: string) => Number(BigInt(v) / 10n ** 12n) / 1e6;
+const tokens = (v: string | null | undefined) => {
+  try {
+    return Number(BigInt(v || 0) / 10n ** 12n) / 1e6;
+  } catch {
+    return 0;
+  }
+};
 
 // The dollar chart moves with the AVAX price; counted in tokens, deposits show
 // whether people actually added or withdrew.
@@ -939,7 +945,7 @@ function AvaxDepositsCard({ names }: { names: Record<string, string> }) {
   const showLine = symbol === 'AVAX';
   return (
     <Card
-      title="AVAX deposits in tokens"
+      title={`${symbol} deposits in tokens`}
       subtitle="Counted in tokens, not dollars, so price moves drop out. AVAX includes WAVAX."
       right={
         <div className="flex items-center gap-2">
@@ -969,9 +975,11 @@ function AvaxDepositsCard({ names }: { names: Record<string, string> }) {
                 <div className="text-[11px] text-muted-foreground">
                   {d
                     ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}${showLine && d.line != null ? `, ${compact(d.line)} borrowed` : ''}`
-                    : change != null
+                    : change != null && (loadedKey ?? key).endsWith('365')
                       ? `supplied now, ${change >= 0 ? 'up' : 'down'} ${Math.abs(change).toFixed(0)}% from ${compact(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`
-                      : 'supplied now'}
+                      : first
+                        ? `supplied now; ${compact(first.total)} when history starts, ${format(parseISO(first.date), 'MMM d, yyyy')}`
+                        : 'supplied now'}
                 </div>
               </>
             )}

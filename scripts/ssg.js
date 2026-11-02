@@ -193,10 +193,14 @@ async function generate() {
     }
     
     // Fixed pages that render in the browser get head-only files the same way.
-    for (const seo of staticPages) {
-      await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+    try {
+      for (const seo of staticPages) {
+        await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+      }
+      console.log(`Generated ${staticPages.length} page heads`);
+    } catch (e) {
+      console.error('Failed to generate page heads', e);
     }
-    console.log(`Generated ${staticPages.length} page heads`);
 
     // Chain pages render in the browser (their data is live), but each gets its
     // own HTML file so search results and link previews name the chain. The root

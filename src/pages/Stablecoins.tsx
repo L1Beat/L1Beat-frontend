@@ -55,7 +55,7 @@ interface SupplyTrend {
   change7d: number;  // fractional change over the last 7 days
   prev24h: number;   // absolute USD supply 1 day ago (for aggregate totals)
   prev7d: number;    // absolute USD supply 7 days ago
-  prev30d: number | null; // absolute USD supply 30 days ago; null with less history
+  prev30d: number;   // absolute USD supply 30 days ago; 0 for a coin newer than that
 }
 
 interface EnrichedCoin extends Stablecoin {
@@ -135,10 +135,22 @@ function computeTrend(
   if (pts.length < 2) return null;
   const vals = pts.map((p) => p.v);
   const last = vals[vals.length - 1];
-  const prev24h = vals[vals.length - 2];
-  // 7 daily buckets back, clamped to the oldest point we have.
-  const prev7d = vals[Math.max(0, vals.length - 8)];
-  const prev30d = vals.length >= 31 ? vals[vals.length - 31] : null;
+  // The series only has days with activity, so look back by date, not by point:
+  // the supply at a cutoff is the last point on or before it. A coin whose
+  // history starts after the cutoff didn't exist then, so it counts from zero.
+  const today = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const at = (days: number) => {
+    const cut = today - days * DAY_MS;
+    let v = 0;
+    for (const p of pts) {
+      if (p.t > cut) break;
+      v = p.v;
+    }
+    return v;
+  };
+  const prev24h = at(1);
+  const prev7d = at(7);
+  const prev30d = at(30);
   return {
     prev30d,
     spark: vals.slice(-30),
@@ -294,7 +306,7 @@ export function Stablecoins() {
       // supply otherwise (a coin with no history contributes no change).
       prev7d += c.trend ? c.trend.prev7d : c.supplyUsd;
       // A coin newer than 30 days counts from zero, so its arrival shows as growth.
-      prev30d += c.trend ? (c.trend.prev30d ?? 0) : c.supplyUsd;
+      prev30d += c.trend ? c.trend.prev30d : c.supplyUsd;
       if (/^(USDC|USDT)(\.e)?$/.test(c.symbol)) majorsUsd += c.supplyUsd;
     }
     const change7d = prev7d > 0 ? (supply - prev7d) / prev7d : 0;
