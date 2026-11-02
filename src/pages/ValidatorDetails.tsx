@@ -25,14 +25,19 @@ const WARN_TEXT = 'text-[#9a6b00] dark:text-[#d4a017]';
 type ValidatorKind = 'l1' | 'legacy' | 'primary';
 type CopyKey = 'node' | 'validation' | 'bls' | 'owner' | 'tx';
 
+// Whole AVAX from 1,000 up, where cents are noise; smaller amounts keep their decimals.
 function formatAvax(nAvax: number): string {
-  return (nAvax / NAVAX_TO_AVAX).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const avax = nAvax / NAVAX_TO_AVAX;
+  return avax >= 1000
+    ? Math.round(avax).toLocaleString()
+    : avax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
 function formatAvaxCompact(nAvax: number): string {
   const avax = nAvax / NAVAX_TO_AVAX;
-  if (avax >= 1_000_000) return `${(avax / 1_000_000).toFixed(2)}M`;
-  if (avax >= 1_000) return `${(avax / 1_000).toFixed(2)}K`;
+  const trim = (n: number) => n.toFixed(2).replace(/\.?0+$/, '');
+  if (avax >= 1_000_000) return `${trim(avax / 1_000_000)}M`;
+  if (avax >= 1_000) return `${trim(avax / 1_000)}K`;
   return avax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -199,7 +204,7 @@ export function ValidatorDetails() {
     : kind === 'primary'
       ? validator.weight / NAVAX_TO_AVAX
       : 0;
-  const stakeText = `${stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`;
+  const stakeText = `${stakeAvax >= 1000 ? Math.round(stakeAvax).toLocaleString() : stakeAvax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AVAX`;
 
   const uptimeValue = kind === 'legacy' ? (validator.primary_uptime ?? 0) : (validator.uptime_percentage ?? 0);
 
@@ -358,7 +363,8 @@ export function ValidatorDetails() {
 
       <StatStrip items={stats} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* items-start: a short Record panel keeps its own height instead of stretching into an empty box. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <Panel title={isL1 ? 'Balance' : 'Stake'}>
           {isL1 ? (
             <>

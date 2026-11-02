@@ -23,7 +23,7 @@ import {
   Github,
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
-import { watermarkPlugin, smoothLinePath, getInkRgb } from '../utils/chartConfig';
+import { watermarkPlugin, getInkRgb } from '../utils/chartConfig';
 import { NodeId } from '../components/NodeId';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
 import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
@@ -31,7 +31,7 @@ import { StakeDistributionChart, getValidatorColor } from '../components/StakeDi
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { SEO } from '../components/SEO';
-import { StatStrip } from '../components/instrument';
+import { SegmentedControl, StatStrip } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
@@ -771,9 +771,9 @@ export function ChainDetails() {
                 tooltip: missingActivity(chain, lastActivity).detail,
               }
             : {
-                label: 'Current TPS',
+                label: lastUpdate ? `TPS, ${format(new Date(lastUpdate * 1000), 'MMM d')}` : 'TPS',
                 value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
-                sub: 'transactions per second',
+                sub: 'daily average',
               },
           {
             label: 'Active validators',
@@ -791,7 +791,6 @@ export function ChainDetails() {
             sub: allTimeFeesBurned > 0 ? 'AVAX, all time' : 'No burn data',
           },
         ]}
-        footnote={lastUpdate ? `Updated ${format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}` : undefined}
       />
 
             {/* Sticky section nav — scroll-spy, matching the Metrics page */}
@@ -823,7 +822,15 @@ export function ChainDetails() {
             <div className="flex flex-col gap-4 sm:gap-6">
               <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
-                  <ChainActivityCard chain={chain} points={activityPoints} unit={quiet ? 'tx' : 'tps'} loading={detailsLoading && tpsHistory.length === 0} elsewhere={activityOwner} />
+                  <ChainActivityCard
+                    chain={chain}
+                    apiChainId={chain.originalChainId || chain.chainId}
+                    tps={tpsHistory}
+                    tx={txHistory}
+                    defaultUnit={quiet ? 'tx' : 'tps'}
+                    loading={detailsLoading && tpsHistory.length === 0}
+                    elsewhere={activityOwner}
+                  />
                 </SectionErrorBoundary>
               </section>
 
@@ -1580,7 +1587,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
   );
 }
 
-// Headline/hover value — always 2 decimals so it matches the "Current TPS" KPI
+// Headline/hover value — always 2 decimals so it matches the TPS stat
 // card (which uses toFixed(2)). Axis ticks keep formatTps() for cleaner labels.
 function formatTpsExact(value: number | undefined | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -1605,89 +1612,126 @@ const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 
 const DAY_S = 86400;
 
-// Consecutive daily points; a step longer than a day and a half starts a new run.
-function splitRuns<P extends { t: number }>(points: P[]): P[][] {
-  const runs: P[][] = [];
-  for (const p of points) {
-    const run = runs[runs.length - 1];
-    if (run && p.t - run[run.length - 1].t <= DAY_S * 1.5) run.push(p);
-    else runs.push([p]);
-  }
-  return runs;
-}
-
-// Daily TPS trend — uses the history already fetched for the headline number.
 // Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
 const QUIET_TX_PER_DAY = 864;
 
-function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewhere = null }: {
+const ACT_RANGES = [
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+] as const;
+type ActRange = (typeof ACT_RANGES)[number]['value'];
+
+// Daily activity as bars, like the network charts on Metrics: each day is its own
+// figure. Daily TPS is the day's count over 86,400 seconds, so it's the same
+// shape: the chart counts transactions and the readout gives both. The page's
+// first 30 days are passed in; longer ranges load here.
+function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = false, elsewhere = null }: {
   chain: Chain;
-  points: { t: number; v: number }[];
-  unit: 'tps' | 'tx';
+  apiChainId: string;
+  tps: TPSHistory[];
+  tx: { timestamp: number; value: number }[];
+  defaultUnit: 'tps' | 'tx';
   loading?: boolean;
   /** The chain that carries this EVM ID's activity, when it isn't this one. */
   elsewhere?: Chain | null;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [range, setRange] = useState<ActRange>('30');
+  const [longer, setLonger] = useState<{ range: ActRange; tps: TPSHistory[]; tx: { timestamp: number; value: number }[] } | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [failed, setFailed] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
-  const isTx = unit === 'tx';
+  // Drawn at the box's own pixel width, so labels stay readable on phones.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(ACT_W);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(Math.max(el.clientWidth, 1)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  useEffect(() => {
+    if (range === '30' || elsewhere) {
+      setFailed(false);
+      return;
+    }
+    let alive = true;
+    setFetching(true);
+    const days = Number(range);
+    setFailed(false);
+    // One extra day, as on the page, within the backend's 365-day limit.
+    const ask = Math.min(days + 1, 365);
+    Promise.all([getTPSHistory(ask, apiChainId), getChainTxCountHistory(apiChainId, ask)]).then(([t, c]) => {
+      if (!alive) return;
+      // An empty answer keeps the range already on screen rather than blanking the chart.
+      if (t.length || c.length) setLonger({ range, tps: t.slice(-days), tx: c.slice(-days) });
+      else setFailed(true);
+      setFetching(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [range, apiChainId, elsewhere]);
+
+  // Until a longer range arrives, keep drawing what is loaded (dimmed).
+  const src = range !== '30' && longer && !failed ? longer : { tps, tx };
+  // Counts when the backend has them; chains with only a TPS series fall back to it.
+  const isTx = src.tx.length > 0 || defaultUnit === 'tx';
+  const raw = isTx ? src.tx.map((d) => ({ t: d.timestamp, v: d.value })) : src.tps.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
   const lastPoint = raw.length ? raw[raw.length - 1].t : null;
   const missing = missingActivity(chain, lastPoint);
   const stale = isStale(lastPoint);
-  const fmt = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTpsExact(v));
-  const fmtTick = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTps(v));
-  const subtitle = isTx ? 'Transactions per day' : 'Transactions per second';
+  const fmt = (v: number) =>
+    isTx ? `${Math.round(v).toLocaleString()} transactions, ${formatTpsExact(v / DAY_S)} TPS` : `${formatTpsExact(v)} TPS`;
+  const fmtTick = (v: number) => {
+    if (!isTx) return formatTps(v);
+    const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+    return v >= 1e6 ? `${trim(v / 1e6)}M` : v >= 1e3 ? `${trim(v / 1e3)}K` : String(Math.round(v));
+  };
+  const subtitle = isTx ? 'Transactions per day' : 'Average transactions per second, per day';
+  const big = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTpsExact(v));
 
   const points = useMemo(
     () => raw.filter((p) => Number.isFinite(p.t)).sort((a, b) => a.t - b.t),
-    [raw],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [src, isTx],
   );
 
   const geom = useMemo(() => {
     if (points.length < 2) return null;
-    const xs = points.map((p) => p.t);
-    const ys = points.map((p) => p.v);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const peak = Math.max(...ys, 0);
-    // Whole-number steps for counts; an all-zero series gets a single 0 line.
-    const maxY = peak === 0 ? 1 : isTx ? Math.max(3, Math.ceil(peak / 3) * 3) : peak;
-    const iw = ACT_W - ACT_M.left - ACT_M.right;
+    const minX = points[0].t;
+    const maxX = points[points.length - 1].t;
+    const peak = Math.max(...points.map((p) => p.v), 0);
+    // Round steps (100K, 250K, 0.5 TPS...); an all-zero series gets a single 0 line.
+    const raw = peak / 3;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const step = Math.max(isTx ? 1 : 0, ([1, 2, 2.5, 5, 10].find((k) => k * mag >= raw) ?? 10) * mag);
+    const maxY = peak === 0 ? 1 : Math.ceil(peak / step) * step;
+    const iw = W - ACT_M.left - ACT_M.right;
     const ih = ACT_H - ACT_M.top - ACT_M.bottom;
-    // Bars sit inside their day slot, so the outer ones don't spill past the axis.
-    const slot = iw / points.length;
-    const pad = isTx ? slot / 2 : 0;
-    const sx = (t: number) => ACT_M.left + pad + ((t - minX) / (maxX - minX || 1)) * (iw - 2 * pad);
+    // One slot per calendar day, so a missing day is an empty slot, not a squeezed axis.
+    const days = Math.round((maxX - minX) / DAY_S) + 1;
+    const slot = iw / days;
+    const sx = (t: number) => ACT_M.left + slot / 2 + ((t - minX) / DAY_S) * slot;
     const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
-    const floor = ACT_M.top + ih;
-    // Missing days break the line, so a gap doesn't read as a straight trend.
-    const runs = splitRuns(points).map((run) => {
-      const line = smoothLinePath(run.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
-      const x0 = sx(run[0].t).toFixed(1);
-      const x1 = sx(run[run.length - 1].t).toFixed(1);
-      return { line, area: `${line} L${x1},${floor} L${x0},${floor} Z`, lone: run.length === 1 ? run[0] : null };
-    });
-    const yTicks = peak === 0 ? [0] : Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
-    // Counts are whole days, so they're bars; a smoothed line would dip below zero between them.
-    const barW = Math.max(2, slot * 0.7);
-    return { sx, sy, runs, yTicks, floor, barW };
-  }, [points, isTx]);
+    const yTicks = peak === 0 ? [0] : Array.from({ length: Math.round(maxY / step) + 1 }, (_, i) => i * step);
+    const barW = Math.max(1, slot * (days > 120 ? 0.85 : 0.7));
+    const labelEvery = Math.ceil(points.length / (W < 600 ? 4 : 7));
+    return { sx, sy, yTicks, floor: ACT_M.top + ih, barW, days, labelEvery };
+  }, [points, isTx, W]);
 
   const latest = points.length ? points[points.length - 1] : null;
   const active = hover != null && points[hover] ? points[hover] : null;
   const shown = active ?? latest;
-  const first = points[0];
-  const spanDays = first && latest ? Math.round((latest.t - first.t) / DAY_S) + 1 : 0;
-  const gaps = points.length > 1 && spanDays > points.length;
-  // Day-to-day counts on a quiet chain swing by hundreds of percent; the delta would be noise.
-  // With missing days the first point isn't 30 days back, so there's no honest delta either.
-  const delta = !isTx && !gaps && first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
-  const positive = delta != null && delta >= 0;
+  const gaps = geom != null && geom.days > points.length;
+  const avg = points.length ? points.reduce((s, p) => s + p.v, 0) / points.length : 0;
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!geom || !svgRef.current || points.length === 0) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const vx = ((e.clientX - rect.left) / rect.width) * ACT_W;
+    const vx = e.clientX - rect.left;
     let best = 0;
     let bestD = Infinity;
     for (let i = 0; i < points.length; i++) {
@@ -1700,13 +1744,17 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
     setHover(best);
   };
 
+  const controls = !elsewhere && (
+    <SegmentedControl size="xs" value={range} options={ACT_RANGES} onChange={setRange} ariaLabel="Activity range" />
+  );
+
   if (loading) {
     return (
       <div className="rounded-md border border-border bg-card p-4 sm:p-5">
         <header className="flex items-end justify-between gap-3 mb-3">
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}, last 30 days</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
           </div>
           <div className="h-7 w-16 rounded-md bg-muted animate-pulse" />
         </header>
@@ -1717,36 +1765,28 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
 
   return (
     <div className="rounded-md border border-border bg-card p-4 sm:p-5">
-      <header className="flex items-end justify-between gap-3 mb-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-          {points.length > 0 && (
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {points.length < 2
-                ? subtitle
-                : gaps
-                  ? `${subtitle}, ${points.length} of the last ${spanDays} days`
-                  : `${subtitle}, last ${points.length} days`}
-            </p>
-          )}
+          <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
-        {shown && (
-          <div className="text-right">
-            <div className="num text-[22px] font-medium text-foreground leading-none">{fmt(shown.v)}</div>
-            <div className="text-[11px] mt-1">
-              {active || stale ? (
-                <span className="text-muted-foreground">{format(new Date((active ?? shown).t * 1000), 'MMM d')}</span>
-              ) : delta != null ? (
-                <span className={positive ? 'text-up' : 'text-down'}>
-                  {positive ? '+' : '−'}{Math.abs(delta).toFixed(0)}% over {spanDays}d
-                </span>
-              ) : (
-                <span className="text-muted-foreground">latest</span>
-              )}
-            </div>
-          </div>
-        )}
+        {controls}
       </header>
+      {shown && geom && (
+        <div className="mb-2">
+          <div className="num text-[22px] font-medium text-foreground leading-7">
+            {big(active ? active.v : avg)}
+            {isTx && (
+              <span className="ml-2 text-[13px] text-muted-foreground">{formatTpsExact((active ? active.v : avg) / DAY_S)} TPS</span>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {active
+              ? `${isTx ? 'transactions on ' : ''}${format(new Date(active.t * 1000), 'EEE, MMM d, yyyy')}`
+              : `${isTx ? 'transactions ' : ''}a day on average, ${format(new Date(points[0].t * 1000), 'MMM d')} to ${format(new Date(latest!.t * 1000), 'MMM d')}; latest ${fmt(latest!.v)}`}
+          </div>
+        </div>
+      )}
       {!geom && elsewhere ? (
         <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
           <p className="text-[13px] text-foreground">Activity is counted under another blockchain</p>
@@ -1764,75 +1804,57 @@ function ChainActivityCard({ chain, points: raw, unit, loading = false, elsewher
           <p className="text-[12px] text-muted-foreground max-w-md">{missing.detail}</p>
         </div>
       ) : (
-        <div className="relative">
+        <div ref={boxRef} className={`relative transition-opacity ${fetching ? 'opacity-50' : ''}`}>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${ACT_W} ${ACT_H}`}
-          className="w-full h-auto block"
+          width={W}
+          height={ACT_H}
+          className="block"
           onMouseMove={handleMove}
           onMouseLeave={() => setHover(null)}
           role="img"
-          aria-label={isTx ? 'Daily transactions over time' : 'TPS over time'}
+          aria-label={isTx ? 'Daily transactions' : 'Daily average TPS'}
         >
-          <defs>
-            <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.12} />
-              <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
           {geom.yTicks.map((tick, i) => (
             <g key={i}>
-              <line x1={ACT_M.left} x2={ACT_W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
+              <line x1={ACT_M.left} x2={W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
               <text x={ACT_M.left - 8} y={geom.sy(tick)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
                 {fmtTick(tick)}
               </text>
             </g>
           ))}
-          {isTx ? (
-            points.map((p, i) => (
+          {points.map((p, i) => (
+            <g key={p.t}>
               <rect
-                key={p.t}
                 x={geom.sx(p.t) - geom.barW / 2}
                 y={geom.sy(p.v)}
                 width={geom.barW}
                 height={Math.max(0, geom.floor - geom.sy(p.v))}
-                rx={1}
                 fill="var(--ink)"
                 fillOpacity={hover == null || hover === i ? 0.75 : 0.3}
               />
-            ))
-          ) : (
-            <>
-              {geom.runs.map((r, i) =>
-                r.lone ? (
-                  <circle key={i} cx={geom.sx(r.lone.t)} cy={geom.sy(r.lone.v)} r={2} fill="var(--ink)" />
-                ) : (
-                  <g key={i}>
-                    <path d={r.area} fill="url(#chain-tps-fill)" />
-                    <path d={r.line} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                  </g>
-                ),
+              {i % geom.labelEvery === 0 && (
+                <text x={geom.sx(p.t)} y={ACT_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
+                  {format(new Date(p.t * 1000), geom.days > 120 ? 'MMM yyyy' : 'MMM d')}
+                </text>
               )}
-            </>
-          )}
-          {!isTx && latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="var(--ink)" />}
-          {active && !isTx && (
-            <g>
-              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="rgb(148, 163, 184)" strokeOpacity={0.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-              <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="var(--ink)" stroke="var(--card, #fff)" strokeWidth={2} />
             </g>
-          )}
+          ))}
         </svg>
         <ChartWatermark />
         </div>
       )}
-      {geom && stale ? (
+      {failed ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          The longer history couldn't be loaded, so this shows the last 30 days. Try again in a minute.
+        </p>
+      ) : geom && stale ? (
         <p className="mt-3 text-[11px] text-muted-foreground">
           {missing.title}. {missing.detail}
         </p>
       ) : geom && gaps ? (
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Breaks in the line are days without a count yet. Older days are still being filled in.
+          Empty days have no count yet. Older days are still being filled in.
         </p>
       ) : null}
     </div>

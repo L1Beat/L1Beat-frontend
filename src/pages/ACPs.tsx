@@ -334,15 +334,6 @@ export default function ACPs() {
                 Every ACP from draft to activation, with status, track, and authors.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center gap-1.5 h-7 px-2.5 border border-border rounded text-[12px] font-medium text-foreground bg-background hover:bg-accent transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Refresh
-              </button>
-            </div>
           </div>
 
           {/* Statistics */}
@@ -353,7 +344,7 @@ export default function ACPs() {
                   { label: 'Total ACPs', value: String(stats.total), sub: 'tracked proposals' },
                   { label: 'Contributors', value: String(stats.totalAuthors || 0), sub: 'distinct authors' },
                   { label: 'Deployed', value: String(stats.implementationProgress?.deployed || 0), sub: 'activated on mainnet' },
-                  { label: 'Recently updated', value: String(stats.recentlyUpdated || 0), sub: 'changed in the last 30 days' },
+                  { label: 'In progress', value: String(tabCounts.Proposed + tabCounts.Implementable), sub: 'proposed or implementable' },
                 ]}
               />
             </div>
