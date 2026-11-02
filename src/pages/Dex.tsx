@@ -33,7 +33,8 @@ const WINDOWS = [
 
 function compact(v: number): string {
   const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
-  const a = Math.abs(v);
+  // Compare after rounding, so 999,960 reads 1M rather than 1000K.
+  const a = Number(Math.abs(v).toPrecision(3));
   if (a >= 1e9) return `${trim(v / 1e9)}B`;
   if (a >= 1e6) return `${trim(v / 1e6)}M`;
   if (a >= 1e3) return `${trim(v / 1e3)}K`;
@@ -155,7 +156,7 @@ export function Dex() {
         </div>
         <div className="flex items-center justify-between gap-3 pt-1">
           <h2 className="text-[14px] font-semibold text-foreground">
-            {win === '1' ? `${day(summary.data?.as_of, 'MMM d, yyyy')}` : `${day(summary.data?.from)} to ${day(summary.data?.as_of)}`}
+            {summary.data?.days === 1 ? `${day(summary.data?.as_of, 'MMM d, yyyy')}` : `${day(summary.data?.from)} to ${day(summary.data?.as_of)}`}
           </h2>
           <SegmentedControl size="xs" value={win} options={WINDOWS} onChange={setWin} ariaLabel="Table window" />
         </div>
@@ -216,7 +217,9 @@ function VolumeChart({ days, state, names }: { days: DexDay[] | null; state: 'lo
 
   const total = days?.reduce((s, d) => s + d.volume_usd, 0) ?? 0;
   const active = hover != null && days ? days[hover] : null;
-  const ids = STACK.filter((id) => days?.some((d) => d.dexes.some((x) => x.id === id && x.volume_usd > 0)));
+  // Known venues in a fixed order, then any new ones the API adds, so bars always sum to the day's total.
+  const seen = [...new Set((days ?? []).flatMap((d) => d.dexes.filter((x) => x.volume_usd > 0).map((x) => x.id)))];
+  const ids = [...STACK.filter((id) => seen.includes(id)), ...seen.filter((id) => !STACK.includes(id))];
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!geom || !svgRef.current || !days) return;

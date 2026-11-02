@@ -36,7 +36,8 @@ const SEGMENT = 1_000_000;
 
 function compact(v: number): string {
   const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
-  const a = Math.abs(v);
+  // Compare after rounding, so 999,960 reads 1M rather than 1000K.
+  const a = Number(Math.abs(v).toPrecision(3));
   if (a >= 1e9) return `${trim(v / 1e9)}B`;
   if (a >= 1e6) return `${trim(v / 1e6)}M`;
   if (a >= 1e3) return `${trim(v / 1e3)}K`;
@@ -70,6 +71,10 @@ export function Treasuries() {
   );
   const t = data?.totals;
   const price = t?.avax_price_usd ?? null;
+  const oldestEtf = holders
+    .filter((h) => h.kind === 'etf' && h.aum_usd != null && h.as_of)
+    .map((h) => h.as_of as string)
+    .sort()[0];
   const etfAum = holders.filter((h) => h.kind === 'etf' && h.aum_usd != null).reduce((s, h) => s + (h.aum_usd ?? 0), 0);
 
   const stats: StatItem[] = t
@@ -84,8 +89,8 @@ export function Treasuries() {
         {
           label: 'ETF assets',
           value: etfAum > 0 ? usd(etfAum) : '—',
-          sub: 'as the funds report them',
-          tooltip: "The sum of each ETF's reported net assets. It can differ from AVAX held times today's price, because funds report once a day.",
+          sub: oldestEtf ? `as reported, oldest ${format(parseISO(oldestEtf), 'MMM d')}` : 'as the funds report them',
+          tooltip: "The sum of each ETF's latest reported net assets. Funds report on different dates, so it can differ from AVAX held times today's price.",
         },
       ]
     : ['Held in total', 'Company treasuries', 'Spot ETFs', 'ETF assets'].map((label) => ({

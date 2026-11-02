@@ -632,7 +632,7 @@ function LiquidStakingCard({ totalStake }: { totalStake: number | null }) {
       ) : !protocols ? (
         <CardMessage>Liquid staking data couldn't be loaded. Try again in a minute.</CardMessage>
       ) : protocols.length === 0 ? (
-        <CardMessage>Liquid staking figures are still being collected. Check back in a few minutes.</CardMessage>
+        <CardMessage>Liquid staking figures are still being collected. Check back within the hour.</CardMessage>
       ) : (
         <div className="space-y-5">
           {protocols.map((p) => (

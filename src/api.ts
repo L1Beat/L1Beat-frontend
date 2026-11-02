@@ -1843,18 +1843,23 @@ async function fetchAllL1BeatPages<T>(
     if (parallel && page === 1 && typeof total === 'number' && total > offset) {
       const offsets: number[] = [];
       for (let o = offset; o < total && offsets.length < maxPages - 1; o += limit) offsets.push(o);
-      // Pages stay in order; a failed page is skipped rather than discarding the rest.
-      const pages = await Promise.allSettled(
-        offsets.map((o) =>
-          fetchExternalWithRetry<{ data: T[] }>(
-            `${L1BEAT_EXTERNAL_API}${endpoint}?${new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(o) })}`,
-          ),
-        ),
-      );
-      pages.forEach((r, i) => {
-        if (r.status === 'fulfilled') all.push(...(r.value.data ?? []));
-        else console.warn(`fetchAllL1BeatPages: page at offset ${offsets[i]} failed for ${endpoint}:`, r.reason);
-      });
+      const pageUrl = (o: number) =>
+        `${L1BEAT_EXTERNAL_API}${endpoint}?${new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(o) })}`;
+      const pages = await Promise.allSettled(offsets.map((o) => fetchExternalWithRetry<{ data: T[] }>(pageUrl(o))));
+      // A page lost to a burst limit gets one more try on its own, so a gap in the
+      // middle of the list (which would shift later chains' slugs) is unlikely.
+      for (let i = 0; i < pages.length; i++) {
+        const r = pages[i];
+        if (r.status === 'fulfilled') {
+          all.push(...(r.value.data ?? []));
+          continue;
+        }
+        try {
+          all.push(...((await fetchExternalWithRetry<{ data: T[] }>(pageUrl(offsets[i]))).data ?? []));
+        } catch (error) {
+          console.warn(`fetchAllL1BeatPages: page at offset ${offsets[i]} failed for ${endpoint}:`, error);
+        }
+      }
       break;
     }
     if (throttleMs > 0) await new Promise((r) => setTimeout(r, throttleMs));

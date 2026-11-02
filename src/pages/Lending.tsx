@@ -21,7 +21,8 @@ const MIN_COMPARE_USD = 100_000;
 
 function compact(v: number): string {
   const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
-  const a = Math.abs(v);
+  // Compare after rounding, so 999,960 reads 1M rather than 1000K.
+  const a = Number(Math.abs(v).toPrecision(3));
   if (a >= 1e9) return `${trim(v / 1e9)}B`;
   if (a >= 1e6) return `${trim(v / 1e6)}M`;
   if (a >= 1e3) return `${trim(v / 1e3)}K`;
@@ -39,7 +40,8 @@ const assetKey = (m: LendingMarket) => (m.symbol === 'WAVAX' ? 'AVAX' : m.symbol
 type CapUse = { kind: 'none' } | { kind: 'closed' } | { kind: 'pct'; value: number };
 /** How much of a cap is used. A cap of one whole token or less marks a market being wound down. */
 function capUse(cap: string | null, amount: string, decimals: number): CapUse {
-  if (cap == null) return { kind: 'none' };
+  // Null and 0 both mean no cap.
+  if (cap == null || Number(cap) === 0) return { kind: 'none' };
   const capTokens = Number(cap) / 10 ** decimals;
   if (!(capTokens > 1)) return { kind: 'closed' };
   return { kind: 'pct', value: (Number(amount) / 10 ** decimals / capTokens) * 100 };
@@ -137,10 +139,15 @@ export function Lending() {
     ? [
         { label: 'Supplied', value: usd(totals.supplied_usd), sub: `${data?.protocols.length ?? 0} protocols` },
         { label: 'Borrowed', value: usd(totals.borrowed_usd), sub: utilization != null ? `${pct(utilization)} of what's supplied` : ' ' },
-        { label: 'Available to borrow', value: usd(totals.supplied_usd - totals.borrowed_usd), sub: 'supplied minus borrowed' },
+        {
+          label: 'Not borrowed',
+          value: usd(totals.supplied_usd - totals.borrowed_usd),
+          sub: 'supplied minus borrowed',
+          tooltip: "Includes markets that can't be borrowed, such as sAVAX, so it's more than anyone could borrow today.",
+        },
         { label: 'Markets', value: String(live.length), sub: 'with deposits, not winding down' },
       ]
-    : ['Supplied', 'Borrowed', 'Available to borrow', 'Markets'].map((label) => ({ label, value: '—', sub: state === 'error' ? 'Unavailable' : ' ' }));
+    : ['Supplied', 'Borrowed', 'Not borrowed', 'Markets'].map((label) => ({ label, value: '—', sub: state === 'error' ? 'Unavailable' : ' ' }));
 
   return (
     <div>
@@ -335,7 +342,8 @@ function RatesCard({ rows }: { rows: Row[] }) {
           .filter((r) => r.borrow_apy_percent != null && (r.borrowed_usd ?? 0) >= MIN_COMPARE_USD && r.borrowCap.kind !== 'closed')
           .sort((a, b) => (a.borrow_apy_percent ?? 0) - (b.borrow_apy_percent ?? 0));
         const bestSupply = (supplies[0]?.supply_apy_percent ?? 0) >= 0.05 ? supplies[0] : undefined;
-        const bestBorrow = borrows.find((r) => r.protocol_id !== 'aave-v4');
+        // With only Aave V4 borrowing it, show its base rate rather than nothing.
+        const bestBorrow = borrows.find((r) => r.protocol_id !== 'aave-v4') ?? borrows[0];
         return {
           asset,
           bestSupply,
@@ -360,7 +368,10 @@ function RatesCard({ rows }: { rows: Row[] }) {
   const best = (r: Row | undefined, key: 'supply_apy_percent' | 'borrow_apy_percent', none: string) =>
     r ? (
       <span className="inline-flex items-baseline gap-2">
-        <span className="num text-[15px] font-medium text-foreground">{apy(r[key])}</span>
+        <span className="num text-[15px] font-medium text-foreground">
+          {apy(r[key])}
+          {key === 'borrow_apy_percent' && r.protocol_id === 'aave-v4' && <span className="text-[11px] text-muted-foreground"> + premium</span>}
+        </span>
         <span className="inline-flex items-center gap-1.5 text-[12px] text-foreground/90">
           <ProtocolDot id={r.protocol_id} />
           {r.protocolName.replace(' Lending', '')}
@@ -423,16 +434,22 @@ function RatesCard({ rows }: { rows: Row[] }) {
 function PausedNotice({ rows }: { rows: Row[] }) {
   const paused = rows.filter((r) => !r.closed && (r.supplied_usd ?? 0) >= MIN_COMPARE_USD && collateralState(r).kind === 'paused');
   if (!paused.length) return null;
-  const assets = [...new Set(paused.map((r) => r.asset))];
-  const protocols = [...new Set(paused.map((r) => r.protocolName.replace(' Lending', '')))];
   const list = (xs: string[]) => (xs.length <= 1 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  // Group by protocol set, so no asset is implied paused somewhere it isn't.
+  const byAsset = new Map<string, string[]>();
+  for (const r of paused) byAsset.set(r.asset, [...new Set([...(byAsset.get(r.asset) ?? []), r.protocolName.replace(' Lending', '')])]);
+  const groups = new Map<string, string[]>();
+  for (const [asset, ps] of byAsset) {
+    const key = ps.sort().join('|');
+    groups.set(key, [...(groups.get(key) ?? []), asset]);
+  }
+  const phrases = [...groups].map(([key, assets]) => `${list(assets)} on ${list(key.split('|'))}`);
   return (
     <div className="flex items-start gap-3 rounded-md border border-[#d4a017]/40 bg-[#d4a017]/[0.07] px-4 py-3">
       <span className="mt-1.5 w-2 h-2 rounded-full bg-[#d4a017] shrink-0" aria-hidden />
       <p className="text-[13px] leading-5 text-foreground">
-        New borrowing against <span className="font-medium">{list(assets)}</span> is switched off on {list(protocols)}: their
-        loan-to-value is set to 0. Existing positions keep their liquidation thresholds, so the change doesn't liquidate
-        anyone.
+        New borrowing is switched off against <span className="font-medium">{phrases.join('; ')}</span>: their loan-to-value
+        is set to 0. Existing positions keep their liquidation thresholds, so the change doesn't liquidate anyone.
       </p>
     </div>
   );

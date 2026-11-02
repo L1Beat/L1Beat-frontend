@@ -6,7 +6,7 @@ import { ThemeToggle } from '../ThemeToggle';
 import { useTheme } from '../../hooks/useTheme';
 import { SearchPalette } from './SearchPalette';
 
-interface NavLink {
+export interface NavLink {
   id: string;
   label: string;
   path: string;
@@ -14,7 +14,7 @@ interface NavLink {
   hint?: string;
 }
 
-type NavEntry = NavLink | { id: string; label: string; items: NavLink[] };
+export type NavEntry = NavLink | { id: string; label: string; items: NavLink[] };
 
 // Direct links for the pages people come back to; related pages grouped in
 // small menus so the bar stays short as pages are added.
@@ -145,6 +145,7 @@ function NavMenu({ label, items, pathname }: { label: string; items: NavLink[]; 
   const ref = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number>();
   const active = items.some((i) => isNavActive(pathname, i.path));
+  const menuId = `nav-menu-${label.toLowerCase()}`;
 
   // Close on navigation, Escape and clicks outside.
   useEffect(() => setOpen(false), [pathname]);
@@ -171,11 +172,18 @@ function NavMenu({ label, items, pathname }: { label: string; items: NavLink[]; 
   };
 
   return (
-    <div ref={ref} className="relative h-full" onMouseEnter={enter} onMouseLeave={leave}>
+    <div
+      ref={ref}
+      className="relative h-full"
+      // Hover only for a mouse: on touch, the emulated hover would open the menu and the click close it again.
+      onPointerEnter={(e) => e.pointerType === 'mouse' && enter()}
+      onPointerLeave={(e) => e.pointerType === 'mouse' && leave()}
+      onBlur={(e) => !ref.current?.contains(e.relatedTarget as Node | null) && setOpen(false)}
+    >
       <button
         type="button"
-        aria-haspopup="true"
         aria-expanded={open}
+        aria-controls={menuId}
         onClick={() => setOpen((o) => !o)}
         className={navItemCls(active)}
       >
@@ -185,7 +193,7 @@ function NavMenu({ label, items, pathname }: { label: string; items: NavLink[]; 
       </button>
       {open && (
         <div className="absolute left-0 top-full pt-1 z-50">
-          <ul className="min-w-[240px] rounded-md border border-border bg-card shadow-lg p-1">
+          <ul id={menuId} className="min-w-[240px] rounded-md border border-border bg-card shadow-lg p-1">
             {items.map((item) => {
               const current = isNavActive(pathname, item.path);
               return (
