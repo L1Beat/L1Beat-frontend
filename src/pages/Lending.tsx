@@ -99,10 +99,11 @@ interface Row extends LendingMarket {
 const HIST_RANGES = [
   { value: '90', label: '90d' },
   { value: '365', label: '1y' },
+  { value: '3650', label: 'All' },
 ] as const;
 
 export function Lending() {
-  const [histRange, setHistRange] = useState<'90' | '365'>('90');
+  const [histRange, setHistRange] = useState<'90' | '365' | '3650'>('90');
   const [data, setData] = useState<LendingData | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
@@ -825,6 +826,9 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
       })),
     [data],
   );
+  // Markets with deposits but no oracle price that day sit outside the USD sum,
+  // so a dip there is a gap in pricing, not money leaving.
+  const unpriced = useMemo(() => new Map((data ?? []).filter((d) => d.unpriced_markets).map((d) => [d.date, d.unpriced_markets ?? 0])), [data]);
   if (state === 'loading' && !data) return <div className="h-full min-h-[240px] rounded bg-muted/50 animate-pulse" />;
   if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded.</div>;
   const first = series[0];
@@ -842,7 +846,8 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
               {d
                 ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
                 : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
-              {series.length < loadedDays && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
+              {d && unpriced.get(d.date) ? `. ${unpriced.get(d.date)} ${unpriced.get(d.date) === 1 ? 'market' : 'markets'} had no price that day and aren't counted` : ''}
+              {series.length < loadedDays && loadedDays !== 3650 && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
             </div>
           </>
         )}

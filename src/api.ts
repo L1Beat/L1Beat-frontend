@@ -2536,7 +2536,9 @@ export interface LendingTotalsDay {
   date: string;
   supplied_usd: number;
   borrowed_usd: number;
-  by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number }[];
+  /** Markets with deposits but no oracle price that day; left out of the USD sums. */
+  unpriced_markets?: number;
+  by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number; unpriced_markets?: number }[];
 }
 
 export interface LiquidationsDay {
@@ -2564,7 +2566,7 @@ export interface Liquidation {
 // whose quota error clears every cached entry, so they stay in memory.
 const lendingPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/lending${path}`, persist);
 /** Daily supplied and borrowed USD per lending protocol. */
-export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`) as Promise<LendingTotalsDay[] | null>;
+export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`, days <= 365) as Promise<LendingTotalsDay[] | null>;
 export const getLiquidationsDaily = (days: number) =>
   lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`, days <= 90) as Promise<LiquidationsDay[] | null>;
 export const getLiquidationsTop = (days: number, limit = 10) =>
