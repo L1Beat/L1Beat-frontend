@@ -7,14 +7,16 @@ import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getDexPools, getDexSummary, getDexTimeseries } from '../api';
 import type { DexDay, DexPool, DexSummary } from '../api';
 
-// Categorical palette from DESIGN_SYSTEM.md. A protocol's versions share a hue.
+// Close to each DEX's brand so it's recognised without the legend. Pharaoh's red
+// is toned to orange, because red means a drop on L1Beat; its two versions share
+// the hue. Pangolin's gold would clash with Blackhole's, so the smallest venue is grey.
 const DEX_STYLE: Record<string, { color: string; opacity: number }> = {
-  'pharaoh-v3': { color: '#3987e5', opacity: 1 },
-  'pharaoh-dlmm': { color: '#3987e5', opacity: 0.5 },
-  'uniswap-v3': { color: '#8b5cf6', opacity: 1 },
+  'pharaoh-v3': { color: '#d95926', opacity: 1 },
+  'pharaoh-dlmm': { color: '#d95926', opacity: 0.5 },
+  'uniswap-v3': { color: '#e8508f', opacity: 1 },
   'blackhole-clmm': { color: '#d4a017', opacity: 1 },
-  lfj: { color: '#d95926', opacity: 1 },
-  'pangolin-v3': { color: '#199e70', opacity: 1 },
+  lfj: { color: '#6366f1', opacity: 1 },
+  'pangolin-v3': { color: '#6b7280', opacity: 1 },
 };
 const dexStyle = (id: string) => DEX_STYLE[id] ?? { color: '#6b7280', opacity: 1 };
 // Stack order, bottom to top: largest venues sit on the baseline.
