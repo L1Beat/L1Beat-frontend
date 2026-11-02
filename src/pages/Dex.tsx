@@ -9,18 +9,31 @@ import type { DexDay, DexPool, DexSummary } from '../api';
 
 // Close to each DEX's brand so it's recognised without the legend. Pharaoh's red
 // is toned to orange, because red means a drop on L1Beat; its two versions share
-// the hue. Pangolin's gold would clash with Blackhole's, so the smallest venue is grey.
+// the hue. Pangolin's gold would clash with Blackhole's, so it is grey. Older
+// versions of a DEX share its hue at half strength.
 const DEX_STYLE: Record<string, { color: string; opacity: number }> = {
   'pharaoh-v3': { color: '#d95926', opacity: 1 },
   'pharaoh-dlmm': { color: '#d95926', opacity: 0.5 },
   'uniswap-v3': { color: '#e8508f', opacity: 1 },
   'blackhole-clmm': { color: '#d4a017', opacity: 1 },
   lfj: { color: '#6366f1', opacity: 1 },
+  'lfj-v1': { color: '#6366f1', opacity: 0.5 },
   'pangolin-v3': { color: '#6b7280', opacity: 1 },
+  'pangolin-v2': { color: '#6b7280', opacity: 0.5 },
+  'sushiswap-v2': { color: '#8b5cf6', opacity: 1 },
 };
 const dexStyle = (id: string) => DEX_STYLE[id] ?? { color: '#6b7280', opacity: 1 };
 // Stack order, bottom to top: largest venues sit on the baseline.
-const STACK = ['pharaoh-v3', 'pharaoh-dlmm', 'uniswap-v3', 'blackhole-clmm', 'lfj', 'pangolin-v3'];
+const STACK = ['pharaoh-v3', 'pharaoh-dlmm', 'uniswap-v3', 'blackhole-clmm', 'lfj', 'lfj-v1', 'pangolin-v3', 'pangolin-v2', 'sushiswap-v2'];
+
+const PROTOCOL_LABEL: Record<string, string> = {
+  pharaoh: 'Pharaoh',
+  uniswap: 'Uniswap',
+  blackhole: 'Blackhole',
+  lfj: 'LFJ',
+  pangolin: 'Pangolin',
+  sushiswap: 'SushiSwap',
+};
 
 const RANGES = [
   { value: '30', label: '30d' },
@@ -88,9 +101,15 @@ export function Dex() {
       : m.days === 365
         ? 'in the last year'
         : `in the last ${m.days} days`;
-  const pharaohShare = m && m.totals.volume_usd > 0
-    ? (m.dexes.filter((d) => d.protocol === 'pharaoh').reduce((s, d) => s + d.volume_usd, 0) / m.totals.volume_usd) * 100
-    : null;
+  // The protocol with the most volume in the window, all its versions together.
+  const lead = (() => {
+    if (!m || m.totals.volume_usd <= 0) return null;
+    const byProtocol = new Map<string, number>();
+    for (const d of m.dexes) byProtocol.set(d.protocol, (byProtocol.get(d.protocol) ?? 0) + d.volume_usd);
+    const [protocol, volume] = [...byProtocol].sort((a, b) => b[1] - a[1])[0] ?? [];
+    if (!protocol || !volume) return null;
+    return { name: PROTOCOL_LABEL[protocol] ?? protocol, share: (volume / m.totals.volume_usd) * 100 };
+  })();
 
   const t = m?.totals;
   const stats: StatItem[] = t
@@ -136,8 +155,8 @@ export function Dex() {
                     Avalanche's main DEXes traded <span className="tabular-nums">{usd(m.totals.volume_usd)}</span> {rangeLabel}.
                   </p>
                   <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
-                    {pharaohShare != null && (
-                      <>Pharaoh handled <span className="num">{pct(pharaohShare)}</span> of it, across </>
+                    {lead && (
+                      <>{lead.name} handled <span className="num">{pct(lead.share)}</span> of it, across </>
                     )}
                     <span className="num">{compact(m.totals.swaps)}</span> swaps from <span className="num">{compact(m.totals.unique_addresses)}</span> addresses.
                   </p>
@@ -497,5 +516,8 @@ const DEX_LABEL: Record<string, string> = {
   'uniswap-v3': 'Uniswap V3',
   'blackhole-clmm': 'Blackhole',
   lfj: 'LFJ',
+  'lfj-v1': 'LFJ V1',
   'pangolin-v3': 'Pangolin V3',
+  'pangolin-v2': 'Pangolin V2',
+  'sushiswap-v2': 'SushiSwap V2',
 };
