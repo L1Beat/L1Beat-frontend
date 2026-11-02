@@ -9,6 +9,7 @@ import { DownloadAssets } from '../components/branding/DownloadAssets';
 import { ExampleApplications } from '../components/branding/ExampleApplications';
 import { useTheme } from '../hooks/useTheme';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: LayoutIcon },
@@ -61,11 +62,7 @@ export function BrandGuidelines() {
 
   return (
     <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <SEO
-        title="Brand Guidelines"
-        description="L1Beat brand kit: logo, colors, typography, usage rules, and downloadable assets."
-        url="/brand"
-      />
+      <SEO {...PAGE_SEO.brand} />
       <header>
         <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
           BRAND GUIDELINES

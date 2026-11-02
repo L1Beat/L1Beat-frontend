@@ -70,7 +70,7 @@ async function generate() {
 
     // 3. Load server entry
     const template = await fs.readFile(path.resolve(root, 'dist/index.html'), 'utf-8');
-    const { render, renderHead, getChainPages } = await import(path.resolve(root, 'dist/server/entry-server.js'));
+    const { render, renderHead, getChainPages, staticPages } = await import(path.resolve(root, 'dist/server/entry-server.js'));
 
     // When a page brings its own preview tags, drop the template's defaults so
     // crawlers don't see two conflicting sets. A page with only a title keeps
@@ -192,6 +192,12 @@ async function generate() {
       }
     }
     
+    // Fixed pages that render in the browser get head-only files the same way.
+    for (const seo of staticPages) {
+      await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+    }
+    console.log(`Generated ${staticPages.length} page heads`);
+
     // Chain pages render in the browser (their data is live), but each gets its
     // own HTML file so search results and link previews name the chain. The root
     // stays empty and unmarked, so the client renders it fresh.

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { Search } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
@@ -109,11 +110,7 @@ export function Staking() {
 
   return (
     <div>
-      <SEO
-        title="Avalanche Staking"
-        description="AVAX staked on the Primary Network, validators and delegations, stake concentration, delegation fees and upcoming staking period ends."
-        url="/staking"
-      />
+      <SEO {...PAGE_SEO.staking} />
 
       {/* Hero: every validator, largest first, so the concentration is the first thing you see. */}
       <section

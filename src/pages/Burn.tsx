@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Volume2, VolumeX } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { getBurnedTotal } from '../api';
@@ -549,7 +550,7 @@ export function Burn() {
 
   return (
     <div>
-      <SEO title="AVAX Burn: Live Avalanche Fee Burn" description="Live AVAX burned on Avalanche, streamed block by block. Every C-Chain fee, base fee and priority tip, is burned." />
+      <SEO {...PAGE_SEO.burn} />
       <style>{`
         @keyframes burnIgnite {
           0% { background-color: rgba(249,115,22,0.22); transform: translateY(-6px); opacity: 0; }

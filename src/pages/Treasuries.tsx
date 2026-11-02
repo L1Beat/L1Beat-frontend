@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ExternalLink } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
@@ -101,11 +102,7 @@ export function Treasuries() {
 
   return (
     <div>
-      <SEO
-        title="AVAX Treasuries & ETFs"
-        description="How much AVAX public companies and U.S. spot ETFs hold, with each holder's share, value, staking and the date of its latest figure."
-        url="/treasuries"
-      />
+      <SEO {...PAGE_SEO.treasuries} />
 
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}

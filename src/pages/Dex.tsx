@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { SegmentedControl, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
@@ -133,11 +134,7 @@ export function Dex() {
 
   return (
     <div>
-      <SEO
-        title="Avalanche Trading Volume"
-        description="Daily trading volume, swaps and top pools on Avalanche C-Chain DEXes: Pharaoh, Uniswap, Blackhole, LFJ and Pangolin, indexed from the chain."
-        url="/trading"
-      />
+      <SEO {...PAGE_SEO.trading} />
 
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}

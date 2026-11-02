@@ -15,6 +15,7 @@ import { NotFound } from './pages/NotFound';
 import { SEO } from './components/SEO';
 import { getChains } from './api';
 import { chainSeo } from './utils/chainSeo';
+import { PAGE_SEO } from './utils/pageSeo';
 
 // Eager on the server so renderToString emits real page HTML, not fallbacks.
 const pages: PrerenderedPages = { Dashboard, BlogList, BlogPost, ACPs, NotFound };
@@ -51,6 +52,9 @@ export function renderHead(seo: ComponentProps<typeof SEO>) {
   );
   return helmetContext.helmet;
 }
+
+/** Head tags for each client-rendered page with a fixed path. */
+export const staticPages = Object.values(PAGE_SEO);
 
 /** Every chain page's path and head tags. */
 export async function getChainPages() {

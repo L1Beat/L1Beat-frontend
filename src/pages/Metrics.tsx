@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GitCompareArrows } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
@@ -259,11 +260,7 @@ export function Metrics() {
 
   return (
     <div>
-      <SEO
-        title="Network Metrics"
-        description="Aggregate Avalanche L1 metrics: cross-chain TPS, transactions, validators, gas, fees, and a side-by-side compare tool."
-        url="/metrics"
-      />
+      <SEO {...PAGE_SEO.metrics} />
 
       {/* Hero: the network chart fills the first screen, headline numbers float along the bottom. */}
       <section

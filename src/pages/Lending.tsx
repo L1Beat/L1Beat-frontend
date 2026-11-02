@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
@@ -159,11 +160,7 @@ export function Lending() {
 
   return (
     <div>
-      <SEO
-        title="Avalanche Lending Markets"
-        description="Supply and borrow rates, utilization and caps for every lending market on Aave V3, Aave V4 and BENQI on the Avalanche C-Chain, read from the contracts."
-        url="/lending"
-      />
+      <SEO {...PAGE_SEO.lending} />
 
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}

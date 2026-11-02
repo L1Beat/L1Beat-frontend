@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../components/Toaster';
 import { SEO } from '../components/SEO';
+import { PAGE_SEO } from '../utils/pageSeo';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { StatStrip } from '../components/instrument';
@@ -376,11 +377,7 @@ export function Stablecoins() {
   return (
     <TooltipProvider delayDuration={200}>
       <div>
-        <SEO
-          title="Stablecoins on Avalanche"
-          description="Live supply, holders, and 24h activity for every major stablecoin on Avalanche C-Chain: USDC, USDT, AUSD, BUIDL, EURC and more."
-          url="/stablecoins"
-        />
+        <SEO {...PAGE_SEO.stablecoins} />
 
         {/* Hero: the supply chart fills the first screen, headline numbers float along the bottom. */}
         <section
