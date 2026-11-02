@@ -643,6 +643,8 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  // A protocol picked in the legend; its part of every bar is highlighted.
+  const [focus, setFocus] = useState<string | null>(null);
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
@@ -695,12 +697,22 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
           {ids.map((id) => {
             const st = protocolStyle(id);
             const v = active?.parts.find((p) => p.id === id)?.value;
+            const on = focus === id;
             return (
-              <span key={id} className="inline-flex items-center gap-1.5">
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFocus((f) => (f === id ? null : id))}
+                aria-pressed={on}
+                title={on ? 'Show all protocols' : `Highlight ${names[id] ?? id}`}
+                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
+                  on ? 'bg-accent text-foreground' : focus ? 'opacity-50 hover:opacity-100' : ''
+                }`}
+              >
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
                 {names[id] ?? id}
                 {active && <span className="num text-foreground">{usd(v ?? 0)}</span>}
-              </span>
+              </button>
             );
           })}
           {lineLabel && (
@@ -734,7 +746,8 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                     run += v;
                     const y1 = geom.y(run);
                     const st = protocolStyle(id);
-                    return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={st.opacity} />;
+                    const dim = focus != null && focus !== id;
+                    return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={dim ? st.opacity * 0.15 : st.opacity} />;
                   })}
                   {i % geom.labelEvery === 0 && (
                     <text x={geom.x(i) + geom.barW / 2} y={H - 5} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>

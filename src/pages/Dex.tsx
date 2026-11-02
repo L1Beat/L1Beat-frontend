@@ -69,6 +69,9 @@ function useLoad<T>(load: () => Promise<T | null>, deps: unknown[]) {
 export function Dex() {
   const [range, setRange] = useState<'30' | '90' | '365' | '3650'>('90');
   const [win, setWin] = useState<'1' | '7' | '30'>('30');
+  // A DEX picked in the legend or the table; its part of every bar is highlighted.
+  const [focus, setFocus] = useState<string | null>(null);
+  const toggleFocus = (id: string) => setFocus((f) => (f === id ? null : id));
   const series = useLoad(() => getDexTimeseries(Number(range)), [range]);
   const summary = useLoad(() => getDexSummary(Number(win)), [win]);
   // The headline describes the chart's range.
@@ -159,7 +162,7 @@ export function Dex() {
 
           <div className="relative flex-1 min-h-0 mx-4 sm:mx-6 lg:mx-10 mt-4 mb-4 md:mb-[128px]">
             <SectionErrorBoundary label="the daily volume chart">
-              <VolumeChart days={series.data} state={series.state} names={Object.fromEntries((m?.dexes ?? []).map((d) => [d.id, d.name]))} />
+              <VolumeChart days={series.data} state={series.state} names={Object.fromEntries((m?.dexes ?? []).map((d) => [d.id, d.name]))} focus={focus} onFocus={toggleFocus} />
             </SectionErrorBoundary>
           </div>
         </div>
@@ -180,7 +183,7 @@ export function Dex() {
         </div>
 
         <SectionErrorBoundary label="the DEX table">
-          <VenueTable summary={summary.data} state={summary.state} />
+          <VenueTable summary={summary.data} state={summary.state} focus={focus} onFocus={toggleFocus} />
         </SectionErrorBoundary>
 
         <SectionErrorBoundary label="the top pools">
@@ -199,7 +202,13 @@ export function Dex() {
 
 const M = { top: 10, right: 8, bottom: 24, left: 48 };
 
-function VolumeChart({ days, state, names }: { days: DexDay[] | null; state: 'loading' | 'ready' | 'error'; names: Record<string, string> }) {
+function VolumeChart({ days, state, names, focus, onFocus }: {
+  days: DexDay[] | null;
+  state: 'loading' | 'ready' | 'error';
+  names: Record<string, string>;
+  focus: string | null;
+  onFocus: (id: string) => void;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   // Drawn at the stage's own pixel size, so text stays crisp at any width or height.
@@ -254,20 +263,46 @@ function VolumeChart({ days, state, names }: { days: DexDay[] | null; state: 'lo
       {days && days.length > 0 && (
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-2">
         <div>
-          <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total / days.length)}</div>
-          <div className="text-[11px] text-muted-foreground">
-            {active ? `${day(active.date, 'EEE, MMM d, yyyy')}, ${active.swaps.toLocaleString()} swaps` : `a day on average, ${day(days[0].date)} to ${day(days[days.length - 1].date)}`}
-          </div>
+          {focus ? (
+            <>
+              <div className="num text-[22px] leading-7 font-medium text-foreground">
+                {usd(active ? vol(active, focus) : days.reduce((sum, d) => sum + vol(d, focus), 0) / days.length)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {names[focus] ?? focus}
+                {active
+                  ? ` on ${day(active.date, 'EEE, MMM d, yyyy')}, ${pct(active.volume_usd > 0 ? (vol(active, focus) / active.volume_usd) * 100 : 0)} of the day`
+                  : `, a day on average, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, focus), 0) / total) * 100 : 0)} of all volume`}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total / days.length)}</div>
+              <div className="text-[11px] text-muted-foreground">
+                {active ? `${day(active.date, 'EEE, MMM d, yyyy')}, ${active.swaps.toLocaleString()} swaps` : `a day on average, ${day(days[0].date)} to ${day(days[days.length - 1].date)}`}
+              </div>
+            </>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
           {ids.map((id) => {
             const st = dexStyle(id);
+            const on = focus === id;
             return (
-              <span key={id} className="inline-flex items-center gap-1.5">
+              <button
+                key={id}
+                type="button"
+                onClick={() => onFocus(id)}
+                aria-pressed={on}
+                title={on ? 'Show all DEXes' : `Highlight ${names[id] ?? id}`}
+                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
+                  on ? 'bg-accent text-foreground' : focus ? 'opacity-50 hover:opacity-100' : ''
+                }`}
+              >
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
                 {names[id] ?? id}
                 {active && <span className="num text-foreground">{usd(vol(active, id))}</span>}
-              </span>
+              </button>
             );
           })}
         </div>
@@ -311,7 +346,8 @@ function VolumeChart({ days, state, names }: { days: DexDay[] | null; state: 'lo
                 run += v;
                 const y1 = geom.y(run);
                 const st = dexStyle(id);
-                return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={st.opacity} />;
+                const dim = focus != null && focus !== id;
+                return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={dim ? st.opacity * 0.15 : st.opacity} />;
               })}
               {i % geom.labelEvery === 0 && (
                 <text x={geom.x(i) + geom.barW / 2} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
@@ -338,14 +374,19 @@ function DexName({ id, name }: { id: string; name: string }) {
   );
 }
 
-function VenueTable({ summary, state }: { summary: DexSummary | null; state: 'loading' | 'ready' | 'error' }) {
+function VenueTable({ summary, state, focus, onFocus }: {
+  summary: DexSummary | null;
+  state: 'loading' | 'ready' | 'error';
+  focus: string | null;
+  onFocus: (id: string) => void;
+}) {
   const rows = [...(summary?.dexes ?? [])].sort((a, b) => b.volume_usd - a.volume_usd);
   const total = summary?.totals.volume_usd ?? 0;
   return (
     <section className="rounded-md border border-border bg-card">
       <header className="px-4 sm:px-5 pt-4 pb-3">
         <h2 className="text-[14px] font-semibold text-foreground">By DEX</h2>
-        <p className="text-[11px] text-muted-foreground mt-0.5">Addresses are counted per DEX, so the same address can appear under several.</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Click a DEX to highlight it on the chart. Addresses are counted per DEX, so the same address can appear under several.</p>
       </header>
       {state === 'error' ? (
         <div className="px-5 py-10 text-center text-[12px] text-muted-foreground">DEX totals couldn't be loaded. Try again in a minute.</div>
@@ -369,8 +410,17 @@ function VenueTable({ summary, state }: { summary: DexSummary | null; state: 'lo
                 const share = total > 0 ? (d.volume_usd / total) * 100 : 0;
                 const st = dexStyle(d.id);
                 return (
-                  <tr key={d.id}>
-                    <td className="px-4 sm:px-5 py-2.5"><DexName id={d.id} name={d.name} /></td>
+                  <tr
+                    key={d.id}
+                    onClick={() => onFocus(d.id)}
+                    className={`cursor-pointer transition-colors hover:bg-muted/30 ${focus === d.id ? 'bg-accent/60' : focus ? 'opacity-60' : ''}`}
+                    title={focus === d.id ? 'Show all DEXes on the chart' : 'Highlight on the chart'}
+                  >
+                    <td className="px-4 sm:px-5 py-2.5">
+                      <button type="button" aria-pressed={focus === d.id} className="text-left" onClick={(e) => { e.stopPropagation(); onFocus(d.id); }}>
+                        <DexName id={d.id} name={d.name} />
+                      </button>
+                    </td>
                     <td className="num text-right px-3 py-2.5 text-foreground">{usd(d.volume_usd)}</td>
                     <td className="px-3 py-2.5 hidden md:table-cell">
                       <div className="flex items-center gap-2">
