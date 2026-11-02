@@ -2560,6 +2560,60 @@ export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-$
 export const getDexPools = (days: number, limit = 20) =>
   getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
 
+// --- Bridges (C-Chain side of CCTP, LayerZero, Stargate, Avalanche Bridge, CCIP) ---
+export interface BridgeFlow {
+  inflow_usd: number;
+  outflow_usd: number;
+  net_usd: number;
+  transfers: number;
+}
+export interface BridgeSummary {
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  flag_threshold_usd: number;
+  totals: BridgeFlow & { priced_share: number | null; flagged_transfers: number; passthrough_count: number };
+  by_bridge: (BridgeFlow & { id: string; name: string; priced_share: number | null; flagged_transfers: number })[];
+  /** Counterparty chains, ordered by USD moved; avalanche_l1 marks Avalanche L1s reached over LayerZero. */
+  by_chain: (BridgeFlow & {
+    chain: string;
+    name: string;
+    avalanche_l1: boolean;
+    /** Per-bridge split of this chain's flow, when the indexer provides it. */
+    bridges?: { id: string; inflow_usd: number; outflow_usd: number; transfers: number }[];
+  })[];
+  by_token: (BridgeFlow & { token: string; symbol: string; decimals: number | null; priced: boolean; inflow_amount: string; outflow_amount: string })[];
+}
+export interface BridgeDay extends BridgeFlow {
+  date: string;
+  bridges: { id: string; inflow_usd: number; outflow_usd: number; transfers: number }[];
+}
+export interface BridgeTransfer {
+  tx_hash: string;
+  time: string;
+  bridge: string;
+  direction: 'in' | 'out';
+  chain: string;
+  chain_name: string;
+  token: string;
+  symbol: string;
+  decimals: number | null;
+  amount: string;
+  usd: number | null;
+  from: string | null;
+  to: string | null;
+  via?: string;
+  passthrough: boolean;
+}
+const bridgePath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/bridges${path}`, persist);
+export const getBridgeSummary = (days: number) => bridgePath(`bridges-${days}`, `?days=${days}`) as Promise<BridgeSummary | null>;
+export const getBridgeTimeseries = (days: number) =>
+  bridgePath(`bridges-ts-${days}`, `/timeseries?days=${days}`, days <= 365) as Promise<BridgeDay[] | null>;
+export const getBridgeTopTransfers = (days: number, limit = 10) =>
+  bridgePath(`bridges-top-${days}-${limit}`, `/transfers/top?days=${days}&limit=${limit}`) as Promise<BridgeTransfer[] | null>;
+export const getBridgeRecentTransfers = (limit = 10) =>
+  bridgePath(`bridges-recent-${limit}`, `/transfers/recent?limit=${limit}`) as Promise<BridgeTransfer[] | null>;
+
 export interface LendingTotalsDay {
   date: string;
   supplied_usd: number;

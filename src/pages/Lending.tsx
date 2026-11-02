@@ -878,6 +878,7 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
   if (state === 'loading' && !data) return <div className="h-full min-h-[240px] rounded bg-muted/50 animate-pulse" />;
   if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded.</div>;
   const first = series[0];
+  const peak = series.reduce((m, d) => (d.total > m.total ? d : m), first);
   return (
     <div className={`h-[300px] md:h-full transition-opacity ${state === 'loading' ? 'opacity-50' : ''}`}>
       <DailyStack
@@ -892,7 +893,10 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
             <div className="text-[11px] text-muted-foreground">
               {d
                 ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
-                : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
+                : loadedDays === 3650
+                  ? // On All the first day is launch day, near zero, so the peak says more.
+                    `supplied now; peak ${usd(peak.total)} on ${format(parseISO(peak.date), 'MMM d, yyyy')}, history from ${format(parseISO(first.date), 'MMM yyyy')}`
+                  : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
               {d && unpriced.get(d.date) ? `. ${unpriced.get(d.date)} ${unpriced.get(d.date) === 1 ? 'market' : 'markets'} had no price that day and aren't counted` : ''}
               {series.length < loadedDays && loadedDays !== 3650 && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
             </div>

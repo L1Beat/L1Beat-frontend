@@ -29,6 +29,11 @@ export const PAGE_SEO = {
     description: 'Daily trading volume, swaps and top pools on Avalanche C-Chain DEXes: LFJ, Pharaoh, Blackhole, Uniswap, Pangolin and SushiSwap, indexed from the chain.',
     url: '/trading',
   },
+  bridges: {
+    title: 'Avalanche Bridge Flows',
+    description: 'Daily inflows and outflows through bridges to and from Avalanche: Circle CCTP, LayerZero, Stargate, the Avalanche Bridge and Chainlink CCIP, by chain and token.',
+    url: '/bridges',
+  },
   lending: {
     title: 'Avalanche Lending Markets',
     description: 'Supply and borrow rates, utilization and caps for every lending market on Aave V3, Aave V4 and BENQI on the Avalanche C-Chain, read from the contracts.',

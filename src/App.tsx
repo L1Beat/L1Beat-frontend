@@ -37,6 +37,7 @@ const Staking = lazy(() => import('./pages/Staking').then(m => ({ default: m.Sta
 const Treasuries = lazy(() => import('./pages/Treasuries').then(m => ({ default: m.Treasuries })));
 const Dex = lazy(() => import('./pages/Dex').then(m => ({ default: m.Dex })));
 const Lending = lazy(() => import('./pages/Lending').then(m => ({ default: m.Lending })));
+const Bridges = lazy(() => import('./pages/Bridges').then(m => ({ default: m.Bridges })));
 const DelegatorDetails = lazy(() => import('./pages/DelegatorDetails').then(m => ({ default: m.DelegatorDetails })));
 
 function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
@@ -126,6 +127,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/treasuries" element={<Treasuries />} />
         <Route path="/trading" element={<Dex />} />
         <Route path="/lending" element={<Lending />} />
+        <Route path="/bridges" element={<Bridges />} />
         <Route path="/dex" element={<Navigate to="/trading" replace />} />
         <Route path="/acps" element={<ACPs />} />
         <Route path="/acps/:acpNumber" element={<ACPDetails />} />

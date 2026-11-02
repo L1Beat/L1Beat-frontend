@@ -88,6 +88,7 @@ const PAGES: Result[] = [
   { id: 'page-staking', type: 'page', title: 'Staking', subtitle: 'AVAX staked, validators, delegations, staking end dates', to: '/staking' },
   { id: 'page-lending', type: 'page', title: 'Lending', subtitle: 'Rates, usage and caps on Aave and BENQI', to: '/lending' },
   { id: 'page-trading', type: 'page', title: 'Trading', subtitle: 'DEX volume, swaps and top pools on the C-Chain', to: '/trading' },
+  { id: 'page-bridges', type: 'page', title: 'Bridges', subtitle: 'Money bridged in and out of Avalanche', to: '/bridges' },
   { id: 'page-treasuries', type: 'page', title: 'Treasuries & ETFs', subtitle: 'AVAX held by public companies and spot ETFs', to: '/treasuries' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },

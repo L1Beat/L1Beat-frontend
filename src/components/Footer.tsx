@@ -18,6 +18,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
       { label: 'Treasuries & ETFs', to: '/treasuries' },
       { label: 'Trading', to: '/trading' },
       { label: 'Lending', to: '/lending' },
+      { label: 'Bridges', to: '/bridges' },
       { label: 'Burn', to: '/burn' },
     ],
   },
