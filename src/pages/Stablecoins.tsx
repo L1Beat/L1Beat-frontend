@@ -428,6 +428,11 @@ export function Stablecoins() {
                       </>
                     )}
                   </p>
+                  <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
+                    Counts fiat-pegged stablecoins on the C&#8209;Chain, with non-dollar coins at current exchange rates. Tokenized
+                    money-market funds like BUIDL and BENJI are included. Coins backed by other stablecoins, like avUSD, are left out
+                    so the same dollars aren't counted twice.
+                  </p>
                 </>
               ) : error ? (
                 <p className="mt-3 text-[13px] text-muted-foreground">Stablecoin data couldn't be loaded. Try again in a minute.</p>
