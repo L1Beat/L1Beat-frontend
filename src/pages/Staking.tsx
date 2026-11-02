@@ -117,7 +117,7 @@ export function Staking() {
 
       {/* Hero: every validator, largest first, so the concentration is the first thing you see. */}
       <section
-        className="relative border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),820px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="Primary Network stake by validator"
       >
         <SectionErrorBoundary label="the stake distribution chart">

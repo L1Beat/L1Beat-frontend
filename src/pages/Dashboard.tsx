@@ -683,7 +683,7 @@ export function Dashboard() {
       {/* Hero: the network map fills the first screen. Title and range float
           top-left, headline numbers float along the bottom. */}
       <section
-        className="relative border-b border-border bg-stage h-[420px] md:h-[min(calc(100vh-48px),960px)] md:min-h-[520px]"
+        className="relative border-b border-border bg-stage h-[420px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[520px]"
         aria-label="Network map"
       >
         {heroView === 'map' ? (

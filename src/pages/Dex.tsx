@@ -109,7 +109,7 @@ export function Dex() {
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}
       <section
-        className="relative border-b border-border bg-stage h-[600px] md:h-[min(calc(100vh-48px),820px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage h-[600px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="Daily DEX volume"
       >
         <div className="absolute inset-0 flex flex-col">

@@ -560,7 +560,7 @@ export function Burn() {
       `}</style>
 
       {/* Hero: the running total fills the first screen, embers rise behind it. */}
-      <section className="relative overflow-hidden border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),900px)] md:min-h-[560px]">
+      <section className="relative overflow-hidden border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[560px]">
         <div
           className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none"
           style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(249,115,22,0.16), transparent 70%)' }}

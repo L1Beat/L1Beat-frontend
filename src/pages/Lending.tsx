@@ -160,7 +160,7 @@ export function Lending() {
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}
       <section
-        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),820px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="Supplied and borrowed by asset"
       >
         <div className="md:absolute md:inset-0 flex flex-col">

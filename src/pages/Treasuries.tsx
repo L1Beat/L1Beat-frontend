@@ -110,7 +110,7 @@ export function Treasuries() {
       {/* Hero in the shared page frame: the chart fills the stage and the KPIs
           float over its foot from md up. */}
       <section
-        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),820px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="AVAX held by treasuries and ETFs"
       >
         {/* Phones stack the six rows at their natural height; from md the chart fills the fixed stage. */}

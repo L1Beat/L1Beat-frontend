@@ -268,7 +268,7 @@ export function Metrics() {
       {/* Hero: the network chart fills the first screen, headline numbers float along the bottom. */}
       <section
         id="network"
-        className="relative border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),900px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="Network charts"
       >
         <SectionErrorBoundary label="Network charts">

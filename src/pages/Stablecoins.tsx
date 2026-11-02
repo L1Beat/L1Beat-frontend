@@ -384,7 +384,7 @@ export function Stablecoins() {
 
         {/* Hero: the supply chart fills the first screen, headline numbers float along the bottom. */}
         <section
-          className="relative border-b border-border bg-stage h-[560px] md:h-[min(calc(100vh-48px),900px)] md:min-h-[600px]"
+          className="relative border-b border-border bg-stage h-[560px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
           aria-label="Stablecoin supply history"
         >
           <SectionErrorBoundary label="the supply history chart">
