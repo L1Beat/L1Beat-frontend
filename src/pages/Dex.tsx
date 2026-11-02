@@ -7,6 +7,7 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getDexPools, getDexSummary, getDexTimeseries } from '../api';
 import type { DexDay, DexPool, DexSummary } from '../api';
+import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
 
 // Close to each DEX's brand so it's recognised without the legend. Pharaoh's red
 // is toned to orange, because red means a drop on L1Beat; its two versions share
@@ -211,7 +212,27 @@ export function Dex() {
 
 const M = { top: 10, right: 8, bottom: 24, left: 48 };
 
-function VolumeChart({ days, state, names, focus, onFocus }: {
+/** Sums days into Monday-start weeks; each week is dated by its Monday. */
+function toWeeks(days: DexDay[]): DexDay[] {
+  const out = new Map<string, DexDay>();
+  for (const d of days) {
+    const key = weekStart(d.date);
+    const w = out.get(key) ?? { date: key, volume_usd: 0, swaps: 0, dexes: [] };
+    w.volume_usd += d.volume_usd;
+    w.swaps += d.swaps;
+    for (const x of d.dexes) {
+      const e = w.dexes.find((y) => y.id === x.id);
+      if (e) {
+        e.volume_usd += x.volume_usd;
+        e.swaps += x.swaps;
+      } else w.dexes.push({ ...x });
+    }
+    out.set(key, w);
+  }
+  return [...out.values()];
+}
+
+function VolumeChart({ days: dailyDays, state, names, focus, onFocus }: {
   days: DexDay[] | null;
   state: 'loading' | 'ready' | 'error';
   names: Record<string, string>;
@@ -219,6 +240,11 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
   onFocus: (id: string) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const weekly = (dailyDays?.length ?? 0) > WEEKLY_AFTER_DAYS;
+  const days = useMemo(() => (dailyDays && weekly ? toWeeks(dailyDays) : dailyDays), [dailyDays, weekly]);
+  // Averages stay per day, whichever way the bars are grouped.
+  const dayCount = Math.max(dailyDays?.length ?? 1, 1);
+  const when = (date: string) => (weekly ? `Week of ${day(date, 'MMM d, yyyy')}` : day(date, 'EEE, MMM d, yyyy'));
   const svgRef = useRef<SVGSVGElement>(null);
   // Drawn at the stage's own pixel size, so text stays crisp at any width or height.
   const boxRef = useRef<HTMLDivElement>(null);
@@ -277,20 +303,20 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
           {fx ? (
             <>
               <div className="num text-[22px] leading-7 font-medium text-foreground">
-                {usd(active ? vol(active, fx) : days.reduce((sum, d) => sum + vol(d, fx), 0) / days.length)}
+                {usd(active ? vol(active, fx) : days.reduce((sum, d) => sum + vol(d, fx), 0) / dayCount)}
               </div>
               <div className="text-[11px] text-muted-foreground">
                 {names[fx] ?? fx}
                 {active
-                  ? ` on ${day(active.date, 'EEE, MMM d, yyyy')}, ${pct(active.volume_usd > 0 ? (vol(active, fx) / active.volume_usd) * 100 : 0)} of the day`
+                  ? `, ${when(active.date)}, ${pct(active.volume_usd > 0 ? (vol(active, fx) / active.volume_usd) * 100 : 0)} of the ${weekly ? 'week' : 'day'}`
                   : `, a day on average, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, fx), 0) / total) * 100 : 0)} of all volume`}
               </div>
             </>
           ) : (
             <>
-              <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total / days.length)}</div>
+              <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total / dayCount)}</div>
               <div className="text-[11px] text-muted-foreground">
-                {active ? `${day(active.date, 'EEE, MMM d, yyyy')}, ${active.swaps.toLocaleString()} swaps` : `a day on average, ${day(days[0].date)} to ${day(days[days.length - 1].date)}`}
+                {active ? `${when(active.date)}, ${active.swaps.toLocaleString()} swaps` : `a day on average, ${day(dailyDays![0].date)} to ${day(dailyDays![dailyDays!.length - 1].date)}${weekly ? '; bars are weeks' : ''}`}
               </div>
             </>
           )}
@@ -336,7 +362,7 @@ function VolumeChart({ days, state, names, focus, onFocus }: {
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
         role="img"
-        aria-label={`Daily volume on tracked Avalanche DEXes over ${days.length} days, stacked by DEX`}
+        aria-label={`${weekly ? 'Weekly' : 'Daily'} volume on tracked Avalanche DEXes over ${dayCount} days, stacked by DEX`}
       >
         {geom.ticks.map((tk) => (
           <g key={tk}>

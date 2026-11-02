@@ -7,6 +7,7 @@ import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrumen
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getLending, getLendingAsset, getLendingTotals, getLiquidationsDaily, getLiquidationsRecent, getLiquidationsTop } from '../api';
+import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
 import type { Lending as LendingData, LendingAssetDay, LendingMarket, LendingTotalsDay, Liquidation, LiquidationsDay } from '../api';
 
 // Close to each protocol's brand so it's recognised without the legend: Aave's
@@ -632,8 +633,10 @@ interface StackDay {
 
 const STACK_M = { top: 10, right: 8, bottom: 22, left: 52 };
 
-function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel, fmt = usd }: {
+function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel, fmt = usd, area = false }: {
   days: StackDay[];
+  /** Stacked areas, for levels like money supplied. Bars are for amounts per day. */
+  area?: boolean;
   /** Formats values on the axis and in the legend; dollars unless given. */
   fmt?: (v: number) => string;
   names: Record<string, string>;
@@ -682,7 +685,8 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
     const barW = Math.max(1, slot * (days.length > 120 ? 0.9 : 0.72));
     const x = (i: number) => STACK_M.left + slot * i + (slot - barW) / 2;
     const y = (v: number) => STACK_M.top + ih - (v / maxY) * ih;
-    return { x, y, barW, slot, ticks, labelEvery: Math.ceil(days.length / (W < 600 ? 4 : 8)) };
+    const cx = (i: number) => x(i) + barW / 2;
+    return { x, cx, y, barW, slot, ticks, labelEvery: Math.ceil(days.length / (W < 600 ? 4 : 8)) };
   }, [days, W, H]);
 
   const move = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -696,10 +700,22 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   const linePath = geom && days.some((d) => d.line != null)
     ? days
         .map((d, i) =>
-          d.line == null ? '' : `${i === 0 || days[i - 1].line == null ? 'M' : 'L'}${(geom.x(i) + geom.barW / 2).toFixed(1)},${geom.y(d.line).toFixed(1)}`,
+          d.line == null ? '' : `${i === 0 || days[i - 1].line == null ? 'M' : 'L'}${geom.cx(i).toFixed(1)},${geom.y(d.line).toFixed(1)}`,
         )
         .join('')
     : null;
+  // One closed band per protocol, stacked in legend order.
+  const bands = useMemo(() => {
+    if (!area || !geom) return [];
+    const base = days.map(() => 0);
+    return ids.map((id) => {
+      const lower = [...base];
+      days.forEach((d, i) => (base[i] += d.parts.find((p) => p.id === id)?.value ?? 0));
+      const top = days.map((_, i) => `${geom.cx(i).toFixed(1)},${geom.y(base[i]).toFixed(1)}`);
+      const bottom = days.map((_, i) => `${geom.cx(i).toFixed(1)},${geom.y(lower[i]).toFixed(1)}`).reverse();
+      return { id, d: `M${top.join('L')}L${bottom.join('L')}Z` };
+    });
+  }, [area, geom, days, ids]);
 
   return (
     <div className={fill ? 'h-full flex flex-col' : ''}>
@@ -747,11 +763,19 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                 </text>
               </g>
             ))}
+            {bands.map((b) => {
+              const st = protocolStyle(b.id);
+              const dim = activeFocus != null && activeFocus !== b.id;
+              return <path key={b.id} d={b.d} fill={st.color} fillOpacity={(dim ? 0.15 : 1) * st.opacity * 0.85} />;
+            })}
+            {area && hover != null && (
+              <line x1={geom.cx(hover)} x2={geom.cx(hover)} y1={STACK_M.top} y2={H - STACK_M.bottom} stroke="currentColor" strokeOpacity={0.5} className="text-foreground" />
+            )}
             {days.map((d, i) => {
               let run = 0;
               return (
-                <g key={d.date} opacity={hover != null && hover !== i ? 0.45 : 1}>
-                  {ids.map((id) => {
+                <g key={d.date} opacity={!area && hover != null && hover !== i ? 0.45 : 1}>
+                  {!area && ids.map((id) => {
                     const v = d.parts.find((p) => p.id === id)?.value ?? 0;
                     if (v <= 0) return null;
                     const y0 = geom.y(run);
@@ -807,6 +831,23 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
  * One entry per UTC day from `from` to `to`, so a day with nothing to report is
  * an empty slot instead of vanishing and squeezing the time axis.
  */
+/** Sums days into Monday-start weeks, for flow charts over long ranges. */
+function toWeeks(series: StackDay[]): StackDay[] {
+  const out = new Map<string, StackDay>();
+  for (const d of series) {
+    const key = weekStart(d.date);
+    const w = out.get(key) ?? { date: key, total: 0, parts: [] };
+    w.total += d.total;
+    for (const p of d.parts) {
+      const e = w.parts.find((x) => x.id === p.id);
+      if (e) e.value += p.value;
+      else w.parts.push({ ...p });
+    }
+    out.set(key, w);
+  }
+  return [...out.values()];
+}
+
 function fillDays(series: StackDay[], from: string, to: string): StackDay[] {
   const by = new Map(series.map((d) => [d.date, d]));
   const out: StackDay[] = [];
@@ -843,6 +884,7 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
         days={series}
         names={names}
         fill
+        area
         lineLabel="Borrowed"
         renderHover={(d) => (
           <>
@@ -916,6 +958,7 @@ function AvaxDepositsCard({ names }: { names: Record<string, string> }) {
             days={showLine ? series : series.map((d) => ({ ...d, line: undefined }))}
             names={names}
             height={220}
+            area
             fmt={compact}
             lineLabel={showLine ? 'Borrowed' : undefined}
             renderHover={(d) => (
@@ -952,7 +995,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
   const top = useLoadOnce<Liquidation[], string>(() => getLiquidationsTop(Number(range), 8), range);
   const recent = useLoadOnce<Liquidation[], string>(() => getLiquidationsRecent(8), 'recent');
 
-  const rows = daily.data ?? [];
+  const rows = useMemo(() => daily.data ?? [], [daily.data]);
   const loadedRange = daily.loadedKey ?? range;
   const series: StackDay[] = useMemo(() => {
     const raw = rows.map((d) => ({
@@ -967,6 +1010,16 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
     return fillDays(raw, from, last);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daily.data, loadedRange]);
+  const weekly = series.length > WEEKLY_AFTER_DAYS;
+  const bars = useMemo(() => (weekly ? toWeeks(series) : series), [series, weekly]);
+  const countOn = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of rows) {
+      const key = weekly ? weekStart(d.date) : d.date;
+      m.set(key, (m.get(key) ?? 0) + d.count);
+    }
+    return m;
+  }, [rows, weekly]);
   const total = series.reduce((s, d) => s + d.total, 0);
   const count = rows.reduce((s, d) => s + d.count, 0);
   const peak = series.reduce<StackDay | null>((m, d) => (!m || d.total > m.total ? d : m), null);
@@ -981,7 +1034,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
   return (
     <Card
       title="Liquidations"
-      subtitle="Loans closed by liquidators after the collateral fell below its liquidation threshold. Bars show the debt they repaid, per day."
+      subtitle={`Loans closed by liquidators after the collateral fell below its liquidation threshold. Bars show the debt they repaid, per ${weekly ? 'week' : 'day'}.`}
       right={<SegmentedControl size="xs" value={range} options={LIQ_RANGES} onChange={setRange} ariaLabel="Liquidation range" />}
     >
       <div className="px-4 sm:px-5 pb-4">
@@ -994,7 +1047,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
         ) : (
           <div className={daily.state === 'loading' ? 'opacity-60' : ''}>
             <DailyStack
-              days={series}
+              days={bars}
               names={names}
               height={220}
               renderHover={(d) => (
@@ -1002,7 +1055,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
                   <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(d ? d.total : total)}</div>
                   <div className="text-[11px] text-muted-foreground">
                     {d
-                      ? `repaid on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${(daily.data?.find((x) => x.date === d.date)?.count ?? 0).toLocaleString()} liquidations`
+                      ? `repaid ${weekly ? `in the week of ${format(parseISO(d.date), 'MMM d, yyyy')}` : `on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}`}, ${(countOn.get(d.date) ?? 0).toLocaleString()} liquidations`
                       : `repaid across ${count.toLocaleString()} liquidations ${label}${peak && peak.total > 0 ? `; most in a day ${usd(peak.total)} on ${format(parseISO(peak.date), 'MMM d, yyyy')}` : ''}`}
                   </div>
                 </>
