@@ -2567,6 +2567,16 @@ export interface Liquidation {
 const lendingPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/lending${path}`, persist);
 /** Daily supplied and borrowed USD per lending protocol. */
 export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`, days <= 365) as Promise<LendingTotalsDay[] | null>;
+export interface LendingAssetDay {
+  date: string;
+  /** Token base units (18 decimals for AVAX and sAVAX). */
+  supplied: string;
+  borrowed: string;
+  by_protocol: { protocol_id: string; supplied: string; borrowed: string }[];
+}
+/** Daily AVAX or sAVAX supplied and borrowed in tokens, summed across protocols. */
+export const getLendingAsset = (asset: 'avax' | 'savax', days: number) =>
+  lendingPath(`lending-asset-${asset}-${days}`, `/timeseries?asset=${asset}&days=${days}`, days <= 365) as Promise<LendingAssetDay[] | null>;
 export const getLiquidationsDaily = (days: number) =>
   lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`, days <= 90) as Promise<LiquidationsDay[] | null>;
 export const getLiquidationsTop = (days: number, limit = 10) =>

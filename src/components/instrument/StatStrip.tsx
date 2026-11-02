@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../branding/ui/tooltip';
 
 export interface StatItem {
@@ -13,6 +14,8 @@ export interface StatItem {
   /** Secondary line when there is no delta, e.g. a unit or a reason for '—'. */
   sub?: string;
   tooltip?: string;
+  /** Makes the whole cell a link to the page with the detail. */
+  href?: string;
 }
 
 /**
@@ -57,16 +60,18 @@ export function StatStrip({
           }`}
         >
           {items.map((it) => (
-            <div key={it.label} className="px-4 py-3 min-w-0">
+            <div key={it.label} className={`px-4 py-3 min-w-0 ${it.href ? 'group relative transition-colors hover:bg-accent/50' : ''}`}>
+              {it.href && <Link to={it.href} aria-label={`${it.label}: open the page`} className="absolute inset-0 rounded-[inherit]" />}
               <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground leading-4">
                 <span className="truncate">{it.label}</span>
+                {it.href && <ChevronRight className="w-3 h-3 shrink-0 -ml-0.5 opacity-60 group-hover:opacity-100 group-hover:text-foreground" aria-hidden />}
                 {it.tooltip && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         aria-label={`About ${it.label}`}
-                        className="shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
+                        className="relative shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
                       >
                         <Info className="w-3 h-3" />
                       </button>

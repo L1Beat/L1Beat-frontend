@@ -6,8 +6,8 @@ import { PAGE_SEO } from '../utils/pageSeo';
 import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
-import { getLending, getLendingTotals, getLiquidationsDaily, getLiquidationsRecent, getLiquidationsTop } from '../api';
-import type { Lending as LendingData, LendingMarket, LendingTotalsDay, Liquidation, LiquidationsDay } from '../api';
+import { getLending, getLendingAsset, getLendingTotals, getLiquidationsDaily, getLiquidationsRecent, getLiquidationsTop } from '../api';
+import type { Lending as LendingData, LendingAssetDay, LendingMarket, LendingTotalsDay, Liquidation, LiquidationsDay } from '../api';
 
 // Close to each protocol's brand so it's recognised without the legend: Aave's
 // purple (V4 a lighter shade of it) and BENQI's teal. Same on the Staking page.
@@ -231,6 +231,9 @@ export function Lending() {
                   <AssetChart rows={rows} loading={false} />
                 </div>
               </Card>
+            </SectionErrorBoundary>
+            <SectionErrorBoundary label="AVAX deposits in tokens">
+              <AvaxDepositsCard names={Object.fromEntries(data.protocols.map((p) => [p.id, p.name]))} />
             </SectionErrorBoundary>
             <SectionErrorBoundary label="the rate comparison">
               <RatesCard rows={rows} />
@@ -629,8 +632,10 @@ interface StackDay {
 
 const STACK_M = { top: 10, right: 8, bottom: 22, left: 52 };
 
-function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel }: {
+function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel, fmt = usd }: {
   days: StackDay[];
+  /** Formats values on the axis and in the legend; dollars unless given. */
+  fmt?: (v: number) => string;
   names: Record<string, string>;
   /** Fill the parent's height instead of a fixed one. */
   fill?: boolean;
@@ -718,7 +723,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
               >
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
                 {names[id] ?? id}
-                {active && <span className="num text-foreground">{usd(v ?? 0)}</span>}
+                {active && <span className="num text-foreground">{fmt(v ?? 0)}</span>}
               </button>
             );
           })}
@@ -726,7 +731,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
             <span className="inline-flex items-center gap-1.5">
               <span className="w-3 h-0.5 bg-foreground" />
               {lineLabel}
-              {active?.line != null && <span className="num text-foreground">{usd(active.line)}</span>}
+              {active?.line != null && <span className="num text-foreground">{fmt(active.line)}</span>}
             </span>
           )}
         </div>
@@ -738,7 +743,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
               <g key={t}>
                 <line x1={STACK_M.left} x2={W - STACK_M.right} y1={geom.y(t)} y2={geom.y(t)} stroke="currentColor" strokeOpacity={0.08} />
                 <text x={STACK_M.left - 8} y={geom.y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
-                  {t === 0 ? '0' : `$${compact(t)}`}
+                  {t === 0 ? '0' : fmt(t)}
                 </text>
               </g>
             ))}
@@ -853,6 +858,84 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
         )}
       />
     </div>
+  );
+}
+
+const ASSETS = [
+  { value: 'avax', label: 'AVAX' },
+  { value: 'savax', label: 'sAVAX' },
+] as const;
+const TOKEN_RANGES = [
+  { value: '365', label: '1y' },
+  { value: '3650', label: 'All' },
+] as const;
+// 18-decimal base units to whole tokens; exact enough for a chart.
+const tokens = (v: string) => Number(BigInt(v) / 10n ** 12n) / 1e6;
+
+// The dollar chart moves with the AVAX price; counted in tokens, deposits show
+// whether people actually added or withdrew.
+function AvaxDepositsCard({ names }: { names: Record<string, string> }) {
+  const [asset, setAsset] = useState<'avax' | 'savax'>('avax');
+  const [range, setRange] = useState<'365' | '3650'>('365');
+  const key = `${asset}-${range}`;
+  const { data, state, loadedKey } = useLoadOnce<LendingAssetDay[], string>(() => getLendingAsset(asset, Number(range)), key);
+  const symbol = (loadedKey ?? key).startsWith('savax') ? 'sAVAX' : 'AVAX';
+  const series: StackDay[] = useMemo(
+    () =>
+      (data ?? []).map((d) => ({
+        date: d.date,
+        total: tokens(d.supplied),
+        line: tokens(d.borrowed),
+        parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: tokens(p.supplied) })),
+      })),
+    [data],
+  );
+  const first = series[0];
+  const last = series[series.length - 1];
+  const change = first && last && first.total > 0 ? ((last.total - first.total) / first.total) * 100 : null;
+  // sAVAX is collateral only on most markets, so a borrowed line near zero is noise.
+  const showLine = symbol === 'AVAX';
+  return (
+    <Card
+      title="AVAX deposits in tokens"
+      subtitle="Counted in tokens, not dollars, so price moves drop out. AVAX includes WAVAX."
+      right={
+        <div className="flex items-center gap-2">
+          <SegmentedControl size="xs" value={asset} options={ASSETS} onChange={setAsset} ariaLabel="Asset" />
+          <SegmentedControl size="xs" value={range} options={TOKEN_RANGES} onChange={setRange} ariaLabel="Deposit history range" />
+        </div>
+      }
+    >
+      <div className={`px-4 sm:px-5 pb-5 pt-1 transition-opacity ${state === 'loading' && data ? 'opacity-50' : ''}`}>
+        {state === 'loading' && !data ? (
+          <div className="h-[260px] rounded bg-muted/50 animate-pulse" />
+        ) : !series.length ? (
+          <p className="py-10 text-center text-[12px] text-muted-foreground">Deposit history couldn't be loaded.</p>
+        ) : (
+          <DailyStack
+            days={showLine ? series : series.map((d) => ({ ...d, line: undefined }))}
+            names={names}
+            height={220}
+            fmt={compact}
+            lineLabel={showLine ? 'Borrowed' : undefined}
+            renderHover={(d) => (
+              <>
+                <div className="num text-[22px] leading-7 font-medium text-foreground">
+                  {compact((d ?? last).total)} <span className="text-[13px] text-muted-foreground">{symbol}</span>
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {d
+                    ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}${showLine && d.line != null ? `, ${compact(d.line)} borrowed` : ''}`
+                    : change != null
+                      ? `supplied now, ${change >= 0 ? 'up' : 'down'} ${Math.abs(change).toFixed(0)}% from ${compact(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`
+                      : 'supplied now'}
+                </div>
+              </>
+            )}
+          />
+        )}
+      </div>
+    </Card>
   );
 }
 

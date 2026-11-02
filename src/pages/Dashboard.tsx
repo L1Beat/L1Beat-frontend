@@ -28,6 +28,10 @@ import {
   getTPSHistory,
   getAllChainsTpsHistory,
   getTeleporterMessages,
+  getDexSummary,
+  getLending,
+  getStakingSummary,
+  getTreasuries,
 } from '../api';
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
@@ -755,6 +759,8 @@ export function Dashboard() {
         )}
       </div>
 
+      <MarketsStrip />
+
       <section id="screener" className="scroll-mt-12">
         <ScreenerToolbar
           activeTab={validatorFilter}
@@ -935,6 +941,72 @@ function KpiCardsImpl({
     },
   ];
   return <StatStrip items={items} floating={floating} />;
+}
+
+// A doorway to the Markets and Staking pages: one live figure each, each cell
+// linking through. Loads after the chain data, so it never delays the screener.
+function MarketsStrip() {
+  const [figures, setFigures] = useState<{
+    staking: Awaited<ReturnType<typeof getStakingSummary>>;
+    dex: Awaited<ReturnType<typeof getDexSummary>>;
+    lending: Awaited<ReturnType<typeof getLending>>;
+    treasuries: Awaited<ReturnType<typeof getTreasuries>>;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries()]).then(([staking, dex, lending, treasuries]) => {
+      if (alive) setFigures({ staking, dex, lending, treasuries });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Short forms (205M, $683.2M): four cells share a phone's width.
+  const short = (v: number) => {
+    const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+    if (v >= 1e9) return `${trim(v / 1e9)}B`;
+    if (v >= 1e6) return `${trim(v / 1e6)}M`;
+    if (v >= 1e3) return `${trim(v / 1e3)}K`;
+    return v.toFixed(0);
+  };
+  const usd = (v: number | null | undefined) => (v == null ? '—' : `$${short(v)}`);
+  const staked = figures?.staking ? Number(figures.staking.total_stake) / 1e9 : null;
+  const dexDay = figures?.dex?.as_of
+    ? new Date(`${figures.dex.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    : null;
+  const lend = figures?.lending?.summary.totals;
+  const held = figures?.treasuries?.totals;
+  const items: StatItem[] = [
+    {
+      label: 'AVAX staked',
+      value: staked != null ? short(staked) : '—',
+      sub: figures?.staking ? `${figures.staking.staked_supply_percent.toFixed(1)}% of supply` : figures ? 'Not available right now' : ' ',
+      href: '/staking',
+    },
+    {
+      label: 'DEX volume, 1d',
+      value: usd(figures?.dex?.totals.volume_usd),
+      sub: dexDay ? `on ${dexDay}` : figures ? 'Not available right now' : ' ',
+      href: '/trading',
+    },
+    {
+      label: 'Lending supplied',
+      value: usd(lend?.supplied_usd),
+      sub: lend ? `${usd(lend.borrowed_usd)} borrowed` : figures ? 'Not available right now' : ' ',
+      href: '/lending',
+    },
+    {
+      label: 'Treasuries & ETFs',
+      value: held ? short(held.combined_avax) : '—',
+      sub: held ? 'AVAX held' : figures ? 'Not available right now' : ' ',
+      href: '/treasuries',
+    },
+  ];
+  return (
+    <section aria-label="Markets and staking">
+      <StatStrip items={items} />
+    </section>
+  );
 }
 
 function FlowCards({
