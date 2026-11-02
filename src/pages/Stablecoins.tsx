@@ -164,6 +164,9 @@ export function Stablecoins() {
   const [supplyHist, setSupplyHist] = useState<Map<string, StablecoinSeriesPoint[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The last few days of daily volume, so the headline quotes the same number
+  // as the chart's latest bar.
+  const [volumeDays, setVolumeDays] = useState<StablecoinSeries[]>([]);
 
   const [peg, setPeg] = useState<string>('All');
   const [origin, setOrigin] = useState<OriginFilter>('All');
@@ -197,6 +200,18 @@ export function Stablecoins() {
       .finally(() => {
         if (alive) setLoading(false);
       });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    getStablecoinsTimeseries({ evmChainId: 43114, metric: 'volume', granularity: 'day', limit: 3 })
+      .then((series) => {
+        if (alive) setVolumeDays(series);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -280,6 +295,12 @@ export function Stablecoins() {
       change7d, hasTrend,
     };
   }, [enriched]);
+
+  const latestVolume = useMemo(() => {
+    const meta = new Map(coins.map((c) => [c.token.toLowerCase(), { decimals: c.decimals, peg: c.peg }]));
+    const pts = aggregateSeries(volumeDays, meta, 'volume', fx);
+    return pts.length ? pts[pts.length - 1] : null;
+  }, [volumeDays, coins, fx]);
 
   const issuerSlices = useMemo(() => {
     if (!enriched.length) return [];
@@ -379,14 +400,47 @@ export function Stablecoins() {
       <div>
         <SEO {...PAGE_SEO.stablecoins} />
 
-        {/* Hero: the supply chart fills the first screen, headline numbers float along the bottom. */}
+        {/* Hero in the shared page frame: a headline sentence, then the chart
+            fills the stage and the KPIs float over its foot from md up. */}
         <section
-          className="relative border-b border-border bg-stage h-[560px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
+          className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
           aria-label="Stablecoin supply history"
         >
-          <SectionErrorBoundary label="the supply history chart">
-            <SupplyHistoryCard coins={coins} fx={fx} hero />
-          </SectionErrorBoundary>
+          <div className="md:absolute md:inset-0 flex flex-col">
+            <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5">
+              <h1 className="text-[18px] leading-6 font-semibold text-foreground">Stablecoins</h1>
+              {totals.supply > 0 ? (
+                <>
+                  <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+                    Stablecoins on Avalanche C‑Chain total <span className="tabular-nums">{fmtUsd(totals.supply)}</span>.
+                  </p>
+                  <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+                    {issuerSlices[0] && (
+                      <>
+                        {issuerSlices[0].name} issues <span className="num">{Math.round((issuerSlices[0].value / totals.supply) * 100)}%</span> of it
+                        {latestVolume ? ', and ' : '.'}
+                      </>
+                    )}
+                    {latestVolume && (
+                      <>
+                        <span className="num">{fmtUsd(latestVolume.v)}</span> moved on{' '}
+                        {new Date(latestVolume.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}.
+                      </>
+                    )}
+                  </p>
+                </>
+              ) : error ? (
+                <p className="mt-3 text-[13px] text-muted-foreground">Stablecoin data couldn't be loaded. Try again in a minute.</p>
+              ) : (
+                <div className="mt-3 h-9 w-[min(560px,80vw)] rounded bg-muted animate-pulse" />
+              )}
+            </div>
+            <div className="relative h-[520px] md:h-auto md:flex-1 md:min-h-0 mt-3">
+              <SectionErrorBoundary label="the supply history chart">
+                <SupplyHistoryCard coins={coins} fx={fx} hero />
+              </SectionErrorBoundary>
+            </div>
+          </div>
           <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
             <SectionErrorBoundary label="the stablecoin KPIs">
               <KpiStrip totals={totals} floating />
@@ -1066,7 +1120,6 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
       <div className="relative h-full w-full bg-stage flex flex-col gap-3 px-4 pt-3 pb-4 sm:block sm:p-0">
         <div className="relative sm:absolute sm:top-3 sm:left-6 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-            <h1 className="hidden sm:block text-[15px] leading-6 font-semibold text-foreground shrink-0">Stablecoins</h1>
             {metricToggle}
             {stackedToggle}
           </div>
@@ -1076,7 +1129,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
           {shown && (
             <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
               <div>
-                <div className="num text-[26px] leading-none font-medium text-foreground">
+                <div className="num text-[22px] leading-none font-medium text-foreground">
                   {fmtValue(shown.v)}
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1.5">

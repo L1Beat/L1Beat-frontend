@@ -796,7 +796,6 @@ export function AvalancheNetworkMetrics({
         {/* Toolbar floats over the chart. */}
         <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between pointer-events-none [&>*]:pointer-events-auto export-hide">
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">Network metrics</h1>
             {metricChips}
             {metricInfo}
           </div>

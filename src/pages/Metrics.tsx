@@ -244,6 +244,21 @@ export function Metrics() {
   }, []);
 
   const coveredChains = history?.chainCount ?? null;
+  // The headline sentence follows the chart's range, like the KPIs under it.
+  const headline = useMemo(() => {
+    if (!history) return null;
+    const days = RANGE_DAYS[range];
+    const tx = history.tx.slice(0, days).reduce((s, d) => s + (d.value ?? 0), 0);
+    const tps = avg(history.tps.slice(0, days).map((d) => d.totalTps ?? 0));
+    if (!tx) return null;
+    return {
+      tx: tx >= 1e6 ? `${(tx / 1e6).toFixed(1)}M` : formatCount(tx),
+      tps: tps >= 10 ? Math.round(tps).toLocaleString() : tps.toFixed(1),
+      window: range === '1Y' ? 'in the last year' : `in the last ${days} days`,
+      chains: history.tx[0]?.chainCount ?? history.chainCount ?? null,
+      validators: history.validatorTotal != null ? history.validatorTotal.toLocaleString() : null,
+    };
+  }, [history, range]);
   const peakChains = history?.maxTps[0]?.chainCount ?? null;
 
   const scrollToCompare = () => scrollToSection('compare');
@@ -262,15 +277,46 @@ export function Metrics() {
     <div>
       <SEO {...PAGE_SEO.metrics} />
 
-      {/* Hero: the network chart fills the first screen, headline numbers float along the bottom. */}
+      {/* Hero in the shared page frame: a headline sentence, then the network
+          chart fills the stage and the KPIs float over its foot from md up. */}
       <section
         id="network"
-        className="relative border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
+        className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
         aria-label="Network charts"
       >
-        <SectionErrorBoundary label="Network charts">
-          <AvalancheNetworkMetrics hero actions={compareButton} />
-        </SectionErrorBoundary>
+        <div className="md:absolute md:inset-0 flex flex-col">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5">
+            <h1 className="text-[18px] leading-6 font-semibold text-foreground">Network metrics</h1>
+            {headline ? (
+              <>
+                <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+                  Avalanche L1s processed <span className="tabular-nums">{headline.tx}</span> transactions {headline.window}.
+                </p>
+                <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+                  That is <span className="num">{headline.tps}</span> per second on average
+                  {headline.chains != null && (
+                    <>
+                      {' '}across the <span className="num">{headline.chains}</span> L1s with data
+                    </>
+                  )}
+                  {headline.validators != null && (
+                    <>
+                      , secured by <span className="num">{headline.validators}</span> validators
+                    </>
+                  )}
+                  .
+                </p>
+              </>
+            ) : (
+              <div className="mt-3 h-9 w-[min(560px,80vw)] rounded bg-muted animate-pulse" />
+            )}
+          </div>
+          <div className="relative h-[520px] md:h-auto md:flex-1 md:min-h-0 mt-3">
+            <SectionErrorBoundary label="Network charts">
+              <AvalancheNetworkMetrics hero actions={compareButton} />
+            </SectionErrorBoundary>
+          </div>
+        </div>
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
           <KpiStrip kpis={kpis} range={range} floating />
         </div>
