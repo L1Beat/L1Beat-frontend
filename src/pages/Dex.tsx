@@ -24,6 +24,7 @@ const RANGES = [
   { value: '30', label: '30d' },
   { value: '90', label: '90d' },
   { value: '365', label: '1y' },
+  { value: '3650', label: 'All' },
 ] as const;
 const WINDOWS = [
   { value: '1', label: '1d' },
@@ -64,16 +65,31 @@ function useLoad<T>(load: () => Promise<T | null>, deps: unknown[]) {
 }
 
 export function Dex() {
-  const [range, setRange] = useState<'30' | '90' | '365'>('90');
+  const [range, setRange] = useState<'30' | '90' | '365' | '3650'>('90');
   const [win, setWin] = useState<'1' | '7' | '30'>('30');
   const series = useLoad(() => getDexTimeseries(Number(range)), [range]);
   const summary = useLoad(() => getDexSummary(Number(win)), [win]);
   // The headline describes the chart's range.
-  const month = useLoad(() => getDexSummary(Number(range)), [range]);
+  // "All" asks for exactly as many days as the history holds: the summary
+  // endpoint answers empty when the window reaches back past the first pool.
+  const month = useLoad(
+    () =>
+      range === '3650'
+        ? getDexTimeseries(3650).then((ts) => getDexSummary(ts?.length || 365))
+        : getDexSummary(Number(range)),
+    [range],
+  );
 
   const m = month.data;
   // From the loaded data, so the label never runs ahead of the numbers while a new range loads.
-  const rangeLabel = !m ? '' : m.days >= 365 ? 'the last year' : `the last ${m.days} days`;
+  // Reads after "traded $X": "since June 2023", "in the last year", "in the last 90 days".
+  const rangeLabel = !m
+    ? ''
+    : m.days > 365
+      ? `since ${m.from ? format(parseISO(m.from), 'MMMM yyyy') : 'tracking began'}`
+      : m.days === 365
+        ? 'in the last year'
+        : `in the last ${m.days} days`;
   const pharaohShare = m && m.totals.volume_usd > 0
     ? (m.dexes.filter((d) => d.protocol === 'pharaoh').reduce((s, d) => s + d.volume_usd, 0) / m.totals.volume_usd) * 100
     : null;
@@ -81,7 +97,7 @@ export function Dex() {
   const t = m?.totals;
   const stats: StatItem[] = t
     ? [
-        { label: 'Volume', value: usd(t.volume_usd), sub: `${rangeLabel.replace('the ', '')}, to ${day(m?.as_of)}` },
+        { label: 'Volume', value: usd(t.volume_usd), sub: `${rangeLabel.replace('in the ', '')}, to ${day(m?.as_of)}` },
         { label: 'Swaps', value: compact(t.swaps), sub: t.volume_usd > 0 ? `$${compact(t.volume_usd / Math.max(1, t.swaps))} average` : ' ' },
         {
           label: 'Addresses trading',
@@ -119,7 +135,7 @@ export function Dex() {
               {m ? (
                 <>
                   <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
-                    Avalanche's main DEXes traded <span className="tabular-nums">{usd(m.totals.volume_usd)}</span> in {rangeLabel}.
+                    Avalanche's main DEXes traded <span className="tabular-nums">{usd(m.totals.volume_usd)}</span> {rangeLabel}.
                   </p>
                   <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
                     {pharaohShare != null && (

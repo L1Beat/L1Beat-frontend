@@ -2532,6 +2532,42 @@ export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-$
 export const getDexPools = (days: number, limit = 20) =>
   getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
 
+export interface LendingTotalsDay {
+  date: string;
+  supplied_usd: number;
+  borrowed_usd: number;
+  by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number }[];
+}
+
+export interface LiquidationsDay {
+  date: string;
+  count: number;
+  /** Liquidations whose seized side has no USD price yet. */
+  unpriced: number;
+  /** Debt the liquidators paid back, priced by the protocol oracle. */
+  repaid_usd: number;
+  seized_usd: number;
+  by_protocol: { protocol_id: string; count: number; repaid_usd: number; seized_usd: number }[];
+}
+
+export interface Liquidation {
+  protocol_id: string;
+  tx_hash: string;
+  block_time: string;
+  borrower: string;
+  liquidator: string;
+  debt: { address: string; symbol: string; decimals: number; amount: string; usd: number | null };
+  collateral: { address: string; symbol: string; decimals: number; amount: string; usd: number | null };
+}
+
+const lendingPath = (key: string, path: string) => getDexData(key, `/api/v1/metrics/lending${path}`);
+/** Daily supplied and borrowed USD per lending protocol. */
+export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`) as Promise<LendingTotalsDay[] | null>;
+export const getLiquidationsDaily = (days: number) => lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`) as Promise<LiquidationsDay[] | null>;
+export const getLiquidationsTop = (days: number, limit = 10) =>
+  lendingPath(`liq-top-${days}-${limit}`, `/liquidations/top?days=${days}&limit=${limit}`) as Promise<Liquidation[] | null>;
+export const getLiquidationsRecent = (limit = 10) => lendingPath(`liq-recent-${limit}`, `/liquidations/recent?limit=${limit}`) as Promise<Liquidation[] | null>;
+
 export interface DelegatorDelegation {
   tx_id: string;
   node_id: string;

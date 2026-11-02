@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
-import { getLending } from '../api';
-import type { Lending as LendingData, LendingMarket } from '../api';
+import { getLending, getLendingTotals, getLiquidationsDaily, getLiquidationsRecent, getLiquidationsTop } from '../api';
+import type { Lending as LendingData, LendingMarket, LendingTotalsDay, Liquidation, LiquidationsDay } from '../api';
 
-// One colour per protocol, as on the Staking page's lending card.
+// Close to each protocol's brand so it's recognised without the legend: Aave's
+// purple (V4 a lighter shade of it) and BENQI's teal. Same on the Staking page.
 const PROTOCOL_STYLE: Record<string, { color: string; opacity: number }> = {
-  'aave-v3': { color: '#d95926', opacity: 1 },
-  'aave-v4': { color: '#d95926', opacity: 0.5 },
-  benqi: { color: '#199e70', opacity: 1 },
+  'aave-v3': { color: '#8b5cf6', opacity: 1 },
+  'aave-v4': { color: '#8b5cf6', opacity: 0.5 },
+  benqi: { color: '#22a6c9', opacity: 1 },
 };
 const protocolStyle = (id: string) => PROTOCOL_STYLE[id] ?? { color: '#6b7280', opacity: 1 };
 const SUPPLIED = '#3987e5';
@@ -93,7 +95,13 @@ interface Row extends LendingMarket {
   closed: boolean;
 }
 
+const HIST_RANGES = [
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+] as const;
+
 export function Lending() {
+  const [histRange, setHistRange] = useState<'90' | '365'>('90');
   const [data, setData] = useState<LendingData | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
@@ -161,7 +169,7 @@ export function Lending() {
           float over its foot from md up. */}
       <section
         className="relative border-b border-border bg-stage md:h-[min(calc(100vh-48px),1200px)] md:min-h-[600px]"
-        aria-label="Supplied and borrowed by asset"
+        aria-label="Supplied and borrowed over time"
       >
         <div className="md:absolute md:inset-0 flex flex-col">
           <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -190,23 +198,16 @@ export function Lending() {
               )}
             </div>
             <div className="flex flex-col gap-2 sm:items-end shrink-0">
-              <UpdatedAgo at={loadedAt} />
-              <span className="inline-flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: SUPPLIED }} />
-                  Borrowed
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: SUPPLIED, opacity: 0.25 }} />
-                  Not borrowed
-                </span>
-              </span>
+              <div className="flex items-center gap-3">
+                <UpdatedAgo at={loadedAt} />
+                <SegmentedControl size="xs" value={histRange} options={HIST_RANGES} onChange={setHistRange} ariaLabel="History range" />
+              </div>
             </div>
           </div>
 
           <div className="relative md:flex-1 md:min-h-0 mx-4 sm:mx-6 lg:mx-10 mt-5 mb-6 md:mt-4 md:mb-[128px]">
-            <SectionErrorBoundary label="the supplied and borrowed chart">
-              <AssetChart rows={rows} loading={state === 'loading'} />
+            <SectionErrorBoundary label="the lending history chart">
+              <HistoryChart days={Number(histRange)} names={Object.fromEntries((data?.protocols ?? []).map((p) => [p.id, p.name]))} />
             </SectionErrorBoundary>
           </div>
         </div>
@@ -222,11 +223,25 @@ export function Lending() {
         {state === 'ready' && data && (
           <>
             <PausedNotice rows={rows} />
+            <SectionErrorBoundary label="supplied and borrowed by asset">
+              <Card title="By asset" subtitle="Supplied across all three protocols, with the share that is borrowed filled in. Top 10 assets.">
+                <div className="px-4 sm:px-5 pb-5 pt-1">
+                  <div className="flex items-center gap-3 mb-3 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: SUPPLIED }} />Borrowed</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: SUPPLIED, opacity: 0.25 }} />Not borrowed</span>
+                  </div>
+                  <AssetChart rows={rows} loading={false} />
+                </div>
+              </Card>
+            </SectionErrorBoundary>
             <SectionErrorBoundary label="the rate comparison">
               <RatesCard rows={rows} />
             </SectionErrorBoundary>
             <SectionErrorBoundary label="markets near their limits">
               <LimitsCard rows={rows} />
+            </SectionErrorBoundary>
+            <SectionErrorBoundary label="liquidations">
+              <LiquidationsCard names={Object.fromEntries(data.protocols.map((p) => [p.id, p.name]))} />
             </SectionErrorBoundary>
             <SectionErrorBoundary label="the market table">
               <MarketsTable rows={rows} protocols={data.protocols} />
@@ -236,7 +251,7 @@ export function Lending() {
         <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
           Read from each protocol's contracts every few minutes and priced with each protocol's own oracle. Rates are variable
           APYs. Aave V4's borrow rate is its base rate, which borrowers pay a premium on top of, and its supply rate is an
-          estimate. Liquidations and history are being indexed and will be added here.
+          estimate. History is read from the contracts at the last block of each UTC day.
         </p>
       </div>
     </div>
@@ -601,5 +616,309 @@ function MarketsTable({ rows, protocols }: { rows: Row[]; protocols: LendingData
         </table>
       </div>
     </Card>
+  );
+}
+
+// ── Daily stacked bars, shared by the history and liquidation charts ────────
+
+interface StackDay {
+  date: string;
+  total: number;
+  parts: { id: string; value: number }[];
+  /** Optional line drawn over the bars (borrowed, on the history chart). */
+  line?: number;
+}
+
+const STACK_M = { top: 10, right: 8, bottom: 22, left: 52 };
+
+function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel }: {
+  days: StackDay[];
+  names: Record<string, string>;
+  /** Fill the parent's height instead of a fixed one. */
+  fill?: boolean;
+  height?: number;
+  renderHover: (d: StackDay | null) => React.ReactNode;
+  lineLabel?: string;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const W = Math.max(box?.w ?? 0, 300);
+  const H = fill ? Math.max(box?.h ?? 0, 160) : height;
+  const ids = useMemo(() => {
+    const seen = new Set<string>();
+    days.forEach((d) => d.parts.forEach((p) => p.value > 0 && seen.add(p.id)));
+    const order = ['aave-v3', 'aave-v4', 'benqi'];
+    return [...order.filter((id) => seen.has(id)), ...[...seen].filter((id) => !order.includes(id))];
+  }, [days]);
+
+  const geom = useMemo(() => {
+    if (!days.length) return null;
+    const peak = Math.max(...days.map((d) => Math.max(d.total, d.line ?? 0)), 1);
+    const raw = peak / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const tick = ([1, 2, 2.5, 5, 10].find((k) => k * mag >= raw) ?? 10) * mag;
+    const maxY = Math.ceil(peak / tick) * tick;
+    const ticks = Array.from({ length: Math.round(maxY / tick) + 1 }, (_, i) => i * tick);
+    const iw = W - STACK_M.left - STACK_M.right;
+    const ih = H - STACK_M.top - STACK_M.bottom;
+    const slot = iw / days.length;
+    const barW = Math.max(1, slot * (days.length > 120 ? 0.9 : 0.72));
+    const x = (i: number) => STACK_M.left + slot * i + (slot - barW) / 2;
+    const y = (v: number) => STACK_M.top + ih - (v / maxY) * ih;
+    return { x, y, barW, slot, ticks, labelEvery: Math.ceil(days.length / (W < 600 ? 4 : 8)) };
+  }, [days, W, H]);
+
+  const move = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!geom) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.floor((e.clientX - r.left - STACK_M.left) / geom.slot);
+    setHover(i >= 0 && i < days.length ? i : null);
+  };
+  const active = hover != null ? days[hover] : null;
+  const linePath = geom && days.some((d) => d.line != null)
+    ? days.map((d, i) => `${i ? 'L' : 'M'}${(geom.x(i) + geom.barW / 2).toFixed(1)},${geom.y(d.line ?? 0).toFixed(1)}`).join('')
+    : null;
+
+  return (
+    <div className={fill ? 'h-full flex flex-col' : ''}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-2">
+        <div>{renderHover(active)}</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          {ids.map((id) => {
+            const st = protocolStyle(id);
+            const v = active?.parts.find((p) => p.id === id)?.value;
+            return (
+              <span key={id} className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color, opacity: st.opacity }} />
+                {names[id] ?? id}
+                {active && <span className="num text-foreground">{usd(v ?? 0)}</span>}
+              </span>
+            );
+          })}
+          {lineLabel && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3 h-0.5 bg-foreground" />
+              {lineLabel}
+              {active?.line != null && <span className="num text-foreground">{usd(active.line)}</span>}
+            </span>
+          )}
+        </div>
+      </div>
+      <div ref={boxRef} className={`relative ${fill ? 'flex-1 min-h-0' : ''}`} style={fill ? undefined : { height }}>
+        {geom && box && (
+          <svg width={W} height={H} className="absolute inset-0 block" onMouseMove={move} onMouseLeave={() => setHover(null)} role="img" aria-label="Daily values by protocol">
+            {geom.ticks.map((t) => (
+              <g key={t}>
+                <line x1={STACK_M.left} x2={W - STACK_M.right} y1={geom.y(t)} y2={geom.y(t)} stroke="currentColor" strokeOpacity={0.08} />
+                <text x={STACK_M.left - 8} y={geom.y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
+                  {t === 0 ? '0' : `$${compact(t)}`}
+                </text>
+              </g>
+            ))}
+            {days.map((d, i) => {
+              let run = 0;
+              return (
+                <g key={d.date} opacity={hover != null && hover !== i ? 0.45 : 1}>
+                  {ids.map((id) => {
+                    const v = d.parts.find((p) => p.id === id)?.value ?? 0;
+                    if (v <= 0) return null;
+                    const y0 = geom.y(run);
+                    run += v;
+                    const y1 = geom.y(run);
+                    const st = protocolStyle(id);
+                    return <rect key={id} x={geom.x(i)} y={y1} width={geom.barW} height={Math.max(0, y0 - y1)} fill={st.color} fillOpacity={st.opacity} />;
+                  })}
+                  {i % geom.labelEvery === 0 && (
+                    <text x={geom.x(i) + geom.barW / 2} y={H - 5} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
+                      {format(parseISO(d.date), days.length > 120 ? 'MMM yyyy' : 'MMM d')}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            {linePath && <path d={linePath} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-foreground" />}
+          </svg>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function useLoadOnce<T>(load: () => Promise<T | null>, deps: unknown[]) {
+  const [data, setData] = useState<T | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    load().then((r) => {
+      if (!alive) return;
+      setData(r);
+      setState(r ? 'ready' : 'error');
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return { data, state };
+}
+
+// Supplied per protocol, stacked by day, with total borrowed as a line.
+function HistoryChart({ days, names }: { days: number; names: Record<string, string> }) {
+  const { data, state } = useLoadOnce<LendingTotalsDay[]>(() => getLendingTotals(days), [days]);
+  const series: StackDay[] = useMemo(
+    () =>
+      (data ?? []).map((d) => ({
+        date: d.date,
+        total: d.supplied_usd,
+        line: d.borrowed_usd,
+        parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.supplied_usd })),
+      })),
+    [data],
+  );
+  if (state === 'loading' && !data) return <div className="h-full min-h-[240px] rounded bg-muted/50 animate-pulse" />;
+  if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded.</div>;
+  const first = series[0];
+  return (
+    <div className="h-[300px] md:h-full">
+      <DailyStack
+        days={series}
+        names={names}
+        fill
+        lineLabel="Borrowed"
+        renderHover={(d) => (
+          <>
+            <div className="num text-[22px] leading-7 font-medium text-foreground">{usd((d ?? series[series.length - 1]).total)}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {d
+                ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
+                : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
+              {series.length < days && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
+            </div>
+          </>
+        )}
+      />
+    </div>
+  );
+}
+
+const LIQ_RANGES = [
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+  { value: '3650', label: 'All' },
+] as const;
+
+function LiquidationsCard({ names }: { names: Record<string, string> }) {
+  const [range, setRange] = useState<'30' | '90' | '365' | '3650'>('90');
+  const daily = useLoadOnce<LiquidationsDay[]>(() => getLiquidationsDaily(Number(range)), [range]);
+  const top = useLoadOnce<Liquidation[]>(() => getLiquidationsTop(Number(range), 8), [range]);
+  const recent = useLoadOnce<Liquidation[]>(() => getLiquidationsRecent(8), []);
+
+  const series: StackDay[] = useMemo(
+    () =>
+      (daily.data ?? []).map((d) => ({
+        date: d.date,
+        total: d.repaid_usd,
+        parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.repaid_usd })),
+      })),
+    [daily.data],
+  );
+  const total = series.reduce((s, d) => s + d.total, 0);
+  const count = (daily.data ?? []).reduce((s, d) => s + d.count, 0);
+  const peak = series.reduce<StackDay | null>((m, d) => (!m || d.total > m.total ? d : m), null);
+  const label = range === '3650' ? 'since BENQI launched in 2021' : range === '365' ? 'in the last year' : `in the last ${range} days`;
+
+  return (
+    <Card
+      title="Liquidations"
+      subtitle="Loans closed by liquidators after the collateral fell below its liquidation threshold. Bars show the debt they repaid, per day."
+      right={<SegmentedControl size="xs" value={range} options={LIQ_RANGES} onChange={setRange} ariaLabel="Liquidation range" />}
+    >
+      <div className="px-4 sm:px-5 pb-4">
+        {daily.state === 'loading' && !daily.data ? (
+          <div className="h-[260px] rounded bg-muted/50 animate-pulse" />
+        ) : !series.length ? (
+          <div className="h-[120px] flex items-center justify-center text-[12px] text-muted-foreground">
+            {daily.state === 'error' ? "Liquidations couldn't be loaded. Try again in a minute." : 'No liquidations in this period.'}
+          </div>
+        ) : (
+          <div className={daily.state === 'loading' ? 'opacity-60' : ''}>
+            <DailyStack
+              days={series}
+              names={names}
+              height={220}
+              renderHover={(d) => (
+                <>
+                  <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(d ? d.total : total)}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {d
+                      ? `repaid on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${(daily.data?.find((x) => x.date === d.date)?.count ?? 0).toLocaleString()} liquidations`
+                      : `repaid across ${count.toLocaleString()} liquidations ${label}${peak && peak.total > 0 ? `; busiest day ${format(parseISO(peak.date), 'MMM d, yyyy')} (${usd(peak.total)})` : ''}`}
+                  </div>
+                </>
+              )}
+            />
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-border lg:divide-x divide-border">
+        <LiquidationList title={`Largest ${label.replace('in the ', '')}`} items={top.data} state={top.state} names={names} />
+        <LiquidationList title="Latest" items={recent.data} state={recent.state} names={names} />
+      </div>
+    </Card>
+  );
+}
+
+function LiquidationList({ title, items, state, names }: {
+  title: string;
+  items: Liquidation[] | null;
+  state: 'loading' | 'ready' | 'error';
+  names: Record<string, string>;
+}) {
+  return (
+    <div className="min-w-0 border-t lg:border-t-0 border-border first:border-t-0">
+      <div className="px-4 sm:px-5 pt-3 pb-1.5 text-[12px] font-medium text-foreground">{title}</div>
+      {state === 'loading' && !items ? (
+        <div className="px-4 sm:px-5 pb-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
+      ) : !items?.length ? (
+        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">None in this period.</div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {items.map((l) => (
+            <li key={l.tx_hash + l.borrower} className="px-4 sm:px-5 py-2 flex items-center justify-between gap-3">
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-[12px] text-foreground">
+                  <ProtocolDot id={l.protocol_id} />
+                  <span className="truncate">
+                    <span className="num">{l.debt.symbol}</span> debt repaid against <span className="num">{l.collateral.symbol}</span>
+                  </span>
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {(names[l.protocol_id] ?? l.protocol_id).replace(' Lending', '')}, {format(new Date(l.block_time), 'MMM d, yyyy HH:mm')}
+                </span>
+              </span>
+              <a
+                href={`https://snowtrace.io/tx/${l.tx_hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="num shrink-0 text-[13px] text-foreground hover:underline underline-offset-2 decoration-border"
+                title="Open the transaction"
+              >
+                {usd(l.debt.usd)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -654,11 +654,11 @@ function LiquidStakingCard({ totalStake }: { totalStake: number | null }) {
 
 // ── Lending markets ─────────────────────────────────────────────────────────
 
-// One colour per lending protocol; Aave's two versions share a hue.
+// Close to each protocol's brand, as on the Lending page: Aave purple, BENQI teal.
 const LENDING_COLOR: Record<string, { color: string; opacity: number }> = {
-  'aave-v3': { color: '#d95926', opacity: 1 },
-  'aave-v4': { color: '#d95926', opacity: 0.5 },
-  benqi: { color: '#199e70', opacity: 1 },
+  'aave-v3': { color: '#8b5cf6', opacity: 1 },
+  'aave-v4': { color: '#8b5cf6', opacity: 0.5 },
+  benqi: { color: '#22a6c9', opacity: 1 },
 };
 const lendingStyle = (id: string) => LENDING_COLOR[id] ?? { color: '#6b7280', opacity: 1 };
 const WEI = 1e18;
