@@ -88,7 +88,7 @@ export function Interchain() {
   const history = useLoad(() => getIcmTimeseries(3650), 'all');
   const index = useChainIndex();
   const wide = useMediaQuery('(min-width: 768px)', true);
-  const nodes = useHubNodes(summary.data, index, wide ? 12 : 8);
+  const nodes = useHubNodes(summary.data, index, wide ? 16 : 9);
   const [hover, setHover] = useState<string | null>(null);
 
   const s = summary.data;
@@ -160,7 +160,7 @@ export function Interchain() {
                   <div className="md:hidden flex items-center gap-4 text-[11px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: TO_CCHAIN }} />To C-Chain</span>
                     <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: FROM_CCHAIN }} />From C-Chain</span>
-                    <span>Tap a circle</span>
+                    <span>Rings: 10x each</span>
                   </div>
                   <HubMap nodes={nodes} summary={s} state={summary.state} index={index} hover={hover} setHover={setHover} />
                   <div className="hidden md:block min-h-0">
@@ -243,9 +243,10 @@ function useHubNodes(summary: IcmSummary | null, index: ChainIndex, n: number): 
 }
 
 /**
- * The C-Chain at the center and the busiest L1s around it. Busier chains sit
- * closer, on a spiral by rank; each is joined by two curved lanes, messages to
- * the C-Chain on one side and back on the other, with dots moving along them.
+ * The C-Chain at the center and L1s on rings by magnitude: each ring is ten
+ * times the messages of the one outside it, so distance reads as a scale.
+ * Around the circle, chains run from mostly sending to the C-Chain (left) to
+ * mostly receiving from it (right). Two straight lanes join each to the hub.
  */
 function HubMap({ nodes, summary, state, index, hover, setHover }: {
   nodes: HubNode[];
@@ -265,60 +266,45 @@ function HubMap({ nodes, summary, state, index, hover, setHover }: {
     const W = box.w;
     const H = box.h;
     const cx = W / 2;
-    const cy = H / 2;
-    const maxTotal = Math.max(...nodes.map((d) => d.total), 1);
+    const cy = H / 2 + 6;
+    const hubR = wide ? 28 : 20;
+    // Rings at powers of ten covering every chain shown.
+    const totals = nodes.map((d) => Math.max(1, d.total));
+    const lo = Math.floor(Math.log10(Math.min(...totals)));
+    const hi = Math.max(lo + 1, Math.ceil(Math.log10(Math.max(...totals))));
+    const ry = H / 2 - (wide ? 34 : 26);
+    const rx = Math.min(W / 2 - (wide ? 80 : 40), ry * 1.45);
+    const inner = (hubR + (wide ? 40 : 28)) / ry; // the top ring sits just outside the hub
+    const frac = (v: number) => 1 - ((Math.log10(Math.max(1, v)) - lo) / (hi - lo)) * (1 - inner);
+    const rings = Array.from({ length: hi - lo + 1 }, (_, k) => lo + k).map((p) => ({ value: 10 ** p, f: frac(10 ** p) }));
+    const maxTotal = Math.max(...totals);
     const maxLeg = Math.max(...nodes.flatMap((d) => [d.toC, d.fromC]), 1);
-    const hubR = wide ? 30 : 22;
-    const size = (v: number) => (wide ? 8 : 6) + (wide ? 22 : 14) * Math.sqrt(v / maxTotal);
-    // Spread over an ellipse that uses the wider side, leaving room for labels.
-    const ry = H / 2 - (wide ? 40 : 30);
-    const rx = Math.min(W / 2 - (wide ? 90 : 50), ry * 1.5);
-    const inner = 0.42;
-    const pts = nodes.map((d, i) => {
-      const r = size(d.total);
-      const t = nodes.length > 1 ? i / (nodes.length - 1) : 0;
-      const dist = inner + (1 - inner) * Math.sqrt(t);
-      const a = -Math.PI / 2 + i * 2.39996; // golden angle
-      return { d, r, x: cx + Math.cos(a) * dist * rx, y: cy + Math.sin(a) * dist * ry };
-    });
-    // Push overlapping circles apart, keeping them off the hub and inside the box.
-    for (let k = 0; k < 60; k++) {
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
+    const size = (v: number) => (wide ? 7 : 5) + (wide ? 15 : 10) * Math.sqrt(v / maxTotal);
+    // Order by direction: mostly to the C-Chain first (down the left), mostly back last (up the right).
+    const order = [...nodes].sort((a, b) => b.toC / Math.max(1, b.total) - a.toC / Math.max(1, a.total));
+    const n = order.length;
+    const pts = order.map((d, i) => ({ d, r: size(d.total), f: frac(d.total), a: -Math.PI / 2 - ((i + 0.5) / n) * Math.PI * 2 }));
+    const pos = (p: { f: number; a: number }) => ({ x: cx + Math.cos(p.a) * p.f * rx, y: cy + Math.sin(p.a) * p.f * ry });
+    // Distance carries the value, so overlaps are fixed by nudging angles only.
+    for (let k = 0; k < 80; k++) {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (i === j) continue;
           const p = pts[i], q = pts[j];
-          const dx = q.x - p.x, dy = q.y - p.y;
-          const dd = Math.hypot(dx, dy) || 1;
-          const need = p.r + q.r + (wide ? 30 : 18);
+          const P = pos(p), Q = pos(q);
+          const dd = Math.hypot(Q.x - P.x, Q.y - P.y);
+          const need = p.r + q.r + (wide ? 26 : 16);
           if (dd < need) {
-            const m = (need - dd) / 2;
-            p.x -= (dx / dd) * m; p.y -= (dy / dd) * m;
-            q.x += (dx / dd) * m; q.y += (dy / dd) * m;
+            let da = p.a - q.a;
+            while (da > Math.PI) da -= 2 * Math.PI;
+            while (da < -Math.PI) da += 2 * Math.PI;
+            p.a += (da >= 0 ? 1 : -1) * 0.012;
           }
         }
-        const p = pts[i];
-        const hx = p.x - cx, hy = p.y - cy;
-        const hd = Math.hypot(hx, hy) || 1;
-        const min = hubR + p.r + (wide ? 46 : 30);
-        if (hd < min) { p.x = cx + (hx / hd) * min; p.y = cy + (hy / hd) * min; }
-        p.x = Math.min(W - p.r - 4, Math.max(p.r + 4, p.x));
-        p.y = Math.min(H - p.r - 16, Math.max(p.r + 4, p.y));
       }
     }
-    const lanes = pts.map((p) => {
-      const dx = cx - p.x, dy = cy - p.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len, ny = dx / len;
-      const bow = Math.min(60, len * 0.2);
-      const mx = (p.x + cx) / 2, my = (p.y + cy) / 2;
-      const width = (v: number) => (v > 0 ? 1.2 + (wide ? 9 : 6) * Math.sqrt(v / maxLeg) : 0);
-      return {
-        // To the C-Chain bows one way, back bows the other: together they read as a lens.
-        toC: { d: `M${p.x},${p.y} Q${mx + nx * bow},${my + ny * bow} ${cx},${cy}`, w: width(p.d.toC), v: p.d.toC },
-        fromC: { d: `M${cx},${cy} Q${mx - nx * bow},${my - ny * bow} ${p.x},${p.y}`, w: width(p.d.fromC), v: p.d.fromC },
-        len: len * 1.1,
-      };
-    });
-    return { W, H, cx, cy, hubR, pts, lanes, maxLeg };
+    const placed = pts.map((p) => ({ ...p, ...pos(p) }));
+    return { W, H, cx, cy, rx, ry, hubR, rings, placed, maxLeg };
   }, [box, nodes, wide]);
 
   const cLogo = index.get(C_CHAIN_ID)?.chainLogoUri;
@@ -333,51 +319,96 @@ function HubMap({ nodes, summary, state, index, hover, setHover }: {
           <div className="h-full rounded bg-muted/40 animate-pulse" />
         )
       ) : layout && (
-        <svg width={layout.W} height={layout.H} className="absolute inset-0 block overflow-visible" role="img" aria-label="The C-Chain at the center with the busiest L1s around it, closer and larger the more messages they exchanged">
+        <svg width={layout.W} height={layout.H} className="absolute inset-0 block overflow-visible" role="img" aria-label="The C-Chain at the center with L1s on rings by number of messages, each ring ten times the one outside it">
           <defs>
             <radialGradient id="icm-halo">
-              <stop offset="0" stopColor="currentColor" stopOpacity={0.14} />
+              <stop offset="0" stopColor="currentColor" stopOpacity={0.12} />
               <stop offset="1" stopColor="currentColor" stopOpacity={0} />
             </radialGradient>
             <clipPath id="icm-hub-clip"><circle cx={layout.cx} cy={layout.cy} r={layout.hubR - 3} /></clipPath>
-            {layout.pts.map((p, i) => (
+            <filter id="icm-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation={wide ? 5 : 3.5} />
+            </filter>
+            {layout.placed.map((p, i) => (
               <clipPath key={p.d.id} id={`icm-clip-${i}`}><circle cx={p.x} cy={p.y} r={p.r - 3} /></clipPath>
             ))}
           </defs>
 
+          {/* The scale: one ring per power of ten, labelled at the top. */}
           <g className="text-foreground">
-            <circle cx={layout.cx} cy={layout.cy} r={layout.hubR * 3.2} fill="url(#icm-halo)" />
-            {[0.55, 1].map((k) => (
-              <ellipse
-                key={k}
-                cx={layout.cx}
-                cy={layout.cy}
-                rx={(layout.W / 2 - (wide ? 90 : 50)) * k}
-                ry={(layout.H / 2 - (wide ? 40 : 30)) * k}
-                fill="none"
-                stroke="currentColor"
-                strokeOpacity={0.05}
-                strokeDasharray="2 6"
-              />
+            <circle cx={layout.cx} cy={layout.cy} r={layout.hubR * 3} fill="url(#icm-halo)" />
+            {layout.rings.map((g) => (
+              <g key={g.value}>
+                {/* Rings brighten toward the hub, where the busiest chains sit. */}
+                <ellipse
+                  cx={layout.cx}
+                  cy={layout.cy}
+                  rx={g.f * layout.rx}
+                  ry={g.f * layout.ry}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity={0.06 + 0.16 * ((1 - g.f) / Math.max(0.01, 1 - layout.rings[layout.rings.length - 1].f))}
+                  strokeDasharray="2 5"
+                />
+                <text
+                  x={layout.cx}
+                  y={layout.cy - g.f * layout.ry - 4}
+                  textAnchor="middle"
+                  className="fill-muted-foreground num"
+                  fontSize={10}
+                  style={{ paintOrder: 'stroke', stroke: 'rgb(var(--stage-rgb))', strokeWidth: 4 }}
+                >
+                  {g.value >= 1e6 ? `${g.value / 1e6}M` : g.value >= 1e3 ? `${g.value / 1e3}K` : g.value}
+                </text>
+              </g>
             ))}
+            {wide && (
+              <>
+                <text x={layout.cx - layout.rx - 8} y={layout.cy} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={11}>
+                  Mostly to C-Chain
+                </text>
+                <text x={layout.cx + layout.rx + 8} y={layout.cy} textAnchor="start" dominantBaseline="middle" className="fill-muted-foreground" fontSize={11}>
+                  Mostly from C-Chain
+                </text>
+              </>
+            )}
           </g>
 
-          {layout.pts.map((p, i) => {
-            const lane = layout.lanes[i];
-            const on = hover == null || hover === p.d.id;
+          {layout.placed.map((p) => {
+            const d = p.d;
+            const dx = layout.cx - p.x, dy = layout.cy - p.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = -dy / len, ny = dx / len;
+            const width = (v: number) => (v > 0 ? 1.2 + (wide ? 8 : 5) * Math.sqrt(v / layout.maxLeg) : 0);
+            const wIn = width(d.toC);
+            const wOut = width(d.fromC);
+            // Side by side: to the C-Chain on one side of the line, back on the other.
+            const lane = (w: number, side: number, inward: boolean) => {
+              const o = side * (w / 2 + 0.8);
+              const a = { x: p.x + nx * o, y: p.y + ny * o };
+              const b = { x: layout.cx + nx * o, y: layout.cy + ny * o };
+              const [s, e] = inward ? [a, b] : [b, a];
+              return `M${s.x},${s.y} L${e.x},${e.y}`;
+            };
+            const on = hover == null || hover === d.id;
+            const dots = (v: number) => (v / layout.maxLeg > 0.25 ? 3 : v / layout.maxLeg > 0.03 ? 2 : 1);
             return (
-              <g key={p.d.id} className="transition-opacity duration-200" opacity={on ? 1 : 0.15}>
+              <g key={d.id} className="transition-opacity duration-200" opacity={on ? 1 : 0.12}>
                 {[
-                  { ...lane.toC, color: TO_CCHAIN },
-                  { ...lane.fromC, color: FROM_CCHAIN },
+                  { w: wIn, v: d.toC, path: lane(wIn, 1, true), color: TO_CCHAIN },
+                  { w: wOut, v: d.fromC, path: lane(wOut, -1, false), color: FROM_CCHAIN },
                 ].map((l, k) =>
                   l.w > 0 ? (
                     <g key={k}>
-                      <path d={l.d} fill="none" stroke={l.color} strokeWidth={l.w} strokeOpacity={hover === p.d.id ? 0.85 : 0.45} strokeLinecap="round" />
+                      {/* A soft glow under the busiest lanes. */}
+                      {l.v / layout.maxLeg > 0.15 && (
+                        <path d={l.path} stroke={l.color} strokeWidth={l.w * 3} strokeOpacity={0.35} strokeLinecap="round" fill="none" filter="url(#icm-glow)" />
+                      )}
+                      <path d={l.path} stroke={l.color} strokeWidth={l.w} strokeOpacity={hover === d.id ? 0.85 : 0.45} strokeLinecap="round" fill="none" />
                       {!still &&
-                        Array.from({ length: l.v / layout.maxLeg > 0.25 ? 3 : l.v / layout.maxLeg > 0.03 ? 2 : 1 }, (_, n, ) => (
-                          <circle key={n} r={Math.max(1.5, Math.min(3, l.w / 2.5))} fill={l.color}>
-                            <animateMotion dur={`${(lane.len / 60).toFixed(1)}s`} begin={`${((n * lane.len) / 60 / 3).toFixed(1)}s`} repeatCount="indefinite" path={l.d} />
+                        Array.from({ length: dots(l.v) }, (_, m) => (
+                          <circle key={m} r={Math.max(1.4, Math.min(2.6, l.w / 2.5))} fill={l.color}>
+                            <animateMotion dur={`${(len / 55).toFixed(1)}s`} begin={`${((m * len) / 55 / dots(l.v)).toFixed(1)}s`} repeatCount="indefinite" path={l.path} />
                           </circle>
                         ))}
                     </g>
@@ -393,19 +424,19 @@ function HubMap({ nodes, summary, state, index, hover, setHover }: {
           ) : (
             <text x={layout.cx} y={layout.cy} textAnchor="middle" dominantBaseline="central" className="fill-foreground" fontSize={14} fontWeight={600}>C</text>
           )}
-          <text x={layout.cx} y={layout.cy + layout.hubR + 14} textAnchor="middle" className="fill-foreground" fontSize={11} fontWeight={600}>C-Chain</text>
 
-          {layout.pts.map((p, i) => {
+          {layout.placed.map((p, i) => {
             const d = p.d;
             const on = hover == null || hover === d.id;
             const share = d.total > 0 ? d.toC / d.total : 0;
             const ring = 2 * Math.PI * (p.r - 1);
-            const dx = p.x - layout.cx;
-            const anchor = Math.abs(dx) < p.r ? 'middle' : dx > 0 ? 'start' : 'end';
-            const lx = anchor === 'middle' ? p.x : p.x + (dx > 0 ? p.r + 7 : -p.r - 7);
-            // A centered label goes on the side away from the hub, so it never sits between them.
-            const ly = anchor === 'middle' ? (p.y < layout.cy ? p.y - p.r - 24 : p.y + p.r + 12) : p.y - 2;
-            const labelled = wide ? i < 9 || hover === d.id || d.other > 0 : i < 6 || hover === d.id;
+            const cos = Math.cos(p.a);
+            const sin = Math.sin(p.a);
+            // Labels sit outward from the hub, on the side the chain is on.
+            const anchor = Math.abs(cos) < 0.3 ? 'middle' : cos > 0 ? 'start' : 'end';
+            const lx = anchor === 'middle' ? p.x : p.x + (cos > 0 ? p.r + 6 : -p.r - 6);
+            const ly = anchor === 'middle' ? (sin < 0 ? p.y - p.r - 20 : p.y + p.r + 11) : p.y - 3;
+            const labelled = wide || hover === d.id || d.total / Math.max(1, total) >= 0.01;
             const go = d.chain ? () => navigate(`/chain/${d.chain!.chainId}`) : undefined;
             const shortName = !wide && d.name.length > 11 ? `${d.name.slice(0, 10)}…` : d.name;
             return (
@@ -424,32 +455,22 @@ function HubMap({ nodes, summary, state, index, hover, setHover }: {
                 aria-label={`${d.name}: ${num(d.toC)} messages to the C-Chain, ${num(d.fromC)} from it`}
               >
                 <circle cx={p.x} cy={p.y} r={p.r} className="fill-card" />
-                {/* Ring split by direction: blue for messages to the C-Chain, orange for messages back. */}
                 <circle cx={p.x} cy={p.y} r={p.r - 1} fill="none" stroke={FROM_CCHAIN} strokeWidth={2} />
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={p.r - 1}
-                  fill="none"
-                  stroke={TO_CCHAIN}
-                  strokeWidth={2}
-                  strokeDasharray={`${ring * share} ${ring}`}
-                  transform={`rotate(-90 ${p.x} ${p.y})`}
-                />
+                <circle cx={p.x} cy={p.y} r={p.r - 1} fill="none" stroke={TO_CCHAIN} strokeWidth={2} strokeDasharray={`${ring * share} ${ring}`} transform={`rotate(-90 ${p.x} ${p.y})`} />
                 {d.chain?.chainLogoUri ? (
                   <image href={d.chain.chainLogoUri} x={p.x - p.r + 3} y={p.y - p.r + 3} width={(p.r - 3) * 2} height={(p.r - 3) * 2} clipPath={`url(#icm-clip-${i})`} preserveAspectRatio="xMidYMid slice" />
                 ) : (
-                  <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground" fontSize={Math.max(9, p.r * 0.7)} fontWeight={600}>
+                  <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground" fontSize={Math.max(8, p.r * 0.7)} fontWeight={600}>
                     {d.other ? '+' : d.name.charAt(0).toUpperCase()}
                   </text>
                 )}
                 {labelled && (
                   <>
-                    <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle" className="fill-foreground" fontSize={wide ? 12 : 10} fontWeight={500}>
+                    <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle" className="fill-foreground" fontSize={wide ? 11.5 : 10} fontWeight={500}>
                       {shortName}
                     </text>
-                    <text x={lx} y={ly + 13} textAnchor={anchor} dominantBaseline="middle" className="fill-muted-foreground num" fontSize={wide ? 11 : 9.5}>
-                      {compact(d.total)}{total > 0 && ` · ${((d.total / total) * 100).toFixed(d.total / total >= 0.1 ? 0 : 1)}%`}
+                    <text x={lx} y={ly + 12} textAnchor={anchor} dominantBaseline="middle" className="fill-muted-foreground num" fontSize={wide ? 10.5 : 9.5}>
+                      {compact(d.total)}
                     </text>
                   </>
                 )}
@@ -472,7 +493,7 @@ function RouteRail({ nodes, summary, hover, setHover }: { nodes: HubNode[]; summ
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: TO_CCHAIN }} />To C-Chain</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: FROM_CCHAIN }} />From C-Chain</span>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">Closer and larger means more messages.</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">Each ring inward is ten times the messages. Left leans to the C-Chain, right leans back.</p>
       <ul className="mt-3 flex-1 min-h-0 overflow-y-auto divide-y divide-border/60 border-y border-border/60">
         {summary
           ? nodes.map((d, i) => {
@@ -489,7 +510,7 @@ function RouteRail({ nodes, summary, hover, setHover }: { nodes: HubNode[]; summ
                       <span className="truncate text-[12.5px] font-medium text-foreground">{d.name}</span>
                     </span>
                     <span className="num text-[12px] text-foreground shrink-0">
-                      {compact(d.total)} <span className="text-[10px] text-muted-foreground">{total > 0 ? `${((d.total / total) * 100).toFixed(d.total / total >= 0.1 ? 0 : 1)}%` : ''}</span>
+                      {compact(d.total)} <span className="text-[10px] text-muted-foreground">{total > 0 ? (d.total / total < 0.001 ? '<0.1%' : `${((d.total / total) * 100).toFixed(d.total / total >= 0.1 ? 0 : 1)}%`) : ''}</span>
                     </span>
                   </div>
                   <div className="mt-1.5 ml-6 flex h-1.5 rounded-sm overflow-hidden" style={{ width: `calc(${Math.max(3, (d.total / max) * 100)}% - 1.5rem)` }}>
