@@ -39,6 +39,7 @@ import type {
   StablecoinMetric,
   StablecoinGranularity,
 } from '../types';
+import { chartPointerProps } from '../utils/chartPointer';
 
 type SortKey =
   | 'supplyUsd'
@@ -1197,8 +1198,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
                 ref={svgRef}
                 viewBox={`0 0 ${chartW} ${chartH}`}
                 className={`${hero ? "w-full h-full block" : "w-full h-auto block"} transition-opacity ${loading ? "opacity-50" : ""}`}
-                onMouseMove={handleMove}
-                onMouseLeave={() => setHover(null)}
+                {...chartPointerProps({ onMove: handleMove, count: points.length, hover, setHover })}
                 role="img"
                 aria-label={`Stablecoin ${metric} over time`}
               >
@@ -1382,8 +1382,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
             ref={svgRef}
             viewBox={`0 0 ${chartW} ${chartH}`}
             className={hero ? "w-full h-full block" : "w-full h-auto block"}
-            onMouseMove={handleMove}
-            onMouseLeave={() => setHover(null)}
+            {...chartPointerProps({ onMove: handleMove, count: points.length, hover, setHover })}
             role="img"
             aria-label={`Stablecoin ${metric} over time`}
           >

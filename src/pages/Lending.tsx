@@ -8,6 +8,7 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getLending, getLendingAsset, getLendingTotals, getLiquidationsDaily, getLiquidationsRecent, getLiquidationsTop } from '../api';
 import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
+import { chartPointerProps } from '../utils/chartPointer';
 import type { Lending as LendingData, LendingAssetDay, LendingMarket, LendingTotalsDay, Liquidation, LiquidationsDay } from '../api';
 
 // Close to each protocol's brand so it's recognised without the legend: Aave's
@@ -253,7 +254,8 @@ export function Lending() {
         <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
           Read from each protocol's contracts every few minutes and priced with each protocol's own oracle. Rates are variable
           APYs. Aave V4's borrow rate is its base rate, which borrowers pay a premium on top of, and its supply rate is an
-          estimate. History is read from the contracts at the last block of each UTC day.
+          estimate. History is read from the contracts at the last block of each UTC day. Supplied includes deposits that were
+          borrowed and supplied again, so it runs high when incentives reward looping, as at Aave V3's launch in April and May 2022.
         </p>
       </div>
     </div>
@@ -756,7 +758,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
       </div>
       <div ref={boxRef} className={`relative overflow-hidden ${fill ? 'flex-1 min-h-0' : ''}`} style={fill ? undefined : { height }}>
         {geom && box && (
-          <svg width={W} height={H} className="absolute inset-0 block" onMouseMove={move} onMouseLeave={() => setHover(null)} role="img" aria-label="Daily values by protocol">
+          <svg width={W} height={H} className="absolute inset-0 block" {...chartPointerProps({ onMove: move, count: days.length, hover, setHover })} role="img" aria-label="Daily values by protocol">
             {geom.ticks.map((t) => (
               <g key={t}>
                 <line x1={STACK_M.left} x2={W - STACK_M.right} y1={geom.y(t)} y2={geom.y(t)} stroke="currentColor" strokeOpacity={0.08} />

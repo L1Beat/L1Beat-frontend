@@ -8,6 +8,7 @@ import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getDexPools, getDexSummary, getDexTimeseries } from '../api';
 import type { DexDay, DexPool, DexSummary } from '../api';
 import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
+import { chartPointerProps } from '../utils/chartPointer';
 
 // Close to each DEX's brand so it's recognised without the legend. Pharaoh's red
 // is toned to orange, because red means a drop on L1Beat; its two versions share
@@ -371,8 +372,7 @@ function VolumeChart({ days: dailyDays, state, names, focus, onFocus }: {
         width={W}
         height={H}
         className={`absolute inset-0 block ${state === 'loading' ? 'opacity-50' : ''}`}
-        onMouseMove={handleMove}
-        onMouseLeave={() => setHover(null)}
+        {...chartPointerProps({ onMove: handleMove, count: days?.length ?? 0, hover, setHover })}
         role="img"
         aria-label={`${weekly ? 'Weekly' : 'Daily'} volume on tracked Avalanche DEXes over ${dayCount} days, stacked by DEX`}
       >

@@ -37,6 +37,7 @@ import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { chartPointerProps } from '../utils/chartPointer';
 import { isStale, missingActivity } from '../utils/activityCoverage';
 
 // Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
@@ -1821,8 +1822,7 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
           width={W}
           height={ACT_H}
           className="block"
-          onMouseMove={handleMove}
-          onMouseLeave={() => setHover(null)}
+          {...chartPointerProps({ onMove: handleMove, count: points.length, hover, setHover })}
           role="img"
           aria-label={isTx ? 'Daily transactions' : 'Daily average TPS'}
         >

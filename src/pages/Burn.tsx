@@ -7,6 +7,7 @@ import { SegmentedControl, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { getBurnedTotal, getEvmFeesBurned, getEvmFeesBurnedSpan, getStakingSummary, getTreasuries, nAvaxToAvax } from '../api';
 import type { FeeBurnPoint } from '../api';
+import { chartPointerProps } from '../utils/chartPointer';
 
 // --- websocket types -------------------------------------------------------
 interface WsBlock {
@@ -677,11 +678,15 @@ function BurnHistory() {
               width={W}
               height={H}
               className="absolute inset-0 block"
-              onMouseMove={(e) => {
-                const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - HM.left) / geom.slot);
-                setHover(i >= 0 && i < points.length ? i : null);
-              }}
-              onMouseLeave={() => setHover(null)}
+              {...chartPointerProps<SVGSVGElement>({
+                onMove: (e) => {
+                  const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - HM.left) / geom.slot);
+                  setHover(i >= 0 && i < points.length ? i : null);
+                },
+                count: points.length,
+                hover,
+                setHover,
+              })}
               role="img"
               aria-label={`AVAX burned per ${weekly ? 'week' : 'day'}, base fee and priority tip`}
             >

@@ -9,6 +9,7 @@ import { getBridgeRecentTransfers, getBridgeSummary, getBridgeTimeseries, getBri
 import type { BridgeDay, BridgeSummary, BridgeTransfer } from '../api';
 import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { chartPointerProps } from '../utils/chartPointer';
 
 // Circle's blue for CCTP; the rest from the categorical palette. Red stays for
 // drops, so outflows are drawn below the axis in the same colour, not in red.
@@ -389,11 +390,15 @@ function FlowChart({ days, state, loadedRange, names, asOf }: {
             width={W}
             height={H}
             className={`absolute inset-0 block ${state === 'loading' ? 'opacity-50' : ''}`}
-            onMouseMove={(e) => {
-              const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - M.left) / geom.slot);
-              setHover(i >= 0 && i < rows.length ? i : null);
-            }}
-            onMouseLeave={() => setHover(null)}
+            {...chartPointerProps<SVGSVGElement>({
+              onMove: (e) => {
+                const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - M.left) / geom.slot);
+                setHover(i >= 0 && i < rows.length ? i : null);
+              },
+              count: rows.length,
+              hover,
+              setHover,
+            })}
             role="img"
             aria-label={`${weekly ? 'Weekly' : 'Daily'} bridge inflow above the axis and outflow below, stacked by bridge, with net flow as a line`}
           >
@@ -628,8 +633,9 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
                   strokeWidth={Math.max(1.5, l.w)}
                   strokeOpacity={on ? 0.75 : dim ? 0.08 : 0.42}
                   style={{ transition: 'stroke-opacity 0.25s ease' }}
-                  onMouseEnter={() => !l.chain.startsWith('others') && setHover(l.chain)}
-                  onMouseLeave={() => setHover(null)}
+                  onPointerEnter={(e) => e.pointerType === 'mouse' && !l.chain.startsWith('others') && setHover(l.chain)}
+                  onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(null)}
+                  onClick={() => !l.chain.startsWith('others') && setHover((h) => (h === l.chain ? null : l.chain))}
                 />
               );
             })}
@@ -660,8 +666,19 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
                   key={`${n.side}-${n.key}`}
                   opacity={dim ? 0.35 : 1}
                   style={{ transition: 'opacity 0.25s ease', cursor: n.key.startsWith('others') ? 'default' : 'pointer' }}
-                  onMouseEnter={() => !n.key.startsWith('others') && setHover(n.key)}
-                  onMouseLeave={() => setHover(null)}
+                  onPointerEnter={(e) => e.pointerType === 'mouse' && !n.key.startsWith('others') && setHover(n.key)}
+                  onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(null)}
+                  // Tap to select on touch, tap again to clear; Tab moves through chains with the keyboard.
+                  onClick={() => !n.key.startsWith('others') && setHover((h) => (h === n.key ? null : n.key))}
+                  {...(n.key.startsWith('others')
+                    ? {}
+                    : {
+                        tabIndex: 0,
+                        role: 'button',
+                        'aria-label': `${n.name}: ${usd(n.value)} ${n.side === 'in' ? 'came from it' : 'went to it'}`,
+                        onFocus: () => setHover(n.key),
+                        onBlur: () => setHover(null),
+                      })}
                 >
                   <rect x={x} y={n.y} width={layout.nodeW} height={n.h} rx={2} fill={n.color} />
                   {n.h + 8 >= 12 && <text
