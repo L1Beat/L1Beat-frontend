@@ -5,7 +5,7 @@ import { Search } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
-import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
+import { ProtocolLogo, SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { NodeId } from '../components/NodeId';
@@ -658,6 +658,8 @@ const LENDING_COLOR: Record<string, { color: string; opacity: number }> = {
   benqi: { color: '#22a6c9', opacity: 1 },
 };
 const lendingStyle = (id: string) => LENDING_COLOR[id] ?? { color: '#6b7280', opacity: 1 };
+// DefiLlama icon slugs for the lending protocols.
+const LENDING_SLUG: Record<string, string> = { 'aave-v3': 'aave-v3', 'aave-v4': 'aave-v4', benqi: 'benqi-lending' };
 const WEI = 1e18;
 const fromWei = (v: string | null | undefined) => (v == null ? 0 : Number(v) / WEI);
 const apy = (v: number | null | undefined) => (v == null ? '—' : `${v < 0.1 && v > 0 ? v.toFixed(2) : v.toFixed(1)}%`);
@@ -789,8 +791,15 @@ function LendingBody({ data }: { data: Lending }) {
                 <td className="py-2.5 pr-3"><ProtocolName id={r.id} name={r.name} /></td>
                 <td className="num text-right px-3 py-2.5 text-foreground">{r.avax ? compact(fromWei(r.avax.total_supplied)) : '—'}</td>
                 <td className="num text-right px-3 py-2.5 text-foreground">{r.avax ? compact(fromWei(r.avax.total_borrowed)) : '—'}</td>
-                <td className="num text-right px-3 py-2.5 text-muted-foreground">
-                  {r.avax?.utilization_percent != null ? pct(r.avax.utilization_percent, 0) : '—'}
+                <td className="num text-right px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                  {r.avax?.utilization_percent != null ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Meter value={r.avax.utilization_percent} color={lendingStyle(r.id).color} />
+                      <span className="w-8 text-right">{pct(r.avax.utilization_percent, 0)}</span>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
                 </td>
                 <td className="num text-right px-3 py-2.5 text-foreground">{apy(r.avax?.supply_apy_percent)}</td>
                 <td className="num text-right px-3 py-2.5 text-foreground">{apy(r.avax?.borrow_apy_percent)}</td>
@@ -852,6 +861,7 @@ function AssetSplit({ title, lead, leadUnit, detail, parts, unit }: {
           return (
             <span key={p.id} className="inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-[2px]" style={{ background: st.color, opacity: st.opacity }} />
+              <ProtocolLogo protocol={LENDING_SLUG[p.id] ?? p.id} name={p.name} size={14} />
               {p.name} <span className="num text-foreground">{compact(p.value)}</span>
             </span>
           );
@@ -864,9 +874,22 @@ function AssetSplit({ title, lead, leadUnit, detail, parts, unit }: {
 function ProtocolName({ id, name }: { id: string; name: string }) {
   const st = lendingStyle(id);
   return (
-    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
-      <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: st.color, opacity: st.opacity }} aria-hidden />
+    <span className="inline-flex items-center gap-2.5 text-[13px] font-medium text-foreground">
+      <span className="relative inline-flex">
+        <ProtocolLogo protocol={LENDING_SLUG[id] ?? id} name={name} size={20} />
+        {/* The protocol's color in the split bars above. */}
+        <span className="absolute -right-1 -bottom-1 w-2 h-2 rounded-[2px] ring-2 ring-card" style={{ background: st.color, opacity: st.opacity }} aria-hidden />
+      </span>
       {name}
+    </span>
+  );
+}
+
+/** A short horizontal meter with its value, e.g. how much of a market is borrowed. */
+function Meter({ value, color, width = 'w-12' }: { value: number; color: string; width?: string }) {
+  return (
+    <span className={`inline-block ${width} h-1.5 rounded-sm bg-muted overflow-hidden align-middle`} aria-hidden>
+      <span className="block h-full rounded-sm" style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color }} />
     </span>
   );
 }
@@ -1036,6 +1059,15 @@ function StakeSplit({ own, total, max }: { own: number; total: number; max: numb
   );
 }
 
+const DAY_MS = 86_400_000;
+/** "in 12d", "in 5 mo": how long until a staking period ends. */
+function untilLabel(end: number, now: number): string {
+  const days = Math.max(0, Math.round((end - now) / DAY_MS));
+  if (days === 0) return 'today';
+  if (days < 60) return `in ${days}d`;
+  return `in ${Math.round(days / 30.4)} mo`;
+}
+
 function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; state: 'loading' | 'ready' | 'error' }) {
   const [sort, setSort] = useState<{ key: VSortKey; dir: SortDir }>({ key: 'total', dir: 'desc' });
   const [query, setQuery] = useState('');
@@ -1065,16 +1097,18 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
 
   const visible = showAll || query ? sorted : sorted.slice(0, VALIDATOR_PAGE);
   const maxStake = useMemo(() => Math.max(1, ...(rows ?? []).map((v) => v.total_stake ?? v.weight)), [rows]);
+  const now = Date.now();
 
   return (
-    <section>
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 pb-2 border-b border-border">
+    <section className="rounded-md border border-border bg-card">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 px-4 sm:px-5 pt-4 pb-3 border-b border-border">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Primary Network validators</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {rows ? `${rows.length} active, ranked by total stake` : 'Active validators, ranked by total stake'}
-            <span className="hidden lg:inline">
-              {'. '}Bars split <span style={{ color: STAKE }}>own stake</span> and <span style={{ color: DELEGATED }}>delegated</span>.
+            <span className="hidden md:inline">
+              {'. '}Bars split <span style={{ color: STAKE }}>own stake</span> and <span style={{ color: DELEGATED }}>delegated</span>,
+              scaled to the largest validator.
             </span>
           </p>
         </div>
@@ -1104,10 +1138,10 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="h-9 px-3 text-left text-[11px] font-medium text-muted-foreground w-10">#</th>
+                  <th className="h-9 pl-4 sm:pl-5 pr-3 text-left text-[11px] font-medium text-muted-foreground w-10">#</th>
                   <th className="h-9 px-3 text-left text-[11px] font-medium text-muted-foreground">Node</th>
                   <SortTh label="Total stake" k="total" sort={sort} onSort={onSort} />
-                  <th className="h-9 px-3 text-left text-[11px] font-medium text-muted-foreground hidden lg:table-cell w-32">
+                  <th className="h-9 px-3 text-left text-[11px] font-medium text-muted-foreground hidden md:table-cell w-[18%]">
                     <span className="sr-only">Own and delegated split</span>
                   </th>
                   <SortTh label="Own" k="own" sort={sort} onSort={onSort} className="hidden md:table-cell" />
@@ -1115,18 +1149,24 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
                   <SortTh label="Delegators" k="delegators" sort={sort} onSort={onSort} className="hidden lg:table-cell" />
                   <SortTh label="Fee" k="fee" sort={sort} onSort={onSort} />
                   <SortTh label="Uptime" k="uptime" sort={sort} onSort={onSort} className="hidden sm:table-cell" />
-                  <SortTh label="Ends" k="end" sort={sort} onSort={onSort} className="hidden sm:table-cell" />
+                  <SortTh label="Ends" k="end" sort={sort} onSort={onSort} className="hidden sm:table-cell pr-4 sm:pr-5" />
                 </tr>
               </thead>
               <tbody>
                 {visible.map((v, i) => (
                   <tr key={v.validation_id} className="border-b border-border/60 hover:bg-accent/40">
-                    <td className="num px-3 py-2 text-muted-foreground">{i + 1}</td>
+                    <td className="num pl-4 sm:pl-5 pr-3 py-2 text-muted-foreground">{i + 1}</td>
                     <td className="px-3 py-2">
                       <NodeId id={v.node_id} to={`/validator/${encodeURIComponent(v.node_id)}?subnet=${PRIMARY_NETWORK_SUBNET_ID}`} />
                     </td>
-                    <td className="num px-3 py-2 text-right text-foreground">{compact(toAvax(v.total_stake ?? v.weight))}</td>
-                    <td className="px-3 py-2 hidden lg:table-cell">
+                    <td className="num px-3 py-2 text-right text-foreground">
+                      {compact(toAvax(v.total_stake ?? v.weight))}
+                      {/* Phones drop the split column, so a slim bar rides under the figure. */}
+                      <div className="md:hidden mt-1 w-14 ml-auto">
+                        <StakeSplit own={v.weight} total={v.total_stake ?? v.weight} max={maxStake} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 hidden md:table-cell">
                       <StakeSplit own={v.weight} total={v.total_stake ?? v.weight} max={maxStake} />
                     </td>
                     <td className="num px-3 py-2 text-right text-muted-foreground hidden md:table-cell">{compact(toAvax(v.weight))}</td>
@@ -1136,29 +1176,67 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
                     <td className="num px-3 py-2 text-right text-muted-foreground hidden lg:table-cell">
                       {v.delegator_count ? v.delegator_count.toLocaleString() : '—'}
                     </td>
-                    <td className="num px-3 py-2 text-right text-foreground">
-                      {v.delegation_fee_percent != null ? pct(v.delegation_fee_percent, v.delegation_fee_percent % 1 ? 1 : 0) : '—'}
-                    </td>
-                    <td className="num px-3 py-2 text-right text-muted-foreground hidden sm:table-cell">
-                      {v.uptime_percentage == null ? (
-                        '—'
-                      ) : v.uptime_percentage < 80 ? (
-                        <span className="text-down" title="Below 80% uptime, the minimum for staking rewards">{pct(v.uptime_percentage)}</span>
+                    <td className="px-3 py-2 text-right">
+                      {v.delegation_fee_percent != null ? (
+                        // Gold is fees across this page, as in the fee histogram.
+                        <span className="num inline-block min-w-[2.75rem] px-1.5 py-px rounded-sm text-center text-foreground" style={{ background: `${FEE}24` }}>
+                          {pct(v.delegation_fee_percent, v.delegation_fee_percent % 1 ? 1 : 0)}
+                        </span>
                       ) : (
-                        pct(v.uptime_percentage)
+                        '—'
                       )}
                     </td>
                     <td className="num px-3 py-2 text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">
-                      {v.end_time ? format(new Date(v.end_time), 'MMM d, yyyy') : '—'}
+                      {v.uptime_percentage == null ? (
+                        '—'
+                      ) : (
+                        <span
+                          className="inline-flex items-center justify-end gap-2"
+                          title={v.uptime_percentage < 80 ? 'Below 80% uptime, the minimum for staking rewards' : undefined}
+                        >
+                          {/* The bar spans 80 to 100%: below 80 a validator earns no rewards. */}
+                          <span className="hidden lg:inline-block w-10 h-1.5 rounded-sm bg-muted overflow-hidden" aria-hidden>
+                            <span
+                              className="block h-full rounded-sm"
+                              style={{
+                                width: `${Math.max(0, Math.min(100, ((v.uptime_percentage - 80) / 20) * 100))}%`,
+                                background: v.uptime_percentage < 80 ? 'var(--down)' : '#6b7280',
+                              }}
+                            />
+                          </span>
+                          <span className={`w-11 ${v.uptime_percentage < 80 ? 'text-down' : ''}`}>{pct(v.uptime_percentage)}</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="num pl-3 pr-4 sm:pr-5 py-2 text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">
+                      {v.end_time ? (
+                        <span title={format(new Date(v.end_time), 'MMM d, yyyy')}>
+                          <span className="hidden xl:inline">{format(new Date(v.end_time), 'MMM d, yyyy')} </span>
+                          <span className={Date.parse(v.end_time) - now < 14 * DAY_MS ? 'text-foreground' : ''}>
+                            {Date.parse(v.end_time) - now < 14 * DAY_MS && (
+                              <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: FEE }} aria-hidden />
+                            )}
+                            <span className="xl:hidden">{untilLabel(Date.parse(v.end_time), now)}</span>
+                            <span className="hidden xl:inline">({untilLabel(Date.parse(v.end_time), now)})</span>
+                          </span>
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <footer className="flex items-center justify-between gap-2 py-2">
+          <footer className="flex items-center justify-between gap-2 px-4 sm:px-5 py-2.5">
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {visible.length} of {sorted.length} validators. Stake in AVAX.
+              <span className="hidden sm:inline">
+                {' '}Uptime bars run from 80%, the minimum for rewards, to 100%.{' '}
+                <span className="inline-block w-1.5 h-1.5 rounded-full align-middle mr-1" style={{ background: FEE }} aria-hidden />
+                ends within 14 days.
+              </span>
             </span>
             {!query && sorted.length > VALIDATOR_PAGE && (
               <button

@@ -69,3 +69,26 @@ export function PairLogos({ a, b, size = 20 }: { a: { address: string; symbol: s
     </span>
   );
 }
+
+/** A coin's logo by ticker (BTC, AVAX), for markets that name an asset rather than a C-Chain token. */
+export function SymbolLogo({ symbol, size = 20 }: { symbol: string; size?: number }) {
+  const s = symbol.toLowerCase();
+  return <Img sources={[`https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color/${s}.svg`]} label={symbol} size={size} />;
+}
+
+// DefiLlama chain icon names, where our chain keys differ.
+const CHAIN_SLUG: Record<string, string> = {
+  bera: 'berachain',
+  cronosevm: 'cronos',
+  zksync: 'zksync era',
+  tomo: 'viction',
+  klaytn: 'klaytn',
+  coredao: 'core',
+  telos: 'telos',
+};
+
+/** An external chain's logo by its key (ethereum, base, solana). */
+export function ChainLogo({ chain, name, size = 20 }: { chain: string; name: string; size?: number }) {
+  const slug = encodeURIComponent(CHAIN_SLUG[chain] ?? chain);
+  return <Img sources={[`https://icons.llamao.fi/icons/chains/rsz_${slug}?w=48&h=48`]} label={name} size={size} />;
+}

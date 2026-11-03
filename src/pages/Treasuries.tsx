@@ -168,6 +168,19 @@ export function Treasuries() {
         <div className="md:hidden">
           <StatStrip items={stats} />
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+          <SectionErrorBoundary label="the split by kind">
+            <KindSplit holders={holders} state={state} />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary label="the share of supply">
+            <SupplyShare data={data} state={state} />
+          </SectionErrorBoundary>
+          <div className="md:col-span-2 lg:col-span-1 min-w-0">
+            <SectionErrorBoundary label="the ETF staking">
+              <EtfStaking holders={holders} state={state} />
+            </SectionErrorBoundary>
+          </div>
+        </div>
         <SectionErrorBoundary label="the holders table">
           <HoldersTable holders={holders} price={price} state={state} />
         </SectionErrorBoundary>
@@ -250,6 +263,167 @@ function HoldingsChart({ holders, price, loading }: { holders: TreasuryHolder[];
   );
 }
 
+function Card({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <section className="h-full rounded-md border border-border bg-card flex flex-col">
+      <header className="px-4 sm:px-5 pt-4 pb-3">
+        <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      </header>
+      <div className="px-4 sm:px-5 pb-4 flex-1 flex flex-col">{children}</div>
+    </section>
+  );
+}
+
+function CardBody({ state, children }: { state: 'loading' | 'ready' | 'error'; children: React.ReactNode }) {
+  if (state === 'error') return <p className="py-6 text-center text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>;
+  if (state === 'loading') return <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>;
+  return <>{children}</>;
+}
+
+const pctOf = (part: number, whole: number, digits = 1) => (whole > 0 ? `${((part / whole) * 100).toFixed(digits)}%` : '—');
+
+/** Treasuries against ETFs, and how much of it sits with the two largest holders. */
+function KindSplit({ holders, state }: { holders: TreasuryHolder[]; state: 'loading' | 'ready' | 'error' }) {
+  const rows = holders.filter((h) => h.avax_held != null);
+  const total = rows.reduce((s, h) => s + (h.avax_held ?? 0), 0);
+  const top = rows.slice(0, 2);
+  const topSum = top.reduce((s, h) => s + (h.avax_held ?? 0), 0);
+  const kinds = (['treasury', 'etf'] as const).map((k) => {
+    const of = rows.filter((h) => h.kind === k);
+    return { k, held: of.reduce((s, h) => s + (h.avax_held ?? 0), 0), holders: of };
+  });
+  return (
+    <Card title="Who holds it" sub="Company treasuries against spot ETFs, each holder a segment">
+      <CardBody state={state}>
+        {top.length === 2 && (
+          <p className="text-[12px] text-muted-foreground">
+            <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{pctOf(topSum, total, 0)}</span>
+            is with {top[0].name} and {top[1].name}
+          </p>
+        )}
+        {/* One segment per holder, shaded within its kind's color, largest first. */}
+        <div className="mt-3 flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label="AVAX held by each holder">
+          {kinds.flatMap(({ k, holders: of }) =>
+            of.map((h, i) => (
+              <div
+                key={h.id}
+                title={`${h.name} ${pctOf(h.avax_held ?? 0, total)}`}
+                style={{ width: `${((h.avax_held ?? 0) / total) * 100}%`, background: KIND[k].color, opacity: 1 - i * 0.25 }}
+              />
+            )),
+          )}
+        </div>
+        <ul className="mt-4 space-y-3">
+          {kinds.map(({ k, held, holders: of }) => (
+            <li key={k} className="text-[12px]">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ background: KIND[k].color }} aria-hidden />
+                <span className="text-foreground flex-1">{KIND[k].plural}</span>
+                <span className="num text-muted-foreground">{compact(held)} AVAX</span>
+                <span className="num w-12 text-right text-foreground">{pctOf(held, total)}</span>
+              </div>
+              <div className="mt-1.5 pl-[18px] flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {of.map((h) => (
+                  <span key={h.id} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Logo h={h} className="!h-3.5 sm:!h-3.5 max-w-[84px]" />
+                    <span className="num">{pctOf(h.avax_held ?? 0, total, 0)}</span>
+                  </span>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
+/** The holdings drawn against the whole circulating supply, to scale. */
+function SupplyShare({ data, state }: { data: TreasuriesData | null; state: 'loading' | 'ready' | 'error' }) {
+  const t = data?.totals;
+  const supply = t?.circulating_supply_avax ?? null;
+  return (
+    <Card title="Share of supply" sub="Against all circulating AVAX, drawn to scale">
+      <CardBody state={state === 'ready' && supply == null ? 'error' : state}>
+        {t && supply != null && (
+          <>
+            <p className="text-[12px] text-muted-foreground">
+              <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{pctOf(t.combined_avax, supply)}</span>
+              of {compact(supply)} circulating AVAX
+            </p>
+            <div className="mt-3 flex h-3 rounded-sm overflow-hidden bg-muted" role="img" aria-label="Held AVAX as a share of the circulating supply">
+              <div style={{ width: `${(t.treasury_avax / supply) * 100}%`, background: KIND.treasury.color }} />
+              <div style={{ width: `${(t.etf_avax / supply) * 100}%`, background: KIND.etf.color }} />
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-[12px]">
+              {(['treasury', 'etf'] as const).map((k) => {
+                const held = k === 'treasury' ? t.treasury_avax : t.etf_avax;
+                return (
+                  <div key={k} className="rounded border border-border px-3 py-2">
+                    <dt className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="w-2 h-2 rounded-[2px]" style={{ background: KIND[k].color }} aria-hidden />
+                      {KIND[k].plural}
+                    </dt>
+                    <dd className="num mt-0.5 text-[15px] text-foreground">{pctOf(held, supply, 2)}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+            <p className="mt-auto pt-3 text-[11px] text-muted-foreground">Circulating supply from CoinGecko.</p>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/** How much of each ETF's AVAX is staked, against the most its rules allow. */
+function EtfStaking({ holders, state }: { holders: TreasuryHolder[]; state: 'loading' | 'ready' | 'error' }) {
+  const etfs = holders.filter((h) => h.kind === 'etf');
+  const reported = etfs.filter((h) => h.staking_pct != null && h.avax_held != null);
+  const stakedAvax = reported.reduce((s, h) => s + ((h.avax_held ?? 0) * (h.staking_pct ?? 0)) / 100, 0);
+  return (
+    <Card title="Staking in the ETFs" sub="Share of each fund's AVAX staked, with the tick at its cap">
+      <CardBody state={state}>
+        {reported.length > 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{compact(stakedAvax)}</span>
+            AVAX staked by the {reported.length === etfs.length ? 'funds' : `${reported.length} funds that report it`}
+          </p>
+        )}
+        <ul className="mt-3 space-y-3.5">
+          {etfs.map((h) => (
+            <li key={h.id} className="text-[12px]">
+              <div className="flex items-center justify-between gap-2">
+                <Logo h={h} className="!h-3.5 sm:!h-3.5 max-w-[88px]" />
+                <span className="num text-muted-foreground text-right">
+                  {h.staking_pct != null ? (
+                    <><span className="text-foreground">{Math.round(h.staking_pct)}%</span>{h.staking_max_pct != null && ` of ${h.staking_max_pct}%`}</>
+                  ) : h.staking_max_pct != null ? (
+                    `not reported, up to ${h.staking_max_pct}%`
+                  ) : (
+                    '—'
+                  )}
+                  {h.sponsor_fee_pct != null && <span className="ml-3 pl-3 border-l border-border whitespace-nowrap">{h.sponsor_fee_pct}% fee</span>}
+                </span>
+              </div>
+              <div className="relative mt-1.5 h-1.5 rounded-sm bg-muted">
+                {h.staking_pct != null && (
+                  <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${h.staking_pct}%`, background: KIND.etf.color }} />
+                )}
+                {h.staking_max_pct != null && (
+                  <div className="absolute -top-1 -bottom-1 w-px bg-foreground/60" style={{ left: `${h.staking_max_pct}%` }} aria-hidden />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}
+
 function HoldersTable({ holders, price, state }: { holders: TreasuryHolder[]; price: number | null; state: 'loading' | 'ready' | 'error' }) {
   const notes = holders.filter((h) => NOTES[h.id]);
   return (
@@ -310,8 +484,15 @@ function HoldersTable({ holders, price, state }: { holders: TreasuryHolder[]; pr
                       <td className="num text-right px-3 py-2.5 text-foreground">
                         {h.avax_held != null ? h.avax_held.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}
                       </td>
-                      <td className="num text-right px-3 py-2.5 text-muted-foreground">
-                        {h.avax_held != null && total > 0 ? `${((h.avax_held / total) * 100).toFixed(1)}%` : '—'}
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-20 h-1.5 rounded-sm bg-muted overflow-hidden">
+                            <div className="h-full rounded-sm" style={{ width: `${h.avax_held != null && total > 0 ? (h.avax_held / total) * 100 : 0}%`, background: KIND[h.kind].color }} />
+                          </div>
+                          <span className="num w-11 text-right text-muted-foreground">
+                            {h.avax_held != null && total > 0 ? `${((h.avax_held / total) * 100).toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
                       </td>
                       <td className="num text-right px-3 py-2.5 text-foreground">{h.avax_held != null && price != null ? usd(h.avax_held * price) : '—'}</td>
                       <td className="num text-right px-3 py-2.5 text-foreground">{usd(h.aum_usd)}</td>

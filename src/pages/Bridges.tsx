@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
-import { SegmentedControl, StatStrip } from '../components/instrument';
+import { ChainLogo, ProtocolLogo, SegmentedControl, Sparkline, StatStrip, TokenLogo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getBridgeRecentTransfers, getBridgeSummary, getBridgeTimeseries, getBridgeTopTransfers } from '../api';
@@ -32,6 +32,18 @@ const BRIDGE_NAME: Record<string, string> = {
   aeb: 'Avalanche-Ethereum Bridge',
 };
 const ORDER = ['cctp', 'layerzero', 'stargate', 'avalanche-bridge', 'ccip', 'aeb'];
+// DefiLlama protocol icons; both Avalanche bridges use the Avalanche mark.
+const BRIDGE_ICON: Record<string, string> = { cctp: 'circle-cctp', layerzero: 'layerzero', stargate: 'stargate', ccip: 'chainlink-ccip' };
+function BridgeLogo({ id, size = 20 }: { id: string; size?: number }) {
+  const name = BRIDGE_NAME[id] ?? id;
+  return BRIDGE_ICON[id] ? <ProtocolLogo protocol={BRIDGE_ICON[id]} name={name} size={size} /> : <ChainLogo chain="avalanche" name={name} size={size} />;
+}
+// Long series are summed into about 120 buckets, so a trend line keeps its shape.
+function buckets(values: number[], n = 120): number[] {
+  if (values.length <= n) return values;
+  const size = values.length / n;
+  return Array.from({ length: n }, (_, i) => values.slice(Math.floor(i * size), Math.floor((i + 1) * size)).reduce((a, b) => a + b, 0));
+}
 
 const VIEWS = [
   { value: 'flows', label: 'Flows' },
@@ -202,13 +214,13 @@ export function Bridges() {
           <StatStrip items={stats} />
         </div>
 
-        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-5 items-start ${summary.state === 'loading' && s ? 'opacity-60' : ''}`}>
+        <div className={`space-y-5 ${summary.state === 'loading' && s ? 'opacity-60' : ''}`}>
           <SectionErrorBoundary label="flows by chain">
             <ChainTable summary={s} state={summary.state} />
           </SectionErrorBoundary>
-          <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
             <SectionErrorBoundary label="flows by bridge">
-              <BridgeTable summary={s} state={summary.state} />
+              <BridgeTable summary={s} days={series.data} state={summary.state} />
             </SectionErrorBoundary>
             <SectionErrorBoundary label="flows by token">
               <TokenTable summary={s} state={summary.state} />
@@ -753,10 +765,10 @@ function Skeleton({ rows = 4 }: { rows?: number }) {
 }
 
 // A pair of bars on one scale: inflow to the right of the centre, outflow to the left.
-function FlowBars({ inflow, outflow, max }: { inflow: number; outflow: number; max: number }) {
+function FlowBars({ inflow, outflow, max, wide = false }: { inflow: number; outflow: number; max: number; wide?: boolean }) {
   const w = (v: number) => `${max > 0 ? Math.max(v > 0 ? 2 : 0, (v / max) * 100) : 0}%`;
   return (
-    <span className="flex w-28 h-2" aria-hidden>
+    <span className={`flex ${wide ? 'w-56' : 'w-28'} h-2`} aria-hidden>
       <span className="flex-1 flex justify-end">
         <span className="h-full rounded-l-sm bg-foreground/35" style={{ width: w(outflow) }} />
       </span>
@@ -788,21 +800,28 @@ function ChainTable({ summary, state }: { summary: BridgeSummary | null; state: 
                 <th className="text-right font-normal px-3 py-2">In</th>
                 <th className="text-right font-normal px-3 py-2">Out</th>
                 <th className="text-right font-normal px-3 py-2">Net</th>
-                <th className="hidden sm:table-cell px-4 sm:px-5 py-2" />
+                <th className="text-left font-normal hidden sm:table-cell px-3 py-2">Out / in</th>
+                <th className="text-left font-normal hidden md:table-cell px-4 sm:px-5 py-2">Via</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((c) => (
                 <tr key={c.chain}>
                   <td className="px-4 sm:px-5 py-2.5 text-[13px] font-medium text-foreground">
-                    {c.name}
-                    {c.avalanche_l1 && <span className="ml-2 text-[10px] font-normal text-muted-foreground">Avalanche L1</span>}
+                    <span className="inline-flex items-center gap-2.5">
+                      <ChainLogo chain={c.chain} name={c.name} size={20} />
+                      {c.name}
+                      {c.avalanche_l1 && <span className="text-[10px] font-normal text-muted-foreground">Avalanche L1</span>}
+                    </span>
                   </td>
                   <td className="num text-right px-3 py-2.5 text-foreground">{usd(c.inflow_usd)}</td>
                   <td className="num text-right px-3 py-2.5 text-foreground">{usd(c.outflow_usd)}</td>
                   <td className={`num text-right px-3 py-2.5 ${netClass(c.net_usd)}`}>{signedUsd(c.net_usd)}</td>
-                  <td className="hidden sm:table-cell px-4 sm:px-5 py-2.5">
-                    <FlowBars inflow={c.inflow_usd} outflow={c.outflow_usd} max={max} />
+                  <td className="hidden sm:table-cell px-3 py-2.5">
+                    <FlowBars inflow={c.inflow_usd} outflow={c.outflow_usd} max={max} wide />
+                  </td>
+                  <td className="hidden md:table-cell px-4 sm:px-5 py-2.5">
+                    <BridgeMix bridges={c.bridges ?? []} />
                   </td>
                 </tr>
               ))}
@@ -814,44 +833,91 @@ function ChainTable({ summary, state }: { summary: BridgeSummary | null; state: 
   );
 }
 
-function BridgeTable({ summary, state }: { summary: BridgeSummary | null; state: 'loading' | 'ready' | 'error' }) {
-  const rows = [...(summary?.by_bridge ?? [])].sort((a, b) => b.inflow_usd + b.outflow_usd - (a.inflow_usd + a.outflow_usd));
+/** Which bridges carried a chain's dollars, as one bar split by bridge. */
+function BridgeMix({ bridges }: { bridges: { id: string; inflow_usd: number; outflow_usd: number }[] }) {
+  const total = bridges.reduce((a, x) => a + x.inflow_usd + x.outflow_usd, 0);
+  if (total <= 0) return <span className="text-muted-foreground">—</span>;
+  const parts = [...bridges].sort((a, b) => b.inflow_usd + b.outflow_usd - (a.inflow_usd + a.outflow_usd));
   return (
-    <Card title="By bridge">
+    <span
+      className="flex w-24 h-2 rounded-sm overflow-hidden gap-px bg-muted"
+      title={parts.map((x) => `${BRIDGE_NAME[x.id] ?? x.id} ${Math.round(((x.inflow_usd + x.outflow_usd) / total) * 100)}%`).join(', ')}
+    >
+      {parts.map((x) => (
+        <span key={x.id} style={{ width: `${((x.inflow_usd + x.outflow_usd) / total) * 100}%`, background: bridgeColor(x.id) }} />
+      ))}
+    </span>
+  );
+}
+
+function BridgeTable({ summary, days, state }: { summary: BridgeSummary | null; days: BridgeDay[] | null; state: 'loading' | 'ready' | 'error' }) {
+  const rows = [...(summary?.by_bridge ?? [])].filter((b) => b.inflow_usd + b.outflow_usd > 0 || b.transfers > 0).sort((a, b) => b.inflow_usd + b.outflow_usd - (a.inflow_usd + a.outflow_usd));
+  const total = rows.reduce((a, b) => a + b.inflow_usd + b.outflow_usd, 0);
+  const trend = (id: string) =>
+    buckets((days ?? []).map((d) => {
+      const x = d.bridges.find((y) => y.id === id);
+      return x ? x.inflow_usd + x.outflow_usd : 0;
+    }));
+  return (
+    <Card title="By bridge" subtitle="Dollars moved both ways, with the daily trend over the chart's range">
       {state === 'error' && !summary ? (
         <p className="px-5 pb-5 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>
       ) : !summary ? (
         <Skeleton />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px] whitespace-nowrap">
-            <thead>
-              <tr className="border-y border-border text-[11px] text-muted-foreground">
-                <th className="text-left font-normal px-4 sm:px-5 py-2">Bridge</th>
-                <th className="text-right font-normal px-3 py-2">In</th>
-                <th className="text-right font-normal px-3 py-2">Out</th>
-                <th className="text-right font-normal px-3 py-2">Net</th>
-                <th className="text-right font-normal px-4 sm:px-5 py-2">Transfers</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((b) => (
-                <tr key={b.id}>
-                  <td className="px-4 sm:px-5 py-2.5">
-                    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
-                      <span className="w-2 h-2 rounded-[2px]" style={{ background: bridgeColor(b.id) }} aria-hidden />
-                      {b.name}
-                    </span>
-                  </td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{usd(b.inflow_usd)}</td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{usd(b.outflow_usd)}</td>
-                  <td className={`num text-right px-3 py-2.5 ${netClass(b.net_usd)}`}>{signedUsd(b.net_usd)}</td>
-                  <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground">{b.transfers.toLocaleString()}</td>
+        <>
+          {total > 0 && (
+            <div className="px-4 sm:px-5 pb-3">
+              <div className="flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label="Share of dollars moved by bridge">
+                {rows.map((b) => (
+                  <div
+                    key={b.id}
+                    title={`${b.name} ${(((b.inflow_usd + b.outflow_usd) / total) * 100).toFixed(1)}%`}
+                    style={{ width: `${((b.inflow_usd + b.outflow_usd) / total) * 100}%`, background: bridgeColor(b.id) }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] whitespace-nowrap">
+              <thead>
+                <tr className="border-y border-border text-[11px] text-muted-foreground">
+                  <th className="text-left font-normal px-4 sm:px-5 py-2">Bridge</th>
+                  <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">In</th>
+                  <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">Out</th>
+                  <th className="text-right font-normal px-3 py-2">Net</th>
+                  <th className="text-left font-normal px-4 sm:px-5 py-2 hidden sm:table-cell">Trend</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((b) => (
+                  <tr key={b.id}>
+                    <td className="px-4 sm:px-5 py-2.5">
+                      <span className="inline-flex items-center gap-2.5 text-[13px] font-medium text-foreground">
+                        <span className="relative inline-flex">
+                          <BridgeLogo id={b.id} />
+                          {/* The chart color, so a row can be matched to its band. */}
+                          <span className="absolute -right-1 -bottom-1 w-2 h-2 rounded-[2px] ring-2 ring-card" style={{ background: bridgeColor(b.id) }} aria-hidden />
+                        </span>
+                        <span>
+                          {b.name}
+                          <span className="block text-[11px] font-normal text-muted-foreground">{b.transfers.toLocaleString()} transfers</span>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{usd(b.inflow_usd)}</td>
+                    <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{usd(b.outflow_usd)}</td>
+                    <td className={`num text-right px-4 sm:px-3 py-2.5 ${netClass(b.net_usd)}`}>{signedUsd(b.net_usd)}</td>
+                    <td className="px-4 sm:px-5 py-2.5 hidden sm:table-cell">
+                      <Sparkline data={trend(b.id)} width={96} height={22} color={bridgeColor(b.id)} fill />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </Card>
   );
@@ -859,6 +925,7 @@ function BridgeTable({ summary, state }: { summary: BridgeSummary | null; state:
 
 function TokenTable({ summary, state }: { summary: BridgeSummary | null; state: 'loading' | 'ready' | 'error' }) {
   const rows = (summary?.by_token ?? []).filter((x) => x.priced && x.inflow_usd + x.outflow_usd > 0).slice(0, 8);
+  const max = Math.max(...rows.map((x) => Math.max(x.inflow_usd, x.outflow_usd)), 1);
   return (
     <Card title="By token" subtitle="Tokens with a price. Others are counted in transfers but add no dollars.">
       {state === 'error' && !summary ? (
@@ -873,16 +940,25 @@ function TokenTable({ summary, state }: { summary: BridgeSummary | null; state: 
                 <th className="text-left font-normal px-4 sm:px-5 py-2">Token</th>
                 <th className="text-right font-normal px-3 py-2">In</th>
                 <th className="text-right font-normal px-3 py-2">Out</th>
-                <th className="text-right font-normal px-4 sm:px-5 py-2">Net</th>
+                <th className="text-right font-normal px-3 py-2">Net</th>
+                <th className="text-left font-normal hidden sm:table-cell px-4 sm:px-5 py-2">Out / in</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((x) => (
                 <tr key={x.token}>
-                  <td className="num px-4 sm:px-5 py-2.5 text-[13px] text-foreground">{x.symbol}</td>
+                  <td className="px-4 sm:px-5 py-2.5 text-[13px] text-foreground">
+                    <span className="inline-flex items-center gap-2.5">
+                      <TokenLogo address={x.token} symbol={x.symbol} size={20} />
+                      <span className="num">{x.symbol}</span>
+                    </span>
+                  </td>
                   <td className="num text-right px-3 py-2.5 text-foreground">{usd(x.inflow_usd)}</td>
                   <td className="num text-right px-3 py-2.5 text-foreground">{usd(x.outflow_usd)}</td>
-                  <td className={`num text-right px-4 sm:px-5 py-2.5 ${netClass(x.net_usd)}`}>{signedUsd(x.net_usd)}</td>
+                  <td className={`num text-right px-3 py-2.5 ${netClass(x.net_usd)}`}>{signedUsd(x.net_usd)}</td>
+                  <td className="hidden sm:table-cell px-4 sm:px-5 py-2.5">
+                    <FlowBars inflow={x.inflow_usd} outflow={x.outflow_usd} max={max} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -924,10 +1000,16 @@ function TransferList({ title, items, state, names, empty }: {
       ) : (
         <ul className="divide-y divide-border">
           {items.map((x, i) => (
-            <li key={`${x.tx_hash}-${x.direction}-${x.token}-${i}`} className="px-4 sm:px-5 py-2 flex items-center justify-between gap-3">
-              <span className="min-w-0">
+            <li key={`${x.tx_hash}-${x.direction}-${x.token}-${i}`} className="px-4 sm:px-5 py-2 flex items-center gap-3">
+              {/* The other chain, badged with the bridge that carried it. */}
+              <span className="relative inline-flex shrink-0">
+                <ChainLogo chain={x.chain} name={x.chain_name} size={24} />
+                <span className="absolute -right-1.5 -bottom-1 rounded-[4px] ring-2 ring-card inline-flex">
+                  <BridgeLogo id={x.bridge} size={13} />
+                </span>
+              </span>
+              <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-[12px] text-foreground">
-                  <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: bridgeColor(x.bridge) }} aria-hidden />
                   <span className="truncate">
                     <span className="num">{x.symbol}</span> {x.direction === 'in' ? `from ${x.chain_name}` : `to ${x.chain_name}`}
                     {x.passthrough && <span className="text-muted-foreground"> (passed straight through)</span>}

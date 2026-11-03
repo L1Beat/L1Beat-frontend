@@ -3,7 +3,7 @@ import { Flame, Volume2, VolumeX } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
 import { format, parseISO } from 'date-fns';
-import { SegmentedControl, StatStrip } from '../components/instrument';
+import { SegmentedControl, Sparkline, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { getBurnedTotal, getEvmFeesBurned, getEvmFeesBurnedSpan, getStakingSummary, getTreasuries, nAvaxToAvax } from '../api';
 import type { FeeBurnPoint } from '../api';
@@ -456,7 +456,7 @@ const BlockRow = memo(function BlockRow({
 
 // Owns the 1s clock so the "Xs ago" labels stay live without re-rendering the
 // hero, counter, ember canvas or stat cards every second.
-function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }) {
+function LiveFeed({ blocks, reduced, connected }: { blocks: FeedBlock[]; reduced: boolean; connected: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -465,14 +465,23 @@ function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }
   const shown = blocks.slice(0, FEED_VISIBLE);
   const maxAvax = shown.reduce((m, b) => Math.max(m, b.avax), 0);
 
+  // Oldest first, for the trend line over every block still in the buffer.
+  const trail = blocks.map((b) => b.avax).reverse();
   return (
-    <section>
-      <div className="flex items-baseline justify-between gap-3 py-2">
-        <h2 className="text-[13px] font-medium text-foreground">Live C-Chain block burns</h2>
-        <span className="text-[11px] text-muted-foreground">
-          Last <span className="num">{FEED_VISIBLE}</span> blocks
+    <Card
+      title="Live C-Chain block burns"
+      sub={`The last ${FEED_VISIBLE} blocks as they land; the line shows the last ${blocks.length || FEED_CAP}.`}
+      aside={
+        <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
+          <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-up' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
+          {connected ? 'Live' : 'Reconnecting'}
         </span>
+      }
+    >
+      <div className="px-4 sm:px-5 pb-3">
+        <div className="h-10">{trail.length > 1 && <Sparkline data={trail} width={600} height={40} color={BASE} fill className="w-full h-10" />}</div>
       </div>
+      <div className="px-4 sm:px-5 pb-2">
       <table className="w-full text-[12px] border-t border-border">
         <thead>
           <tr className="h-9 border-b border-border text-[11px] font-medium text-muted-foreground">
@@ -497,7 +506,8 @@ function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }
               ))}
         </tbody>
       </table>
-    </section>
+      </div>
+    </Card>
   );
 }
 
@@ -520,11 +530,28 @@ interface BurnFacts {
   /** Total AVAX supply, for the share already burned. */
   supplyAvax: number | null;
   price: number | null;
+  /** Oldest first: the last 24 hours, 60 days and every complete month. */
+  hours: FeeBurnPoint[];
+  days: FeeBurnPoint[];
+  months: FeeBurnPoint[];
+  /** All-time base fee and priority tip, in AVAX. */
+  cumulative: { base: number; tip: number } | null;
 }
 
 // Loaded once: the rolling totals, the busiest month, supply and price.
 function useBurnFacts(): BurnFacts {
-  const [facts, setFacts] = useState<BurnFacts>({ last24h: null, last30d: null, prior30d: null, busiestMonth: null, supplyAvax: null, price: null });
+  const [facts, setFacts] = useState<BurnFacts>({
+    last24h: null,
+    last30d: null,
+    prior30d: null,
+    busiestMonth: null,
+    supplyAvax: null,
+    price: null,
+    hours: [],
+    days: [],
+    months: [],
+    cumulative: null,
+  });
   useEffect(() => {
     let alive = true;
     Promise.all([
@@ -547,6 +574,10 @@ function useBurnFacts(): BurnFacts {
         busiestMonth: busiest ? { period: busiest.period, avax: nAvaxToAvax(busiest.total_burned) } : null,
         supplyAvax: staking ? nAvaxToAvax(staking.total_supply) : null,
         price: treasuries?.totals.avax_price_usd ?? null,
+        hours: hours?.series ?? [],
+        days: d,
+        months: months?.series ?? [],
+        cumulative: months ? { base: nAvaxToAvax(months.cumulative.base_fee_burned), tip: nAvaxToAvax(months.cumulative.priority_fee_burned) } : null,
       });
     });
     return () => {
@@ -725,6 +756,219 @@ function BurnHistory() {
   );
 }
 
+const BASE = PARTS[0].color;
+const TIP = PARTS[1].color;
+const pctOf = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
+
+function Card({ title, sub, aside, children }: { title: string; sub?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-md border border-border bg-card">
+      <header className="px-4 sm:px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+          {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        </div>
+        {aside}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+const Pending = ({ rows = 3 }: { rows?: number }) => (
+  <div className="px-4 sm:px-5 pb-5 space-y-2">{Array.from({ length: rows }, (_, i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
+);
+
+/** One bar split into base fee and priority tip. */
+function SplitBar({ base, tip, label }: { base: number; tip: number; label: string }) {
+  const b = pctOf(base, base + tip);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[11px] text-muted-foreground">
+        <span>{label}</span>
+        <span className="num">
+          <span className="text-foreground">{b.toFixed(0)}%</span> base, <span className="text-foreground">{(100 - b).toFixed(0)}%</span> tip
+        </span>
+      </div>
+      <div className="mt-1.5 flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label={`${label}: ${b.toFixed(0)}% base fee, ${(100 - b).toFixed(0)}% priority tip`}>
+        <div style={{ width: `${b}%`, background: BASE }} />
+        <div style={{ width: `${100 - b}%`, background: TIP }} />
+      </div>
+    </div>
+  );
+}
+
+/** Where the burn comes from, all time against the last 30 days. */
+function FeeSplit({ facts }: { facts: BurnFacts }) {
+  const recent = facts.days.slice(-30);
+  const base30 = recent.reduce((s, p) => s + nAvaxToAvax(p.base_fee_burned), 0);
+  const tip30 = recent.reduce((s, p) => s + nAvaxToAvax(p.priority_fee_burned), 0);
+  const tipShare30 = pctOf(tip30, base30 + tip30);
+  const all = facts.cumulative;
+  return (
+    <Card title="Base fee and priority tip" sub="Both parts of every C-Chain fee are burned">
+      {!all || !recent.length ? (
+        <Pending />
+      ) : (
+        <div className="px-4 sm:px-5 pb-4 space-y-4">
+          <p className="text-[12px] text-muted-foreground">
+            <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{tipShare30.toFixed(0)}%</span>
+            of the last 30 days came from tips, against {pctOf(all.tip, all.base + all.tip).toFixed(0)}% all time
+          </p>
+          <SplitBar label="All time" base={all.base} tip={all.tip} />
+          <SplitBar label="Last 30 days" base={base30} tip={tip30} />
+          <ul className="space-y-2 pt-1">
+            {PARTS.map((part) => (
+              <li key={part.key} className="flex items-center gap-3 text-[12px]">
+                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: part.color }} aria-hidden />
+                <span className="text-foreground flex-1">{part.label}</span>
+                <Sparkline data={recent.map((p) => nAvaxToAvax(p[part.key]))} width={72} height={18} color={part.color} fill />
+                <span className="num w-20 text-right text-foreground">{compact(part.key === 'base_fee_burned' ? base30 : tip30)} AVAX</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted-foreground">Lines and amounts cover the last 30 days.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Calendar years from the monthly series, each with its months as a line. */
+function ByYear({ facts }: { facts: BurnFacts }) {
+  const years = useMemo(() => {
+    const out = new Map<string, { base: number; tip: number; months: number[] }>();
+    for (const p of facts.months) {
+      const y = p.period.slice(0, 4);
+      const e = out.get(y) ?? { base: 0, tip: 0, months: [] };
+      e.base += nAvaxToAvax(p.base_fee_burned);
+      e.tip += nAvaxToAvax(p.priority_fee_burned);
+      e.months.push(nAvaxToAvax(p.total_burned));
+      out.set(y, e);
+    }
+    return [...out].map(([year, v]) => ({ year, ...v, total: v.base + v.tip })).reverse();
+  }, [facts.months]);
+  const first = facts.months[0]?.period;
+  const last = facts.months[facts.months.length - 1]?.period;
+  const max = Math.max(1, ...years.map((y) => y.total));
+  const all = years.reduce((s, y) => s + y.total, 0);
+  const span = (year: string) => {
+    const f = first?.startsWith(year) ? format(parseISO(first), 'MMM') : 'Jan';
+    const l = last?.startsWith(year) ? format(parseISO(last), 'MMM') : 'Dec';
+    return f === 'Jan' && l === 'Dec' ? null : `${f} to ${l}`;
+  };
+  return (
+    <Card title="By year" sub="Complete months only, so the current month isn't counted yet">
+      {!years.length ? (
+        <Pending rows={5} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px] whitespace-nowrap">
+            <thead>
+              <tr className="border-y border-border text-[11px] text-muted-foreground">
+                <th className="text-left font-normal px-4 sm:px-5 py-2">Year</th>
+                <th className="text-right font-normal px-3 py-2">Burned, AVAX</th>
+                <th className="text-left font-normal px-3 py-2 w-[34%] hidden md:table-cell">Base fee and tip</th>
+                <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">By month</th>
+                <th className="text-right font-normal px-4 sm:px-5 py-2">Of all burned</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {years.map((y) => (
+                <tr key={y.year}>
+                  <td className="px-4 sm:px-5 py-2.5">
+                    <span className="num text-[13px] font-medium text-foreground">{y.year}</span>
+                    {span(y.year) && <span className="ml-2 text-[11px] text-muted-foreground">{span(y.year)}</span>}
+                  </td>
+                  <td className="num text-right px-3 py-2.5 text-foreground">{compact(y.total)}</td>
+                  <td className="px-3 py-2.5 hidden md:table-cell">
+                    {/* Length is the year's total against the biggest year; the split is base fee then tip. */}
+                    <div className="h-1.5 rounded-sm bg-muted overflow-hidden">
+                      <div className="h-full flex" style={{ width: `${(y.total / max) * 100}%` }}>
+                        <div style={{ width: `${pctOf(y.base, y.total)}%`, background: BASE }} />
+                        <div style={{ width: `${pctOf(y.tip, y.total)}%`, background: TIP }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 hidden sm:table-cell">
+                    <Sparkline data={y.months} width={96} height={20} color={BASE} fill />
+                  </td>
+                  <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground">{pctOf(y.total, all).toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BusiestMonths({ facts }: { facts: BurnFacts }) {
+  const top = [...facts.months].sort((a, b) => nAvaxToAvax(b.total_burned) - nAvaxToAvax(a.total_burned)).slice(0, 6);
+  const max = top.length ? nAvaxToAvax(top[0].total_burned) : 1;
+  return (
+    <Card title="Busiest months" sub="Most AVAX burned in a calendar month">
+      {!top.length ? (
+        <Pending />
+      ) : (
+        <ol className="px-4 sm:px-5 pb-4 space-y-2.5">
+          {top.map((p) => {
+            const v = nAvaxToAvax(p.total_burned);
+            return (
+              <li key={p.period} className="text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground">{format(parseISO(p.period), 'MMMM yyyy')}</span>
+                  <span className="num text-foreground">{compact(v)} AVAX</span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-sm bg-muted overflow-hidden">
+                  <div className="h-full rounded-sm" style={{ width: `${(v / max) * 100}%`, background: BASE }} />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+/** The last 24 hours, hour by hour, with the busiest hour named. */
+function LastDay({ facts }: { facts: BurnFacts }) {
+  const hours = facts.hours;
+  const values = hours.map((p) => nAvaxToAvax(p.total_burned));
+  const peakIdx = values.reduce((m, v, i) => (v > values[m] ? i : m), 0);
+  const peak = hours[peakIdx];
+  return (
+    <Card title="Last 24 hours" sub="AVAX burned each hour, UTC">
+      {!hours.length ? (
+        <Pending rows={2} />
+      ) : (
+        <div className="px-4 sm:px-5 pb-4">
+          <div className="num text-[22px] leading-7 font-medium text-foreground">{facts.last24h != null ? `${compact(facts.last24h)} AVAX` : '—'}</div>
+          <div className="text-[11px] text-muted-foreground">
+            {facts.last24h != null && facts.price != null ? `about $${compact(facts.last24h * facts.price)}, ` : ''}
+            {(facts.last24h ?? 0) > 0 ? `${compact((facts.last24h ?? 0) / 24)} AVAX an hour on average` : ''}
+          </div>
+          <div className="mt-3 h-16">
+            <Sparkline data={values} width={300} height={64} color={BASE} fill className="w-full h-16" />
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground num">
+            <span>{format(parseISO(hours[0].period), 'HH:mm')}</span>
+            <span>{format(parseISO(hours[hours.length - 1].period), 'HH:mm')}</span>
+          </div>
+          {peak && (
+            <p className="mt-3 text-[12px] text-muted-foreground">
+              Busiest hour: <span className="num text-foreground">{format(parseISO(peak.period), 'HH:mm')}</span>, with{' '}
+              <span className="num text-foreground">{compact(values[peakIdx])} AVAX</span>
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // --- page ------------------------------------------------------------------
 export function Burn() {
   const reduced = usePrefersReducedMotion();
@@ -843,12 +1087,22 @@ export function Burn() {
         </div>
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-5">
         <div className="md:hidden">
           <StatStrip items={stats} />
         </div>
         <BurnHistory />
-        <LiveFeed blocks={blocks} reduced={reduced} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="lg:col-span-2 space-y-5 min-w-0">
+            <ByYear facts={facts} />
+            <LiveFeed blocks={blocks} reduced={reduced} connected={connected} />
+          </div>
+          <div className="space-y-5 min-w-0">
+            <FeeSplit facts={facts} />
+            <LastDay facts={facts} />
+            <BusiestMonths facts={facts} />
+          </div>
+        </div>
       </div>
     </div>
   );

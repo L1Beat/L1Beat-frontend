@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
-import { SegmentedControl, StatStrip } from '../components/instrument';
+import { ProtocolLogo, SegmentedControl, Sparkline, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getPerpsOpenInterest, getPerpsSummary, getPerpsTimeseries, getPerpsTopLiquidations } from '../api';
-import type { PerpsOpenInterestDay, PerpsSummary } from '../api';
+import type { PerpsDay, PerpsOpenInterestDay, PerpsSummary } from '../api';
 import { LONG, Liquidations, OpenInterest, PERPS_RANGES, SHORT, VolumeBars, compact, day, usd, useLoad, venueStyle } from '../components/PerpsCharts';
 import type { PerpsRange } from '../components/PerpsCharts';
 import { chartPointerProps } from '../utils/chartPointer';
@@ -125,8 +125,12 @@ export function Perps() {
           </section>
         </SectionErrorBoundary>
 
+        <SectionErrorBoundary label="daily activity">
+          <ActivityPanels days={series.data} state={series.state} />
+        </SectionErrorBoundary>
+
         <SectionErrorBoundary label="venues">
-          <VenueTable summary={s} state={summary.state} />
+          <VenueTable summary={s} days={series.data} state={summary.state} />
         </SectionErrorBoundary>
 
         <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
@@ -244,8 +248,57 @@ function OpenInterestChart({ data, state }: { data: PerpsOpenInterestDay[] | nul
   );
 }
 
-function VenueTable({ summary, state }: { summary: PerpsSummary | null; state: 'loading' | 'ready' | 'error' }) {
+// Long series are summed into about 120 buckets, so a trend line keeps its shape.
+function buckets(values: number[], n = 120): number[] {
+  if (values.length <= n) return values;
+  const size = values.length / n;
+  return Array.from({ length: n }, (_, i) => values.slice(Math.floor(i * size), Math.floor((i + 1) * size)).reduce((a, b) => a + b, 0));
+}
+
+/** Trades, fees and liquidations per day as three small panels, each with its total and busiest day. */
+function ActivityPanels({ days, state }: { days: PerpsDay[] | null; state: 'loading' | 'ready' | 'error' }) {
+  const panels: { key: 'trades' | 'fees_usd' | 'liquidated_usd'; label: string; color: string; fmt: (v: number) => string }[] = [
+    { key: 'trades', label: 'Trades', color: '#8b5cf6', fmt: (v) => compact(v) },
+    { key: 'fees_usd', label: 'Fees paid', color: '#199e70', fmt: usd },
+    { key: 'liquidated_usd', label: 'Liquidated', color: '#d4a017', fmt: usd },
+  ];
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      {panels.map((p) => {
+        const values = (days ?? []).map((d) => d[p.key]);
+        const total = values.reduce((a, b) => a + b, 0);
+        const peakIdx = values.length ? values.indexOf(Math.max(...values)) : -1;
+        const peak = peakIdx >= 0 ? days![peakIdx] : null;
+        return (
+          <section key={p.key} className="rounded-md border border-border bg-card px-4 sm:px-5 pt-4 pb-3 min-w-0">
+            <h2 className="text-[12px] text-muted-foreground">{p.label}</h2>
+            {!days ? (
+              <div className={`mt-2 h-[92px] rounded bg-muted/50 ${state === 'loading' ? 'animate-pulse' : ''}`} />
+            ) : (
+              <div className={state === 'loading' ? 'opacity-50' : ''}>
+                <div className="mt-1 num text-[22px] leading-7 font-medium text-foreground">{p.fmt(total)}</div>
+                <div className="text-[11px] text-muted-foreground leading-4">
+                  {peak && values[peakIdx] > 0 ? (
+                    <>
+                      busiest day <span className="num text-foreground">{p.fmt(values[peakIdx])}</span> on {day(peak.date, days.length > 365 ? 'MMM d, yyyy' : 'MMM d')}
+                    </>
+                  ) : (
+                    'none in this period'
+                  )}
+                </div>
+                <Sparkline data={buckets(values)} width={300} height={44} color={p.color} fill className="mt-2 w-full h-11" />
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function VenueTable({ summary, days, state }: { summary: PerpsSummary | null; days: PerpsDay[] | null; state: 'loading' | 'ready' | 'error' }) {
   const rows = (summary?.by_venue ?? []).filter((v) => v.volume_usd > 0 || v.trades > 0);
+  const trend = (id: string) => buckets((days ?? []).map((d) => d.venues.find((x) => x.id === id)?.volume_usd ?? 0));
   return (
     <section className="rounded-md border border-border bg-card">
       <header className="px-4 sm:px-5 pt-4 pb-3">
@@ -262,31 +315,52 @@ function VenueTable({ summary, state }: { summary: PerpsSummary | null; state: '
               <tr className="border-y border-border text-[11px] text-muted-foreground">
                 <th className="text-left font-normal px-4 sm:px-5 py-2">Venue</th>
                 <th className="text-right font-normal px-3 py-2">Volume</th>
-                <th className="text-right font-normal px-3 py-2">Long / short</th>
+                <th className="text-left font-normal px-3 py-2 w-[24%] hidden md:table-cell">Long / short</th>
+                <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">Trend</th>
                 <th className="text-right font-normal px-3 py-2">Traders</th>
-                <th className="text-right font-normal px-3 py-2">Fees</th>
-                <th className="text-right font-normal px-4 sm:px-5 py-2">Liquidated</th>
+                <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">Fees</th>
+                <th className="text-right font-normal px-4 sm:px-5 py-2 hidden sm:table-cell">Liquidated</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((v) => (
-                <tr key={v.id}>
-                  <td className="px-4 sm:px-5 py-2.5">
-                    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
-                      <span className="w-2 h-2 rounded-[2px]" style={{ background: venueStyle(v.id).color, opacity: venueStyle(v.id).opacity }} aria-hidden />
-                      {v.name}
-                      {v.id === 'gmx-v1' && <span className="text-[10px] font-normal text-muted-foreground">closed July 2025</span>}
-                    </span>
-                  </td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{usd(v.volume_usd)}</td>
-                  <td className="num text-right px-3 py-2.5 text-muted-foreground">
-                    {v.volume_usd > 0 ? `${Math.round((v.long_volume_usd / v.volume_usd) * 100)}% / ${Math.round((v.short_volume_usd / v.volume_usd) * 100)}%` : '—'}
-                  </td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{v.traders.toLocaleString()}</td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{usd(v.fees_usd)}</td>
-                  <td className="num text-right px-4 sm:px-5 py-2.5 text-foreground">{usd(v.liquidated_usd)}</td>
-                </tr>
-              ))}
+              {rows.map((v) => {
+                const long = v.volume_usd > 0 ? (v.long_volume_usd / v.volume_usd) * 100 : 0;
+                const st = venueStyle(v.id);
+                return (
+                  <tr key={v.id}>
+                    <td className="px-4 sm:px-5 py-2.5">
+                      <span className="inline-flex items-center gap-2.5 text-[13px] font-medium text-foreground">
+                        <span style={{ opacity: st.opacity }} className="inline-flex">
+                          <ProtocolLogo protocol="gmx" name={v.name} size={20} />
+                        </span>
+                        {v.name}
+                        {v.id === 'gmx-v1' && <span className="text-[10px] font-normal text-muted-foreground">closed July 2025</span>}
+                      </span>
+                    </td>
+                    <td className="num text-right px-3 py-2.5 text-foreground">{usd(v.volume_usd)}</td>
+                    <td className="px-3 py-2.5 hidden md:table-cell">
+                      {v.volume_usd > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <span className="num w-8 text-right text-[11px]" style={{ color: LONG }}>{Math.round(long)}%</span>
+                          <div className="flex-1 flex h-1.5 rounded-sm overflow-hidden gap-px" aria-label={`${Math.round(long)}% long`}>
+                            <div style={{ width: `${long}%`, background: LONG }} />
+                            <div style={{ width: `${100 - long}%`, background: SHORT }} />
+                          </div>
+                          <span className="num w-8 text-[11px]" style={{ color: SHORT }}>{Math.round(100 - long)}%</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                      <Sparkline data={trend(v.id)} width={120} height={22} color={st.color} fill />
+                    </td>
+                    <td className="num text-right px-3 py-2.5 text-foreground">{v.traders.toLocaleString()}</td>
+                    <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{usd(v.fees_usd)}</td>
+                    <td className="num text-right px-4 sm:px-5 py-2.5 text-foreground hidden sm:table-cell">{usd(v.liquidated_usd)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

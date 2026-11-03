@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SymbolLogo } from './instrument';
 import { format, parseISO } from 'date-fns';
 import type { PerpsDay, PerpsLiquidation, PerpsOpenInterestDay } from '../api';
 import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
@@ -232,7 +233,7 @@ export function OpenInterest({ data, state }: { data: PerpsOpenInterestDay[] | n
   const rows = (latest?.by_market ?? [])
     .filter((m) => m.long_usd + m.short_usd > 0)
     .sort((a, b) => b.long_usd + b.short_usd - (a.long_usd + a.short_usd))
-    .slice(0, 6);
+    .slice(0, 10);
   const max = Math.max(...rows.map((m) => Math.max(m.long_usd, m.short_usd)), 1);
   return (
     <div className="min-w-0 px-4 sm:px-5 py-3">
@@ -252,8 +253,9 @@ export function OpenInterest({ data, state }: { data: PerpsOpenInterestDay[] | n
         <ul className="space-y-2">
           {rows.map((m) => (
             <li key={m.market} className="text-[12px]">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-foreground truncate">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-foreground truncate inline-flex items-center gap-2 min-w-0">
+                  <SymbolLogo symbol={m.name.split('/')[0]} size={16} />
                   {m.name}
                   {/* V1 positions still open from before it closed have no pool; say which venue. */}
                   <span className="ml-1.5 text-[11px] text-muted-foreground">{m.pool ?? (m.venue === 'gmx-v1' ? 'GMX V1' : '')}</span>
@@ -293,26 +295,41 @@ export function Liquidations({ items, state, title }: { items: PerpsLiquidation[
       ) : (
         <ul className="divide-y divide-border">
           {items.map((l, i) => (
-            <li key={`${l.tx_hash}-${i}`} className="px-4 sm:px-5 py-2 flex items-center justify-between gap-3">
-              <span className="min-w-0">
-                <span className="block text-[12px] text-foreground truncate">
-                  {l.is_long ? 'Long' : 'Short'} {l.market_name}
-                  {l.pool && <span className="text-muted-foreground"> ({l.pool})</span>}
+            <li key={`${l.tx_hash}-${i}`} className="px-4 sm:px-5 py-2 flex items-center gap-3">
+              <SymbolLogo symbol={l.market_name.split('/')[0]} size={22} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 text-[12px] text-foreground truncate">
+                  <span
+                    className="shrink-0 px-1 rounded-[3px] text-[10px] font-medium leading-4"
+                    style={{ color: l.is_long ? LONG : SHORT, background: `${l.is_long ? LONG : SHORT}1f` }}
+                  >
+                    {l.is_long ? 'Long' : 'Short'}
+                  </span>
+                  <span className="truncate">
+                    {l.market_name}
+                    {l.pool && <span className="text-muted-foreground"> ({l.pool})</span>}
+                  </span>
                 </span>
                 <span className="block text-[11px] text-muted-foreground">
                   {/* UTC, like the daily bars. */}
                   {l.venue === 'gmx-v1' ? 'GMX V1' : 'GMX V2'}, {format(parseISO(l.time.slice(0, 19)), 'MMM d, yyyy HH:mm')} UTC
                 </span>
               </span>
-              <a
-                href={`https://snowtrace.io/tx/${l.tx_hash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="num shrink-0 text-[13px] text-foreground hover:underline underline-offset-2 decoration-border"
-                title="Open the transaction"
-              >
-                {usd(l.size_usd)}
-              </a>
+              <span className="shrink-0 flex flex-col items-end gap-1">
+                <a
+                  href={`https://snowtrace.io/tx/${l.tx_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="num text-[13px] text-foreground hover:underline underline-offset-2 decoration-border"
+                  title="Open the transaction"
+                >
+                  {usd(l.size_usd)}
+                </a>
+                {/* Size against the largest in the list. */}
+                <span className="block w-16 h-1 rounded-sm bg-muted overflow-hidden" aria-hidden>
+                  <span className="block h-full rounded-sm" style={{ width: `${(l.size_usd / Math.max(1, items[0].size_usd)) * 100}%`, background: l.is_long ? LONG : SHORT }} />
+                </span>
+              </span>
             </li>
           ))}
         </ul>
