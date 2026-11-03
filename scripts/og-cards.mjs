@@ -1,5 +1,5 @@
 // Renders the link-preview cards in public/og/ (1200x630, the size X, Telegram and
-// Slack use). Run locally after changing a page's title or look:
+// Slack use). The address sits top right: X lays the page title over the bottom left. Run locally after changing a page's title or look:
 //   node scripts/og-cards.mjs
 // Needs Google Chrome; set CHROME to its binary if it isn't in the default place.
 import { spawn } from 'node:child_process';
@@ -178,7 +178,7 @@ const html = (c) => `<!doctype html><html><head><meta charset="utf-8">
   h1{margin:0;font-size:${c.title.length > 22 ? 52 : 68}px;line-height:1.05;font-weight:600;letter-spacing:-0.01em}
   p{margin:22px 0 0;font-size:27px;line-height:1.35;color:#a1a1aa}
   .brand{position:absolute;left:64px;top:56px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Sans';font-weight:600;font-size:30px;color:#f4f4f5}
-  .url{position:absolute;left:64px;bottom:52px;font-family:'IBM Plex Mono';font-size:22px;color:#71717a}
+  .url{position:absolute;right:64px;top:66px;font-family:'IBM Plex Mono';font-size:22px;color:#71717a}
 </style></head><body>
 <div class="brand"><svg width="56" height="48" viewBox="0 0 48 48">${PULSE}</svg>L1Beat</div>
 <div class="t"><h1>${c.title}</h1><p>${c.sub}</p></div>
