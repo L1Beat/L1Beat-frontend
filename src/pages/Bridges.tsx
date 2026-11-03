@@ -185,7 +185,7 @@ export function Bridges() {
                     <FlowLists summary={s} />
                   )
                 ) : (
-                  <FlowChart days={series.data} state={series.state} loadedRange={series.loadedKey} names={names} />
+                  <FlowChart days={series.data} state={series.state} loadedRange={series.loadedKey} names={names} asOf={s?.as_of ?? null} />
                 )
               )}
             </SectionErrorBoundary>
@@ -225,7 +225,10 @@ export function Bridges() {
             </header>
             <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-border lg:divide-x divide-border">
               <TransferList
-                title={(top.loadedKey ?? range) === '3650' ? 'Largest ever' : `Largest, ${rangeLabel.replace('in the ', '')}`}
+                title={(() => {
+                  const k = top.loadedKey ?? range;
+                  return k === '3650' ? 'Largest ever' : k === '365' ? 'Largest, last year' : `Largest, last ${k} days`;
+                })()}
                 items={top.data}
                 state={top.state}
                 names={names}
@@ -238,7 +241,7 @@ export function Bridges() {
 
         <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
           Read from bridge contracts on the C-Chain: Circle CCTP, LayerZero OFT tokens, Stargate pools, the Avalanche Bridge
-          (.e tokens to Ethereum and BTC.b to Bitcoin) and Chainlink CCIP. Each transfer counts once; USDC sent over CCIP that
+          (.e tokens to Ethereum and BTC.b to Bitcoin), its 2021 predecessor the Avalanche-Ethereum Bridge, and Chainlink CCIP. Each transfer counts once; USDC sent over CCIP that
           settles through CCTP counts as CCTP.
           {t && t.passthrough_count > 0 && ` ${t.passthrough_count.toLocaleString()} transactions that bridged in and straight back out are left out.`}{' '}
           Some LayerZero transfers go to Avalanche L1s like Dexalot and Beam; they're marked in the chain list. Wormhole, Axelar,
@@ -252,8 +255,10 @@ export function Bridges() {
 // Inflow above the axis and outflow below, both stacked by bridge, with net as a line.
 const M = { top: 12, right: 8, bottom: 24, left: 56 };
 
-function FlowChart({ days, state, loadedRange, names }: {
+function FlowChart({ days, state, loadedRange, names, asOf }: {
   days: BridgeDay[] | null;
+  /** The last complete day; the window ends here even if that day had no transfers. */
+  asOf: string | null;
   state: 'loading' | 'ready' | 'error';
   loadedRange: string | null;
   names: Record<string, string>;
@@ -274,20 +279,22 @@ function FlowChart({ days, state, loadedRange, names }: {
   // Every UTC day gets a slot (the API leaves out days without transfers); past
   // about a year they are summed into weeks, where days would be under a pixel.
   const { rows, weekly } = useMemo(() => {
-    if (!days?.length) return { rows: [] as BridgeDay[], weekly: false };
+    if (!days?.length) return { rows: [] as (BridgeDay & { daysIn?: number })[], weekly: false };
     const by = new Map(days.map((d) => [d.date, d]));
-    const last = Date.parse(`${days[days.length - 1].date}T00:00:00Z`);
+    const lastApi = days[days.length - 1].date;
+    const last = Date.parse(`${asOf && asOf > lastApi ? asOf : lastApi}T00:00:00Z`);
     const span = loadedRange === '3650' ? Math.round((last - Date.parse(`${days[0].date}T00:00:00Z`)) / 86_400_000) + 1 : Number(loadedRange ?? days.length);
     const filled: BridgeDay[] = [];
     for (let i = span - 1; i >= 0; i--) {
       const key = new Date(last - i * 86_400_000).toISOString().slice(0, 10);
       filled.push(by.get(key) ?? { date: key, inflow_usd: 0, outflow_usd: 0, net_usd: 0, transfers: 0, bridges: [] });
     }
-    if (filled.length <= WEEKLY_AFTER_DAYS) return { rows: filled, weekly: false };
-    const weeks = new Map<string, BridgeDay>();
+    if (filled.length <= WEEKLY_AFTER_DAYS) return { rows: filled as (BridgeDay & { daysIn?: number })[], weekly: false };
+    const weeks = new Map<string, BridgeDay & { daysIn: number }>();
     for (const d of filled) {
       const k = weekStart(d.date);
-      const w = weeks.get(k) ?? { date: k, inflow_usd: 0, outflow_usd: 0, net_usd: 0, transfers: 0, bridges: [] };
+      const w = weeks.get(k) ?? { date: k, inflow_usd: 0, outflow_usd: 0, net_usd: 0, transfers: 0, bridges: [], daysIn: 0 };
+      w.daysIn += 1;
       w.inflow_usd += d.inflow_usd;
       w.outflow_usd += d.outflow_usd;
       w.net_usd += d.net_usd;
@@ -303,7 +310,8 @@ function FlowChart({ days, state, loadedRange, names }: {
       weeks.set(k, w);
     }
     return { rows: [...weeks.values()], weekly: true };
-  }, [days, loadedRange]);
+  }, [days, loadedRange, asOf]);
+  useEffect(() => setHover(null), [rows]);
 
   const ids = useMemo(() => {
     const seen = new Set<string>();
@@ -346,7 +354,7 @@ function FlowChart({ days, state, loadedRange, names }: {
             <div className="num text-[22px] leading-7 font-medium text-foreground">{signedUsd(net)} net</div>
             <div className="text-[11px] text-muted-foreground">
               {active
-                ? `${weekly ? `Week of ${day(active.date, 'MMM d, yyyy')}` : day(active.date, 'EEE, MMM d, yyyy')}: ${usd(active.inflow_usd)} in, ${usd(active.outflow_usd)} out`
+                ? `${weekly ? `Week of ${day(active.date, 'MMM d, yyyy')}${(active.daysIn ?? 7) < 7 ? ` (partial, ${active.daysIn} ${active.daysIn === 1 ? 'day' : 'days'})` : ''}` : day(active.date, 'EEE, MMM d, yyyy')}: ${usd(active.inflow_usd)} in, ${usd(active.outflow_usd)} out`
                 : `${usd(totalIn)} in, ${usd(totalOut)} out, ${day(rows[0].date)} to ${day(rows[rows.length - 1].date)}${weekly ? '; bars are weeks' : ''}`}
             </div>
           </div>
@@ -403,7 +411,7 @@ function FlowChart({ days, state, loadedRange, names }: {
               let up = 0;
               let down = 0;
               return (
-                <g key={d.date} opacity={hover != null && hover !== i ? 0.45 : 1}>
+                <g key={d.date} opacity={(hover != null && hover !== i ? 0.45 : 1) * (weekly && (d.daysIn ?? 7) < 7 ? 0.5 : 1)}>
                   {ids.map((id) => {
                     const b = bridgeOf(d, id);
                     if (!b) return null;
@@ -457,7 +465,7 @@ function sideNodes(summary: BridgeSummary, side: 'in' | 'out'): SideNode[] {
   const top = rows.slice(0, SANKEY_TOP).map(node);
   const rest = rows.slice(SANKEY_TOP);
   if (rest.length) {
-    top.push({ key: `others-${side}`, name: `${rest.length} others`, value: rest.reduce((a, c) => a + pick(c), 0), l1: false, bridges: [] });
+    top.push({ key: `others-${side}`, name: rest.length === 1 ? `1 other` : `${rest.length} others`, value: rest.reduce((a, c) => a + pick(c), 0), l1: false, bridges: [] });
   }
   return top;
 }
@@ -519,8 +527,8 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
     // One scale for both sides, so the larger side fills the height and band widths compare.
     const maxN = Math.max(left.length, right.length);
     const scale = (H - pad.top - pad.bottom - gap * (maxN - 1)) / Math.max(totalIn, totalOut);
-    const stack = (nodes: SideNode[], total: number) => {
-      const used = total * scale + gap * (nodes.length - 1);
+    const stack = (nodes: SideNode[]) => {
+      const used = nodes.reduce((a, n) => a + Math.max(1.5, n.value * scale), 0) + gap * (nodes.length - 1);
       let y = pad.top + (H - pad.top - pad.bottom - used) / 2;
       return nodes.map((n) => {
         const h = Math.max(1.5, n.value * scale);
@@ -529,8 +537,8 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
         return out;
       });
     };
-    const L = stack(left, totalIn);
-    const R = stack(right, totalOut);
+    const L = stack(left);
+    const R = stack(right);
     const midH = Math.max(totalIn, totalOut) * scale;
     const midY = pad.top + (H - pad.top - pad.bottom - midH) / 2;
     // Each link is a stroked centre line, wide as its dollars, entering and leaving
@@ -544,13 +552,13 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
     const links = [
       ...L.map((n) => {
         const w = n.value * scale;
-        const l = { id: `in-${n.key}`, chain: n.key, d: curve(xL + nodeW, n.y + w / 2, xM, inY + w / 2), w, x0: xL + nodeW, x1: xM, from: n.color, to: AVALANCHE_RED, value: n.value };
+        const l = { id: `in-${n.key.replace(/[^\w-]/g, '_')}`, chain: n.key, d: curve(xL + nodeW, n.y + w / 2, xM, inY + w / 2), w, x0: xL + nodeW, x1: xM, from: n.color, to: AVALANCHE_RED, value: n.value };
         inY += w;
         return l;
       }),
       ...R.map((n) => {
         const w = n.value * scale;
-        const l = { id: `out-${n.key}`, chain: n.key, d: curve(xM + midW, outY + w / 2, xR, n.y + w / 2), w, x0: xM + midW, x1: xR, from: AVALANCHE_RED, to: n.color, value: n.value };
+        const l = { id: `out-${n.key.replace(/[^\w-]/g, '_')}`, chain: n.key, d: curve(xM + midW, outY + w / 2, xR, n.y + w / 2), w, x0: xM + midW, x1: xR, from: AVALANCHE_RED, to: n.color, value: n.value };
         outY += w;
         return l;
       }),
@@ -595,7 +603,9 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
       )}
       <div ref={boxRef} className={`relative flex-1 min-h-0 overflow-hidden ${state === 'loading' && summary ? 'opacity-50' : ''}`}>
         {!layout ? (
-          <div className={`absolute inset-0 rounded ${state === 'loading' ? 'bg-muted/50 animate-pulse' : ''}`} />
+          <div className={`absolute inset-0 rounded flex items-center justify-center text-[12px] text-muted-foreground ${state === 'loading' ? 'bg-muted/50 animate-pulse' : ''}`}>
+            {state === 'error' ? "Bridge flows couldn't be loaded. Try again in a minute." : summary && box ? 'No priced bridge transfers in this period.' : ''}
+          </div>
         ) : (
           <svg width={layout.W} height={layout.H} className="absolute inset-0 block" role="img" aria-label="Bridge flows by chain: inflow sources on the left, outflow destinations on the right">
             <defs>
@@ -612,7 +622,6 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
               return (
                 <path
                   key={l.id}
-                  id={`bfp-${l.id}`}
                   d={l.d}
                   fill="none"
                   stroke={`url(#bf-${l.id})`}
@@ -632,10 +641,8 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
                 return Array.from({ length: n }, (_, k) => {
                   const dur = 3.2 + ((k * 7 + l.id.length) % 5) * 0.45;
                   return (
-                    <circle key={`${l.id}-p${k}`} r={2.4} className="fill-foreground" opacity={dim ? 0.15 : 0.9}>
-                      <animateMotion dur={`${dur}s`} begin={`${-(k * dur) / n}s`} repeatCount="indefinite">
-                        <mpath href={`#bfp-${l.id}`} />
-                      </animateMotion>
+                    <circle key={`${l.id}-p${k}`} r={2.4} className="fill-foreground" opacity={dim ? 0.15 : 0.9} pointerEvents="none">
+                      <animateMotion dur={`${dur}s`} begin={`${-(k * dur) / n}s`} repeatCount="indefinite" path={l.d} />
                     </circle>
                   );
                 });
@@ -657,7 +664,7 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
                   onMouseLeave={() => setHover(null)}
                 >
                   <rect x={x} y={n.y} width={layout.nodeW} height={n.h} rx={2} fill={n.color} />
-                  <text
+                  {n.h + 8 >= 12 && <text
                     x={n.side === 'in' ? x - 8 : x + layout.nodeW + 8}
                     y={n.y + n.h / 2}
                     textAnchor={n.side === 'in' ? 'end' : 'start'}
@@ -667,7 +674,7 @@ function FlowSankey({ summary, state, names }: { summary: BridgeSummary | null; 
                     <tspan className="fill-foreground">{n.name}</tspan>
                     <tspan className="num fill-muted-foreground" dx={6}>{usd(n.value)}</tspan>
                     {n.l1 && <tspan className="fill-muted-foreground" dx={6} fontSize={9}>L1</tspan>}
-                  </text>
+                  </text>}
                 </g>
               );
             })}
@@ -869,6 +876,18 @@ function TokenTable({ summary, state }: { summary: BridgeSummary | null; state: 
   );
 }
 
+// A base-unit amount in whole tokens, compact; without decimals there's no honest number.
+function tokenAmount(amount: string, decimals: number | null): string {
+  if (decimals == null) return '';
+  try {
+    const big = BigInt(amount);
+    const scale = 10n ** BigInt(Math.max(0, decimals - 2));
+    return compact(Number(big / scale) / 100);
+  } catch {
+    return '';
+  }
+}
+
 function TransferList({ title, items, state, names, empty }: {
   title: string;
   items: BridgeTransfer[] | null;
@@ -887,8 +906,8 @@ function TransferList({ title, items, state, names, empty }: {
         <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">{empty}</div>
       ) : (
         <ul className="divide-y divide-border">
-          {items.map((x) => (
-            <li key={x.tx_hash + x.direction + x.token} className="px-4 sm:px-5 py-2 flex items-center justify-between gap-3">
+          {items.map((x, i) => (
+            <li key={`${x.tx_hash}-${x.direction}-${x.token}-${i}`} className="px-4 sm:px-5 py-2 flex items-center justify-between gap-3">
               <span className="min-w-0">
                 <span className="flex items-center gap-2 text-[12px] text-foreground">
                   <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: bridgeColor(x.bridge) }} aria-hidden />
@@ -911,7 +930,7 @@ function TransferList({ title, items, state, names, empty }: {
                 title="Open the transaction"
               >
                 {x.direction === 'in' ? '+' : '−'}
-                {x.usd != null ? `$${compact(x.usd)}` : `${x.symbol}`}
+                {x.usd != null ? `$${compact(x.usd)}` : `${tokenAmount(x.amount, x.decimals)} ${x.symbol}`}
               </a>
             </li>
           ))}

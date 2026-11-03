@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import { chainSeo } from '../utils/chainSeo';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, getChainRestaking, DailyFeeBurn } from '../api';
 import type { RestakedL1 } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
@@ -760,7 +760,7 @@ export function ChainDetails() {
             ? {
                 label: 'Transactions',
                 value: latestTx.value.toLocaleString(),
-                sub: `on ${format(new Date(latestTx.timestamp * 1000), 'MMM d')}`,
+                sub: `on ${utcDay(latestTx.timestamp, 'MMM d')}`,
                 tooltip: stale ? missingActivity(chain, lastActivity).detail : undefined,
               }
             : stale
@@ -771,7 +771,7 @@ export function ChainDetails() {
                 tooltip: missingActivity(chain, lastActivity).detail,
               }
             : {
-                label: lastUpdate ? `TPS, ${format(new Date(lastUpdate * 1000), 'MMM d')}` : 'TPS',
+                label: lastUpdate ? `TPS, ${utcDay(lastUpdate, 'MMM d')}` : 'TPS',
                 value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
                 sub: 'daily average',
               },
@@ -1615,6 +1615,9 @@ const DAY_S = 86400;
 // Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
 const QUIET_TX_PER_DAY = 864;
 
+// Daily points are stamped at UTC midnight; format that UTC date, not the viewer's local one.
+const utcDay = (t: number, f: string) => format(parseISO(new Date(t * 1000).toISOString().slice(0, 10)), f);
+
 const ACT_RANGES = [
   { value: '30', label: '30d' },
   { value: '90', label: '90d' },
@@ -1651,10 +1654,12 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
     const ro = new ResizeObserver(() => setW(Math.max(el.clientWidth, 1)));
     ro.observe(el);
     return () => ro.disconnect();
-  });
+    // The box only exists while there is a chart; re-attach when that changes, not on every render.
+  }, [loading, elsewhere, tps.length, tx.length]);
   useEffect(() => {
     if (range === '30' || elsewhere) {
       setFailed(false);
+      setFetching(false);
       return;
     }
     let alive = true;
@@ -1665,20 +1670,24 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
     const ask = Math.min(days + 1, 365);
     Promise.all([getTPSHistory(ask, apiChainId), getChainTxCountHistory(apiChainId, ask)]).then(([t, c]) => {
       if (!alive) return;
-      // An empty answer keeps the range already on screen rather than blanking the chart.
+      // An empty answer falls back to the 30 days already loaded, with a note, rather than blanking the chart.
       if (t.length || c.length) setLonger({ range, tps: t.slice(-days), tx: c.slice(-days) });
       else setFailed(true);
       setFetching(false);
     });
     return () => {
       alive = false;
+      setFetching(false);
     };
   }, [range, apiChainId, elsewhere]);
 
   // Until a longer range arrives, keep drawing what is loaded (dimmed).
-  const src = range !== '30' && longer && !failed ? longer : { tps, tx };
-  // Counts when the backend has them; chains with only a TPS series fall back to it.
-  const isTx = src.tx.length > 0 || defaultUnit === 'tx';
+  // Counts when the backend has them; chains with only a TPS series use TPS. Decided
+  // from the page's 30 days, so the units never flip between ranges.
+  const pageTx = tx.length > 0 || defaultUnit === 'tx';
+  const longerFits = longer != null && (!pageTx || longer.tx.length > 0);
+  const src = range !== '30' && longerFits && !failed ? longer! : { tps, tx };
+  const isTx = pageTx;
   const raw = isTx ? src.tx.map((d) => ({ t: d.timestamp, v: d.value })) : src.tps.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
   const lastPoint = raw.length ? raw[raw.length - 1].t : null;
   const missing = missingActivity(chain, lastPoint);
@@ -1776,14 +1785,16 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
         <div className="mb-2">
           <div className="num text-[22px] font-medium text-foreground leading-7">
             {big(active ? active.v : avg)}
-            {isTx && (
+            {isTx ? (
               <span className="ml-2 text-[13px] text-muted-foreground">{formatTpsExact((active ? active.v : avg) / DAY_S)} TPS</span>
+            ) : (
+              <span className="ml-1.5 text-[13px] text-muted-foreground">TPS</span>
             )}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {active
-              ? `${isTx ? 'transactions on ' : ''}${format(new Date(active.t * 1000), 'EEE, MMM d, yyyy')}`
-              : `${isTx ? 'transactions ' : ''}a day on average, ${format(new Date(points[0].t * 1000), 'MMM d')} to ${format(new Date(latest!.t * 1000), 'MMM d')}; latest ${fmt(latest!.v)}`}
+              ? `${isTx ? 'transactions on ' : ''}${utcDay(active.t, 'EEE, MMM d, yyyy')}`
+              : `${isTx ? 'transactions ' : ''}a day on average, ${utcDay(points[0].t, 'MMM d')} to ${utcDay(latest!.t, 'MMM d')}; latest ${fmt(latest!.v)}`}
           </div>
         </div>
       )}
@@ -1835,7 +1846,7 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
               />
               {i % geom.labelEvery === 0 && (
                 <text x={geom.sx(p.t)} y={ACT_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
-                  {format(new Date(p.t * 1000), geom.days > 120 ? 'MMM yyyy' : 'MMM d')}
+                  {utcDay(p.t, geom.days > 120 ? 'MMM yyyy' : 'MMM d')}
                 </text>
               )}
             </g>

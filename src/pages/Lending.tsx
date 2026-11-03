@@ -629,6 +629,8 @@ interface StackDay {
   parts: { id: string; value: number }[];
   /** Optional line drawn over the bars (borrowed, on the history chart). */
   line?: number;
+  /** Days in a weekly bar; under 7 marks a partial week, drawn lighter. */
+  daysIn?: number;
 }
 
 const STACK_M = { top: 10, right: 8, bottom: 22, left: 52 };
@@ -774,7 +776,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
             {days.map((d, i) => {
               let run = 0;
               return (
-                <g key={d.date} opacity={!area && hover != null && hover !== i ? 0.45 : 1}>
+                <g key={d.date} opacity={(!area && hover != null && hover !== i ? 0.45 : 1) * (!area && d.daysIn != null && d.daysIn < 7 ? 0.5 : 1)}>
                   {!area && ids.map((id) => {
                     const v = d.parts.find((p) => p.id === id)?.value ?? 0;
                     if (v <= 0) return null;
@@ -832,7 +834,8 @@ function toWeeks(series: StackDay[]): StackDay[] {
   const out = new Map<string, StackDay>();
   for (const d of series) {
     const key = weekStart(d.date);
-    const w = out.get(key) ?? { date: key, total: 0, parts: [] };
+    const w = out.get(key) ?? { date: key, total: 0, parts: [], daysIn: 0 };
+    w.daysIn = (w.daysIn ?? 0) + 1;
     w.total += d.total;
     for (const p of d.parts) {
       const e = w.parts.find((x) => x.id === p.id);
@@ -1067,7 +1070,7 @@ function LiquidationsCard({ names }: { names: Record<string, string> }) {
                   <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(d ? d.total : total)}</div>
                   <div className="text-[11px] text-muted-foreground">
                     {d
-                      ? `repaid ${weekly ? `in the week of ${format(parseISO(d.date), 'MMM d, yyyy')}` : `on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}`}, ${(countOn.get(d.date) ?? 0).toLocaleString()} liquidations`
+                      ? `repaid ${weekly ? `in the week of ${format(parseISO(d.date), 'MMM d, yyyy')}${d.daysIn != null && d.daysIn < 7 ? ` (partial, ${d.daysIn} ${d.daysIn === 1 ? 'day' : 'days'})` : ''}` : `on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}`}, ${(countOn.get(d.date) ?? 0).toLocaleString()} liquidations`
                       : `repaid across ${count.toLocaleString()} liquidations ${label}${peak && peak.total > 0 ? `; most in a day ${usd(peak.total)} on ${format(parseISO(peak.date), 'MMM d, yyyy')}` : ''}`}
                   </div>
                 </>

@@ -623,8 +623,14 @@ function BurnHistory() {
   }, [points, W]);
   const active = hover != null ? points[hover] : null;
   const total = sumBurned(points);
+  // The newest week usually isn't over; count the complete days it holds so far.
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
+  const daysIn = (p: FeeBurnPoint) => Math.min(7, Math.max(1, Math.round((today - Date.parse(p.period)) / 86_400_000)));
+  const partial = (p: FeeBurnPoint) => weekly && daysIn(p) < 7;
   const when = (p: FeeBurnPoint) =>
-    weekly ? `Week of ${format(parseISO(p.period), 'MMM d, yyyy')}` : format(parseISO(p.period), 'EEE, MMM d, yyyy');
+    weekly
+      ? `Week of ${format(parseISO(p.period), 'MMM d, yyyy')}${partial(p) ? ` (partial, ${daysIn(p)} ${daysIn(p) === 1 ? 'day' : 'days'})` : ''}`
+      : format(parseISO(p.period), 'EEE, MMM d, yyyy');
 
   return (
     <section className="rounded-md border border-border bg-card">
@@ -690,7 +696,7 @@ function BurnHistory() {
               {points.map((p, i) => {
                 let run = 0;
                 return (
-                  <g key={p.period} opacity={hover != null && hover !== i ? 0.45 : 1}>
+                  <g key={p.period} opacity={(hover != null && hover !== i ? 0.45 : 1) * (partial(p) ? 0.5 : 1)}>
                     {PARTS.map((part) => {
                       const v = nAvaxToAvax(p[part.key]);
                       if (v <= 0) return null;

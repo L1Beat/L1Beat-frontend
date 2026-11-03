@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { BlogPost, BlogTag, formatBlogDate, getBlogPosts, getBlogTags } from '../api/blogApi';
@@ -82,15 +82,6 @@ export function BlogList() {
   const filteredPosts = posts;
   const featuredPost = filteredPosts[0];
   const regularPosts = filteredPosts.slice(1);
-  const latestUpdate = useMemo(() => {
-    if (posts.length === 0) return null;
-    const newest = posts.reduce((latest, p) => {
-      const lt = latest ? new Date(latest.publishedAt).getTime() : 0;
-      const pt = new Date(p.publishedAt).getTime();
-      return pt > lt ? p : latest;
-    }, null as BlogPost | null);
-    return newest?.publishedAt ?? null;
-  }, [posts]);
 
   // Rendered in the loading state too: the SSG build only sees that state.
   const seo = (
@@ -125,9 +116,9 @@ export function BlogList() {
             Validator economics, cross-chain messaging, and the long arc of L1 adoption.
           </p>
         </div>
-        {latestUpdate && (
+        {posts.length > 0 && (
           <span className="hidden sm:inline text-[11px] text-muted-foreground">
-            <span className="num">{posts.length}</span> {posts.length === 1 ? 'article' : 'articles'}, updated {formatRelative(latestUpdate)}
+            <span className="num">{posts.length}</span> {posts.length === 1 ? 'article' : 'articles'}
           </span>
         )}
       </header>
@@ -258,20 +249,6 @@ function ArticleRow({ post }: { post: BlogPost }) {
   );
 }
 
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (!then) return '';
-  const diff = Date.now() - then;
-  const day = 1000 * 60 * 60 * 24;
-  const days = Math.floor(diff / day);
-  if (days < 1) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
 
 
 
