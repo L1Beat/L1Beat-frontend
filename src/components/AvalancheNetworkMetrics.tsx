@@ -141,7 +141,7 @@ const METRICS = [
     description: 'Total Interchain Messages (ICM) sent across Avalanche L1s daily',
     icon: MessageSquare,
     color: METRIC_COLORS.dailyMessageVolume,
-    valueFormatter: (value: number) => value.toLocaleString(),
+    valueFormatter: (value: number) => Math.round(value).toLocaleString(),
     unit: 'messages'
   },
   {
@@ -434,10 +434,7 @@ export function AvalancheNetworkMetrics({
           break;
 
         case 'dailyMessageVolume':
-          // The external API doesn't support filtering by days effectively in all cases, 
-          // so we fetch and slice the data manually to ensure the chart reflects the selected timeframe.
-          // We request enough data (365 days) if the user asks for 1Y, otherwise we can request less but slicing is safer.
-          // Actually the external API seems to respect 'days' now, but let's be robust.
+          // The backend keeps 90 days of ICM history, so 1Y shows those 90 for now.
           const requestedDays = daysToFetch === 360 ? 365 : daysToFetch;
           const messageVolumeData = await getDailyMessageVolumeFromExternal(requestedDays);
           
@@ -446,14 +443,16 @@ export function AvalancheNetworkMetrics({
           
           // Slice the data to match the requested timeframe if the API returns more
           const slicedData = sortedData.slice(-daysToFetch);
-
-          processedData = slicedData
-            .map(item => ({
-              timestamp: item.timestamp,
-              date: new Date(item.timestamp * 1000).toISOString(),
-              value: item.value,
-              metadata: {}
-            }));
+          // A day the backend has no count for becomes an empty slot (NaN), so a
+          // gap shows as a gap instead of the neighbouring days closing up.
+          const byDay = new Map(slicedData.map((item) => [item.timestamp, item.value]));
+          const filled: MetricData[] = [];
+          if (slicedData.length) {
+            for (let t = slicedData[0].timestamp; t <= slicedData[slicedData.length - 1].timestamp; t += 86400) {
+              filled.push({ timestamp: t, date: new Date(t * 1000).toISOString(), value: byDay.get(t) ?? NaN, metadata: {} });
+            }
+          }
+          processedData = filled;
           break;
 
         case 'feeBurn':
@@ -582,7 +581,11 @@ export function AvalancheNetworkMetrics({
     filteredPrimaryData[filteredPrimaryData.length - 1].date.slice(0, 10) === new Date().toISOString().slice(0, 10);
   const hasSeries = barValues.length > 0;
   // Finished days only: an unfinished today would read as the window's low.
-  const completeValues = useMemo(() => (partialLast ? barValues.slice(0, -1) : barValues), [barValues, partialLast]);
+  // Days without a count (NaN) are left out of totals, averages and the summary.
+  const completeValues = useMemo(
+    () => (partialLast ? barValues.slice(0, -1) : barValues).filter((v) => Number.isFinite(v)),
+    [barValues, partialLast],
+  );
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   useEffect(() => setHoverIdx(null), [primaryMetric.id, timeframe]);
 
@@ -750,15 +753,16 @@ export function AvalancheNetworkMetrics({
   const readout = (() => {
     if (!hasSeries) return null;
     const agg = primaryMetric.aggregate;
-    const total = barValues.reduce((x, y) => x + y, 0);
-    const done = completeValues.length ? completeValues : barValues;
+    const counted = barValues.filter((v) => Number.isFinite(v));
+    const total = counted.reduce((x, y) => x + y, 0);
+    const done = completeValues.length ? completeValues : counted;
     const rolled =
       agg === 'sum' ? total : agg === 'avg' ? done.reduce((x, y) => x + y, 0) / done.length : Math.max(...done);
     const first = parseDay(barDates[0]);
     const last = parseDay(barDates[barDates.length - 1]);
     const i = hoverIdx;
     const value = i != null ? barValues[i] : rolled;
-    const prev = i != null && i > 0 ? barValues[i - 1] : null;
+    const prev = i != null && i > 0 && Number.isFinite(barValues[i - 1]) ? barValues[i - 1] : null;
     const change = prev ? ((barValues[i!] - prev) / prev) * 100 : null;
     const toDate = cumulativeValues ? cumulativeValues[i ?? cumulativeValues.length - 1] : null;
     return (
@@ -769,8 +773,14 @@ export function AvalancheNetworkMetrics({
             : `${AGGREGATE_LABEL[agg]}, ${format(first, 'MMM d')} to ${format(last, 'MMM d, yyyy')}`}
         </div>
         <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-          <span className="num text-[32px] leading-9 font-medium text-foreground">{primaryMetric.valueFormatter(value)}</span>
-          <span className="text-[13px] text-muted-foreground">{primaryMetric.unit}</span>
+          {Number.isFinite(value) ? (
+            <>
+              <span className="num text-[32px] leading-9 font-medium text-foreground">{primaryMetric.valueFormatter(value)}</span>
+              <span className="text-[13px] text-muted-foreground">{primaryMetric.unit}</span>
+            </>
+          ) : (
+            <span className="text-[15px] leading-9 text-muted-foreground">No count for this day yet</span>
+          )}
           {change != null && Number.isFinite(change) && <Delta value={change} label="vs day before" />}
           {toDate != null && (
             <span className="inline-flex items-baseline gap-1.5 ml-2 text-[11px] text-muted-foreground">

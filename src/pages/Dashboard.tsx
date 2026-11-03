@@ -39,7 +39,8 @@ import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
 import { coverageChanged, missingActivity } from '../utils/activityCoverage';
 import type { DailyTxLatest } from '../api';
 
-type Range = '24H' | '7D' | '30D' | 'ALL';
+// No all-time range until the backend's network history reaches back to 2020.
+type Range = '24H' | '7D' | '30D';
 type HeroView = 'map' | 'flows';
 const HERO_VIEWS: { value: HeroView; label: string }[] = [
   { value: 'map', label: 'Map' },
@@ -53,16 +54,15 @@ type ScreenerTab = 'active' | 'all' | 'inactive' | 'watchlist';
 type SortKey = 'name' | 'tps' | 'validators';
 type SortDir = 'asc' | 'desc';
 
-const RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
+const RANGES: Range[] = ['24H', '7D', '30D'];
 // The Δ 24h column compares the last two complete days.
 const TREND_FETCH_DAYS = 7;
 const RANGE_DAYS: Record<Range, number> = {
   '24H': 2,
   '7D': 7,
   '30D': 30,
-  ALL: 30,
 };
-const VALID_RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
+const VALID_RANGES: Range[] = ['24H', '7D', '30D'];
 const CHAINS_PER_PAGE = 25;
 const MAX_COMPARE = 4;
 const WATCHLIST_STORAGE_KEY = 'dashboardWatchlist';
@@ -160,9 +160,9 @@ function rangeWindow(history: HistoryPoint[], range: Range, mode: 'avg' | 'sum')
       priorPoints: prior,
     };
   }
-  const w = range === 'ALL' ? history.length : RANGE_DAYS[range];
+  const w = RANGE_DAYS[range];
   const last = history.slice(-w);
-  const prior = range === 'ALL' ? [] : history.slice(-(w * 2), -w);
+  const prior = history.slice(-(w * 2), -w);
   const aggregate = (arr: HistoryPoint[]) => {
     if (arr.length === 0) return null;
     const sum = arr.reduce((s, p) => s + p.value, 0);
@@ -173,8 +173,7 @@ function rangeWindow(history: HistoryPoint[], range: Range, mode: 'avg' | 'sum')
 function rangeWindowLabel(r: Range): string {
   if (r === '24H') return '24h';
   if (r === '7D') return '7d';
-  if (r === '30D') return '30d';
-  return 'all-time';
+  return '30d';
 }
 
 function formatCount(n: number): string {
@@ -905,7 +904,7 @@ function KpiCardsImpl({
     ? pctDelta(sameChains.current, sameChains.prior)
     : txGap ? null : pctDelta(tx.current, tx.prior);
   const windowLabel = rangeWindowLabel(range);
-  const priorLabel = range === 'ALL' ? undefined : `vs prior ${windowLabel}`;
+  const priorLabel = `vs prior ${windowLabel}`;
   const pending = 'Not available right now';
   const coverage = coveredChains > 0
     ? ` Covers the ${coveredChains} chains with activity data; chains with no public RPC or metrics source aren't counted.`

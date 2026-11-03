@@ -1000,35 +1000,26 @@ export async function getChainMaxTPSHistory(chainId: string, days: number = 30):
   });
 }
 
+// Daily ICM messages across all L1s, from our backend's Teleporter history (summed
+// over every source and destination pair). The backend serves at most 90 days.
 export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
-  // Use 365 days as default if user asks for more data, but respect the 'days' parameter if it's smaller
-  // The external API supports 'days' parameter
-  return fetchWithCache(`daily-message-volume-external-${days}`, async () => {
+  const ask = Math.min(days, 90);
+  return fetchWithCache(`daily-message-volume-${ask}`, async () => {
     try {
-      const url = `https://idx6.solokhin.com/api/global/metrics/dailyMessageVolume?days=${days}`;
-      const response = await fetchWithRetry<{
-        success: boolean;
-        data: Array<any>;
-      }>(url);
-
-      // The external API returns an array directly or inside data property
-      const dataArray = Array.isArray(response) ? response : (response.data || []);
-
-      if (!Array.isArray(dataArray)) {
-        return [];
-      }
-
-      return dataArray
-        .map(item => ({
-          timestamp: Math.floor(new Date(item.date).getTime() / 1000),
-          value: Number(item.messageCount || item.count || item.value || 0)
+      const rows = await getTeleporterDailyHistory(ask);
+      return rows
+        .map((row) => ({
+          timestamp: Math.floor(Date.parse(`${row.dateString}T00:00:00Z`) / 1000),
+          value: (row.data ?? []).reduce((sum, m) => sum + (Number(m.messageCount) || 0), 0),
         }))
-        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
+        .filter((p) => Number.isFinite(p.timestamp))
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .filter(isNotToday);
     } catch (error) {
       console.error('Daily message volume fetch error:', error);
       return [];
     }
-  }, 5 * 60 * 1000); // Cache for 5 minutes
+  }, 15 * 60 * 1000);
 }
 
 export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
