@@ -37,8 +37,11 @@ export function StatStrip({
   floating?: boolean;
 }) {
   const five = items.length === 5;
+  const six = items.length === 6;
   const cols =
-    five
+    six
+      ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-6'
+      : five
       ? 'grid-cols-2 md:grid-cols-5'
       : items.length >= 4
       ? 'grid-cols-2 md:grid-cols-4'
@@ -54,7 +57,10 @@ export function StatStrip({
           className={`grid ${cols} border border-border rounded-md overflow-hidden ${
             floating ? 'bg-card/85 supports-[backdrop-filter]:bg-card/70 backdrop-blur-md shadow-lg' : 'bg-card'
           } [&>div]:border-border ${
-            five
+            six
+              ? // Rows of two on phones, three from md, one row from lg. Same-specificity selectors, so each breakpoint overrides the last.
+                '[&>div:nth-child(even)]:border-l [&>div:nth-child(n+3)]:border-t md:[&>div:nth-child(3n+1)]:border-l-0 md:[&>div:nth-child(3n)]:border-l md:[&>div:nth-child(3)]:border-t-0 lg:[&>div:nth-child(n+2)]:border-l lg:[&>div:nth-child(n+1)]:border-t-0'
+              : five
               ? // Two columns on phones with the fifth cell spanning both; one row from md.
                 '[&>div:nth-child(even)]:border-l md:[&>div:not(:first-child)]:border-l [&>div:nth-child(n+3)]:border-t md:[&>div:nth-child(n+3)]:border-t-0 [&>div:last-child]:col-span-2 md:[&>div:last-child]:col-span-1'
               : items.length === 3
@@ -62,7 +68,7 @@ export function StatStrip({
                 '[&>div:not(:first-child)]:border-t sm:[&>div:not(:first-child)]:border-t-0 sm:[&>div:not(:first-child)]:border-l'
               : '[&>div:not(:first-child)]:border-l'
           } ${
-            items.length >= 4 && !five ? '[&>div:nth-child(3)]:border-l-0 md:[&>div:nth-child(3)]:border-l [&>div:nth-child(n+3)]:border-t md:[&>div:nth-child(n+3)]:border-t-0' : ''
+            items.length >= 4 && !five && !six ? '[&>div:nth-child(3)]:border-l-0 md:[&>div:nth-child(3)]:border-l [&>div:nth-child(n+3)]:border-t md:[&>div:nth-child(n+3)]:border-t-0' : ''
           }`}
         >
           {items.map((it) => (

@@ -6,3 +6,5 @@ export { UpdatedAgo } from './UpdatedAgo';
 export { SeriesSummary } from './SeriesSummary';
 // DailyBars is imported from './instrument/DailyBars' directly: it registers
 // Chart.js, and re-exporting it here pulled the chart library into every page.
+export { Sparkline } from './Sparkline';
+export { ProtocolLogo, TokenLogo, PairLogos } from './Logos';

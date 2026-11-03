@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
-import { SegmentedControl, StatStrip } from '../components/instrument';
+import { Delta, PairLogos, ProtocolLogo, SegmentedControl, Sparkline, StatStrip } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { getDexPools, getDexSummary, getDexTimeseries } from '../api';
@@ -28,6 +28,16 @@ const DEX_STYLE: Record<string, { color: string; opacity: number }> = {
 const dexStyle = (id: string) => DEX_STYLE[id] ?? { color: '#6b7280', opacity: 1 };
 // Stack order, bottom to top: largest venues sit on the baseline.
 const STACK = ['pharaoh-v3', 'pharaoh-dlmm', 'uniswap-v3', 'blackhole-clmm', 'lfj', 'lfj-v1', 'pangolin-v3', 'pangolin-v2', 'sushiswap-v2'];
+
+// Each protocol in its lead version's color, for views that merge versions.
+const PROTOCOL_COLOR: Record<string, string> = {
+  pharaoh: '#d95926',
+  uniswap: '#e8508f',
+  blackhole: '#d4a017',
+  lfj: '#6366f1',
+  pangolin: '#6b7280',
+  sushiswap: '#8b5cf6',
+};
 
 const PROTOCOL_LABEL: Record<string, string> = {
   pharaoh: 'Pharaoh',
@@ -93,6 +103,10 @@ export function Dex() {
   // The headline describes the chart's range.
   // The server clamps "All" (3650 days) to the first tracked day.
   const month = useLoad(() => getDexSummary(Number(range)), [range]);
+  // Twice the table window, so each DEX's previous window is the difference.
+  const doubled = useLoad(() => getDexSummary(Number(win) * 2), [win]);
+  // Thirty days of daily volume for the table's trend lines, whatever the window.
+  const trend = useLoad(() => getDexTimeseries(30), []);
 
   const m = month.data;
   // From the loaded data, so the label never runs ahead of the numbers while a new range loads.
@@ -198,12 +212,31 @@ export function Dex() {
         </div>
 
         <SectionErrorBoundary label="the DEX table">
-          <VenueTable summary={summary.data} state={summary.state} focus={focus} onFocus={toggleFocus} />
+          <VenueTable
+            summary={summary.data}
+            doubled={doubled.data}
+            trend={trend.data}
+            state={summary.state}
+            focus={focus}
+            onFocus={toggleFocus}
+          />
         </SectionErrorBoundary>
 
-        <SectionErrorBoundary label="the top pools">
-          <PoolsTable days={win} />
-        </SectionErrorBoundary>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="lg:col-span-2 min-w-0">
+            <SectionErrorBoundary label="the top pools">
+              <PoolsTable days={win} total={summary.data?.totals.volume_usd ?? 0} />
+            </SectionErrorBoundary>
+          </div>
+          <div className="space-y-5 min-w-0">
+            <SectionErrorBoundary label="the protocol shares">
+              <ProtocolShare summary={summary.data} state={summary.state} />
+            </SectionErrorBoundary>
+            <SectionErrorBoundary label="the swap sizes">
+              <SwapSize summary={summary.data} state={summary.state} />
+            </SectionErrorBoundary>
+          </div>
+        </div>
 
         <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
           Indexed from every swap on the C-Chain, counting only pools created by each DEX's own factory. Each swap counts once,
@@ -413,34 +446,71 @@ function VolumeChart({ days: dailyDays, state, names, focus, onFocus }: {
   );
 }
 
-function DexName({ id, name }: { id: string; name: string }) {
+function DexName({ id, name, protocol }: { id: string; name: string; protocol: string }) {
   const st = dexStyle(id);
   return (
-    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground whitespace-nowrap">
-      <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: st.color, opacity: st.opacity }} aria-hidden />
+    <span className="inline-flex items-center gap-2.5 text-[13px] font-medium text-foreground whitespace-nowrap">
+      <span className="relative inline-flex">
+        <ProtocolLogo protocol={protocol} name={name} size={20} />
+        {/* The chart color, so a row can be matched to its band. */}
+        <span
+          className="absolute -right-1 -bottom-1 w-2 h-2 rounded-[2px] ring-2 ring-card"
+          style={{ background: st.color, opacity: st.opacity }}
+          aria-hidden
+        />
+      </span>
       {name}
     </span>
   );
 }
 
-function VenueTable({ summary, state, focus, onFocus }: {
+function Card({ title, sub, aside, children }: { title: string; sub?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-md border border-border bg-card">
+      <header className="px-4 sm:px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+          {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        </div>
+        {aside}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+const Skeleton = ({ rows = 4 }: { rows?: number }) => (
+  <div className="px-5 pb-5 space-y-2">{Array.from({ length: rows }, (_, i) => <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" />)}</div>
+);
+const Failed = ({ what }: { what: string }) => (
+  <div className="px-5 py-10 text-center text-[12px] text-muted-foreground">{what} couldn't be loaded. Try again in a minute.</div>
+);
+
+function VenueTable({ summary, doubled, trend, state, focus, onFocus }: {
   summary: DexSummary | null;
+  doubled: DexSummary | null;
+  trend: DexDay[] | null;
   state: 'loading' | 'ready' | 'error';
   focus: string | null;
   onFocus: (id: string) => void;
 }) {
   const rows = [...(summary?.dexes ?? [])].sort((a, b) => b.volume_usd - a.volume_usd);
   const total = summary?.totals.volume_usd ?? 0;
+  // The doubled window only lines up once both answers are for the same window.
+  const prevOk = !!summary && !!doubled && doubled.days === summary.days * 2;
+  const prevOf = (id: string, current: number) => {
+    if (!prevOk) return null;
+    const before = (doubled!.dexes.find((d) => d.id === id)?.volume_usd ?? 0) - current;
+    return before > 0 ? ((current - before) / before) * 100 : null;
+  };
+  const series = (id: string) => (trend ?? []).map((d) => d.dexes.find((x) => x.id === id)?.volume_usd ?? 0);
+  const prevLabel = summary?.days === 1 ? 'vs the day before' : `vs the ${summary?.days ?? ''} days before`;
   return (
-    <section className="rounded-md border border-border bg-card">
-      <header className="px-4 sm:px-5 pt-4 pb-3">
-        <h2 className="text-[14px] font-semibold text-foreground">By DEX</h2>
-        <p className="text-[11px] text-muted-foreground mt-0.5">Click a DEX to highlight it on the chart. Addresses are counted per DEX, so the same address can appear under several.</p>
-      </header>
+    <Card title="By DEX" sub="Click a DEX to highlight it on the chart. Addresses are counted per DEX, so the same address can appear under several.">
       {state === 'error' ? (
-        <div className="px-5 py-10 text-center text-[12px] text-muted-foreground">DEX totals couldn't be loaded. Try again in a minute.</div>
+        <Failed what="DEX totals" />
       ) : !summary ? (
-        <div className="px-5 pb-5 space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" />)}</div>
+        <Skeleton rows={6} />
       ) : (
         <div className={`overflow-x-auto ${state === 'loading' ? 'opacity-60' : ''}`}>
           <table className="w-full text-[12px] whitespace-nowrap">
@@ -448,16 +518,19 @@ function VenueTable({ summary, state, focus, onFocus }: {
               <tr className="border-y border-border text-[11px] text-muted-foreground">
                 <th className="text-left font-normal px-4 sm:px-5 py-2">DEX</th>
                 <th className="text-right font-normal px-3 py-2">Volume</th>
-                <th className="text-left font-normal px-3 py-2 w-[30%] hidden md:table-cell">Share</th>
+                <th className="text-right font-normal px-3 py-2" title={prevLabel}>Change</th>
+                <th className="text-left font-normal px-3 py-2 w-[26%] hidden md:table-cell">Share</th>
+                <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">30 days</th>
                 <th className="text-right font-normal px-3 py-2">Swaps</th>
-                <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">Addresses</th>
-                <th className="text-right font-normal px-4 sm:px-5 py-2 hidden sm:table-cell">Priced</th>
+                <th className="text-right font-normal px-3 py-2 hidden lg:table-cell">Addresses</th>
+                <th className="text-right font-normal px-4 sm:px-5 py-2 hidden lg:table-cell">Priced</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((d) => {
                 const share = total > 0 ? (d.volume_usd / total) * 100 : 0;
                 const st = dexStyle(d.id);
+                const change = prevOf(d.id, d.volume_usd);
                 return (
                   <tr
                     key={d.id}
@@ -466,22 +539,28 @@ function VenueTable({ summary, state, focus, onFocus }: {
                     title={focus === d.id ? 'Show all DEXes on the chart' : 'Highlight on the chart'}
                   >
                     <td className="px-4 sm:px-5 py-2.5">
-                      <button type="button" aria-pressed={focus === d.id} className="text-left" onClick={(e) => { e.stopPropagation(); onFocus(d.id); }}>
-                        <DexName id={d.id} name={d.name} />
+                      <button type="button" aria-pressed={focus === d.id} className="flex text-left" onClick={(e) => { e.stopPropagation(); onFocus(d.id); }}>
+                        <DexName id={d.id} name={d.name} protocol={d.protocol} />
                       </button>
                     </td>
                     <td className="num text-right px-3 py-2.5 text-foreground">{usd(d.volume_usd)}</td>
+                    <td className="text-right px-3 py-2.5">
+                      {change != null ? <Delta value={change} /> : <span className="num text-[11px] text-muted-foreground">—</span>}
+                    </td>
                     <td className="px-3 py-2.5 hidden md:table-cell">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-1.5 rounded-sm bg-muted overflow-hidden">
                           <div className="h-full rounded-sm" style={{ width: `${share}%`, background: st.color, opacity: st.opacity }} />
                         </div>
-                        <span className="num w-12 text-right text-muted-foreground">{pct(share, 1)}</span>
+                        <span className="num w-11 text-right text-muted-foreground">{pct(share, 1)}</span>
                       </div>
                     </td>
-                    <td className="num text-right px-3 py-2.5 text-foreground">{d.swaps.toLocaleString()}</td>
-                    <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{d.unique_addresses.toLocaleString()}</td>
-                    <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground hidden sm:table-cell">
+                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                      <Sparkline data={series(d.id)} width={120} height={22} color={st.color} fill />
+                    </td>
+                    <td className="num text-right px-3 py-2.5 text-foreground">{compact(d.swaps)}</td>
+                    <td className="num text-right px-3 py-2.5 text-foreground hidden lg:table-cell">{compact(d.unique_addresses)}</td>
+                    <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground hidden lg:table-cell">
                       {d.priced_share != null && d.swaps > 0 ? pct(d.priced_share * 100, 1) : '—'}
                     </td>
                   </tr>
@@ -489,59 +568,159 @@ function VenueTable({ summary, state, focus, onFocus }: {
               })}
             </tbody>
           </table>
+          <p className="px-4 sm:px-5 py-2.5 border-t border-border text-[11px] text-muted-foreground">Change is volume {prevLabel}.</p>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
-function PoolsTable({ days }: { days: '1' | '7' | '30' }) {
-  const { data, state } = useLoad(() => getDexPools(Number(days), 15), [days]);
+/** Every DEX's versions merged into its protocol, as one bar of shares. */
+function ProtocolShare({ summary, state }: { summary: DexSummary | null; state: 'loading' | 'ready' | 'error' }) {
+  const total = summary?.totals.volume_usd ?? 0;
+  const byProtocol = new Map<string, number>();
+  for (const d of summary?.dexes ?? []) byProtocol.set(d.protocol, (byProtocol.get(d.protocol) ?? 0) + d.volume_usd);
+  const rows = [...byProtocol].map(([id, v]) => ({ id, v, share: total > 0 ? (v / total) * 100 : 0 })).sort((a, b) => b.v - a.v);
+  const top = rows[0];
   return (
-    <section className="rounded-md border border-border bg-card">
-      <header className="px-4 sm:px-5 pt-4 pb-3">
-        <h2 className="text-[14px] font-semibold text-foreground">Top pools</h2>
-        <p className="text-[11px] text-muted-foreground mt-0.5">Busiest pools by volume over the same days</p>
-      </header>
+    <Card title="By protocol" sub="All versions of each DEX together">
       {state === 'error' ? (
-        <div className="px-5 py-10 text-center text-[12px] text-muted-foreground">Pools couldn't be loaded. Try again in a minute.</div>
+        <Failed what="Protocol shares" />
+      ) : !summary ? (
+        <Skeleton rows={3} />
+      ) : (
+        <div className={`px-4 sm:px-5 pb-4 ${state === 'loading' ? 'opacity-60' : ''}`}>
+          {top && (
+            <p className="text-[12px] text-muted-foreground">
+              <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{pct(top.share)}</span>
+              went through {PROTOCOL_LABEL[top.id] ?? top.id}
+            </p>
+          )}
+          <div className="mt-3 flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label="Volume share by protocol">
+            {rows.map((r) => (
+              <div key={r.id} title={`${PROTOCOL_LABEL[r.id] ?? r.id} ${pct(r.share, 1)}`} style={{ width: `${r.share}%`, background: PROTOCOL_COLOR[r.id] ?? '#6b7280' }} />
+            ))}
+          </div>
+          <ul className="mt-3 space-y-2">
+            {rows.map((r) => (
+              <li key={r.id} className="flex items-center gap-2.5 text-[12px]">
+                <ProtocolLogo protocol={r.id} name={PROTOCOL_LABEL[r.id] ?? r.id} size={18} />
+                <span className="text-foreground flex-1 truncate">{PROTOCOL_LABEL[r.id] ?? r.id}</span>
+                <span className="num text-muted-foreground">{usd(r.v)}</span>
+                <span className="num w-12 text-right text-foreground">{pct(r.share, 1)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** USD volume per priced swap: where the large orders go and where the small ones do. */
+function SwapSize({ summary, state }: { summary: DexSummary | null; state: 'loading' | 'ready' | 'error' }) {
+  const rows = (summary?.dexes ?? [])
+    .map((d) => {
+      const priced = d.swaps * (d.priced_share ?? 0);
+      return { ...d, avg: priced >= 50 ? d.volume_usd / priced : null };
+    })
+    .filter((d): d is typeof d & { avg: number } => d.avg != null)
+    .sort((a, b) => b.avg - a.avg);
+  const max = rows[0]?.avg ?? 1;
+  return (
+    <Card title="Average swap" sub="USD volume divided by the swaps that could be priced">
+      {state === 'error' ? (
+        <Failed what="Swap sizes" />
+      ) : !summary ? (
+        <Skeleton rows={3} />
+      ) : (
+        <ul className={`px-4 sm:px-5 pb-4 space-y-2.5 ${state === 'loading' ? 'opacity-60' : ''}`}>
+          {rows.map((d) => {
+            const st = dexStyle(d.id);
+            return (
+              <li key={d.id} className="text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground truncate">{d.name}</span>
+                  <span className="num text-foreground">${compact(d.avg)}</span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-sm bg-muted overflow-hidden">
+                  <div className="h-full rounded-sm" style={{ width: `${(d.avg / max) * 100}%`, background: st.color, opacity: st.opacity }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function PoolsTable({ days, total }: { days: '1' | '7' | '30'; total: number }) {
+  const { data, state } = useLoad(() => getDexPools(Number(days), 15), [days]);
+  const max = data?.[0]?.volume_usd ?? 0;
+  return (
+    <Card title="Top pools" sub="Busiest pools by volume over the same days">
+      {state === 'error' ? (
+        <Failed what="Pools" />
       ) : !data ? (
-        <div className="px-5 pb-5 space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" />)}</div>
+        <Skeleton />
       ) : (
         <div className={`overflow-x-auto ${state === 'loading' ? 'opacity-60' : ''}`}>
           <table className="w-full text-[12px] whitespace-nowrap">
             <thead>
               <tr className="border-y border-border text-[11px] text-muted-foreground">
-                <th className="text-left font-normal px-4 sm:px-5 py-2">Pair</th>
-                <th className="text-left font-normal px-3 py-2">DEX</th>
+                <th className="text-left font-normal px-4 sm:px-5 py-2 w-10">#</th>
+                <th className="text-left font-normal px-3 py-2">Pair</th>
+                <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">DEX</th>
                 <th className="text-right font-normal px-3 py-2">Volume</th>
+                <th className="text-left font-normal px-3 py-2 w-[22%] hidden md:table-cell">Of all volume</th>
                 <th className="text-right font-normal px-4 sm:px-5 py-2">Swaps</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {data.map((p: DexPool) => (
-                <tr key={p.pool}>
-                  <td className="px-4 sm:px-5 py-2.5">
-                    <a
-                      href={`https://snowtrace.io/address/${p.pool}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="num text-foreground hover:underline underline-offset-2 decoration-border"
-                      title={p.pool}
-                    >
-                      {p.token0.symbol || '?'}/{p.token1.symbol || '?'}
-                    </a>
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{DEX_LABEL[p.dex] ?? p.dex}</td>
-                  <td className="num text-right px-3 py-2.5 text-foreground">{usd(p.volume_usd)}</td>
-                  <td className="num text-right px-4 sm:px-5 py-2.5 text-foreground">{p.swaps.toLocaleString()}</td>
-                </tr>
-              ))}
+              {data.map((p: DexPool, i) => {
+                const share = total > 0 ? (p.volume_usd / total) * 100 : 0;
+                const st = dexStyle(p.dex);
+                return (
+                  <tr key={p.pool} className="hover:bg-muted/30 transition-colors">
+                    <td className="num px-4 sm:px-5 py-2.5 text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2.5">
+                      <a
+                        href={`https://snowtrace.io/address/${p.pool}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2.5 text-foreground hover:underline underline-offset-2 decoration-border"
+                        title={p.pool}
+                      >
+                        <PairLogos a={p.token0} b={p.token1} />
+                        <span className="num">{p.token0.symbol || '?'}/{p.token1.symbol || '?'}</span>
+                      </a>
+                    </td>
+                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <ProtocolLogo protocol={p.protocol} name={DEX_LABEL[p.dex] ?? p.dex} size={16} />
+                        {DEX_LABEL[p.dex] ?? p.dex}
+                      </span>
+                    </td>
+                    <td className="num text-right px-3 py-2.5 text-foreground">{usd(p.volume_usd)}</td>
+                    <td className="px-3 py-2.5 hidden md:table-cell">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-sm bg-muted overflow-hidden">
+                          {/* Scaled to the busiest pool, so the smaller rows stay readable. */}
+                          <div className="h-full rounded-sm" style={{ width: `${max > 0 ? (p.volume_usd / max) * 100 : 0}%`, background: st.color, opacity: st.opacity }} />
+                        </div>
+                        <span className="num w-11 text-right text-muted-foreground">{total > 0 ? pct(share, 1) : '—'}</span>
+                      </div>
+                    </td>
+                    <td className="num text-right px-4 sm:px-5 py-2.5 text-foreground">{compact(p.swaps)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 

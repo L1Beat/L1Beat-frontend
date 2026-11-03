@@ -33,6 +33,7 @@ import {
   getStakingSummary,
   getTreasuries,
   getBridgeSummary,
+  getPerpsSummary,
 } from '../api';
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
@@ -953,12 +954,15 @@ function MarketsStrip() {
     lending: Awaited<ReturnType<typeof getLending>>;
     treasuries: Awaited<ReturnType<typeof getTreasuries>>;
     bridges: Awaited<ReturnType<typeof getBridgeSummary>>;
+    perps: Awaited<ReturnType<typeof getPerpsSummary>>;
   } | null>(null);
   useEffect(() => {
     let alive = true;
-    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries(), getBridgeSummary(30)]).then(([staking, dex, lending, treasuries, bridges]) => {
-      if (alive) setFigures({ staking, dex, lending, treasuries, bridges });
-    });
+    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries(), getBridgeSummary(30), getPerpsSummary(30)]).then(
+      ([staking, dex, lending, treasuries, bridges, perps]) => {
+        if (alive) setFigures({ staking, dex, lending, treasuries, bridges, perps });
+      },
+    );
     return () => {
       alive = false;
     };
@@ -979,6 +983,7 @@ function MarketsStrip() {
   const lend = figures?.lending?.summary.totals;
   const held = figures?.treasuries?.totals;
   const bridged = figures?.bridges?.as_of ? figures.bridges.totals : null;
+  const perps = figures?.perps?.as_of ? figures.perps.totals : null;
   const items: StatItem[] = [
     {
       label: 'AVAX staked',
@@ -1009,6 +1014,12 @@ function MarketsStrip() {
       value: bridged ? usd(bridged.inflow_usd) : '—',
       sub: bridged ? `${bridged.net_usd >= 0 ? '+' : '−'}$${short(Math.abs(bridged.net_usd))} net` : figures ? 'Not available right now' : ' ',
       href: '/bridges',
+    },
+    {
+      label: 'Perps volume, 30d',
+      value: perps ? usd(perps.volume_usd) : '—',
+      sub: perps ? `${short(perps.traders)} traders` : figures ? 'Not available right now' : ' ',
+      href: '/perps',
     },
   ];
   return (
