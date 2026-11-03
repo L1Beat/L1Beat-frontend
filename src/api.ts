@@ -1022,15 +1022,6 @@ export interface IcmSummary {
 }
 export const getIcmSummary = (days: number) => getDexData<IcmSummary>(`icm-${days}`, `/api/v1/metrics/icm?days=${days}`);
 
-export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
-  const rows = await getIcmTimeseries(days);
-  return (rows ?? [])
-    .map((row) => ({ timestamp: Math.floor(Date.parse(`${row.date}T00:00:00Z`) / 1000), value: row.total }))
-    .filter((p) => Number.isFinite(p.timestamp))
-    .sort((a, b) => a.timestamp - b.timestamp)
-    .filter(isNotToday);
-}
-
 export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
   return fetchWithCache('network-max-tps-latest', async () => {
     try {

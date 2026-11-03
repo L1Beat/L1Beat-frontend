@@ -128,6 +128,7 @@ export function ChainIcmCard({ chain }: { chain: Chain }) {
               </>
             )}
           </span>
+          <Link to="/interchain" className="ml-auto hover:text-foreground underline-offset-2 hover:underline">All interchain traffic</Link>
         </div>
       </div>
 

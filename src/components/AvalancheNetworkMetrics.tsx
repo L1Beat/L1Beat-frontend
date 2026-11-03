@@ -7,8 +7,8 @@ import { DailyBars, parseDay } from './instrument/DailyBars';
 import html2canvas from 'html2canvas';
 import { TimeframeOption } from '../types';
 import { useTheme } from '../hooks/useTheme';
-import { RefreshCw, BarChart3, Users, Activity, Fuel, Download, MessageSquare, Share2, Coins, Info } from 'lucide-react';
-import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getDailyMessageVolumeFromExternal, getNetworkGasUsedHistory, getTPSHistory, getNetworkDailyFeeBurn, getL1BeatFeeSummary } from '../api';
+import { RefreshCw, BarChart3, Users, Activity, Fuel, Download, Share2, Coins, Info } from 'lucide-react';
+import { getNetworkActiveAddressesHistory, getNetworkTxCountHistory, getNetworkMaxTPSHistory, getNetworkGasUsedHistory, getTPSHistory, getNetworkDailyFeeBurn, getL1BeatFeeSummary } from '../api';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TimeRangeSlider } from './TimeRangeSlider';
 
@@ -27,7 +27,7 @@ interface MetricData {
   };
 }
 
-type MetricType = 'networkTPS' | 'dailyMessageVolume' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'feeBurn';
+type MetricType = 'networkTPS' | 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'feeBurn';
 
 // Distinct colors for each metric
 const METRIC_COLORS = {
@@ -36,7 +36,6 @@ const METRIC_COLORS = {
   dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },        // Purple
   maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },                // Green
   gasUsed: { main: 'rgb(249, 115, 22)', fill: 'rgba(249, 115, 22, 0.15)' },             // Orange
-  dailyMessageVolume: { main: 'rgb(236, 72, 153)', fill: 'rgba(236, 72, 153, 0.15)' },  // Pink
   feeBurn: { main: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.15)' },              // Amber
 };
 
@@ -46,9 +45,6 @@ const CUMULATIVE_COLOR = 'rgb(232, 65, 66)';
 /** How a window of daily values rolls up into the headline number. */
 type Aggregate = 'sum' | 'avg' | 'max';
 const AGGREGATE_LABEL: Record<Aggregate, string> = { sum: 'Total', avg: 'Daily average', max: 'Peak day' };
-
-// Sep 4 to Sep 11, 2026 UTC, as unix seconds.
-const OMNICOIN_BURST = [Date.UTC(2026, 8, 4) / 1000, Date.UTC(2026, 8, 11) / 1000] as const;
 
 const METRICS = [
   { 
@@ -135,17 +131,6 @@ const METRICS = [
       return value.toLocaleString();
     },
     unit: 'gas'
-  },
-  {
-    id: 'dailyMessageVolume' as const,
-    aggregate: 'sum' as Aggregate,
-    name: 'ICM Messages',
-    fullName: 'Daily ICM Message Volume',
-    description: 'Interchain messages (ICM) sent from or delivered to the C-Chain each day',
-    icon: MessageSquare,
-    color: METRIC_COLORS.dailyMessageVolume,
-    valueFormatter: (value: number) => Math.round(value).toLocaleString(),
-    unit: 'messages'
   },
   {
     id: 'feeBurn' as const,
@@ -434,27 +419,6 @@ export function AvalancheNetworkMetrics({
               metadata: {}
             }))
             .sort((a, b) => a.timestamp - b.timestamp);
-          break;
-
-        case 'dailyMessageVolume':
-          const requestedDays = daysToFetch === 360 ? 365 : daysToFetch;
-          const messageVolumeData = await getDailyMessageVolumeFromExternal(requestedDays);
-          
-          // Ensure we sort by timestamp ascending
-          const sortedData = messageVolumeData.sort((a, b) => a.timestamp - b.timestamp);
-          
-          // Slice the data to match the requested timeframe if the API returns more
-          const slicedData = sortedData.slice(-daysToFetch);
-          // A missing day becomes an empty slot (NaN), so a gap shows as a gap
-          // instead of the neighbouring days closing up.
-          const byDay = new Map(slicedData.map((item) => [item.timestamp, item.value]));
-          const filled: MetricData[] = [];
-          if (slicedData.length) {
-            for (let t = slicedData[0].timestamp; t <= slicedData[slicedData.length - 1].timestamp; t += 86400) {
-              filled.push({ timestamp: t, date: new Date(t * 1000).toISOString(), value: byDay.get(t) ?? NaN, metadata: {} });
-            }
-          }
-          processedData = filled;
           break;
 
         case 'feeBurn':
@@ -797,21 +761,9 @@ export function AvalancheNetworkMetrics({
     );
   })();
 
-  // Omnicoin's bridge sent one repeated transfer to the C-Chain about 258K times over a week;
-  // the spike would otherwise read as organic ICM growth.
-  const omnicoinBurst =
-    primaryMetric.id === 'dailyMessageVolume' &&
-    filteredPrimaryData.some((d) => d.timestamp >= OMNICOIN_BURST[0] && d.timestamp <= OMNICOIN_BURST[1]);
   const summary =
     completeValues.length > 1 ? (
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-        <SeriesSummary values={completeValues} format={primaryMetric.valueFormatter} className="export-hide" />
-        {omnicoinBurst && (
-          <p className="text-[11px] text-muted-foreground">
-            The Sep 4 to 11, 2026 spike is a one-off burst of repeated Omnicoin bridge transfers to the C-Chain.
-          </p>
-        )}
-      </div>
+      <SeriesSummary values={completeValues} format={primaryMetric.valueFormatter} className="export-hide" />
     ) : null;
 
   if (hero) {

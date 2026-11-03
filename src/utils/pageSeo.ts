@@ -40,6 +40,12 @@ export const PAGE_SEO = {
     url: '/bridges',
     image: '/og/bridges.png',
   },
+  interchain: {
+    title: 'Avalanche Interchain Messages',
+    description: 'ICM messages between Avalanche L1s and the C-Chain each day: by chain, by direction, and which L1s are new to it.',
+    url: '/interchain',
+    image: '/og/interchain.png',
+  },
   perps: {
     title: 'Avalanche Perpetuals',
     description: 'Leveraged trading on GMX on Avalanche: daily volume, open interest, fees and liquidations.',

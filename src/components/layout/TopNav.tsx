@@ -25,6 +25,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     label: 'Network',
     items: [
       { id: 'metrics', label: 'Metrics', path: '/metrics', hint: 'Activity and fees across every L1' },
+      { id: 'interchain', label: 'Interchain', path: '/interchain', hint: 'Messages between L1s and the C-Chain' },
       { id: 'burn', label: 'Burn', path: '/burn', hint: 'AVAX burned on the C-Chain, live' },
     ],
   },

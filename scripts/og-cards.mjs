@@ -144,6 +144,24 @@ function network() {
   return out + `<circle cx="${cx}" cy="${cy}" r="30" fill="#e84142"/>`;
 }
 
+// The C-Chain in the middle, L1s around it, each joined by a pair of legs: to the hub and back.
+function hub() {
+  const cx = CX + CW / 2, cy = CY + CH / 2;
+  const sizes = [30, 22, 14, 12, 10, 9, 9, 8, 8, 7, 7, 7];
+  let out = '';
+  sizes.forEach((r, i) => {
+    const a = -Math.PI / 2 + (i / sizes.length) * Math.PI * 2;
+    const x = cx + Math.cos(a) * 150, y = cy + Math.sin(a) * 150;
+    const px = -Math.sin(a), py = Math.cos(a);
+    const w = Math.max(2, r / 2.4);
+    [[w / 2 + 1, '#3987e5'], [-(w / 2 + 1), '#d95926']].forEach(([o, c]) => {
+      out += `<line x1="${x + px * o}" y1="${y + py * o}" x2="${cx + px * o}" y2="${cy + py * o}" stroke="${c}" stroke-width="${w}" stroke-opacity="0.6"/>`;
+    });
+    out += `<circle cx="${x}" cy="${y}" r="${r}" fill="#1c1f26" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.5"/>`;
+  });
+  return out + `<circle cx="${cx}" cy="${cy}" r="34" fill="#e84142"/>`;
+}
+
 function rows() {
   const status = ['#d4a017', '#d4a017', '#3987e5', '#199e70', '#d4a017', '#199e70', '#199e70'];
   return status.map((c, i) => {
@@ -193,6 +211,7 @@ const CARDS = [
   { file: 'perps', path: '/perps', title: 'Perpetuals', sub: 'Leveraged trading on GMX: volume, open interest and liquidations.', art: perpsArt() },
   { file: 'lending', path: '/lending', title: 'Lending', sub: 'Supplied, borrowed and rates on Aave and BENQI on Avalanche.', art: area(['#8b5cf6', '#5b3fa8', '#22a6c9'], 13, '#ffffff') },
   { file: 'bridges', path: '/bridges', title: 'Bridges', sub: 'Money bridged to and from Avalanche, by chain and bridge.', art: sankey() },
+  { file: 'interchain', path: '/interchain', title: 'Interchain', sub: 'ICM messages between Avalanche L1s and the C-Chain, by chain and day.', art: hub() },
   { file: 'burn', path: '/burn', title: 'AVAX burn', sub: 'Every C-Chain fee is burned. Live total and daily history.', art: bars(['#d95926', '#d4a017'], 21) },
   { file: 'acps', path: '/acps', title: 'Avalanche Community Proposals', sub: 'Every ACP from draft to activation.', art: rows() },
   { file: 'api', path: '/api', title: 'API playground', sub: 'Query the L1Beat REST and WebSocket API from the browser. No key needed.', art: code() },

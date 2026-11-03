@@ -9,13 +9,13 @@ import { L1Logo, SegmentedControl, Sparkline } from './instrument';
 export const TO_CCHAIN = '#3987e5';
 export const FROM_CCHAIN = '#d95926';
 
-const RANGES = [
+export const ICM_RANGES = [
   { value: '30', label: '30D' },
   { value: '90', label: '90D' },
   { value: '365', label: '1Y' },
   { value: '3650', label: 'All' },
 ] as const;
-type RangeValue = (typeof RANGES)[number]['value'];
+export type RangeValue = (typeof ICM_RANGES)[number]['value'];
 
 const count = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n.toLocaleString('en-US'));
 
@@ -26,9 +26,14 @@ function buckets(values: number[], n = 120): number[] {
   return Array.from({ length: n }, (_, i) => values.slice(Math.floor(i * size), Math.floor((i + 1) * size)).reduce((a, b) => a + b, 0));
 }
 
-/** Avalanche L1s by the interchain messages they exchanged with the C-Chain. */
-export function IcmByChain() {
-  const [range, setRange] = useState<RangeValue>('30');
+/**
+ * Avalanche L1s by the interchain messages they exchanged with the C-Chain.
+ * With `range` the parent drives the window and the control is hidden; `limit`
+ * caps the rows and `moreLink` replaces "Show all" with a link to the full list.
+ */
+export function IcmByChain({ range: fixedRange, limit = 10, moreLink }: { range?: RangeValue; limit?: number; moreLink?: string } = {}) {
+  const [ownRange, setRange] = useState<RangeValue>('30');
+  const range = fixedRange ?? ownRange;
   const [summary, setSummary] = useState<IcmSummary | null>(null);
   const [days, setDays] = useState<IcmDay[] | null>(null);
   const [chains, setChains] = useState<Chain[]>([]);
@@ -79,9 +84,9 @@ export function IcmByChain() {
 
   const total = summary?.totals.total ?? 0;
   const max = Math.max(...rows.map((r) => r.total), 1);
-  const shown = showAll ? rows : rows.slice(0, 10);
+  const shown = showAll ? rows : rows.slice(0, limit);
   const top = rows[0];
-  const windowText = range === '3650' && summary ? `since ${new Date(`${summary.from}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : `in the last ${RANGES.find((r) => r.value === range)!.label.replace('D', ' days').replace('1Y', 'year')}`;
+  const windowText = range === '3650' && summary ? `since ${new Date(`${summary.from}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : `in the last ${ICM_RANGES.find((r) => r.value === range)!.label.replace('D', ' days').replace('1Y', 'year')}`;
 
   return (
     <section className="rounded-md border border-border bg-card">
@@ -90,7 +95,9 @@ export function IcmByChain() {
           <h2 className="text-[14px] font-semibold text-foreground">Interchain messages by chain</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">ICM messages each L1 sent to or received from the C-Chain.</p>
         </div>
-        <SegmentedControl size="xs" value={range} options={RANGES} onChange={(v) => { setRange(v); setShowAll(false); }} ariaLabel="ICM range" />
+        {!fixedRange && (
+          <SegmentedControl size="xs" value={range} options={ICM_RANGES} onChange={(v) => { setRange(v); setShowAll(false); }} ariaLabel="ICM range" />
+        )}
       </header>
 
       {failed ? (
@@ -165,13 +172,17 @@ export function IcmByChain() {
               </tbody>
             </table>
           </div>
-          {rows.length > 10 && (
+          {moreLink ? (
+            <Link to={moreLink} className="block w-full px-4 sm:px-5 py-2.5 text-[12px] text-muted-foreground hover:text-foreground border-t border-border">
+              See all {rows.length} chains on the Interchain page
+            </Link>
+          ) : rows.length > limit && (
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
               className="w-full px-4 sm:px-5 py-2.5 text-left text-[12px] text-muted-foreground hover:text-foreground border-t border-border"
             >
-              {showAll ? 'Show the top 10' : `Show all ${rows.length} chains`}
+              {showAll ? `Show the top ${limit}` : `Show all ${rows.length} chains`}
             </button>
           )}
         </>

@@ -13,6 +13,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: 'Overview', to: '/' },
       { label: 'Metrics', to: '/metrics' },
+      { label: 'Interchain', to: '/interchain' },
       { label: 'Stablecoins', to: '/stablecoins' },
       { label: 'Staking', to: '/staking' },
       { label: 'Treasuries & ETFs', to: '/treasuries' },

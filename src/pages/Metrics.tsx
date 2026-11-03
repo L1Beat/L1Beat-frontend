@@ -8,7 +8,6 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
-import { IcmByChain } from '../components/IcmByChain';
 import { ComparisonView } from '../components/comparison';
 import {
   getChains,
@@ -338,11 +337,6 @@ export function Metrics() {
         <section id="chains" className="scroll-mt-16">
           <SectionErrorBoundary label="chain metrics">
             <ChainSpecificMetrics />
-          </SectionErrorBoundary>
-        </section>
-        <section id="icm" className="scroll-mt-16">
-          <SectionErrorBoundary label="interchain messages">
-            <IcmByChain />
           </SectionErrorBoundary>
         </section>
         <section id="compare" ref={comparisonRef} className="scroll-mt-16">
