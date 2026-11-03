@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
-import { motion, AnimatePresence } from '../utils/motion';
 import { Chain } from '../types';
 import { isCoreInstalled, addNetworkToWallet, switchToNetwork } from '../utils/metamask';
 import { useToast } from './Toaster';
@@ -78,37 +77,25 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       case 'adding':
         return (
           <>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className="w-4 h-4 rounded-full border-2 border-current border-t-transparent"
-            />
+            <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
             {variant === 'compact' ? 'Adding...' : 'Adding to Wallet...'}
           </>
         );
       case 'success':
         return (
           <>
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-            >
+            <span className="animate-scale-in">
               <Check className="w-4 h-4" />
-            </motion.div>
+            </span>
             {variant === 'compact' ? 'Added!' : 'Added to Wallet!'}
           </>
         );
       case 'error':
         return (
           <>
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: [0, 1.2, 1] }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            >
+            <span className="animate-scale-in">
               <AlertCircle className="w-4 h-4" />
-            </motion.div>
+            </span>
             {variant === 'compact' ? 'Error' : 'Try Again'}
           </>
         );
@@ -167,37 +154,21 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       </button>
       
       {/* Error tooltip */}
-      <AnimatePresence>
-        {status === 'error' && errorMessage && (
-          <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10 max-w-xs"
-            initial={{ opacity: 0, y: -10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
+      {status === 'error' && errorMessage && (
+          <div className="animate-fade-in absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10 max-w-xs">
             <div className="flex items-start gap-1">
               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0 text-red-500" />
               <span>{errorMessage}</span>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
       
       {/* Success message for compact variant */}
-      <AnimatePresence>
-        {status === 'success' && variant === 'compact' && (
-          <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10"
-            initial={{ opacity: 0, y: -10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-          >
+      {status === 'success' && variant === 'compact' && (
+          <div className="animate-fade-in absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10">
             Network added to Wallet!
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }

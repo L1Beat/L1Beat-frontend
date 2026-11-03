@@ -1,6 +1,5 @@
 import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from '../utils/motion';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { ChevronRight, GitCompareArrows, Info, Search, Star, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/branding/ui/tooltip';
@@ -740,7 +739,12 @@ export function Dashboard() {
           {heroView === 'map' ? (
             <SegmentedControl value={range} options={RANGES} onChange={setRange} ariaLabel="Time range" />
           ) : (
-            <SegmentedControl value={flowWindow} options={FLOW_WINDOWS} onChange={setFlowWindow} ariaLabel="Flow window" />
+            <div className="flex items-center gap-3">
+              <Link to="/interchain" className="hidden sm:inline text-[12px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                Interchain page
+              </Link>
+              <SegmentedControl value={flowWindow} options={FLOW_WINDOWS} onChange={setFlowWindow} ariaLabel="Flow window" />
+            </div>
           )}
         </div>
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
@@ -776,25 +780,16 @@ export function Dashboard() {
           onCategoryChange={setSelectedCategory}
           categories={categories}
         />
-        <AnimatePresence mode="wait">
-          {filteredChains.length === 0 ? (
-            <motion.div
+        {/* A CSS fade on each new page or filter; framer-motion here cost every Overview visit 38 KB. */}
+        {filteredChains.length === 0 ? (
+            <div
               key="no-results"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="px-6 py-12 text-center text-[12px] text-muted-foreground border-y border-border"
+              className="animate-fade-in px-6 py-12 text-center text-[12px] text-muted-foreground border-y border-border"
             >
               No L1s match "{searchTerm}". Clear the search or pick another category.
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
-              key={`${selectedCategory}-${searchTerm}-${currentPage}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            <div key={`${selectedCategory}-${searchTerm}-${currentPage}`} className="animate-fade">
               <ScreenerTable
                 chains={paginatedChains}
                 startRank={(currentPage - 1) * CHAINS_PER_PAGE}
@@ -812,9 +807,8 @@ export function Dashboard() {
                 onToggleSelect={toggleSelection}
                 selectionFull={selected.size >= MAX_COMPARE}
               />
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
 
         {coveredChains > 0 && coveredChains < activeCount && (
           <p className="mt-2 text-[11px] text-muted-foreground">
@@ -1050,6 +1044,7 @@ function FlowCards({
       value: loaded ? formatCount(stats.total) : '—',
       sub: loaded ? 'ICM and Teleporter' : 'Loading message data',
       tooltip: 'Interchain messages delivered between Avalanche L1s in the window, from Teleporter and ICM logs.',
+      href: '/interchain',
     },
     {
       label: who ? 'Corridors' : 'Active corridors',
