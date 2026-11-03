@@ -1022,6 +1022,50 @@ export interface IcmSummary {
 }
 export const getIcmSummary = (days: number) => getDexData<IcmSummary>(`icm-${days}`, `/api/v1/metrics/icm?days=${days}`);
 
+export interface IcmToken { address: string; symbol: string; decimals: number }
+export interface IcmAppRef { name: string; kind: 'ictt-home' | 'ictt-remote' | 'other'; label: { name: string; kind: string } | null }
+/** One message through the C-Chain's TeleporterMessenger; direction is from the C-Chain's side. */
+export interface IcmMessage {
+  message_id: string;
+  direction: 'sent' | 'received';
+  counterparty: { blockchain_id: string; name: string };
+  block_time: string;
+  block_number: number;
+  tx_hash: string;
+  /** The C-Chain contract: the sender for sends, the receiver for receives. */
+  local_address: string;
+  remote_address: string;
+  app: IcmAppRef | null;
+  ictt: { type: string; recipient: string; amount_raw: string; token: IcmToken | null } | null;
+}
+export interface IcmApp {
+  address: string;
+  name: string;
+  kind: 'ictt-home' | 'ictt-remote' | 'other';
+  token: IcmToken | null;
+  label: { name: string; kind: string } | null;
+  sent: number;
+  received: number;
+  total: number;
+  first_seen: string;
+  last_seen: string;
+  top_chains: { blockchain_id: string; name: string; sent: number; received: number; total: number }[];
+}
+export const getIcmApps = (days: number, limit = 50) =>
+  getDexData<{ as_of: string; from: string; days: number; apps: IcmApp[] }>(`icm-apps-${days}-${limit}`, `/api/v1/metrics/icm/apps?days=${days}&limit=${limit}`);
+/** Newest messages first; not cached here, the list is refreshed while the page is open. */
+export async function getIcmMessages(limit = 25, before?: string): Promise<{ data: IcmMessage[]; next: string | null } | null> {
+  try {
+    const r = await fetchExternalWithRetry<{ data: IcmMessage[]; meta?: { has_more?: boolean; next_cursor?: string } }>(
+      `${L1BEAT_EXTERNAL_API}/api/v1/metrics/icm/messages?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}`,
+    );
+    return { data: r.data ?? [], next: r.meta?.has_more ? r.meta.next_cursor ?? null : null };
+  } catch (error) {
+    console.error('ICM messages fetch error:', error);
+    return null;
+  }
+}
+
 export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
   return fetchWithCache('network-max-tps-latest', async () => {
     try {

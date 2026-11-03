@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
-import { L1Logo, SegmentedControl, StatStrip } from '../components/instrument';
+import { L1Logo, SegmentedControl, StatStrip, TokenLogo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { IcmByChain, ICM_RANGES, FROM_CCHAIN, TO_CCHAIN } from '../components/IcmByChain';
 import type { RangeValue } from '../components/IcmByChain';
-import { getChains, getIcmSummary, getIcmTimeseries } from '../api';
-import type { IcmDay, IcmSummary } from '../api';
+import { getChains, getIcmApps, getIcmMessages, getIcmSummary, getIcmTimeseries } from '../api';
+import type { IcmApp, IcmDay, IcmMessage, IcmSummary, IcmToken } from '../api';
+import { usePolling } from '../hooks/usePolling';
 import type { Chain } from '../types';
 import { WEEKLY_AFTER_DAYS, weekStart } from '../utils/weeks';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -192,6 +193,17 @@ export function Interchain() {
         <SectionErrorBoundary label="messages by chain">
           <IcmByChain range={range} limit={15} />
         </SectionErrorBoundary>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="lg:col-span-2 min-w-0">
+            <SectionErrorBoundary label="apps">
+              <AppsCard range={range} index={index} />
+            </SectionErrorBoundary>
+          </div>
+          <SectionErrorBoundary label="latest messages">
+            <RecentMessages index={index} />
+          </SectionErrorBoundary>
+        </div>
 
         <SectionErrorBoundary label="adoption">
           <Adoption days={history.data} state={history.state} index={index} />
@@ -741,5 +753,239 @@ function Adoption({ days, state, index }: { days: IcmDay[] | null; state: 'loadi
         </ul>
       </section>
     </div>
+  );
+}
+
+// Tokens whose symbol is often reused by lookalikes; an ICTT app moving a token with
+// one of these symbols at another address gets marked.
+const CANONICAL: Record<string, string> = {
+  WAVAX: '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7',
+  USDC: '0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e',
+  USDT: '0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7',
+  'BTC.B': '0x152b9d0fdc40c096757f570a51e494bd4b943e50',
+  'WETH.E': '0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab',
+};
+const lookalike = (t: IcmToken | null | undefined) => {
+  if (!t) return false;
+  const main = CANONICAL[t.symbol.toUpperCase()];
+  return !!main && main !== t.address.toLowerCase();
+};
+const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const KIND: Record<IcmApp['kind'], { chip: string; title: string } | null> = {
+  'ictt-home': { chip: 'ICTT home', title: 'Token bridge (ICTT): holds the original token on the C-Chain and sends it to L1s' },
+  'ictt-remote': { chip: 'ICTT remote', title: "Token bridge (ICTT): the C-Chain copy of a token whose home is on an L1" },
+  other: null,
+};
+const appName = (a: { name: string; label: { name: string } | null } | null, address: string, withAddress = true) =>
+  a?.name || a?.label?.name || (withAddress ? `Unlabeled ${shortAddr(address)}` : 'Unlabeled contract');
+
+function TokenTag({ token }: { token: IcmToken }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+      <TokenLogo address={token.address} symbol={token.symbol} size={13} />
+      <span className="num">{token.symbol}</span>
+      {lookalike(token) && (
+        <span className="text-[10px] text-muted-foreground/80" title={`This token calls itself ${token.symbol} but isn't the main ${token.symbol} at ${shortAddr(CANONICAL[token.symbol.toUpperCase()])}`}>
+          (not the main {token.symbol})
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The contracts on the C-Chain that send and receive ICM, busiest first. */
+function AppsCard({ range, index }: { range: RangeValue; index: ChainIndex }) {
+  const apps = useLoad(() => getIcmApps(Number(range), 50), range);
+  const [showAll, setShowAll] = useState(false);
+  const rows = (apps.data?.apps ?? []).filter((a) => a.total > 0);
+  const total = rows.reduce((a, r) => a + r.total, 0);
+  const max = Math.max(...rows.map((r) => r.total), 1);
+  const ictt = rows.filter((r) => r.kind !== 'other').reduce((a, r) => a + r.total, 0);
+  const shown = showAll ? rows : rows.slice(0, 10);
+  const d = apps.data;
+  const windowText = !d ? '' : d.days > 365 ? `since ${day(d.from, 'MMMM yyyy')}` : d.days === 365 ? 'in the last year' : `in the last ${d.days} days`;
+
+  return (
+    <section className="rounded-md border border-border bg-card min-w-0">
+      <header className="px-4 sm:px-5 pt-4 pb-3">
+        <h2 className="text-[14px] font-semibold text-foreground">Apps</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          The C-Chain contracts sending and receiving messages. ICTT is Avalanche's token bridge standard: a home contract holds the original token, a remote one its copy.
+        </p>
+      </header>
+      {apps.state === 'error' && !d ? (
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Apps couldn't be loaded. Try again in a minute.</p>
+      ) : !d ? (
+        <div className="px-5 pb-5 space-y-2">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" />)}</div>
+      ) : (
+        <div className={apps.state === 'loading' ? 'opacity-60' : ''}>
+          <p className="px-4 sm:px-5 pb-3 text-[13px] text-foreground">
+            <span className="num">{rows.length}</span> {rows.length === 1 ? 'app' : 'apps'} exchanged messages {windowText}.
+            {total > 0 && (
+              <span className="text-muted-foreground">
+                {' '}Token bridges carried <span className="num text-foreground">{Math.round((ictt / total) * 100)}%</span>
+                {rows[0] && <>, {appName(rows[0], rows[0].address)} alone <span className="num text-foreground">{Math.round((rows[0].total / total) * 100)}%</span></>}.
+              </span>
+            )}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] whitespace-nowrap">
+              <thead>
+                <tr className="border-y border-border text-[11px] text-muted-foreground">
+                  <th className="text-left font-normal px-4 sm:px-5 py-2">App</th>
+                  <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">With</th>
+                  <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">To C-Chain</th>
+                  <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">From C-Chain</th>
+                  <th className="text-right font-normal px-4 py-2 sm:hidden">Messages</th>
+                  <th className="text-left font-normal px-3 py-2 hidden md:table-cell w-[18%]">Messages</th>
+                  <th className="text-right font-normal px-4 sm:px-5 py-2 hidden lg:table-cell">Since</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {shown.map((a) => {
+                  const kind = KIND[a.kind];
+                  return (
+                    <tr key={a.address}>
+                      <td className="px-4 sm:px-5 py-2.5 max-w-[16rem]">
+                        <a href={`https://snowtrace.io/address/${a.address}`} target="_blank" rel="noopener noreferrer" className="block truncate text-[13px] font-medium text-foreground hover:underline underline-offset-2" title={a.address}>
+                          {appName(a, a.address, false)}
+                        </a>
+                        <span className="mt-0.5 flex items-center gap-2">
+                          {kind && <span className="text-[10px] px-1.5 py-px rounded-sm bg-accent text-foreground/80" title={kind.title}>{kind.chip}</span>}
+                          {a.token ? <TokenTag token={a.token} /> : !kind && <span className="num text-[10px] text-muted-foreground">{shortAddr(a.address)}</span>}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 hidden sm:table-cell">
+                        <span className="flex items-center -space-x-1.5" title={a.top_chains.map((c) => `${nameOf(index, c.blockchain_id, c.name)} ${num(c.total)}`).join(', ')}>
+                          {a.top_chains.slice(0, 4).map((c) => (
+                            <span key={c.blockchain_id} className="rounded-full ring-2 ring-card inline-flex">
+                              <L1Logo src={index.get(c.blockchain_id)?.chainLogoUri} name={nameOf(index, c.blockchain_id, c.name)} size={18} />
+                            </span>
+                          ))}
+                          {a.top_chains.length === 1 && <span className="pl-3 text-[11px] text-muted-foreground">{nameOf(index, a.top_chains[0].blockchain_id, a.top_chains[0].name)}</span>}
+                        </span>
+                      </td>
+                      <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{num(a.received)}</td>
+                      <td className="num text-right px-3 py-2.5 text-foreground hidden sm:table-cell">{num(a.sent)}</td>
+                      <td className="num text-right px-4 py-2.5 text-foreground sm:hidden">{num(a.total)}</td>
+                      <td className="px-3 py-2.5 hidden md:table-cell">
+                        <span className="flex h-2 rounded-sm overflow-hidden" style={{ width: `${Math.max(2, (a.total / max) * 100)}%` }}>
+                          <span style={{ width: `${(a.received / a.total) * 100}%`, background: TO_CCHAIN }} />
+                          <span style={{ width: `${(a.sent / a.total) * 100}%`, background: FROM_CCHAIN }} />
+                        </span>
+                      </td>
+                      <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground hidden lg:table-cell">{day(a.first_seen.slice(0, 10), 'MMM yyyy')}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > 10 && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="w-full px-4 sm:px-5 py-2.5 text-left text-[12px] text-muted-foreground hover:text-foreground border-t border-border">
+              {showAll ? 'Show the top 10' : `Show all ${rows.length} apps`}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The latest messages, refreshed every minute while the page is open. */
+function RecentMessages({ index }: { index: ChainIndex }) {
+  const [items, setItems] = useState<IcmMessage[] | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [more, setMore] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const pagedRef = useRef(false);
+  usePolling((alive) => {
+    getIcmMessages(12).then((r) => {
+      if (!alive()) return;
+      setNow(Date.now());
+      if (!r) return setFailed(true);
+      setFailed(false);
+      // Before "Show older" the newest page simply replaces the list; after it,
+      // new messages go on top and the older pages stay.
+      if (!pagedRef.current) {
+        setItems(r.data);
+        setNext(r.next);
+        return;
+      }
+      setItems((prev) => {
+        const key = (m: IcmMessage) => `${m.message_id}-${m.direction}`;
+        const have = new Set((prev ?? []).map(key));
+        return [...r.data.filter((m) => !have.has(key(m))), ...(prev ?? [])];
+      });
+    });
+  }, 60_000);
+  const loadMore = () => {
+    if (!next) return;
+    pagedRef.current = true;
+    setMore(true);
+    getIcmMessages(12, next).then((r) => {
+      setMore(false);
+      if (!r) return;
+      setItems((prev) => [...(prev ?? []), ...r.data]);
+      setNext(r.next);
+    });
+  };
+  const ago = (t: string) => {
+    const s = Math.max(0, Math.round((now - Date.parse(t)) / 1000));
+    return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`;
+  };
+
+  return (
+    <section className="rounded-md border border-border bg-card min-w-0 flex flex-col">
+      <header className="px-4 sm:px-5 pt-4 pb-3">
+        <h2 className="text-[14px] font-semibold text-foreground">Latest messages</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Newest first, refreshed every minute. Open one for its transaction.</p>
+      </header>
+      {failed && !items ? (
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Messages couldn't be loaded. Try again in a minute.</p>
+      ) : !items ? (
+        <div className="px-5 pb-5 space-y-2">{Array.from({ length: 8 }, (_, i) => <div key={i} className="h-9 rounded bg-muted/50 animate-pulse" />)}</div>
+      ) : (
+        <>
+          <ul className="divide-y divide-border border-t border-border">
+            {items.map((m) => {
+              const toC = m.direction === 'received';
+              const chain = index.get(m.counterparty.blockchain_id);
+              const cname = nameOf(index, m.counterparty.blockchain_id, m.counterparty.name);
+              const token = m.ictt?.token;
+              return (
+                <li key={`${m.message_id}-${m.direction}`}>
+                  <a href={`https://snowtrace.io/tx/${m.tx_hash}`} target="_blank" rel="noopener noreferrer" className="px-4 sm:px-5 py-2 flex items-center gap-3 hover:bg-accent/40" title="Open the transaction">
+                    <span className="relative inline-flex shrink-0">
+                      <L1Logo src={chain?.chainLogoUri} name={cname} size={22} />
+                      <span className="absolute -right-1 -bottom-1 w-3 h-3 rounded-full ring-2 ring-card" style={{ background: toC ? TO_CCHAIN : FROM_CCHAIN }} aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] text-foreground">
+                        {toC ? `${cname} to C-Chain` : `C-Chain to ${cname}`}
+                      </span>
+                      <span className="flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
+                        <span className="truncate">{appName(m.app, m.local_address)}</span>
+                        {token && <TokenTag token={token} />}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-[11px] text-muted-foreground" title={`${m.block_time.slice(0, 19).replace('T', ' ')} UTC`}>{ago(m.block_time)}</span>
+                      <span className="block num text-[10px] text-muted-foreground/80">{m.tx_hash.slice(0, 8)}…</span>
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+          {next && (
+            <button type="button" onClick={loadMore} disabled={more} className="mt-auto w-full px-4 sm:px-5 py-2.5 text-left text-[12px] text-muted-foreground hover:text-foreground border-t border-border disabled:opacity-60">
+              {more ? 'Loading…' : 'Show older messages'}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }
