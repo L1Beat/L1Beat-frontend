@@ -75,7 +75,19 @@ async function generate() {
     // When a page brings its own preview tags, drop the template's defaults so
     // crawlers don't see two conflicting sets. A page with only a title keeps
     // the default previews but not the default title.
+    // Preview images are served by whichever site built this, so a dev or preview
+    // deploy shows its own cards before they reach l1beat.io. Netlify sets URL to
+    // the site's address and DEPLOY_PRIME_URL to a branch or preview deploy's;
+    // canonical links keep pointing at l1beat.io.
+    const deployOrigin = (process.env.CONTEXT === 'production' ? process.env.URL : process.env.DEPLOY_PRIME_URL) || '';
+    const imageOrigin = /^https?:\/\//.test(deployOrigin) ? deployOrigin.replace(/\/$/, '') : 'https://l1beat.io';
+    const localImages = (head) =>
+      imageOrigin === 'https://l1beat.io'
+        ? head
+        : head.replace(/content="https:\/\/l1beat\.io\/(og\/[^"]+|banner\.png)"/g, `content="${imageOrigin}/$1"`);
     const withHead = (html, head) => {
+      head = localImages(head);
+      html = localImages(html);
       head = head.replace(/<title[^>]*><\/title>/g, '');
       if (head.includes('og:title')) {
         html = html.replace(/<!--default-meta-->[\s\S]*?<!--\/default-meta-->/, '');
