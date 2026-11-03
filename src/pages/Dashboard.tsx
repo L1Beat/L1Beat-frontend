@@ -655,6 +655,7 @@ export function Dashboard() {
       title="Overview"
       description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
       url="/"
+      image="/og/overview.png"
     />
   );
 

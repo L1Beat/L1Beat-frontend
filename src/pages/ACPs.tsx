@@ -278,6 +278,7 @@ export default function ACPs() {
       title="Avalanche Community Proposals"
       description="Browse, filter, and track every ACP (Avalanche Community Proposals) from draft through final, with status, track, and authors."
       url="/acps"
+      image="/og/acps.png"
     />
   );
 
