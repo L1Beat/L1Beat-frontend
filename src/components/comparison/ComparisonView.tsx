@@ -7,7 +7,7 @@ import { ChainSelector } from './ChainSelector';
 import { ComparisonChart, ComparisonMetricType, formatValue } from './ComparisonChart';
 import { seriesColor } from './colors';
 import { SegmentedControl } from '../instrument';
-import { recentlyRateLimited, getChainMetricsHistory, getChains } from '../../api';
+import { recentlyRateLimited, getChainMetricsHistory, getChains, getAllChainsTxCountLatest } from '../../api';
 import type { ChainMetric } from '../../api';
 import { LoadingSpinner } from '../LoadingSpinner';
 
@@ -132,11 +132,14 @@ export const ComparisonView = memo(function ComparisonView({
   const [copied, setCopied] = useState(false);
   const [hoveredChainId, setHoveredChainId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'absolute' | 'normalized'>('absolute');
+  // Each chain's latest daily transactions, for ranking by activity; null until loaded.
+  const [txLatest, setTxLatest] = useState<Record<string, number> | null>(null);
 
   const metricParam = searchParams.get('metric');
   const selectedMetric: ComparisonMetricType = COMPARISON_METRICS.some(m => m.id === metricParam)
     ? metricParam as ComparisonMetricType
-    : 'dailyActiveAddresses';
+    // Transactions by default: every chain reports them, while active addresses are missing for many.
+    : 'dailyTxCount';
 
   const timeframeParam = searchParams.get('timeframe');
   const timeframe = (timeframeParam === '30' ? 30 : 7) as 7 | 30;
@@ -206,6 +209,32 @@ export const ComparisonView = memo(function ComparisonView({
     fetchAvailableChains();
   }, [providedChains]);
 
+  useEffect(() => {
+    if (availableChains.length === 0) return;
+    let cancelled = false;
+    getAllChainsTxCountLatest()
+      .then((latest) => {
+        if (cancelled) return;
+        const out: Record<string, number> = {};
+        for (const chain of availableChains) {
+          const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
+            .map((k) => (k == null ? '' : String(k)))
+            .find((k) => k && latest[k]);
+          if (hit) out[chain.chainId] = Number(latest[hit].value) || 0;
+        }
+        setTxLatest(out);
+      })
+      .catch(() => !cancelled && setTxLatest({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [availableChains]);
+  // Busiest first by the latest day's transactions, which orders chains the same as their TPS.
+  const byActivity = useCallback(
+    (chains: Chain[]) => [...chains].sort((a, b) => (txLatest?.[b.chainId] ?? b.tps?.value ?? 0) - (txLatest?.[a.chainId] ?? a.tps?.value ?? 0)),
+    [txLatest],
+  );
+
   const selectedMetricRef = useRef(selectedMetric);
   selectedMetricRef.current = selectedMetric;
 
@@ -250,6 +279,8 @@ export const ComparisonView = memo(function ComparisonView({
   useEffect(() => {
     if (chainsLoading || urlInitialized || availableChains.length === 0) return;
     const compareParam = searchParams.get('compare');
+    // The default pick needs the activity ranking.
+    if (!compareParam && !currentChain && txLatest == null) return;
     if (compareParam) {
       const chainIds = compareParam.split(',').filter(Boolean).slice(0, 4);
       const initialChains: ChainComparisonData[] = [];
@@ -267,9 +298,19 @@ export const ComparisonView = memo(function ComparisonView({
       setComparisonChains([emptyData(currentChain)]);
       loadChain(currentChain);
       updateUrl([currentChain.chainId]);
+    } else {
+      // Nothing picked yet: start from the four busiest chains by TPS, the first
+      // preset, so the section opens with something to read. The URL stays clean
+      // until the reader changes the selection.
+      const busiest = byActivity(availableChains).slice(0, 4);
+      if (busiest.length > 0) {
+        const initial = busiest.map(emptyData);
+        setComparisonChains(initial);
+        busiest.forEach(loadChain);
+      }
     }
     setUrlInitialized(true);
-  }, [chainsLoading, availableChains, urlInitialized, searchParams, currentChain, loadChain, updateUrl]);
+  }, [chainsLoading, availableChains, urlInitialized, searchParams, currentChain, loadChain, updateUrl, txLatest, byActivity]);
 
   const prevTimeframeRef = useRef(timeframe);
   useEffect(() => {
@@ -320,9 +361,7 @@ export const ComparisonView = memo(function ComparisonView({
 
   const presets = useMemo(() => {
     if (availableChains.length === 0) return [];
-    const byTps = [...availableChains]
-      .sort((a, b) => (b.tps?.value ?? 0) - (a.tps?.value ?? 0))
-      .slice(0, 4);
+    const byTps = byActivity(availableChains).slice(0, 4);
     const byValidators = [...availableChains]
       .sort((a, b) => (b.validatorCount ?? 0) - (a.validatorCount ?? 0))
       .slice(0, 4);
@@ -337,7 +376,7 @@ export const ComparisonView = memo(function ComparisonView({
     ];
     if (gaming.length >= 2) list.push({ id: 'gaming', label: 'Gaming L1s', chains: gaming });
     return list;
-  }, [availableChains]);
+  }, [availableChains, byActivity]);
 
   const activePresetId = useMemo(() => {
     if (comparisonChains.length === 0) return null;
@@ -390,6 +429,22 @@ export const ComparisonView = memo(function ComparisonView({
     );
   }
 
+  // Inline bars, each against the column's largest value among the compared chains.
+  const colMax = {
+    maxTps: Math.max(0, ...chainStats.map(s => s.maxTps ?? 0)),
+    dailyTx: Math.max(0, ...chainStats.map(s => s.dailyTx ?? 0)),
+  };
+  const barCell = (value: number | null, leader: number | null, max: number, color: string, fmt: (v: number) => string) =>
+    value == null ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      <span className="inline-flex items-center justify-end gap-2 w-full">
+        <span className="hidden md:block w-16 h-1.5 rounded-sm bg-muted overflow-hidden" aria-hidden>
+          <span className="block h-full rounded-sm" style={{ width: `${max > 0 ? (value / max) * 100 : 0}%`, background: color }} />
+        </span>
+        <span className={value === leader ? 'font-semibold text-foreground' : 'text-foreground'}>{fmt(value)}</span>
+      </span>
+    );
   const cell = (value: number | null, leader: number | null, fmt: (v: number) => string) =>
     value == null ? (
       <span className="text-muted-foreground">—</span>
@@ -471,15 +526,15 @@ export const ComparisonView = memo(function ComparisonView({
                   key={data.chain.chainId}
                   onMouseEnter={() => setHoveredChainId(data.chain.chainId)}
                   onMouseLeave={() => setHoveredChainId(null)}
-                  className={`h-10 transition-opacity ${dim ? 'opacity-50' : ''}`}
+                  className={`h-11 transition-opacity ${dim ? 'opacity-50' : ''}`}
                 >
                   <td className="pl-4 pr-3">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span aria-hidden className="w-[3px] h-4 rounded-sm shrink-0" style={{ background: color }} />
                       {data.chain.chainLogoUri ? (
-                        <img src={data.chain.chainLogoUri} alt="" className="w-4 h-4 rounded-full object-cover bg-muted shrink-0" loading="lazy" />
+                        <img src={data.chain.chainLogoUri} alt="" className="w-5 h-5 rounded-full object-cover bg-muted shrink-0" loading="lazy" />
                       ) : (
-                        <span className="w-4 h-4 rounded-full bg-muted shrink-0" />
+                        <span className="w-5 h-5 rounded-full bg-muted shrink-0" />
                       )}
                       <Link to={`/chain/${data.chain.chainId}`} className="truncate font-medium text-foreground hover:underline underline-offset-2">
                         {data.chain.chainName}
@@ -490,9 +545,9 @@ export const ComparisonView = memo(function ComparisonView({
                     <td colSpan={5} className="px-3 text-right text-muted-foreground">Loading…</td>
                   ) : (
                     <>
-                      <td className="hidden sm:table-cell num px-3 text-right">{cell(st.maxTps, leaders.maxTps, v => v.toFixed(2))}</td>
+                      <td className="hidden sm:table-cell num px-3 text-right">{barCell(st.maxTps, leaders.maxTps, colMax.maxTps, color, v => v.toFixed(2))}</td>
                       <td className="hidden sm:table-cell num px-3 text-right">{cell(st.validators, leaders.validators, v => v.toLocaleString())}</td>
-                      <td className="num px-3 text-right">{cell(st.dailyTx, leaders.dailyTx, formatCompact)}</td>
+                      <td className="num px-3 text-right">{barCell(st.dailyTx, leaders.dailyTx, colMax.dailyTx, color, formatCompact)}</td>
                       <td className="hidden md:table-cell num px-3 text-right">
                         {cell(st.feesBurned, leaders.feesBurned, v => `${formatCompact(v)} AVAX`)}
                       </td>

@@ -1,20 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Pie } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Validator } from '../types';
-import { useTheme } from '../hooks/useTheme';
-import { chartTooltipStyle } from '../utils/chartConfig';
-import { PieChart } from 'lucide-react';
-import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { unitsToNumber } from '../utils/formatUnits';
 
-ChartJS.register(ArcElement, Tooltip);
-
-// Export the color generation function for use in other components
+// Kept for callers that still color validators by index.
 export const getValidatorColor = (index: number, isDark: boolean, alpha = 1) => {
-  // Use pastel colors with lower saturation and higher lightness
-  const hue = (index * 137.508) % 360; // Golden angle approximation
-  const saturation = isDark ? '45%' : '40%'; // Lower saturation for pastel effect
-  const lightness = isDark ? '70%' : '75%'; // Higher lightness for pastel effect
+  const hue = (index * 137.508) % 360;
+  const saturation = isDark ? '45%' : '40%';
+  const lightness = isDark ? '70%' : '75%';
   return `hsla(${hue}, ${saturation}, ${lightness}, ${alpha})`;
 };
 
@@ -26,169 +18,201 @@ interface StakeDistributionChartProps {
   onValidatorClick?: (validator: Validator) => void;
 }
 
-export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals, onValidatorClick }: StakeDistributionChartProps) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  // Hide the centre label while a slice is hovered so the tooltip doesn't collide with it.
-  const [hovering, setHovering] = useState(false);
+interface Tile { x: number; y: number; w: number; h: number; i: number }
 
-  const isWeightMode =
-    mode === 'weight' ? true : mode === 'tokens' ? false : validators.some(v => v.stakeUnit === 'weight');
-
-  const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
-  const unitLabel = isWeightMode ? 'weight' : (tokenSymbol || 'N/A');
-
-  const { data, totalStakeBaseUnits, baseByIndex, sortedTop, tokensByIndex, totalTokens } = useMemo(() => {
-    const getStakeBase = (v: Validator) => parseBaseUnits(v.weight) ?? 0n;
-    // PoS: the real staked amount in whole tokens (proportions still come from
-    // weight, which is equivalent since stake = weight / a constant factor).
-    const getTokens = (v: Validator) => Number(v.stakedAmount ?? '0') || 0;
-
-    // Calculate total stake/weight (base units or integer if weight-mode)
-    const total = validators.reduce((sum, v) => sum + getStakeBase(v), 0n);
-    const totalTok = validators.reduce((sum, v) => sum + getTokens(v), 0);
-    
-    // Sort validators by stake weight in descending order
-    const sortedValidators = [...validators].sort((a, b) => {
-      const aw = getStakeBase(a);
-      const bw = getStakeBase(b);
-      return aw < bw ? 1 : (aw > bw ? -1 : 0);
-    });
-
-    // Get top 50 validators for display
-    const top50 = sortedValidators.slice(0, 50);
-    const othersStake = sortedValidators.slice(50).reduce((sum, v) => sum + getStakeBase(v), 0n);
-
-    // Prepare data for the chart (top 50 + others)
-    const chartData: Array<{ label: string; navax: bigint; tokens: number }> = [
-      ...top50.map(v => ({
-        label: `${v.address.slice(0, 8)}...${v.address.slice(-4)}`,
-        navax: getStakeBase(v),
-        tokens: getTokens(v),
-      })),
-    ];
-
-    if (othersStake > 0n) {
-      chartData.push({
-        label: 'Others',
-        navax: othersStake,
-        tokens: sortedValidators.slice(50).reduce((s, v) => s + getTokens(v), 0),
-      });
+/** Squarified treemap (Bruls et al.) of values sorted largest first, in a w×h box. Same layout as the Staking page's map. */
+function squarify(values: number[], W: number, H: number): Tile[] {
+  const total = values.reduce((s, v) => s + v, 0);
+  if (!total) return [];
+  const scale = (W * H) / total;
+  const areas = values.map((v) => v * scale);
+  const tiles: Tile[] = [];
+  let x = 0, y = 0, w = W, h = H;
+  let start = 0;
+  const worst = (sum: number, max: number, min: number, side: number) =>
+    Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
+  while (start < areas.length) {
+    const side = Math.min(w, h);
+    let end = start + 1;
+    let sum = areas[start];
+    let max = sum, min = sum;
+    while (end < areas.length) {
+      const a = areas[end];
+      const nSum = sum + a;
+      if (worst(nSum, Math.max(max, a), Math.min(min, a), side) > worst(sum, max, min, side)) break;
+      sum = nSum; max = Math.max(max, a); min = Math.min(min, a); end++;
     }
+    const thick = sum / side;
+    let off = 0;
+    for (let k = start; k < end; k++) {
+      const len = areas[k] / thick;
+      tiles.push(w >= h ? { x, y: y + off, w: thick, h: len, i: k } : { x: x + off, y, w: len, h: thick, i: k });
+      off += len;
+    }
+    if (w >= h) { x += thick; w -= thick; } else { y += thick; h -= thick; }
+    start = end;
+  }
+  return tiles;
+}
 
-    // ChartJS needs numbers; use best-effort AVAX numbers for rendering.
-    const values = chartData.map(v => unitsToNumber(v.navax, isWeightMode ? 0 : decimals));
-    const baseByIndex = chartData.map(v => v.navax);
-    const backgroundColor = chartData.map((_, i) => 
-      i < 50 ? getValidatorColor(i, isDark, 0.8) : '#6b7280'
-    );
-    const borderColor = chartData.map((_, i) => 
-      i < 50 ? getValidatorColor(i, isDark) : '#4b5563'
-    );
+const BLUE = '#3987e5';
+// Tiers by running share: the validators that make up a third, then half, then the rest.
+const TIER_OPACITY = [1, 0.68, 0.42];
 
-    return {
-      data: {
-        labels: chartData.map(v => v.label),
-        datasets: [{
-          data: values,
-          backgroundColor,
-          borderColor,
-          borderWidth: isDark ? 2 : 1,
-        }],
-      },
-      totalStakeBaseUnits: total,
-      baseByIndex,
-      sortedTop: top50,
-      tokensByIndex: chartData.map(v => v.tokens),
-      totalTokens: totalTok,
-    };
-  }, [validators, isDark, isWeightMode, decimals]);
+const short = (a: string) => (a.length > 16 ? `${a.slice(0, 11)}…${a.slice(-4)}` : a);
+const pct = (v: number) => (v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2));
+const amount = (v: number) => {
+  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+  if (v >= 1e9) return `${trim(v / 1e9)}B`;
+  if (v >= 1e6) return `${trim(v / 1e6)}M`;
+  if (v >= 1e3) return `${trim(v / 1e3)}K`;
+  return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+};
 
-  const groupTokens = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+/**
+ * Each active validator as a box sized by its stake or weight. Equal weights read
+ * as an even grid; otherwise the boxes are shaded by the third and half of stake.
+ */
+export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDecimals, onValidatorClick }: StakeDistributionChartProps) {
+  const isWeightMode = mode === 'weight' ? true : mode === 'tokens' ? false : validators.some((v) => v.stakeUnit === 'weight');
+  const decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
+  const unit = isWeightMode ? 'weight' : tokenSymbol || 'tokens';
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '62%',
-    onHover: (_event: any, elements: any[]) => {
-      const canvas = _event.native?.target as HTMLCanvasElement | undefined;
-      if (canvas) {
-        canvas.style.cursor = elements.length > 0 && elements[0].index < sortedTop.length ? 'pointer' : 'default';
-      }
-      setHovering(elements.length > 0);
-    },
-    onClick: (_event: any, elements: any[]) => {
-      if (!onValidatorClick || elements.length === 0) return;
-      const idx = elements[0].index;
-      if (idx < sortedTop.length) {
-        onValidatorClick(sortedTop[idx]);
-      }
-    },
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        ...chartTooltipStyle(isDark),
-        boxPadding: 4,
-        callbacks: {
-          label: (context: any) => {
-            const idx = context.dataIndex;
-            const base = baseByIndex[idx] ?? 0n;
-            const total = totalStakeBaseUnits || 0n;
-            const percentage = total > 0n ? ((Number(base) / Number(total)) * 100).toFixed(1) : '0.0';
-            const formatted = isWeightMode
-              ? formatUnits(base, 0, { maxFractionDigits: 0 })
-              : groupTokens(tokensByIndex[idx] ?? 0);
-            return `${formatted} ${unitLabel} (${percentage}%)`;
-          },
-        },
-      },
-    },
-  };
+  const rows = useMemo(() => {
+    // PoS chains show real staked tokens; proportions come from weight either way.
+    // A node can hold several validations (common on PoA L1s); they're one validator here,
+    // matching the decentralization counts.
+    const byNode = new Map<string, { v: Validator; w: number; tokens: number | null; entries: number }>();
+    for (const v of validators) {
+      const w = unitsToNumber(v.weight, isWeightMode ? 0 : decimals);
+      if (!Number.isFinite(w) || w <= 0) continue;
+      const tokens = !isWeightMode && v.stakedAmount != null ? Number(v.stakedAmount) || 0 : null;
+      const e = byNode.get(v.address);
+      if (e) {
+        e.w += w;
+        e.tokens = e.tokens != null && tokens != null ? e.tokens + tokens : e.tokens ?? tokens;
+        e.entries += 1;
+      } else byNode.set(v.address, { v, w, tokens, entries: 1 });
+    }
+    const list = [...byNode.values()].sort((a, b) => b.w - a.w);
+    const total = list.reduce((s, r) => s + r.w, 0);
+    let run = 0;
+    return list.map((r) => {
+      const before = run;
+      run += r.w;
+      return { ...r, share: total > 0 ? (r.w / total) * 100 : 0, tier: before < total / 3 ? 0 : before < total / 2 ? 1 : 2 };
+    });
+  }, [validators, isWeightMode, decimals]);
 
-  const totalDisplay = isWeightMode
-    ? formatUnits(totalStakeBaseUnits, 0, { maxFractionDigits: 0 })
-    : groupTokens(totalTokens);
-  const avgDisplay =
-    validators.length > 0
-      ? isWeightMode
-        ? formatUnits(totalStakeBaseUnits / BigInt(validators.length), 0, { maxFractionDigits: 0 })
-        : groupTokens(totalTokens / validators.length)
-      : 'N/A';
+  const equal = rows.length > 1 && rows[0].w === rows[rows.length - 1].w;
+  const tierCount = [0, 1, 2].map((t) => rows.filter((r) => r.tier === t).length);
+  const totalTokens = rows.reduce((s, r) => s + (r.tokens ?? r.w), 0);
+
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const tiles = useMemo(() => (box && box.w > 0 && box.h > 0 ? squarify(rows.map((r) => r.w), box.w, box.h) : []), [rows, box]);
+  const [hover, setHover] = useState<number | null>(null);
+  const shown = hover != null ? rows[hover] : null;
+
+  const overOne = rows.filter((r) => r.share >= 1).length;
 
   return (
-    <div className="bg-card rounded-md border border-border overflow-hidden">
-      <header className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
-        <div className="flex items-center gap-2">
-          <PieChart className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[14px] font-semibold text-foreground">
-            {isWeightMode ? 'Weight distribution' : 'Stake distribution'}
-          </h2>
+    <section className="bg-card rounded-md border border-border overflow-hidden">
+      <header className="px-4 sm:px-5 pt-4 pb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold text-foreground">{isWeightMode ? 'Weight distribution' : 'Stake distribution'}</h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Each box is one active validator node, sized by its {isWeightMode ? 'weight' : 'stake'}. Click one for its details.
+          </p>
         </div>
-        <span className="text-[11px] font-medium text-muted-foreground">
-          {validators.length} validators
+        <span className="text-[11px] text-muted-foreground">
+          <span className="num text-foreground">{amount(totalTokens)}</span> {unit} across <span className="num text-foreground">{rows.length}</span> validators
         </span>
       </header>
 
-      <div className="p-4 sm:p-6">
-        <div className="relative h-64 sm:h-72 flex items-center justify-center">
-          <div className="w-full h-full max-w-[300px]">
-            <Pie data={data} options={options} />
-          </div>
-          {/* Total in the donut centre — hidden while hovering so the tooltip is readable */}
-          {!hovering && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] text-muted-foreground">Total {unitLabel}</span>
-              <span className="text-lg font-bold text-foreground tabular-nums">{totalDisplay}</span>
-            </div>
-          )}
-        </div>
-        <p className="text-center text-[11px] text-muted-foreground mt-3">
-          {validators.length} validators · avg{' '}
-          <span className="font-semibold text-foreground tabular-nums">{avgDisplay}</span> {unitLabel} · tap a slice for detail
+      <div className="px-4 sm:px-5 pb-3">
+        <p className="text-[13px] text-foreground min-h-5">
+          {shown ? (
+            <>
+              <span className="num">{short(shown.v.address)}</span>
+              <span className="text-muted-foreground">
+                {' '}holds <span className="num text-foreground">{shown.tokens != null ? amount(shown.tokens) : amount(shown.w)}</span> {unit},{' '}
+                <span className="num text-foreground">{pct(shown.share)}%</span> of the total
+                {shown.entries > 1 && <>, across {shown.entries} validations</>}
+              </span>
+            </>
+          ) : equal ? (
+            <>
+              All <span className="num">{rows.length}</span> validators hold the same {isWeightMode ? 'weight' : 'stake'},{' '}
+              <span className="num">{pct(rows[0].share)}%</span> each, so no single validator outweighs another.
+            </>
+          ) : rows.length > 1 ? (
+            <>
+              The largest validator holds <span className="num">{pct(rows[0].share)}%</span>
+              {overOne < rows.length ? (
+                <>, and <span className="num">{rows.length - overOne}</span> of the <span className="num">{rows.length}</span> hold less than 1% each.</>
+              ) : (
+                '.'
+              )}
+            </>
+          ) : rows.length === 1 ? (
+            'One active validator holds all of it.'
+          ) : null}
         </p>
       </div>
-    </div>
+
+      <div ref={boxRef} className="relative mx-4 sm:mx-5 h-[220px] sm:h-[280px]" onMouseLeave={() => setHover(null)}>
+        {tiles.map((t) => {
+          const r = rows[t.i];
+          const label = t.w > 46 && t.h > 22;
+          return (
+            <div
+              key={r.v.address}
+              className={`absolute ${onValidatorClick ? 'cursor-pointer' : ''}`}
+              style={{ left: t.x, top: t.y, width: t.w, height: t.h, padding: t.w > 3 && t.h > 3 ? 1 : 0 }}
+              onMouseEnter={() => setHover(t.i)}
+              onClick={() => onValidatorClick?.(r.v)}
+              title={`${r.v.address}: ${pct(r.share)}%`}
+            >
+              <div
+                className="w-full h-full rounded-[2px] transition-opacity"
+                style={{
+                  background: BLUE,
+                  opacity: (equal ? 0.8 : TIER_OPACITY[r.tier]) * (hover == null || hover === t.i ? 1 : 0.55),
+                  outline: hover === t.i ? '1px solid var(--foreground)' : undefined,
+                }}
+              />
+              {label && (
+                <span className={`num absolute left-1.5 top-1 text-[10px] leading-3 pointer-events-none ${!equal && r.tier > 0 ? 'text-foreground/80' : 'text-white/90'}`}>{pct(r.share)}%</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        {equal ? (
+          <span>Every box is the same size: the {isWeightMode ? 'weight' : 'stake'} is spread evenly.</span>
+        ) : (
+          [
+            [0, `${tierCount[0]} hold a third`],
+            [1, `${tierCount[1]} more reach half`],
+            [2, `${tierCount[2]} hold the rest`],
+          ].filter(([t]) => tierCount[t as number] > 0).map(([t, text]) => (
+            <span key={t} className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: BLUE, opacity: TIER_OPACITY[t as number] }} />
+              {text}
+            </span>
+          ))
+        )}
+      </div>
+    </section>
   );
 }

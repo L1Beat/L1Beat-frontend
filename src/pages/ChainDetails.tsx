@@ -26,7 +26,7 @@ import { Line, Bar } from 'react-chartjs-2';
 import { watermarkPlugin, getInkRgb } from '../utils/chartConfig';
 import { NodeId } from '../components/NodeId';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
-import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
+import { StakeDistributionChart } from '../components/StakeDistributionChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
@@ -1273,6 +1273,10 @@ export function ChainDetails() {
                         <tbody>
                           {(() => {
                             const virtualRows = rowVirtualizer.getVirtualItems();
+                            const totalNum = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
+                            const maxSharePct = totalNum > 0
+                              ? Math.max(0, ...filteredValidators.map((v) => unitsToNumber(v.weight, stakeIsWeight ? 0 : stakeTokenDecimals))) / totalNum * 100
+                              : 0;
                             const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
                             const paddingBottom =
                               virtualRows.length > 0
@@ -1317,18 +1321,11 @@ export function ChainDetails() {
                                   </span>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-2.5">
-                                    <span
-                                      aria-hidden
-                                      className="w-2 h-2 rounded-sm shrink-0"
-                                      style={{ backgroundColor: getValidatorColor(index, theme === 'dark', 0.9) }}
-                                    />
-                                    <NodeId id={validator.address} className="text-[12px]" />
-                                  </div>
+                                  <NodeId id={validator.address} className="text-[12px]" />
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
                                   <div className="num flex items-baseline gap-3 text-[12px] text-foreground">
-                                    <span className="min-w-[4.5rem]">
+                                    <span className={stakeIsWeight ? 'sm:w-14' : 'sm:w-36'}>
                                       {stakeIsWeight ? (
                                         formatWeight(validator.weight)
                                       ) : (
@@ -1338,25 +1335,24 @@ export function ChainDetails() {
                                         </>
                                       )}
                                     </span>
-                                    <span className="text-[11px] text-muted-foreground">{percentage}%</span>
+                                    <span className="hidden sm:block w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden" aria-hidden>
+                                      {/* Scaled to the largest validator, so small shares stay visible. */}
+                                      <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground sm:w-12">{percentage}%</span>
                                   </div>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
                                   {hasUptimeData ? (
                                   <div className="flex items-center justify-end gap-2.5">
-                                    <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-sm ${
-                                          (validator.uptime || 0) >= 90 ? 'bg-up' :
-                                          (validator.uptime || 0) >= 80 ? 'bg-[#d4a017]' : 'bg-down'
-                                        }`}
-                                        style={{ width: `${validator.uptime || 0}%` }}
+                                    {/* 80% to 100%: 80% is the minimum uptime for rewards, so the bar only turns red below it. */}
+                                    <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-1.5 overflow-hidden" aria-hidden>
+                                      <div
+                                        className={`h-full rounded-sm ${(validator.uptime || 0) < 80 ? 'bg-down' : 'bg-foreground/45'}`}
+                                        style={{ width: `${Math.max((validator.uptime || 0) < 80 ? 4 : 2, Math.min(100, (((validator.uptime || 0) - 80) / 20) * 100))}%` }}
                                       ></div>
                                     </div>
-                                    <span className={`num text-[12px] w-14 text-right ${
-                                      (validator.uptime || 0) >= 90 ? 'text-foreground' :
-                                      (validator.uptime || 0) >= 80 ? 'text-[#d4a017]' : 'text-down'
-                                    }`}>
+                                    <span className={`num text-[12px] w-14 text-right ${(validator.uptime || 0) < 80 ? 'text-down' : 'text-foreground'}`}>
                                         {Number.isFinite(validator.uptime) ? `${(validator.uptime as number).toFixed(1)}%` : 'N/A'}
                                     </span>
                                   </div>
@@ -1841,8 +1837,8 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
                 y={geom.sy(p.v)}
                 width={geom.barW}
                 height={Math.max(0, geom.floor - geom.sy(p.v))}
-                fill="var(--ink)"
-                fillOpacity={hover == null || hover === i ? 0.75 : 0.3}
+                fill="#3987e5"
+                fillOpacity={hover == null || hover === i ? 0.85 : 0.35}
               />
               {i % geom.labelEvery === 0 && (
                 <text x={geom.sx(p.t)} y={ACT_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
@@ -1855,6 +1851,44 @@ function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = 
         <ChartWatermark />
         </div>
       )}
+      {geom && points.length > 1 && (() => {
+        // Busiest and quietest day, and the second half of the range against the first.
+        const peakP = points.reduce((a, b) => (b.v > a.v ? b : a));
+        const lowP = points.reduce((a, b) => (b.v < a.v ? b : a));
+        const half = Math.floor(points.length / 2);
+        const avgOf = (xs: typeof points) => xs.reduce((s, p) => s + p.v, 0) / Math.max(1, xs.length);
+        const first = avgOf(points.slice(0, half));
+        const second = avgOf(points.slice(half));
+        const change = first > 0 ? ((second - first) / first) * 100 : null;
+        const total = isTx ? points.reduce((s, p) => s + p.v, 0) : null;
+        const cells: { label: string; value: React.ReactNode; sub: string }[] = [
+          total != null
+            ? { label: 'Transactions', value: fmtTick(total), sub: `${utcDay(points[0].t, 'MMM d')} to ${utcDay(latest!.t, 'MMM d')}` }
+            : { label: 'Average', value: `${formatTpsExact(avg)} TPS`, sub: `${points.length} days` },
+          { label: 'Busiest day', value: fmtTick(peakP.v), sub: utcDay(peakP.t, geom.days > 365 ? 'MMM d, yyyy' : 'EEE, MMM d') },
+          { label: 'Quietest day', value: fmtTick(lowP.v), sub: utcDay(lowP.t, geom.days > 365 ? 'MMM d, yyyy' : 'EEE, MMM d') },
+          {
+            label: 'Second half vs first',
+            value: change == null ? '—' : (
+              <span className={Math.abs(change) < 0.05 ? 'text-muted-foreground' : change > 0 ? 'text-up' : 'text-down'}>
+                {change > 0 ? '+' : change < 0 ? '−' : ''}{Math.abs(change).toFixed(1)}%
+              </span>
+            ),
+            sub: 'average per day',
+          },
+        ];
+        return (
+          <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 border-t border-border -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 [&>div:nth-child(even)]:border-l sm:[&>div:not(:first-child)]:border-l [&>div:nth-child(n+3)]:border-t sm:[&>div:nth-child(n+3)]:border-t-0 [&>div]:border-border">
+            {cells.map((c) => (
+              <div key={c.label} className="px-4 sm:px-5 py-2.5 min-w-0">
+                <dt className="text-[11px] text-muted-foreground truncate">{c.label}</dt>
+                <dd className="num text-[15px] leading-6 text-foreground truncate">{c.value}</dd>
+                <div className="text-[11px] text-muted-foreground truncate">{c.sub}</div>
+              </div>
+            ))}
+          </dl>
+        );
+      })()}
       {failed ? (
         <p className="mt-3 text-[11px] text-muted-foreground">
           The longer history couldn't be loaded, so this shows the last 30 days. Try again in a minute.

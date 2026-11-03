@@ -7,7 +7,7 @@ import type { ChainMetricsHistory } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { SeriesSummary } from './instrument';
+import { SeriesSummary, Sparkline } from './instrument';
 import { DailyBars, parseDay } from './instrument/DailyBars';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -21,14 +21,24 @@ interface MetricData {
 
 type MetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid';
 
-// Colors for each metric
+// One color per metric, from the categorical palette.
 const METRIC_COLORS = {
-  dailyActiveAddresses: { main: 'rgb(59, 130, 246)', fill: 'rgba(59, 130, 246, 0.15)' },
-  dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },
-  maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },
-  gasUsed: { main: 'rgb(249, 115, 22)', fill: 'rgba(249, 115, 22, 0.15)' },
-  avgGasPrice: { main: 'rgb(20, 184, 166)', fill: 'rgba(20, 184, 166, 0.15)' },
-  feesPaid: { main: 'rgb(236, 72, 153)', fill: 'rgba(236, 72, 153, 0.15)' },
+  dailyActiveAddresses: { main: '#3987e5', fill: 'rgba(57, 135, 229, 0.15)' },
+  dailyTxCount: { main: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.15)' },
+  maxTPS: { main: '#d4a017', fill: 'rgba(212, 160, 23, 0.15)' },
+  gasUsed: { main: '#d95926', fill: 'rgba(217, 89, 38, 0.15)' },
+  avgGasPrice: { main: '#6b7280', fill: 'rgba(107, 114, 128, 0.15)' },
+  feesPaid: { main: '#199e70', fill: 'rgba(25, 158, 112, 0.15)' },
+};
+
+// How a metric reads over a window: flows add up, levels and peaks don't.
+const SUMMARY: Record<MetricType, 'total' | 'average' | 'peak'> = {
+  dailyActiveAddresses: 'average',
+  dailyTxCount: 'total',
+  maxTPS: 'peak',
+  gasUsed: 'total',
+  avgGasPrice: 'average',
+  feesPaid: 'total',
 };
 
 const METRICS = [
@@ -114,6 +124,8 @@ export function ChainSpecificMetrics() {
   const [ranking, setRanking] = useState<{ by: 'active addresses' | 'transactions'; latest: Record<string, number> }>({ by: 'active addresses', latest: {} });
   const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [copied, setCopied] = useState(false);
+  // The metric drawn large; the rest sit below as small panels that swap in on click.
+  const [lead, setLead] = useState<MetricType>('dailyTxCount');
 
   // Range selection states for each metric
   const [rangeStates, setRangeStates] = useState<Record<string, { start: number; end: number }>>({});
@@ -443,7 +455,7 @@ export function ChainSpecificMetrics() {
   }, [selectedChain, timeframe, isDark]);
 
   // Create chart component for each metric
-  const renderMetricChart = (metricId: MetricType) => {
+  const renderMetricChart = (metricId: MetricType, tall = false) => {
     const metric = METRICS.find(m => m.id === metricId);
     if (!metric) return null;
 
@@ -459,6 +471,7 @@ export function ChainSpecificMetrics() {
         key={metricId}
         metric={metric}
         data={filteredData}
+        tall={tall}
         containerRef={(el) => { chartContainerRefs.current[metricId] = el; }}
         exportHeader={
           <div className="export-show hidden items-center justify-between mb-2">
@@ -530,8 +543,9 @@ export function ChainSpecificMetrics() {
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="w-full sm:w-64 h-8 px-3 bg-background border border-border rounded flex items-center justify-between hover:border-foreground/30 transition-colors"
               >
-                <span className="text-[12px] font-medium text-foreground truncate">
-                  {selectedChain?.chainName || 'Select Chain'}
+                <span className="flex items-center gap-2 min-w-0">
+                  {selectedChain && <ChainMark chain={selectedChain} />}
+                  <span className="text-[12px] font-medium text-foreground truncate">{selectedChain?.chainName || 'Select Chain'}</span>
                 </span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -545,13 +559,14 @@ export function ChainSpecificMetrics() {
                         handleChainChange(chain);
                         setIsDropdownOpen(false);
                       }}
-                      className={`w-full px-3 py-2 text-left text-[12px] hover:bg-accent/50 transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-[12px] hover:bg-accent/50 transition-colors flex items-center gap-2 ${
                         selectedChain?.chainId === chain.chainId
                           ? 'bg-accent text-foreground font-medium'
                           : 'text-foreground'
                       }`}
                     >
-                      {chain.chainName}
+                      <ChainMark chain={chain} />
+                      <span className="truncate">{chain.chainName}</span>
                     </button>
                   ))}
                 </div>
@@ -638,12 +653,26 @@ export function ChainSpecificMetrics() {
         </div>
       </div>
 
-      {/* Metrics Charts Grid */}
-      {selectedChain && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {METRICS.map(metric => renderMetricChart(metric.id))}
-        </div>
-      )}
+      {/* One metric large, the others as small panels */}
+      {selectedChain && (() => {
+        const withData = METRICS.filter((m) => (metricsData[m.id] ?? []).length > 0);
+        const shownLead = withData.some((m) => m.id === lead) ? lead : withData[0]?.id;
+        const rest = withData.filter((m) => m.id !== shownLead);
+        const cols =
+          rest.length >= 5 ? 'lg:grid-cols-5' : rest.length === 4 ? 'lg:grid-cols-4' : rest.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
+        return (
+          <div className="space-y-4">
+            {shownLead && renderMetricChart(shownLead, true)}
+            {rest.length > 0 && (
+              <div className={`grid grid-cols-2 ${cols} gap-4`}>
+                {rest.map((m) => (
+                  <MetricPanel key={m.id} metric={m} data={metricsData[m.id] ?? []} onSelect={() => setLead(m.id)} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -655,12 +684,14 @@ export function ChainSpecificMetrics() {
 function ChainMetricCard({
   metric,
   data,
+  tall = false,
   containerRef,
   exportHeader,
   exportMenu,
 }: {
   metric: (typeof METRICS)[number];
   data: MetricData[];
+  tall?: boolean;
   containerRef: (el: HTMLDivElement | null) => void;
   exportHeader: React.ReactNode;
   exportMenu: React.ReactNode;
@@ -695,7 +726,7 @@ function ChainMetricCard({
         {exportMenu}
       </div>
 
-      <div className="h-[220px]">
+      <div className={tall ? 'h-[300px]' : 'h-[220px]'}>
         <DailyBars
           values={values}
           dates={dates}
@@ -713,5 +744,62 @@ function ChainMetricCard({
         />
       )}
     </div>
+  );
+}
+
+/** A chain's own logo, small, with the L1Beat mark when it has none. */
+function ChainMark({ chain }: { chain: Chain }) {
+  return (
+    <img
+      src={chain.chainLogoUri || '/icon-dark-animated.svg'}
+      alt=""
+      loading="lazy"
+      className="w-4 h-4 rounded-full bg-muted object-cover shrink-0"
+      onError={(e) => {
+        e.currentTarget.src = '/icon-dark-animated.svg';
+        e.currentTarget.onerror = null;
+      }}
+    />
+  );
+}
+
+/**
+ * A metric in brief: its total, average or peak over the window, the busiest
+ * day, and a trend line. Clicking it draws it large above.
+ */
+function MetricPanel({ metric, data, onSelect }: { metric: (typeof METRICS)[number]; data: MetricData[]; onSelect: () => void }) {
+  const values = data.map((d) => d.value);
+  const kind = SUMMARY[metric.id];
+  const peakIdx = values.indexOf(Math.max(...values));
+  const figure =
+    kind === 'total' ? values.reduce((a, b) => a + b, 0) : kind === 'peak' ? values[peakIdx] : values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+  const caption = kind === 'total' ? `total over ${values.length} days` : kind === 'peak' ? 'highest day' : 'a day on average';
+  const Icon = metric.icon;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      title="Show this metric large"
+      className="text-left bg-card rounded-md border border-border px-4 pt-3 pb-2 min-w-0 hover:border-foreground/30 hover:bg-accent/30 transition-colors"
+    >
+      <span className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: metric.color.main }} />
+        <span className="truncate">{metric.name.replace(/^Daily /, '')}</span>
+      </span>
+      <span className="block mt-1 num text-[20px] leading-7 font-medium text-foreground truncate">
+        {metric.valueFormatter(figure)}
+        {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
+      </span>
+      <span className="block text-[11px] text-muted-foreground leading-4 truncate">{caption}</span>
+      {kind !== 'peak' && peakIdx >= 0 && (
+        <span className="block text-[11px] text-muted-foreground leading-4 truncate">
+          busiest <span className="num text-foreground">{metric.valueFormatter(values[peakIdx])}</span> on {format(parseDay(data[peakIdx].date), 'MMM d')}
+        </span>
+      )}
+      {kind === 'peak' && peakIdx >= 0 && (
+        <span className="block text-[11px] text-muted-foreground leading-4 truncate">on {format(parseDay(data[peakIdx].date), 'MMM d, yyyy')}</span>
+      )}
+      <Sparkline data={values} width={240} height={36} color={metric.color.main} fill className="mt-2 w-full h-9" />
+    </button>
   );
 }
