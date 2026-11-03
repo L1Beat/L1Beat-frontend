@@ -168,6 +168,16 @@ function pulseArt() {
     xy.slice(1, -1).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${9 + (i % 3) * 3}" fill="#ef4444"/>`).join('');
 }
 
+function perpsArt() {
+  // Open interest: long above the axis, short below.
+  const n = 50, mid = CY + CH / 2;
+  const l = series(n, 31, 0.5, 0.18), sh = series(n, 37, 0.45, 0.18);
+  const x = (i) => CX + (CW * i) / (n - 1);
+  const up = `M${x(0)},${mid}L${l.map((v, i) => `${x(i)},${mid - v * CH * 0.45}`).join('L')}L${x(n - 1)},${mid}Z`;
+  const dn = `M${x(0)},${mid}L${sh.map((v, i) => `${x(i)},${mid + v * CH * 0.45}`).join('L')}L${x(n - 1)},${mid}Z`;
+  return `${grid()}<path d="${up}" fill="#3987e5" fill-opacity="0.8"/><path d="${dn}" fill="#d95926" fill-opacity="0.8"/><line x1="${CX}" x2="${CX + CW}" y1="${mid}" y2="${mid}" stroke="#ffffff" stroke-opacity="0.3"/>`;
+}
+
 const PULSE = `<path d="M 4 24 L 10 24 L 14 16 L 18 32 L 22 20 L 26 28 L 30 24 L 34 24 L 38 16 L 42 32 L 44 24" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   <circle cx="10" cy="24" r="2.5" fill="#ef4444"/><circle cx="14" cy="16" r="3" fill="#ef4444"/><circle cx="18" cy="32" r="2.5" fill="#ef4444"/>
   <circle cx="22" cy="20" r="2.5" fill="#ef4444"/><circle cx="26" cy="28" r="3.5" fill="#ef4444"/><circle cx="34" cy="24" r="2.5" fill="#ef4444"/>
@@ -180,6 +190,7 @@ const CARDS = [
   { file: 'staking', path: '/staking', title: 'Staking', sub: 'AVAX staked on the Primary Network, validator by validator.', art: treemap() },
   { file: 'treasuries', path: '/treasuries', title: 'Treasuries & ETFs', sub: 'AVAX held by public companies and U.S. spot ETFs.', art: hbars() },
   { file: 'trading', path: '/trading', title: 'Trading', sub: 'Daily volume on Avalanche DEXes: LFJ, Pharaoh, Blackhole and more.', art: bars(['#d95926', '#e8508f', '#d4a017', '#6366f1'], 9) },
+  { file: 'perps', path: '/perps', title: 'Perpetuals', sub: 'Leveraged trading on GMX: volume, open interest and liquidations.', art: perpsArt() },
   { file: 'lending', path: '/lending', title: 'Lending', sub: 'Supplied, borrowed and rates on Aave and BENQI on Avalanche.', art: area(['#8b5cf6', '#5b3fa8', '#22a6c9'], 13, '#ffffff') },
   { file: 'bridges', path: '/bridges', title: 'Bridges', sub: 'Money bridged to and from Avalanche, by chain and bridge.', art: sankey() },
   { file: 'burn', path: '/burn', title: 'AVAX burn', sub: 'Every C-Chain fee is burned. Live total and daily history.', art: bars(['#d95926', '#d4a017'], 21) },

@@ -40,6 +40,12 @@ export const PAGE_SEO = {
     url: '/bridges',
     image: '/og/bridges.png',
   },
+  perps: {
+    title: 'Avalanche Perpetuals',
+    description: 'Leveraged trading on GMX on Avalanche: daily volume, open interest, fees and liquidations.',
+    url: '/perps',
+    image: '/og/perps.png',
+  },
   lending: {
     title: 'Avalanche Lending Markets',
     description: 'Supply and borrow rates, usage and caps for every lending market on Aave V3, Aave V4 and BENQI on Avalanche.',

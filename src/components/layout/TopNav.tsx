@@ -34,6 +34,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     items: [
       { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', hint: 'Supply, volume and holders' },
       { id: 'trading', label: 'Trading', path: '/trading', hint: 'DEX volume and top pools' },
+      { id: 'perps', label: 'Perpetuals', path: '/perps', hint: 'Leveraged trading on GMX' },
       { id: 'lending', label: 'Lending', path: '/lending', hint: 'Rates, usage and caps on Aave and BENQI' },
       { id: 'bridges', label: 'Bridges', path: '/bridges', hint: 'Money bridged in and out of Avalanche' },
       { id: 'treasuries', label: 'Treasuries & ETFs', path: '/treasuries', hint: 'AVAX held by companies and funds' },

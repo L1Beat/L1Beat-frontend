@@ -2551,6 +2551,59 @@ export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-$
 export const getDexPools = (days: number, limit = 20) =>
   getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
 
+// --- Perpetuals (GMX V2 and V1 on the C-Chain) ---
+export interface PerpsFlow {
+  volume_usd: number;
+  long_volume_usd: number;
+  short_volume_usd: number;
+  trades: number;
+  traders: number;
+  fees_usd: number;
+  liquidations: number;
+  liquidated_usd: number;
+}
+export interface PerpsSummary {
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  totals: PerpsFlow;
+  by_venue: (PerpsFlow & { id: string; name: string })[];
+}
+export interface PerpsDay {
+  date: string;
+  volume_usd: number;
+  trades: number;
+  fees_usd: number;
+  liquidated_usd: number;
+  venues: { id: string; volume_usd: number; trades: number }[];
+}
+export interface PerpsOpenInterestDay {
+  date: string;
+  long_usd: number;
+  short_usd: number;
+  by_market: { venue: string; market: string; name: string; pool?: string; long_usd: number; short_usd: number }[];
+}
+export interface PerpsLiquidation {
+  tx_hash: string;
+  time: string;
+  venue: string;
+  market: string;
+  market_name: string;
+  pool?: string;
+  account: string;
+  is_long: boolean;
+  size_usd: number;
+  collateral_usd: number;
+}
+const perpsPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/perps${path}`, persist);
+export const getPerpsSummary = (days: number) => perpsPath(`perps-${days}`, `?days=${days}`) as Promise<PerpsSummary | null>;
+export const getPerpsTimeseries = (days: number) =>
+  perpsPath(`perps-ts-${days}`, `/timeseries?days=${days}`, days <= 365) as Promise<PerpsDay[] | null>;
+export const getPerpsOpenInterest = (days: number) =>
+  perpsPath(`perps-oi-${days}`, `/open-interest?days=${days}`, days <= 90) as Promise<PerpsOpenInterestDay[] | null>;
+export const getPerpsTopLiquidations = (days: number, limit = 8) =>
+  perpsPath(`perps-liq-${days}-${limit}`, `/liquidations/top?days=${days}&limit=${limit}`) as Promise<PerpsLiquidation[] | null>;
+
 // --- Bridges (C-Chain side of CCTP, LayerZero, Stargate, Avalanche Bridge, CCIP) ---
 export interface BridgeFlow {
   inflow_usd: number;
