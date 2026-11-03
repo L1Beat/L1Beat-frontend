@@ -92,3 +92,8 @@ export function ChainLogo({ chain, name, size = 20 }: { chain: string; name: str
   const slug = encodeURIComponent(CHAIN_SLUG[chain] ?? chain);
   return <Img sources={[`https://icons.llamao.fi/icons/chains/rsz_${slug}?w=48&h=48`]} label={name} size={size} />;
 }
+
+/** An Avalanche L1's logo from the chain registry, or a lettered disc. */
+export function L1Logo({ src, name, size = 20 }: { src?: string; name: string; size?: number }) {
+  return <Img sources={src ? [src] : []} label={name} size={size} />;
+}

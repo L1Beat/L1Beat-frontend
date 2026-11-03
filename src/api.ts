@@ -1012,6 +1012,15 @@ export interface IcmDay {
 }
 export const getIcmTimeseries = (days: number) =>
   getDexData<IcmDay[]>(`icm-ts-${days}`, `/api/v1/metrics/icm/timeseries?days=${days}`, days <= 365);
+export interface IcmSummary {
+  as_of: string;
+  from: string;
+  days: number;
+  /** From the C-Chain's side: sent = C-Chain to the L1, received = the L1 to C-Chain. */
+  totals: { sent: number; received: number; total: number };
+  by_chain: IcmDay['by_chain'];
+}
+export const getIcmSummary = (days: number) => getDexData<IcmSummary>(`icm-${days}`, `/api/v1/metrics/icm?days=${days}`);
 
 export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
   const rows = await getIcmTimeseries(days);

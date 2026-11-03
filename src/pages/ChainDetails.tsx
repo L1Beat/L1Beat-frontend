@@ -1,3 +1,4 @@
+import { ChainIcmCard } from '../components/ChainIcmCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link, useParams, useNavigate } from 'react-router-dom';
@@ -833,6 +834,11 @@ export function ChainDetails() {
                     loading={detailsLoading && tpsHistory.length === 0}
                     elsewhere={activityOwner}
                   />
+                </SectionErrorBoundary>
+                <SectionErrorBoundary label="interchain messages">
+                  <div className="mt-4 sm:mt-6 empty:hidden">
+                    <ChainIcmCard chain={chain} />
+                  </div>
                 </SectionErrorBoundary>
               </section>
 
