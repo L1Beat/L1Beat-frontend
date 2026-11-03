@@ -43,7 +43,7 @@ type Range = '24H' | '7D' | '30D' | 'ALL';
 type HeroView = 'map' | 'flows';
 const HERO_VIEWS: { value: HeroView; label: string }[] = [
   { value: 'map', label: 'Map' },
-  { value: 'flows', label: 'Flows' },
+  { value: 'flows', label: 'ICM' },
 ];
 const FLOW_WINDOWS: { value: 'daily' | 'weekly'; label: string }[] = [
   { value: 'daily', label: '24H' },
