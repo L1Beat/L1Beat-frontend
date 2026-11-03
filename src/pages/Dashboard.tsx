@@ -32,6 +32,7 @@ import {
   getLending,
   getStakingSummary,
   getTreasuries,
+  getBridgeSummary,
 } from '../api';
 import type { Chain } from '../types';
 import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
@@ -951,17 +952,18 @@ function MarketsStrip() {
     dex: Awaited<ReturnType<typeof getDexSummary>>;
     lending: Awaited<ReturnType<typeof getLending>>;
     treasuries: Awaited<ReturnType<typeof getTreasuries>>;
+    bridges: Awaited<ReturnType<typeof getBridgeSummary>>;
   } | null>(null);
   useEffect(() => {
     let alive = true;
-    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries()]).then(([staking, dex, lending, treasuries]) => {
-      if (alive) setFigures({ staking, dex, lending, treasuries });
+    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries(), getBridgeSummary(30)]).then(([staking, dex, lending, treasuries, bridges]) => {
+      if (alive) setFigures({ staking, dex, lending, treasuries, bridges });
     });
     return () => {
       alive = false;
     };
   }, []);
-  // Short forms (205M, $683.2M): four cells share a phone's width.
+  // Short forms (205M, $683.2M): two cells share a phone's width.
   const short = (v: number) => {
     const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
     if (v >= 1e9) return `${trim(v / 1e9)}B`;
@@ -976,6 +978,7 @@ function MarketsStrip() {
     : null;
   const lend = figures?.lending?.summary.totals;
   const held = figures?.treasuries?.totals;
+  const bridged = figures?.bridges?.as_of ? figures.bridges.totals : null;
   const items: StatItem[] = [
     {
       label: 'AVAX staked',
@@ -1000,6 +1003,12 @@ function MarketsStrip() {
       value: held ? short(held.combined_avax) : '—',
       sub: held ? 'AVAX held' : figures ? 'Not available right now' : ' ',
       href: '/treasuries',
+    },
+    {
+      label: 'Bridged in, 30d',
+      value: bridged ? usd(bridged.inflow_usd) : '—',
+      sub: bridged ? `${bridged.net_usd >= 0 ? '+' : '−'}$${short(Math.abs(bridged.net_usd))} net` : figures ? 'Not available right now' : ' ',
+      href: '/bridges',
     },
   ];
   return (
