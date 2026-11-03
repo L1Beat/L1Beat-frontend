@@ -47,6 +47,9 @@ const CUMULATIVE_COLOR = 'rgb(232, 65, 66)';
 type Aggregate = 'sum' | 'avg' | 'max';
 const AGGREGATE_LABEL: Record<Aggregate, string> = { sum: 'Total', avg: 'Daily average', max: 'Peak day' };
 
+// Sep 4 to Sep 11, 2026 UTC, as unix seconds.
+const OMNICOIN_BURST = [Date.UTC(2026, 8, 4) / 1000, Date.UTC(2026, 8, 11) / 1000] as const;
+
 const METRICS = [
   { 
     id: 'networkTPS' as const,
@@ -138,7 +141,7 @@ const METRICS = [
     aggregate: 'sum' as Aggregate,
     name: 'ICM Messages',
     fullName: 'Daily ICM Message Volume',
-    description: 'Total Interchain Messages (ICM) sent across Avalanche L1s daily',
+    description: 'Interchain messages (ICM) sent from or delivered to the C-Chain each day',
     icon: MessageSquare,
     color: METRIC_COLORS.dailyMessageVolume,
     valueFormatter: (value: number) => Math.round(value).toLocaleString(),
@@ -434,7 +437,6 @@ export function AvalancheNetworkMetrics({
           break;
 
         case 'dailyMessageVolume':
-          // The backend keeps 90 days of ICM history, so 1Y shows those 90 for now.
           const requestedDays = daysToFetch === 360 ? 365 : daysToFetch;
           const messageVolumeData = await getDailyMessageVolumeFromExternal(requestedDays);
           
@@ -443,8 +445,8 @@ export function AvalancheNetworkMetrics({
           
           // Slice the data to match the requested timeframe if the API returns more
           const slicedData = sortedData.slice(-daysToFetch);
-          // A day the backend has no count for becomes an empty slot (NaN), so a
-          // gap shows as a gap instead of the neighbouring days closing up.
+          // A missing day becomes an empty slot (NaN), so a gap shows as a gap
+          // instead of the neighbouring days closing up.
           const byDay = new Map(slicedData.map((item) => [item.timestamp, item.value]));
           const filled: MetricData[] = [];
           if (slicedData.length) {
@@ -795,9 +797,21 @@ export function AvalancheNetworkMetrics({
     );
   })();
 
+  // Omnicoin's bridge sent one repeated transfer to the C-Chain about 258K times over a week;
+  // the spike would otherwise read as organic ICM growth.
+  const omnicoinBurst =
+    primaryMetric.id === 'dailyMessageVolume' &&
+    filteredPrimaryData.some((d) => d.timestamp >= OMNICOIN_BURST[0] && d.timestamp <= OMNICOIN_BURST[1]);
   const summary =
     completeValues.length > 1 ? (
-      <SeriesSummary values={completeValues} format={primaryMetric.valueFormatter} className="export-hide" />
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <SeriesSummary values={completeValues} format={primaryMetric.valueFormatter} className="export-hide" />
+        {omnicoinBurst && (
+          <p className="text-[11px] text-muted-foreground">
+            The Sep 4 to 11, 2026 spike is a one-off burst of repeated Omnicoin bridge transfers to the C-Chain.
+          </p>
+        )}
+      </div>
     ) : null;
 
   if (hero) {

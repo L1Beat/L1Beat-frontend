@@ -1000,26 +1000,26 @@ export async function getChainMaxTPSHistory(chainId: string, days: number = 30):
   });
 }
 
-// Daily ICM messages across all L1s, from our backend's Teleporter history (summed
-// over every source and destination pair). The backend serves at most 90 days.
+// Daily ICM messages through the C-Chain's TeleporterMessenger, sent plus received,
+// from our indexer. Exact UTC days back to 2024-03-05; quiet days come back as zero.
+// Direct L1-to-L1 messages (about 0.02%) aren't counted.
+export interface IcmDay {
+  date: string;
+  sent: number;
+  received: number;
+  total: number;
+  by_chain: { blockchain_id: string; name: string; sent: number; received: number; total: number }[];
+}
+export const getIcmTimeseries = (days: number) =>
+  getDexData<IcmDay[]>(`icm-ts-${days}`, `/api/v1/metrics/icm/timeseries?days=${days}`, days <= 365);
+
 export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
-  const ask = Math.min(days, 90);
-  return fetchWithCache(`daily-message-volume-${ask}`, async () => {
-    try {
-      const rows = await getTeleporterDailyHistory(ask);
-      return rows
-        .map((row) => ({
-          timestamp: Math.floor(Date.parse(`${row.dateString}T00:00:00Z`) / 1000),
-          value: (row.data ?? []).reduce((sum, m) => sum + (Number(m.messageCount) || 0), 0),
-        }))
-        .filter((p) => Number.isFinite(p.timestamp))
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .filter(isNotToday);
-    } catch (error) {
-      console.error('Daily message volume fetch error:', error);
-      return [];
-    }
-  }, 15 * 60 * 1000);
+  const rows = await getIcmTimeseries(days);
+  return (rows ?? [])
+    .map((row) => ({ timestamp: Math.floor(Date.parse(`${row.date}T00:00:00Z`) / 1000), value: row.total }))
+    .filter((p) => Number.isFinite(p.timestamp))
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .filter(isNotToday);
 }
 
 export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
