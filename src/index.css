@@ -909,4 +909,11 @@
   }
   .liquid-lens-squish { animation: liquid-lens-squish 420ms cubic-bezier(0.3, 1.2, 0.5, 1); }
   @media (prefers-reduced-motion: reduce) { .liquid-lens-squish { animation: none; } }
+  /* A dock sheet rises out of the dock: a short lift and fade, answering the tap. */
+  @keyframes liquid-sheet-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  .liquid-sheet-in { animation: liquid-sheet-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1); transform-origin: 50% 100%; }
+  @media (prefers-reduced-motion: reduce) { .liquid-sheet-in { animation: none; } }
 }

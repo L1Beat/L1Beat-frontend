@@ -190,7 +190,8 @@ function DockSheet({ label, items, pathname }: { label: string; items: NavLink[]
     <div
       role="menu"
       aria-label={label}
-      className="md:hidden fixed left-3 right-3 z-50 mx-auto max-w-[420px] rounded-2xl border border-border bg-card shadow-xl p-1.5"
+      // The same glass as the dock it rises from, with the current page on a lens.
+      className="liquid-glass liquid-sheet-in md:hidden fixed left-3 right-3 z-50 mx-auto max-w-[420px] rounded-[22px] p-1.5"
       style={{ bottom: 'calc(max(12px, env(safe-area-inset-bottom, 0px)) + 64px)' }}
     >
       <div className="px-3 pt-1.5 pb-1 text-[11px] font-medium text-muted-foreground">{label}</div>
@@ -202,7 +203,7 @@ function DockSheet({ label, items, pathname }: { label: string; items: NavLink[]
             to={item.path}
             role="menuitem"
             aria-current={current ? 'page' : undefined}
-            className={`block rounded-xl px-3 py-2.5 transition-colors active:bg-accent ${current ? 'bg-accent/70' : ''}`}
+            className={`block rounded-2xl px-3 py-2.5 transition-colors active:bg-foreground/10 ${current ? 'liquid-glass-lens' : ''}`}
           >
             <span className={`block text-[14px] text-foreground ${current ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
             {item.hint && <span className="block text-[12px] text-muted-foreground">{item.hint}</span>}
