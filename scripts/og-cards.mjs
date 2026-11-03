@@ -152,6 +152,22 @@ function rows() {
   }).join('');
 }
 
+function code() {
+  const lines = [['GET', '/api/v1/metrics/bridges?days=30', '#199e70'], ['GET', '/api/v1/metrics/dex/timeseries', '#199e70'], ['GET', '/api/v1/data/evm/43114/stablecoins', '#199e70'], ['WS', '/ws/blocks/43114', '#8b5cf6'], ['GET', '/api/v1/metrics/lending', '#199e70'], ['GET', '/api/v1/metrics/staking', '#199e70']];
+  return lines.map(([m, path, c], i) => {
+    const y = CY + 20 + i * 52;
+    return `<rect x="${CX}" y="${y - 22}" width="${m.length * 14 + 18}" height="32" rx="4" fill="${c}" fill-opacity="0.18"/><text x="${CX + 9}" y="${y}" font-family="IBM Plex Mono" font-size="18" fill="${c}">${m}</text><text x="${CX + 80}" y="${y}" font-family="IBM Plex Mono" font-size="19" fill="#d4d4d8">${path}</text>`;
+  }).join('');
+}
+
+function pulseArt() {
+  // The logo's heartbeat, large, across the chart area.
+  const pts = [[0, 0.5], [0.12, 0.5], [0.2, 0.18], [0.3, 0.86], [0.4, 0.3], [0.5, 0.7], [0.58, 0.5], [0.68, 0.5], [0.76, 0.18], [0.86, 0.86], [0.92, 0.5], [1, 0.5]];
+  const xy = pts.map(([x, y]) => [CX + x * CW, CY + y * CH]);
+  return `<path d="M${xy.map((p) => p.join(',')).join('L')}" fill="none" stroke="#ef4444" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>` +
+    xy.slice(1, -1).map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${9 + (i % 3) * 3}" fill="#ef4444"/>`).join('');
+}
+
 const PULSE = `<path d="M 4 24 L 10 24 L 14 16 L 18 32 L 22 20 L 26 28 L 30 24 L 34 24 L 38 16 L 42 32 L 44 24" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   <circle cx="10" cy="24" r="2.5" fill="#ef4444"/><circle cx="14" cy="16" r="3" fill="#ef4444"/><circle cx="18" cy="32" r="2.5" fill="#ef4444"/>
   <circle cx="22" cy="20" r="2.5" fill="#ef4444"/><circle cx="26" cy="28" r="3.5" fill="#ef4444"/><circle cx="34" cy="24" r="2.5" fill="#ef4444"/>
@@ -168,6 +184,11 @@ const CARDS = [
   { file: 'bridges', path: '/bridges', title: 'Bridges', sub: 'Money bridged to and from Avalanche, by chain and bridge.', art: sankey() },
   { file: 'burn', path: '/burn', title: 'AVAX burn', sub: 'Every C-Chain fee is burned. Live total and daily history.', art: bars(['#d95926', '#d4a017'], 21) },
   { file: 'acps', path: '/acps', title: 'Avalanche Community Proposals', sub: 'Every ACP from draft to activation.', art: rows() },
+  { file: 'api', path: '/api', title: 'API playground', sub: 'Query the L1Beat REST and WebSocket API from the browser. No key needed.', art: code() },
+  { file: 'blog', path: '/blog', title: 'Research and notes', sub: 'Validator economics, cross-chain messaging and L1 adoption.', art: pulseArt() },
+  { file: 'brand', path: '/brand', title: 'Brand guidelines', sub: 'The L1Beat logo, colours, type and downloadable assets.', art: pulseArt() },
+  // The fallback for any page without a card of its own.
+  { file: 'default', path: '/', title: 'L1Beat', sub: 'Analytics for Avalanche and its L1s: activity, staking, markets and more.', art: pulseArt() },
 ];
 
 const html = (c) => `<!doctype html><html><head><meta charset="utf-8">

@@ -109,7 +109,7 @@ function cleanImageUrl(url: string): string | null {
  */
 export function getFallbackImageUrl(): string {
     // Return a fallback image
-    return '/banner.png';
+    return '/og/blog.png';
 }
 
 /**

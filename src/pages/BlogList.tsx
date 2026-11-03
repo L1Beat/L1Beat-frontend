@@ -89,6 +89,7 @@ export function BlogList() {
       title="Blog"
       description="Insights, research, and deep-dives on Avalanche L1s: performance, economics, and the people building them."
       url="/blog"
+      image="/og/blog.png"
     />
   );
 

@@ -84,7 +84,7 @@ async function generate() {
     const localImages = (head) =>
       imageOrigin === 'https://l1beat.io'
         ? head
-        : head.replace(/content="https:\/\/l1beat\.io\/(og\/[^"]+|banner\.png)"/g, `content="${imageOrigin}/$1"`);
+        : head.replace(/content="https:\/\/l1beat\.io\/(og\/[^"]+)"/g, `content="${imageOrigin}/$1"`);
     const withHead = (html, head) => {
       head = localImages(head);
       html = localImages(html);
@@ -171,7 +171,7 @@ async function generate() {
           let helmetHead = '';
           if (post) {
               // For blog posts, generate custom meta tags with extracted image
-              const imageUrl = post.imageUrl || extractImageFromContent(post.mainContent || post.content) || 'https://l1beat.io/banner.png';
+              const imageUrl = post.imageUrl || extractImageFromContent(post.mainContent || post.content) || 'https://l1beat.io/og/default.png';
               const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `https://l1beat.io${imageUrl}`;
               const description = post.excerpt || post.subtitle || '';
               const title = post.title || 'L1Beat - Avalanche L1 Analytics Platform';

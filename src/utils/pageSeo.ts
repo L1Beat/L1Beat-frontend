@@ -56,10 +56,12 @@ export const PAGE_SEO = {
     title: 'API Playground',
     description: 'Test the L1Beat REST and WebSocket APIs live: endpoint catalog, smart params, bookmarks, and history.',
     url: '/api',
+    image: '/og/api.png',
   },
   brand: {
     title: 'Brand Guidelines',
     description: 'L1Beat brand kit: logo, colors, typography, usage rules, and downloadable assets.',
     url: '/brand',
+    image: '/og/brand.png',
   },
 };
