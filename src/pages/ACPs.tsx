@@ -452,7 +452,7 @@ export default function ACPs() {
                         >
                           <td className="num text-[12px] text-muted-foreground pr-3">{acp.number}</td>
                           <td className="pr-4">
-                            <span className="text-[12.5px] font-medium text-foreground line-clamp-1">{acp.title}</span>
+                            <span className="text-[12.5px] font-medium text-foreground line-clamp-2 sm:line-clamp-1">{acp.title}</span>
                           </td>
                           <td>
                             <AcpStatusChip status={acp.status} />

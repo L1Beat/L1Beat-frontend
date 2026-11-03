@@ -478,7 +478,10 @@ function RunningOverview({ rows, activeStake, activeCount }: { rows: DelegatorDe
   const pct = (v: number) => (activeStake > 0 ? (v / activeStake) * 100 : 0);
   const complete = rows.length >= activeCount;
   const now = new Date();
-  const months = Array.from({ length: 6 }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
+  // Through the month the last delegation ends: no empty months after it, at least 3, at most 12.
+  const lastEnd = new Date(Math.max(now.getTime(), ...rows.map((r) => new Date(r.end_time).getTime()).filter(Number.isFinite)));
+  const span = (lastEnd.getUTCFullYear() - now.getUTCFullYear()) * 12 + lastEnd.getUTCMonth() - now.getUTCMonth() + 1;
+  const months = Array.from({ length: Math.min(12, Math.max(3, span)) }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
   const ending = months.map((m, i) => {
     const next = months[i + 1] ?? new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
     return rows
@@ -525,7 +528,7 @@ function RunningOverview({ rows, activeStake, activeCount }: { rows: DelegatorDe
         <p className="text-[11px] text-muted-foreground mt-0.5">
           {complete ? 'AVAX whose delegation ends each month' : `Of the ${rows.length} largest delegations`}
         </p>
-        <div className="mt-4 flex items-end gap-2 h-24" role="img" aria-label="AVAX whose delegation ends in each of the next six months">
+        <div className="mt-4 flex items-end gap-2 h-24" role="img" aria-label="AVAX whose delegation ends in each coming month">
           {ending.map((v, i) => (
             <div key={i} className="flex-1 flex flex-col justify-end h-full min-w-0" title={`${format(months[i], 'MMM yyyy')}: ${formatAvax(v)} AVAX`}>
               <div className="w-full rounded-t-sm" style={{ height: `${v > 0 ? Math.max(4, (v / maxEnding) * 100) : 0}%`, background: DELEGATED, opacity: 0.8 }} />

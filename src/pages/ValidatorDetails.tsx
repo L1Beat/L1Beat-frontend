@@ -284,7 +284,7 @@ export function ValidatorDetails() {
             ? <span className={daysTone(daysRemaining)}>{daysRemaining.toLocaleString()}</span>
             : '—',
           sub: validator.active
-            ? daysRemaining >= 60 ? `About ${Math.floor(daysRemaining / 30)} months at the current fee` : 'At the current fee'
+            ? daysRemaining >= 60 ? `About ${Math.floor(daysRemaining / 30)} months` : 'At the current fee'
             : 'Inactive',
           tooltip: 'How long the balance lasts at the current daily validation fee.',
         },
@@ -804,7 +804,8 @@ function hasEnd(v: L1BeatValidator): boolean {
 function periodText(v: L1BeatValidator): string {
   const start = format(new Date(v.start_time), 'MMM d, yyyy');
   if (v.active) return `${start} to now`;
-  return hasEnd(v) ? `${start} to ${format(new Date(v.end_time!), 'MMM d, yyyy')}` : start;
+  // Ended L1 validations can come without an end time.
+  return hasEnd(v) ? `${start} to ${format(new Date(v.end_time!), 'MMM d, yyyy')}` : `${start}, ended`;
 }
 
 function validationStake(v: L1BeatValidator): string {
@@ -830,7 +831,14 @@ function ValidationHistory({ validations, current, chains, onOpen }: {
   // One time axis for every row, from the node's first validation to today.
   const nowMs = Date.now();
   const startMs = Math.min(...validations.map((v) => new Date(v.start_time).getTime()));
-  const endOf = (v: L1BeatValidator) => (v.active || !hasEnd(v) ? nowMs : Math.min(nowMs, new Date(v.end_time!).getTime()));
+  // An ended validation without an end time stops by the node's next validation on that
+  // subnet, since a node validates a subnet once at a time; with none after it, just its start.
+  const nextStart = (v: L1BeatValidator) => {
+    const t0 = new Date(v.start_time).getTime();
+    const later = validations.filter((o) => o.subnet_id === v.subnet_id).map((o) => new Date(o.start_time).getTime()).filter((t) => t > t0);
+    return later.length ? Math.min(...later) : t0;
+  };
+  const endOf = (v: L1BeatValidator) => (v.active ? nowMs : hasEnd(v) ? Math.min(nowMs, new Date(v.end_time!).getTime()) : nextStart(v));
   const span = Math.max(1, nowMs - startMs);
 
   return (
@@ -1068,9 +1076,12 @@ function DelegationSummary({ rows, total }: { rows: ValidatorDelegation[]; total
   const top = sorted[0] ?? 0;
   const top10 = sorted.slice(0, 10).reduce((a, b) => a + b, 0);
   const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
-  // AVAX whose delegation ends in each of the next six calendar months.
+  // AVAX whose delegation ends in each coming calendar month.
   const now = new Date();
-  const months = Array.from({ length: 6 }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
+  // Through the month the last delegation ends: no empty months after it, at least 3, at most 12.
+  const lastEnd = new Date(Math.max(now.getTime(), ...rows.map((r) => new Date(r.end_time).getTime()).filter(Number.isFinite)));
+  const span = (lastEnd.getUTCFullYear() - now.getUTCFullYear()) * 12 + lastEnd.getUTCMonth() - now.getUTCMonth() + 1;
+  const months = Array.from({ length: Math.min(12, Math.max(3, span)) }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
   const ending = months.map((m, i) => {
     const next = months[i + 1] ?? new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
     return rows.filter((r) => {
@@ -1105,7 +1116,7 @@ function DelegationSummary({ rows, total }: { rows: ValidatorDelegation[]; total
       </div>
       <div className="min-w-0">
         <p className="text-[12px] text-muted-foreground">Ending by month</p>
-        <div className="mt-2 flex items-end gap-2 h-14" role="img" aria-label="AVAX whose delegation ends in each of the next six months">
+        <div className="mt-2 flex items-end gap-2 h-14" role="img" aria-label="AVAX whose delegation ends in each coming month">
           {ending.map((v, i) => (
             <div key={i} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={`${format(months[i], 'MMM yyyy')}: ${formatAvax(v)} AVAX`}>
               <div className="w-full rounded-t-sm" style={{ height: `${v > 0 ? Math.max(4, (v / maxEnding) * 100) : 0}%`, background: DELEGATED, opacity: 0.8 }} />
