@@ -79,7 +79,23 @@ function useChainIndex() {
   return useMemo(() => new Map(chains.filter((c) => c.platformChainId).map((c) => [c.platformChainId!, c])), [chains]);
 }
 type ChainIndex = ReturnType<typeof useChainIndex>;
-const nameOf = (index: ChainIndex, id: string, fallback: string) => index.get(id)?.chainName || fallback || `${id.slice(0, 8)}…`;
+// Several chains share a P-Chain name (three are called "QRQMS"); those get a short ID tag.
+// Filled from the all-time chain list when it loads, before the sections below render.
+const nameTags = new Map<string, string>();
+const nameOf = (index: ChainIndex, id: string, fallback: string) => {
+  const base = index.get(id)?.chainName || fallback || `${id.slice(0, 8)}…`;
+  const tag = nameTags.get(id);
+  return tag ? `${base} (${tag})` : base;
+};
+function tagDuplicateNames(rows: { blockchain_id: string; name: string }[], index: ChainIndex) {
+  nameTags.clear();
+  const byName = new Map<string, string[]>();
+  for (const r of rows) {
+    const n = (index.get(r.blockchain_id)?.chainName || r.name || '').toLowerCase();
+    if (n) byName.set(n, [...(byName.get(n) ?? []), r.blockchain_id]);
+  }
+  for (const ids of byName.values()) if (ids.length > 1) for (const id of ids) nameTags.set(id, id.slice(0, 4));
+}
 
 export function Interchain() {
   const [range, setRange] = useState<RangeValue>('30');
@@ -88,6 +104,8 @@ export function Interchain() {
   const series = useLoad(() => getIcmTimeseries(Number(range)), range);
   const history = useLoad(() => getIcmTimeseries(3650), 'all');
   const index = useChainIndex();
+  const allTime = useLoad(() => getIcmSummary(3650), 'all');
+  tagDuplicateNames(allTime.data?.by_chain ?? [], index);
   const wide = useMediaQuery('(min-width: 768px)', true);
   const nodes = useHubNodes(summary.data, index, wide ? 16 : 9);
   const [hover, setHover] = useState<string | null>(null);
