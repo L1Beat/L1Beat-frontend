@@ -533,7 +533,7 @@ export function ChainSpecificMetrics() {
           {/* Top row: Title + dropdown */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold text-foreground">Chain-specific metrics</h2>
+              <h2 className="text-[14px] font-semibold text-foreground">Chain-specific metrics</h2>
               <p className="text-[12px] text-muted-foreground">One chain at a time. Pick from the list or the most active chains.</p>
             </div>
 

@@ -305,7 +305,7 @@ function VenueTable({ summary, days, state }: { summary: PerpsSummary | null; da
         <h2 className="text-[14px] font-semibold text-foreground">By venue</h2>
       </header>
       {state === 'error' && !summary ? (
-        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Venues couldn't be loaded. Try again in a minute.</p>
       ) : !summary ? (
         <div className="px-5 pb-5 space-y-2">{[0, 1].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
       ) : (

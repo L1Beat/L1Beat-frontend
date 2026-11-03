@@ -1062,7 +1062,7 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
   // so a dip there is a gap in pricing, not money leaving.
   const unpriced = useMemo(() => new Map((data ?? []).filter((d) => d.unpriced_markets).map((d) => [d.date, d.unpriced_markets ?? 0])), [data]);
   if (state === 'loading' && !data) return <div className="h-full min-h-[240px] rounded bg-muted/50 animate-pulse" />;
-  if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded.</div>;
+  if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded. Try again in a minute.</div>;
   const first = series[0];
   const peak = series.reduce((m, d) => (d.total > m.total ? d : m), first);
   return (
@@ -1148,7 +1148,7 @@ function AvaxDepositsCard({ names }: { names: Record<string, string> }) {
         {state === 'loading' && !data ? (
           <div className="h-[260px] rounded bg-muted/50 animate-pulse" />
         ) : !series.length ? (
-          <p className="py-10 text-center text-[12px] text-muted-foreground">Deposit history couldn't be loaded.</p>
+          <p className="py-10 text-center text-[12px] text-muted-foreground">Deposit history couldn't be loaded. Try again in a minute.</p>
         ) : (
           <DailyStack
             days={showLine ? series : series.map((d) => ({ ...d, line: undefined }))}
@@ -1283,7 +1283,7 @@ function LiquidationList({ title, items, state, names, empty }: {
       {state === 'loading' && !items ? (
         <div className="px-4 sm:px-5 pb-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
       ) : state === 'error' && !items ? (
-        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</div>
+        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">Liquidations couldn't be loaded. Try again in a minute.</div>
       ) : !items?.length ? (
         <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">{empty}</div>
       ) : (

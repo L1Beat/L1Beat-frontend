@@ -276,7 +276,7 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
 }
 
 function CardBody({ state, children }: { state: 'loading' | 'ready' | 'error'; children: React.ReactNode }) {
-  if (state === 'error') return <p className="py-6 text-center text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>;
+  if (state === 'error') return <p className="py-6 text-center text-[12px] text-muted-foreground">Holdings couldn't be loaded. Try again in a minute.</p>;
   if (state === 'loading') return <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>;
   return <>{children}</>;
 }

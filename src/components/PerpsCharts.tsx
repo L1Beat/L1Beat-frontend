@@ -248,7 +248,7 @@ export function OpenInterest({ data, state }: { data: PerpsOpenInterestDay[] | n
       {state === 'loading' && !data ? (
         <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-6 rounded bg-muted/50 animate-pulse" />)}</div>
       ) : !rows.length ? (
-        <p className="text-[12px] text-muted-foreground">{state === 'error' ? "Couldn't be loaded. Try again in a minute." : 'No open positions.'}</p>
+        <p className="text-[12px] text-muted-foreground">{state === 'error' ? "Open interest couldn't be loaded. Try again in a minute." : 'No open positions.'}</p>
       ) : (
         <ul className="space-y-2">
           {rows.map((m) => (
@@ -291,7 +291,7 @@ export function Liquidations({ items, state, title }: { items: PerpsLiquidation[
       {state === 'loading' && !items ? (
         <div className="px-4 sm:px-5 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
       ) : !items?.length ? (
-        <p className="px-4 sm:px-5 text-[12px] text-muted-foreground">{state === 'error' ? "Couldn't be loaded. Try again in a minute." : 'None in this period.'}</p>
+        <p className="px-4 sm:px-5 text-[12px] text-muted-foreground">{state === 'error' ? "Liquidations couldn't be loaded. Try again in a minute." : 'None in this period.'}</p>
       ) : (
         <ul className="divide-y divide-border">
           {items.map((l, i) => (
@@ -299,9 +299,10 @@ export function Liquidations({ items, state, title }: { items: PerpsLiquidation[
               <SymbolLogo symbol={l.market_name.split('/')[0]} size={22} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-[12px] text-foreground truncate">
+                  {/* Foreground text on the side's tint: colored 10px text on its own tint is too faint in light mode. */}
                   <span
-                    className="shrink-0 px-1 rounded-[3px] text-[10px] font-medium leading-4"
-                    style={{ color: l.is_long ? LONG : SHORT, background: `${l.is_long ? LONG : SHORT}1f` }}
+                    className="shrink-0 px-1 rounded-[3px] text-[10px] font-medium leading-4 text-foreground"
+                    style={{ background: `${l.is_long ? LONG : SHORT}33` }}
                   >
                     {l.is_long ? 'Long' : 'Short'}
                   </span>

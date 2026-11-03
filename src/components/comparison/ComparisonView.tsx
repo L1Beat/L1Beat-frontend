@@ -470,7 +470,7 @@ export const ComparisonView = memo(function ComparisonView({
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-[15px] font-semibold text-foreground">Compare chains</h2>
+          <h2 className="text-[14px] font-semibold text-foreground">Compare chains</h2>
           <p className="text-[12px] text-muted-foreground mt-0.5">
             {comparisonChains.length < 2
               ? 'Pick up to 4 L1s, or start from a preset.'

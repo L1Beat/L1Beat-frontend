@@ -1957,6 +1957,9 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
           remainingBalance: v.balance,
           explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
           validationId: v.validation_id,
+          startTime: v.start_time,
+          delegated: v.total_delegated ?? undefined,
+          delegators: v.delegator_count ?? undefined,
         };
       });
     } catch (error) {

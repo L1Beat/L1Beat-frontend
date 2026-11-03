@@ -172,12 +172,17 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
         {tiles.map((t) => {
           const r = rows[t.i];
           const label = t.w > 46 && t.h > 22;
+          const Tile = onValidatorClick ? 'button' : 'div';
           return (
-            <div
+            // A button when boxes open the validator, so they're reachable and usable by keyboard.
+            <Tile
               key={r.v.address}
-              className={`absolute ${onValidatorClick ? 'cursor-pointer' : ''}`}
+              {...(onValidatorClick ? { type: 'button' as const, 'aria-label': `Validator ${r.v.address}, ${pct(r.share)}% of the weight` } : {})}
+              className={`absolute block text-left ${onValidatorClick ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground rounded-[2px]' : ''}`}
               style={{ left: t.x, top: t.y, width: t.w, height: t.h, padding: t.w > 3 && t.h > 3 ? 1 : 0 }}
               onMouseEnter={() => setHover(t.i)}
+              onFocus={() => setHover(t.i)}
+              onBlur={() => setHover(null)}
               onClick={() => onValidatorClick?.(r.v)}
               title={`${r.v.address}: ${pct(r.share)}%`}
             >
@@ -192,7 +197,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
               {label && (
                 <span className={`num absolute left-1.5 top-1 text-[10px] leading-3 pointer-events-none ${!equal && r.tier > 0 ? 'text-foreground/80' : 'text-white/90'}`}>{pct(r.share)}%</span>
               )}
-            </div>
+            </Tile>
           );
         })}
       </div>

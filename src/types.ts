@@ -82,6 +82,11 @@ export interface Validator {
   remainingBalance?: number;
   explorerUrl?: string;
   validationId?: string;
+  /** ISO start of this validation; on the Primary Network it decides the uptime minimum (ACP-267). */
+  startTime?: string;
+  /** Primary Network only: AVAX delegated to this validator, in nAVAX, on top of its own stake (`weight`). */
+  delegated?: number;
+  delegators?: number;
 }
 
 // Risk / decentralization data (api.l1beat.io). Additive; `null` always means

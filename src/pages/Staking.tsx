@@ -21,6 +21,7 @@ import {
   PRIMARY_NETWORK_SUBNET_ID,
 } from '../api';
 import type { Lending, LendingMarket, LiquidStakingProtocol, PrimaryValidator, StakingSummary, StakingUnlockWeek } from '../api';
+import { uptimeFill, uptimeMinimum } from '../utils/uptime';
 
 const NAVAX = 1e9;
 
@@ -376,8 +377,8 @@ function Card({ title, subtitle, right, children, className = '' }: {
   className?: string;
 }) {
   return (
-    <section className={`rounded-md border border-border bg-card p-4 sm:p-5 ${className}`}>
-      <header className="flex items-start justify-between gap-3 mb-4">
+    <section className={`rounded-md border border-border bg-card px-4 sm:px-5 pt-4 pb-4 sm:pb-5 ${className}`}>
+      <header className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
           {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
@@ -579,7 +580,7 @@ function ConcentrationCard({ summary, state }: { summary: StakingSummary | null;
   return (
     <Card title="Stake concentration" subtitle="Share of total stake, own plus delegated, held by the largest validators" className="h-full">
       {!c ? (
-        state === 'loading' ? <div className="h-[160px] rounded bg-muted animate-pulse" /> : <CardMessage>Concentration data couldn't be loaded.</CardMessage>
+        state === 'loading' ? <div className="h-[160px] rounded bg-muted animate-pulse" /> : <CardMessage>Concentration data couldn't be loaded. Try again in a minute.</CardMessage>
       ) : (
         <div className="space-y-4">
           <ShareBar label="Top 10 validators" value={c.top10_percent} detail={`${compact((total * c.top10_percent) / 100)} AVAX`} />
@@ -982,7 +983,7 @@ function FeesCard({ summary, state }: { summary: StakingSummary | null; state: '
       className="h-full"
     >
       {!fee ? (
-        state === 'loading' ? <div className="h-[160px] rounded bg-muted animate-pulse" /> : <CardMessage>Fee data couldn't be loaded.</CardMessage>
+        state === 'loading' ? <div className="h-[160px] rounded bg-muted animate-pulse" /> : <CardMessage>Fee data couldn't be loaded. Try again in a minute.</CardMessage>
       ) : (
         <table className="w-full text-[12px]">
           <thead>
@@ -1192,19 +1193,19 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
                       ) : (
                         <span
                           className="inline-flex items-center justify-end gap-2"
-                          title={v.uptime_percentage < 80 ? 'Below 80% uptime, the minimum for staking rewards' : undefined}
+                          title={v.uptime_percentage < uptimeMinimum(v.start_time) ? `Below ${uptimeMinimum(v.start_time)}% uptime, the minimum for this validation's rewards` : undefined}
                         >
-                          {/* The bar spans 80 to 100%: below 80 a validator earns no rewards. */}
+                          {/* The bar spans 80 to 100%; it turns red below this validation's minimum, 90% if it started after Helicon (ACP-267), else 80%. */}
                           <span className="hidden lg:inline-block w-10 h-1.5 rounded-sm bg-muted overflow-hidden" aria-hidden>
                             <span
                               className="block h-full rounded-sm"
                               style={{
-                                width: `${Math.max(0, Math.min(100, ((v.uptime_percentage - 80) / 20) * 100))}%`,
-                                background: v.uptime_percentage < 80 ? 'var(--down)' : '#6b7280',
+                                width: `${uptimeFill(v.uptime_percentage)}%`,
+                                background: v.uptime_percentage < uptimeMinimum(v.start_time) ? 'var(--down)' : '#6b7280',
                               }}
                             />
                           </span>
-                          <span className={`w-11 ${v.uptime_percentage < 80 ? 'text-down' : ''}`}>{pct(v.uptime_percentage)}</span>
+                          <span className={`w-11 ${v.uptime_percentage < uptimeMinimum(v.start_time) ? 'text-down' : ''}`}>{pct(v.uptime_percentage)}</span>
                         </span>
                       )}
                     </td>
@@ -1233,7 +1234,7 @@ function ValidatorsTable({ rows, state }: { rows: PrimaryValidator[] | null; sta
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {visible.length} of {sorted.length} validators. Stake in AVAX.
               <span className="hidden sm:inline">
-                {' '}Uptime bars run from 80%, the minimum for rewards, to 100%.{' '}
+                {' '}Uptime bars run from 80% to 100% and turn red below the minimum for rewards: 90% for validations started since Helicon, 80% before.{' '}
                 <span className="inline-block w-1.5 h-1.5 rounded-full align-middle mr-1" style={{ background: FEE }} aria-hidden />
                 ends within 14 days.
               </span>

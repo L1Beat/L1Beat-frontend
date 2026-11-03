@@ -3,12 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
-import { SegmentedControl, StatStrip } from '../components/instrument';
+import { SegmentedControl } from '../components/instrument';
 import { RefreshCw, Search, X } from 'lucide-react';
 import { acpService } from '../services/acpService';
 import type { EnhancedACP, ACPStats } from '../types';
 import EnhancedACPCard from '../components/ACPCard';
-import { AcpStatus, ComplexityDots } from '../components/acp/AcpStatus';
+import { ComplexityDots } from '../components/acp/AcpStatus';
+import { AcpStatusChip, acpStatusColor } from '../components/acp/AcpStatusChip';
 
 
 type ViewMode = 'list' | 'grid';
@@ -325,31 +326,26 @@ export default function ACPs() {
       {seo}
       <div className="flex-1">
         <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
-          {/* Header */}
-          <div className="flex justify-between items-end">
-            <div>
-              <h1 className="text-[18px] leading-6 font-semibold text-foreground">
-                Avalanche Community Proposals
-              </h1>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">
-                Every ACP from draft to activation, with status, track, and authors.
-              </p>
-            </div>
-          </div>
+          {/* Hero: the lifecycle in one sentence. */}
+          <header className="pt-1">
+            <h1 className="text-[18px] leading-6 font-semibold text-foreground">Avalanche Community Proposals</h1>
+            <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+              <span className="num">{acps.length}</span> proposals, and <span className="num">{tabCounts.Activated}</span> of them are live on
+              mainnet.
+            </p>
+            <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+              <span className="num">{tabCounts.Proposed}</span> are proposed, <span className="num">{tabCounts.Implementable}</span>{' '}
+              {tabCounts.Implementable === 1 ? 'is' : 'are'} implementable and waiting for an upgrade, written by{' '}
+              <span className="num">{stats?.totalAuthors ?? 0}</span> authors.
+            </p>
+          </header>
 
-          {/* Statistics */}
-          {stats && (
-            <div>
-              <StatStrip
-                items={[
-                  { label: 'Total ACPs', value: String(stats.total), sub: 'tracked proposals' },
-                  { label: 'Contributors', value: String(stats.totalAuthors || 0), sub: 'distinct authors' },
-                  { label: 'Deployed', value: String(stats.implementationProgress?.deployed || 0), sub: 'activated on mainnet' },
-                  { label: 'In progress', value: String(tabCounts.Proposed + tabCounts.Implementable), sub: 'proposed or implementable' },
-                ]}
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            <div className="lg:col-span-2 min-w-0">
+              <Lifecycle acps={acps} onOpen={(n) => navigate(`/acps/${n}`)} />
             </div>
-          )}
+            <ByArea acps={acps} />
+          </div>
 
           {/* Toolbar: status tabs, search, track and complexity, view */}
           <section id="acps" className="scroll-mt-12">
@@ -434,6 +430,7 @@ export default function ACPs() {
                       <th className="text-left font-medium w-20 num">ACP</th>
                       <th className="text-left font-medium">Title</th>
                       <th className="text-left font-medium w-32">Status</th>
+                      <th className="text-left font-medium w-32 hidden lg:table-cell">Area</th>
                       <th className="text-left font-medium w-32 hidden lg:table-cell">Track</th>
                       <th className="text-left font-medium w-24 hidden md:table-cell">Complexity</th>
                       <th className="text-left font-medium hidden xl:table-cell">Authors</th>
@@ -458,8 +455,9 @@ export default function ACPs() {
                             <span className="text-[12.5px] font-medium text-foreground line-clamp-1">{acp.title}</span>
                           </td>
                           <td>
-                            <AcpStatus status={acp.status} />
+                            <AcpStatusChip status={acp.status} />
                           </td>
+                          <td className="text-[11px] text-muted-foreground hidden lg:table-cell">{acp.category || '—'}</td>
                           <td className="text-[11px] text-muted-foreground hidden lg:table-cell">{(acp.track || '').replace(' Track', '') || '—'}</td>
                           <td className="hidden md:table-cell"><ComplexityDots level={acp.complexity} /></td>
                           <td className="text-[11px] text-muted-foreground hidden xl:table-cell">
@@ -492,3 +490,101 @@ export default function ACPs() {
 }
 
 // export default ACPs;
+// The ACP lifecycle, left to right: every proposal as a chip in its stage.
+const STAGES: { key: string; label: string; note: string }[] = [
+  { key: 'Proposed', label: 'Proposed', note: 'in discussion' },
+  { key: 'Implementable', label: 'Implementable', note: 'ready for an upgrade' },
+  { key: 'Activated', label: 'Activated', note: 'live on mainnet' },
+  { key: 'Other', label: 'Stale or withdrawn', note: 'no longer moving' },
+];
+const stageOf = (status?: string) => {
+  const clean = status?.match(/^[a-zA-Z]+/)?.[0] ?? '';
+  return MAIN_STATUSES.has(clean) ? clean : 'Other';
+};
+
+function Lifecycle({ acps, onOpen }: { acps: EnhancedACP[]; onOpen: (n: string) => void }) {
+  const groups = STAGES.map((st) => ({
+    ...st,
+    items: acps.filter((a) => stageOf(a.status) === st.key).sort((a, b) => Number(b.number) - Number(a.number)),
+  }));
+  const total = acps.length || 1;
+  return (
+    <section className="h-full rounded-md border border-border bg-card">
+      <header className="px-4 sm:px-5 pt-4 pb-3">
+        <h2 className="text-[14px] font-semibold text-foreground">Where each proposal stands</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Every ACP by stage. Pick a number to read it.</p>
+      </header>
+      <div className="px-4 sm:px-5">
+        <div className="flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label="ACPs by stage">
+          {groups.map((g) => (
+            <div key={g.key} title={`${g.label}: ${g.items.length}`} style={{ width: `${(g.items.length / total) * 100}%`, background: acpStatusColor(g.key === 'Other' ? 'Stale' : g.key) }} />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border mt-4 border-t border-border">
+        {groups.map((g) => (
+          <div key={g.key} className="bg-card px-4 sm:px-5 py-3 min-w-0">
+            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <span aria-hidden className="w-2 h-2 rounded-[2px]" style={{ background: acpStatusColor(g.key === 'Other' ? 'Stale' : g.key) }} />
+              {g.label}
+            </div>
+            <div className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="num text-[22px] leading-7 font-medium text-foreground">{g.items.length}</span>
+              <span className="text-[11px] text-muted-foreground truncate">{g.note}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {g.items.map((a) => (
+                <button
+                  key={a.number}
+                  type="button"
+                  onClick={() => onOpen(a.number)}
+                  title={`ACP-${a.number}: ${a.title}`}
+                  aria-label={`ACP-${a.number}: ${a.title}`}
+                  className="num h-6 min-w-[2.25rem] px-1.5 rounded-[4px] border border-border text-[11px] text-foreground hover:bg-accent focus-visible:bg-accent transition-colors"
+                >
+                  {a.number}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// What the proposals change, by the area each one touches.
+function ByArea({ acps }: { acps: EnhancedACP[] }) {
+  const counts = new Map<string, { total: number; live: number }>();
+  for (const a of acps) {
+    const k = a.category || 'Other';
+    const c = counts.get(k) ?? { total: 0, live: 0 };
+    c.total += 1;
+    if (stageOf(a.status) === 'Activated') c.live += 1;
+    counts.set(k, c);
+  }
+  const rows = [...counts].sort((a, b) => b[1].total - a[1].total);
+  const max = rows[0]?.[1].total ?? 1;
+  return (
+    <section className="rounded-md border border-border bg-card px-4 sm:px-5 pt-4 pb-4">
+      <h2 className="text-[14px] font-semibold text-foreground">By area</h2>
+      <p className="text-[11px] text-muted-foreground mt-0.5">What each proposal changes, with the share already live</p>
+      <ul className="mt-3 space-y-2.5">
+        {rows.map(([k, c]) => (
+          <li key={k} className="text-[12px]">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-foreground truncate">{k}</span>
+              <span className="num text-muted-foreground">
+                <span className="text-foreground">{c.live}</span> of {c.total} live
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-sm bg-muted overflow-hidden flex" style={{ width: `${(c.total / max) * 100}%` }}>
+              <div className="h-full" style={{ width: `${(c.live / c.total) * 100}%`, background: acpStatusColor('Activated') }} />
+              <div className="h-full flex-1 bg-foreground/20" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

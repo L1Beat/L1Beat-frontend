@@ -39,6 +39,7 @@ import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
 import { chartPointerProps } from '../utils/chartPointer';
 import { isStale, missingActivity } from '../utils/activityCoverage';
+import { uptimeFill, uptimeMinimum } from '../utils/uptime';
 
 // Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
 const NAV_SCROLL_OFFSET = 56 + 48 + 12;
@@ -1139,6 +1140,13 @@ export function ChainDetails() {
                   <div>
                     {/* Validators toolbar */}
                     <div className="py-2">
+                      {chain.validators.some((v) => (v.delegated ?? 0) > 0) && (
+                        <p className="mb-2 hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#3987e5]" aria-hidden />Own stake</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#8b5cf6]" aria-hidden />Delegated</span>
+                          <span>Bars are scaled to the largest validator. Hover a bar for amounts.</span>
+                        </p>
+                      )}
                       <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
                         <div className="flex items-center gap-4">
                           <h3 className="text-[13px] font-medium text-foreground">
@@ -1277,6 +1285,15 @@ export function ChainDetails() {
                             const maxSharePct = totalNum > 0
                               ? Math.max(0, ...filteredValidators.map((v) => unitsToNumber(v.weight, stakeIsWeight ? 0 : stakeTokenDecimals))) / totalNum * 100
                               : 0;
+                            // Primary Network rows carry delegation on top of the own stake: the bar
+                            // then splits own and delegated, both scaled to the largest total.
+                            const splitDelegation = !stakeIsWeight && stakeTokenDecimals === 9 && filteredValidators.some((v) => (v.delegated ?? 0) > 0);
+                            const ownOf = (v: typeof filteredValidators[number]) => unitsToNumber(v.weight, 9);
+                            const delegatedOf = (v: typeof filteredValidators[number]) => (v.delegated ?? 0) / 1e9;
+                            // ACP-267 applies to Primary Network validations only.
+                            const minUptimeOf = (v: typeof filteredValidators[number]) =>
+                              chain.subnetId === '11111111111111111111111111111111LpoYY' ? uptimeMinimum(v.startTime) : 80;
+                            const maxTotal = splitDelegation ? Math.max(0, ...filteredValidators.map((v) => ownOf(v) + delegatedOf(v))) : 0;
                             const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
                             const paddingBottom =
                               virtualRows.length > 0
@@ -1335,24 +1352,36 @@ export function ChainDetails() {
                                         </>
                                       )}
                                     </span>
-                                    <span className="hidden sm:block w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden" aria-hidden>
-                                      {/* Scaled to the largest validator, so small shares stay visible. */}
-                                      <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
-                                    </span>
+                                    {splitDelegation ? (
+                                      <span
+                                        className="hidden sm:flex w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden gap-px"
+                                        title={`${formatStakedTokens(String(Math.round(ownOf(validator))))} own${(validator.delegated ?? 0) > 0 ? `, ${formatStakedTokens(String(Math.round(delegatedOf(validator))))} delegated by ${(validator.delegators ?? 0).toLocaleString()}` : ', no delegations'}`}
+                                      >
+                                        <span className="block h-full bg-[#3987e5]" style={{ width: `${maxTotal > 0 ? (ownOf(validator) / maxTotal) * 100 : 0}%` }} />
+                                        {(validator.delegated ?? 0) > 0 && (
+                                          <span className="block h-full bg-[#8b5cf6]" style={{ width: `${maxTotal > 0 ? (delegatedOf(validator) / maxTotal) * 100 : 0}%` }} />
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span className="hidden sm:block w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden" aria-hidden>
+                                        {/* Scaled to the largest validator, so small shares stay visible. */}
+                                        <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
+                                      </span>
+                                    )}
                                     <span className="text-[11px] text-muted-foreground sm:w-12">{percentage}%</span>
                                   </div>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
                                   {hasUptimeData ? (
                                   <div className="flex items-center justify-end gap-2.5">
-                                    {/* 80% to 100%: 80% is the minimum uptime for rewards, so the bar only turns red below it. */}
+                                    {/* 80% to 100%; red only below the reward minimum: 90% for Primary Network validations started since Helicon (ACP-267), else 80%. */}
                                     <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-1.5 overflow-hidden" aria-hidden>
                                       <div
-                                        className={`h-full rounded-sm ${(validator.uptime || 0) < 80 ? 'bg-down' : 'bg-foreground/45'}`}
-                                        style={{ width: `${Math.max((validator.uptime || 0) < 80 ? 4 : 2, Math.min(100, (((validator.uptime || 0) - 80) / 20) * 100))}%` }}
+                                        className={`h-full rounded-sm ${(validator.uptime || 0) < minUptimeOf(validator) ? 'bg-down' : 'bg-foreground/45'}`}
+                                        style={{ width: `${Math.max((validator.uptime || 0) < minUptimeOf(validator) ? 4 : 2, uptimeFill(validator.uptime || 0))}%` }}
                                       ></div>
                                     </div>
-                                    <span className={`num text-[12px] w-14 text-right ${(validator.uptime || 0) < 80 ? 'text-down' : 'text-foreground'}`}>
+                                    <span className={`num text-[12px] w-14 text-right ${(validator.uptime || 0) < minUptimeOf(validator) ? 'text-down' : 'text-foreground'}`}>
                                         {Number.isFinite(validator.uptime) ? `${(validator.uptime as number).toFixed(1)}%` : 'N/A'}
                                     </span>
                                   </div>

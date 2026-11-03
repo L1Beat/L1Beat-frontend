@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertTriangle, ArrowLeft, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Wallet } from 'lucide-react';
 import { getDelegatorDelegations, getStakingSummary, PRIMARY_NETWORK_SUBNET_ID } from '../api';
-import type { DelegatorPage } from '../api';
+import type { DelegatorDelegation, DelegatorPage } from '../api';
 import { SEO } from '../components/SEO';
 import { NodeId } from '../components/NodeId';
 import { useToast } from '../components/Toaster';
@@ -25,6 +25,14 @@ const STATUS_OPTIONS = [
 ];
 
 const toAvax = (nAvax: string | number) => Number(nAvax) / 1e9;
+// Delegated stake is violet on the Staking and validator pages.
+const DELEGATED = '#8b5cf6';
+
+/** Time left as Staking shows it: "59d", then "3 mo". */
+function timeLeft(days: number): string {
+  if (days < 1) return 'today';
+  return days < 60 ? `${Math.floor(days)}d` : `${Math.round(days / 30)} mo`;
+}
 
 function formatAvax(nAvax: string | number): string {
   return toAvax(nAvax).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -77,6 +85,21 @@ export function DelegatorDetails() {
   useEffect(() => {
     getStakingSummary().then((s) => setAllDelegated(s ? Number(s.delegated_stake) : null));
   }, []);
+
+  // The largest running delegations, for the overview card. Same request as the
+  // table's default view, so it's usually served from the cache.
+  const [running, setRunning] = useState<DelegatorDelegation[] | null>(null);
+  useEffect(() => {
+    if (!valid) return;
+    let cancelled = false;
+    setRunning(null);
+    getDelegatorDelegations(address, { active: true, sort: 'stake', order: 'desc', limit: PAGE_SIZE, offset: 0 }).then((r) => {
+      if (!cancelled) setRunning(r?.data ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, valid]);
 
   useEffect(() => {
     if (!valid) return;
@@ -191,13 +214,50 @@ export function DelegatorDetails() {
   ];
   const empty = !loading && summary && !summary.first_delegation_time;
 
+  const who = label ? `${label.name} ${label.token}` : 'This address';
+  // Exact only when every running delegation is loaded.
+  const allLoaded = !!summary && !!running && running.length >= summary.active_count;
+  const nextEnd = allLoaded && running!.length
+    ? Math.min(...running!.map((d) => new Date(d.end_time).getTime()))
+    : null;
+  const headline = !summary ? null : summary.active_count > 0 ? (
+    {
+      lead: (
+        <>
+          {who} delegates <span className="tabular-nums">{compactAvax(summary.active_stake)}</span> AVAX to{' '}
+          <span className="tabular-nums">{summary.validator_count.toLocaleString()}</span> {summary.validator_count === 1 ? 'validator' : 'validators'}
+          {share != null && share >= 0.01 && <>, <span className="tabular-nums">{share.toFixed(2)}%</span> of all delegated AVAX</>}.
+        </>
+      ),
+      sub: (
+        <>
+          {summary.first_delegation_time && <>Delegating since {format(new Date(summary.first_delegation_time), 'MMMM yyyy')}</>}
+          {nextEnd != null && (
+            <>
+              {summary.first_delegation_time ? '; the' : 'The'} next delegation ends in{' '}
+              <span className="num">{timeLeft((nextEnd - Date.now()) / 86_400_000)}</span>
+            </>
+          )}
+          .
+        </>
+      ),
+    }
+  ) : summary.first_delegation_time ? (
+    {
+      lead: <>{who} has no running delegations.</>,
+      sub: <>It first delegated on {format(new Date(summary.first_delegation_time), 'MMM d, yyyy')}; its history is below.</>,
+    }
+  ) : null;
+
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div>
       <SEO
         title={label ? `${label.name} ${label.token} · Delegator` : `${shortId(address, 12, 6)} · Delegator`}
         description={`Avalanche delegator ${shortId(address, 12, 6)}: AVAX delegated to Primary Network validators, running and ended.`}
         url={`/delegator/${address}`}
       />
+      <section className="border-b border-border bg-stage" aria-label="Delegator summary">
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 pt-5 pb-5 space-y-4">
       <button
         onClick={() => navigate(-1)}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -206,7 +266,7 @@ export function DelegatorDetails() {
         Back
       </button>
 
-      <header className="border-b border-border pb-5">
+      <header>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4 min-w-0">
             {label?.logo ? (
@@ -218,7 +278,7 @@ export function DelegatorDetails() {
             )}
             <div className="min-w-0">
               <div className="flex items-start gap-2 min-w-0">
-                <h1 className="num text-[17px] sm:text-[20px] leading-7 font-medium text-foreground break-all">{address}</h1>
+                <h1 className="num text-[15px] sm:text-[17px] leading-7 font-medium text-foreground break-all">{address}</h1>
                 <button
                   onClick={copy}
                   className="pt-2 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -258,7 +318,22 @@ export function DelegatorDetails() {
         </div>
       </header>
 
-      <StatStrip items={stats} />
+      {headline && (
+        <div className="pt-1">
+          <p className="text-[22px] sm:text-[30px] leading-tight font-medium text-foreground max-w-4xl">{headline.lead}</p>
+          <p className="mt-1.5 text-[14px] sm:text-[16px] leading-snug text-foreground/80 max-w-3xl">{headline.sub}</p>
+        </div>
+      )}
+
+      <StatStrip items={stats} floating />
+      </div>
+      </section>
+
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+      {summary && summary.active_count > 0 && running && running.length > 0 && (
+        <RunningOverview rows={running} activeStake={Number(summary.active_stake)} activeCount={summary.active_count} />
+      )}
+
 
       <section ref={tableRef} className="rounded-md border border-border bg-card overflow-hidden scroll-mt-16">
         <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border">
@@ -308,6 +383,7 @@ export function DelegatorDetails() {
                 <tr className="border-b border-border text-[11px] text-muted-foreground">
                   <th className="text-left font-normal py-2 px-4 sm:px-5">Validator</th>
                   <th className="text-right font-normal py-2 px-3">Stake</th>
+                  {status === 'running' && <th className="text-left font-normal py-2 px-3 hidden md:table-cell w-[18%]">Share</th>}
                   <th className="text-right font-normal py-2 px-3">Started</th>
                   <th className="text-right font-normal py-2 px-3">{status === 'running' ? 'Ends' : status === 'ended' ? 'Ended' : 'End'}</th>
                   <th className="text-right font-normal py-2 px-4 sm:px-5">Transaction</th>
@@ -336,11 +412,26 @@ export function DelegatorDetails() {
                         <NodeId id={d.node_id} to={to} />
                       </td>
                       <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-foreground whitespace-nowrap">{formatAvax(d.stake)} AVAX</td>
+                      {status === 'running' && (
+                        <td className="hidden md:table-cell py-2.5 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-sm bg-muted overflow-hidden">
+                              <div className="h-full rounded-sm" style={{ width: `${activeStake > 0 ? (Number(d.stake) / activeStake) * 100 : 0}%`, background: DELEGATED }} />
+                            </div>
+                            <span className="num w-11 text-right text-muted-foreground">
+                              {activeStake > 0 ? `${((Number(d.stake) / activeStake) * 100).toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                        </td>
+                      )}
                       <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
                         {format(new Date(d.start_time), 'MMM d, yyyy')}
                       </td>
                       <td className="hidden sm:table-cell num py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap">
                         {status === 'all' && d.active ? <span className="text-foreground">{end}</span> : end}
+                        {d.active && (
+                          <span className="ml-1.5 text-foreground/70">(in {timeLeft((new Date(d.end_time).getTime() - Date.now()) / 86_400_000)})</span>
+                        )}
                       </td>
                       <td className="hidden sm:table-cell py-2.5 px-4 sm:px-5 text-right">
                         <TxLink id={d.tx_id} />
@@ -370,6 +461,85 @@ export function DelegatorDetails() {
             </div>
           </>
         )}
+      </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where the running stake sits: one bar split by validator, the largest listed,
+ * and how much each coming month frees up as delegations end.
+ */
+function RunningOverview({ rows, activeStake, activeCount }: { rows: DelegatorDelegation[]; activeStake: number; activeCount: number }) {
+  const top = rows.slice(0, 8);
+  const topSum = top.reduce((a, d) => a + Number(d.stake), 0);
+  const rest = Math.max(0, activeStake - topSum);
+  const pct = (v: number) => (activeStake > 0 ? (v / activeStake) * 100 : 0);
+  const complete = rows.length >= activeCount;
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
+  const ending = months.map((m, i) => {
+    const next = months[i + 1] ?? new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
+    return rows
+      .filter((d) => {
+        const t = new Date(d.end_time).getTime();
+        return t >= m.getTime() && t < next.getTime();
+      })
+      .reduce((a, d) => a + Number(d.stake), 0);
+  });
+  const maxEnding = Math.max(...ending, 1);
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+      <section className="lg:col-span-2 rounded-md border border-border bg-card px-4 sm:px-5 py-4 min-w-0">
+        <h2 className="text-[14px] font-semibold text-foreground">Where it's delegated</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">Running delegations, largest first</p>
+        <div className="mt-3 flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label="Share of running stake by validator">
+          {top.map((d, i) => (
+            <div key={d.tx_id} style={{ width: `${pct(Number(d.stake))}%`, background: DELEGATED, opacity: 1 - i * 0.09 }} title={`${shortId(d.node_id, 12, 4)} ${pct(Number(d.stake)).toFixed(1)}%`} />
+          ))}
+          {rest > 0 && <div className="bg-foreground/20" style={{ width: `${pct(rest)}%` }} />}
+        </div>
+        <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          {top.map((d, i) => (
+            <li key={d.tx_id} className="flex items-center gap-2 text-[12px] min-w-0">
+              <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: DELEGATED, opacity: 1 - i * 0.09 }} />
+              <span className="min-w-0 flex-1 truncate">
+                <NodeId id={d.node_id} to={`/validator/${d.node_id}?subnet=${PRIMARY_NETWORK_SUBNET_ID}`} />
+              </span>
+              <span className="num text-muted-foreground shrink-0">{compactAvax(d.stake)}</span>
+              <span className="num w-11 text-right text-foreground shrink-0">{pct(Number(d.stake)).toFixed(1)}%</span>
+            </li>
+          ))}
+        </ul>
+        {rest > 0 && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            <span className="inline-block w-2 h-2 rounded-sm bg-foreground/20 mr-1.5 align-middle" />
+            {(activeCount - top.length).toLocaleString()} more {activeCount - top.length === 1 ? 'delegation' : 'delegations'} hold the other{' '}
+            <span className="num text-foreground">{pct(rest).toFixed(1)}%</span>
+          </p>
+        )}
+      </section>
+      <section className="rounded-md border border-border bg-card px-4 sm:px-5 py-4 min-w-0">
+        <h2 className="text-[14px] font-semibold text-foreground">Ending by month</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          {complete ? 'AVAX whose delegation ends each month' : `Of the ${rows.length} largest delegations`}
+        </p>
+        <div className="mt-4 flex items-end gap-2 h-24" role="img" aria-label="AVAX whose delegation ends in each of the next six months">
+          {ending.map((v, i) => (
+            <div key={i} className="flex-1 flex flex-col justify-end h-full min-w-0" title={`${format(months[i], 'MMM yyyy')}: ${formatAvax(v)} AVAX`}>
+              <div className="w-full rounded-t-sm" style={{ height: `${v > 0 ? Math.max(4, (v / maxEnding) * 100) : 0}%`, background: DELEGATED, opacity: 0.8 }} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-1 flex gap-2 text-[10px] text-muted-foreground num">
+          {ending.map((v, i) => (
+            <div key={i} className="flex-1 min-w-0 text-center truncate">
+              {format(months[i], 'MMM')}
+              <span className="block text-foreground/80">{v > 0 ? compactAvax(v) : '0'}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

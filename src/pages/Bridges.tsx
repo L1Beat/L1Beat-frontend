@@ -788,7 +788,7 @@ function ChainTable({ summary, state }: { summary: BridgeSummary | null; state: 
   return (
     <Card title="By chain" subtitle="Where money came from and went to. The bar shows outflow on the left and inflow on the right.">
       {state === 'error' && !summary ? (
-        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Chain flows couldn't be loaded. Try again in a minute.</p>
       ) : !summary ? (
         <Skeleton rows={6} />
       ) : (
@@ -861,7 +861,7 @@ function BridgeTable({ summary, days, state }: { summary: BridgeSummary | null; 
   return (
     <Card title="By bridge" subtitle="Dollars moved both ways, with the daily trend over the chart's range">
       {state === 'error' && !summary ? (
-        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Bridge flows couldn't be loaded. Try again in a minute.</p>
       ) : !summary ? (
         <Skeleton />
       ) : (
@@ -929,7 +929,7 @@ function TokenTable({ summary, state }: { summary: BridgeSummary | null; state: 
   return (
     <Card title="By token" subtitle="Tokens with a price. Others are counted in transfers but add no dollars.">
       {state === 'error' && !summary ? (
-        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</p>
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Token flows couldn't be loaded. Try again in a minute.</p>
       ) : !summary ? (
         <Skeleton />
       ) : (
@@ -994,7 +994,7 @@ function TransferList({ title, items, state, names, empty }: {
       {state === 'loading' && !items ? (
         <div className="px-4 sm:px-5 pb-4 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
       ) : state === 'error' && !items ? (
-        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">Couldn't be loaded. Try again in a minute.</div>
+        <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">Transfers couldn't be loaded. Try again in a minute.</div>
       ) : !items?.length ? (
         <div className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">{empty}</div>
       ) : (
@@ -1003,7 +1003,7 @@ function TransferList({ title, items, state, names, empty }: {
             <li key={`${x.tx_hash}-${x.direction}-${x.token}-${i}`} className="px-4 sm:px-5 py-2 flex items-center gap-3">
               {/* The other chain, badged with the bridge that carried it. */}
               <span className="relative inline-flex shrink-0">
-                <ChainLogo chain={x.chain} name={x.chain_name} size={24} />
+                <ChainLogo chain={x.chain} name={x.chain_name} size={22} />
                 <span className="absolute -right-1.5 -bottom-1 rounded-[4px] ring-2 ring-card inline-flex">
                   <BridgeLogo id={x.bridge} size={13} />
                 </span>
