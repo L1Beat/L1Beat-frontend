@@ -47,7 +47,7 @@ const HERO_VIEWS: { value: HeroView; label: string }[] = [
   { value: 'flows', label: 'ICM' },
 ];
 const FLOW_WINDOWS: { value: 'daily' | 'weekly'; label: string }[] = [
-  { value: 'daily', label: '24H' },
+  { value: 'daily', label: '1D' },
   { value: 'weekly', label: '7D' },
 ];
 type ScreenerTab = 'active' | 'all' | 'inactive' | 'watchlist';
@@ -1034,7 +1034,7 @@ function FlowCards({
   selection?: SankeySelection | null;
   floating?: boolean;
 }) {
-  const label = window === 'weekly' ? '7d' : '24h';
+  const label = window === 'weekly' ? '7d' : 'last day';
   const loaded = stats.total > 0;
   const who = selection ? flowChainLabel(selection.chain) : null;
   const incoming = selection?.direction === 'incoming';
@@ -1042,8 +1042,8 @@ function FlowCards({
     {
       label: who ? `Messages ${incoming ? 'into' : 'out of'} ${who}, ${label}` : `Messages, ${label}`,
       value: loaded ? formatCount(stats.total) : '—',
-      sub: loaded ? 'ICM and Teleporter' : 'Loading message data',
-      tooltip: 'Interchain messages delivered between Avalanche L1s in the window, from Teleporter and ICM logs.',
+      sub: loaded ? 'to and from the C-Chain' : 'Loading message data',
+      tooltip: 'Interchain messages between Avalanche L1s and the C-Chain in complete UTC days, counted from the C-Chain TeleporterMessenger. Direct L1-to-L1 messages (about 0.02%) are left out.',
       href: '/interchain',
     },
     {

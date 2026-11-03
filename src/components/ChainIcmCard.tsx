@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getChains, getIcmSummary, getIcmTimeseries } from '../api';
-import type { IcmDay, IcmSummary } from '../api';
+import { getChains, getIcmApps, getIcmMessages, getIcmSummary, getIcmTimeseries, getIcmValue } from '../api';
+import type { IcmApp, IcmDay, IcmMessage, IcmSummary, IcmValue } from '../api';
+import { KIND, TokenTag, appName } from './icm/shared';
 import type { Chain } from '../types';
 import { L1Logo, SegmentedControl } from './instrument';
 import { DailyBars } from './instrument/DailyBars';
@@ -19,6 +20,11 @@ const RANGES = [
 type RangeValue = (typeof RANGES)[number]['value'];
 
 const num = (n: number) => n.toLocaleString('en-US');
+const usd = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e4 ? `$${(v / 1e3).toFixed(1)}K` : `$${Math.round(v).toLocaleString('en-US')}`);
+const ago = (t: string) => {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(t)) / 1000));
+  return s < 3600 ? `${Math.max(1, Math.floor(s / 60))} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`;
+};
 
 /**
  * A chain's ICM traffic with the C-Chain, from the indexer's TeleporterMessenger
@@ -33,21 +39,27 @@ export function ChainIcmCard({ chain }: { chain: Chain }) {
   const [summary, setSummary] = useState<IcmSummary | null>(null);
   const [days, setDays] = useState<IcmDay[] | null>(null);
   const [chains, setChains] = useState<Chain[]>([]);
+  const [value, setValue] = useState<IcmValue | null>(null);
+  const [apps, setApps] = useState<IcmApp[] | null>(null);
+  const [latest, setLatest] = useState<IcmMessage[] | null>(null);
 
   useEffect(() => {
     if (!id) return;
     getIcmSummary(3650).then(setAllTime);
     if (isCChain) getChains().then(setChains).catch(() => setChains([]));
+    getIcmMessages(5, undefined, isCChain ? undefined : id).then((r) => setLatest(r?.data ?? []));
   }, [id, isCChain]);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     const n = Number(range);
-    Promise.all([getIcmSummary(n), getIcmTimeseries(n)]).then(([s, d]) => {
+    Promise.all([getIcmSummary(n), getIcmTimeseries(n), getIcmValue(n), getIcmApps(n, 100)]).then(([s, d, v, a]) => {
       if (cancelled) return;
       setSummary(s);
       setDays(d);
+      setValue(v);
+      setApps(a?.apps ?? []);
     });
     return () => {
       cancelled = true;
@@ -64,6 +76,18 @@ export function ChainIcmCard({ chain }: { chain: Chain }) {
   const back = mine ? (isCChain ? mine.received : mine.sent) : 0;
   const series = (days ?? []).map((d) => (isCChain ? d.total : d.by_chain.find((c) => c.blockchain_id === id)?.total ?? 0));
   const byId = useMemo(() => new Map(chains.filter((c) => c.platformChainId).map((c) => [c.platformChainId!, c])), [chains]);
+  // Apps on the C-Chain this chain exchanged messages with, by this chain's share of each.
+  const myApps = useMemo(() => {
+    const list = (apps ?? [])
+      .map((a) => {
+        const c = isCChain ? a : a.top_chains.find((x) => x.blockchain_id === id);
+        return c ? { app: a, total: c.total } : null;
+      })
+      .filter((x): x is { app: IcmApp; total: number } => !!x && x.total > 0)
+      .sort((a, b) => b.total - a.total);
+    return list.slice(0, 5);
+  }, [apps, id, isCChain]);
+  const valued = isCChain ? value?.totals.total_usd ?? 0 : value?.by_chain.find((c) => c.blockchain_id === id)?.total_usd ?? 0;
 
   if (!id || !allTime || !lifetime || lifetime.total === 0) return null;
 
@@ -95,10 +119,12 @@ export function ChainIcmCard({ chain }: { chain: Chain }) {
             {isCChain ? (
               <>
                 The C-Chain sent <span className="num">{num(out)}</span> messages to L1s and received <span className="num">{num(back)}</span> {windowText}.
+                {valued > 0 && <span className="text-muted-foreground"> Tokens worth <span className="num text-foreground">{usd(valued)}</span> moved with them.</span>}
               </>
             ) : total > 0 ? (
               <>
                 {chain.chainName} sent <span className="num">{num(out)}</span> messages to the C-Chain and received <span className="num">{num(back)}</span> {windowText}.
+                {valued > 0 && <span className="text-muted-foreground"> Tokens worth <span className="num text-foreground">{usd(valued)}</span> moved with them.</span>}
               </>
             ) : (
               <>No messages with the C-Chain {windowText}.</>
@@ -168,6 +194,70 @@ export function ChainIcmCard({ chain }: { chain: Chain }) {
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {(myApps.length > 0 || (latest && latest.length > 0)) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 border-t border-border md:divide-x divide-border">
+          <div className="min-w-0 px-4 sm:px-5 py-3">
+            <p className="text-[11px] text-muted-foreground mb-2">{isCChain ? 'Busiest apps' : 'Apps it talks to on the C-Chain'} {windowText}</p>
+            {myApps.length === 0 ? (
+              <p className="text-[12px] text-muted-foreground">None in this period.</p>
+            ) : (
+              <ul className="space-y-2">
+                {myApps.map(({ app, total }) => {
+                  const kind = KIND[app.kind];
+                  return (
+                    <li key={app.address} className="flex items-center justify-between gap-3">
+                      <span className="min-w-0">
+                        <a href={`https://snowtrace.io/address/${app.address}`} target="_blank" rel="noopener noreferrer" className="block truncate text-[12px] font-medium text-foreground hover:underline underline-offset-2" title={app.address}>
+                          {appName(app, app.address)}
+                        </a>
+                        <span className="flex items-center gap-2">
+                          {kind && <span className="text-[10px] px-1.5 py-px rounded-sm bg-accent text-foreground/80" title={kind.title}>{kind.chip}</span>}
+                          {app.token && <TokenTag token={app.token} />}
+                        </span>
+                      </span>
+                      <span className="num text-[12px] text-foreground shrink-0">{num(total)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="min-w-0 px-4 sm:px-5 py-3 border-t md:border-t-0 border-border">
+            <p className="text-[11px] text-muted-foreground mb-2">Latest messages</p>
+            {!latest?.length ? (
+              <p className="text-[12px] text-muted-foreground">{latest ? 'None recorded.' : 'Loading…'}</p>
+            ) : (
+              <ul className="space-y-2">
+                {latest.map((m) => {
+                  const toC = m.direction === 'received';
+                  const other = m.counterparty.name || `${m.counterparty.blockchain_id.slice(0, 8)}…`;
+                  return (
+                    <li key={`${m.message_id}-${m.direction}`}>
+                      <a href={`https://snowtrace.io/tx/${m.tx_hash}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 group" title="Open the transaction">
+                        <span className="min-w-0 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: toC ? TO_CCHAIN : FROM_CCHAIN }} aria-hidden />
+                          <span className="min-w-0">
+                            <span className="block truncate text-[12px] text-foreground group-hover:underline underline-offset-2">
+                              {toC ? `${isCChain ? other : chain.chainName} to C-Chain` : `C-Chain to ${isCChain ? other : chain.chainName}`}
+                              {toC && m.executed === false && <span className="ml-1.5 text-[10px] text-muted-foreground">failed to execute</span>}
+                            </span>
+                            <span className="flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
+                              <span className="truncate">{appName(m.app, m.local_address)}</span>
+                              {m.ictt?.token && <TokenTag token={m.ictt.token} />}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="text-[11px] text-muted-foreground shrink-0" title={`${m.block_time.slice(0, 19).replace('T', ' ')} UTC`}>{ago(m.block_time)}</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </section>

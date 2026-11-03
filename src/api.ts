@@ -1083,10 +1083,10 @@ export const getIcmValueTimeseries = (days: number) =>
 export const getIcmTopTransfers = (days: number, limit = 8) =>
   getDexData<IcmTransfer[]>(`icm-top-${days}-${limit}`, `/api/v1/metrics/icm/transfers/top?days=${days}&limit=${limit}`);
 /** Newest messages first; not cached here, the list is refreshed while the page is open. */
-export async function getIcmMessages(limit = 25, before?: string): Promise<{ data: IcmMessage[]; next: string | null } | null> {
+export async function getIcmMessages(limit = 25, before?: string, chain?: string): Promise<{ data: IcmMessage[]; next: string | null } | null> {
   try {
     const r = await fetchExternalWithRetry<{ data: IcmMessage[]; meta?: { has_more?: boolean; next_cursor?: string } }>(
-      `${L1BEAT_EXTERNAL_API}/api/v1/metrics/icm/messages?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}`,
+      `${L1BEAT_EXTERNAL_API}/api/v1/metrics/icm/messages?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}${chain ? `&chain=${encodeURIComponent(chain)}` : ''}`,
     );
     return { data: r.data ?? [], next: r.meta?.has_more ? r.meta.next_cursor ?? null : null };
   } catch (error) {
@@ -1714,56 +1714,35 @@ export async function getHealth(): Promise<HealthStatus> {
   }, 30000); // Cache for 30 seconds
 }
 
+/**
+ * ICM message flows for the Overview's flow chart, from the indexer's C-Chain
+ * TeleporterMessenger counts: the last complete UTC day, or the last 7. Each L1
+ * is one pair of flows with the C-Chain. Direct L1-to-L1 messages (about 0.02%)
+ * aren't included. Chains that share a name get a short ID tag, so they stay apart.
+ */
 export async function getTeleporterMessages(
   timeframe: 'daily' | 'weekly' = 'daily'
 ): Promise<TeleporterMessageData> {
-  return fetchWithCache(`teleporter-messages-${timeframe}`, async () => {
-    try {
-      const endpoint = timeframe === 'weekly'
-        ? `${API_URL}/teleporter/messages/weekly-count`
-        : `${API_URL}/teleporter/messages/daily-count`;
-      const response = await fetchWithRetry<any>(endpoint);
-      
-      // Handle both raw array and { data: [...] } formats
-      const dataArray = Array.isArray(response) ? response : (response?.data || []);
-      
-      if (!Array.isArray(dataArray)) {
-        throw new Error('Invalid Teleporter message data format');
-      }
-      
-      // Map the API response to our internal format
-      const messages = dataArray.map((msg: any) => ({
-        source: msg.sourceChain || msg.source || 'Unknown',
-        target: msg.destinationChain || msg.target || 'Unknown',
-        value: Number(msg.messageCount || msg.count || msg.value || 0)
-      }));
-      
-      // Calculate total messages if metadata is missing
-      const totalMessages = response?.metadata?.totalMessages || 
-        messages.reduce((sum: number, msg: any) => sum + msg.value, 0);
-      
-      return {
-        messages,
-        metadata: {
-          totalMessages,
-          startDate: response?.metadata?.startDate || new Date().toISOString(),
-          endDate: response?.metadata?.endDate || new Date().toISOString(),
-          updatedAt: response?.metadata?.updatedAt || new Date().toISOString()
-        }
-      };
-    } catch (error) {
-      console.error('Teleporter messages fetch error:', error);
-      return {
-        messages: [],
-        metadata: {
-          totalMessages: 0,
-          startDate: new Date().toISOString(),
-          endDate: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
-    }
-  }, 15 * 60 * 1000); // Cache for 15 minutes
+  const s = await getIcmSummary(timeframe === 'weekly' ? 7 : 1);
+  const rows = (s?.by_chain ?? []).filter((c) => c.total > 0);
+  const seen = new Map<string, number>();
+  for (const c of rows) seen.set(c.name.toLowerCase(), (seen.get(c.name.toLowerCase()) ?? 0) + 1);
+  const label = (c: IcmSummary['by_chain'][number]) =>
+    !c.name ? `${c.blockchain_id.slice(0, 8)}…` : (seen.get(c.name.toLowerCase()) ?? 0) > 1 ? `${c.name} (${c.blockchain_id.slice(0, 4)})` : c.name;
+  const C = 'Avalanche C-Chain';
+  const messages = rows.flatMap((c) => [
+    ...(c.received > 0 ? [{ source: label(c), target: C, value: c.received }] : []),
+    ...(c.sent > 0 ? [{ source: C, target: label(c), value: c.sent }] : []),
+  ]).sort((a, b) => b.value - a.value);
+  return {
+    messages,
+    metadata: {
+      totalMessages: s?.totals.total ?? 0,
+      startDate: s?.from ?? '',
+      endDate: s?.as_of ?? '',
+      updatedAt: s?.as_of ?? '',
+    },
+  };
 }
 
 export async function getTeleporterDailyHistory(days: number = 30): Promise<TeleporterDailyData[]> {

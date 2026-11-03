@@ -6,9 +6,8 @@ import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from './LoadingSpinner';
+import { getTeleporterMessages } from '../api';
 
-// Get API base URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
 interface TeleporterMessage {
   source: string;
@@ -191,104 +190,21 @@ export function TeleporterSankeyDiagram({ timeframe, onTimeframeChange, fill = f
 
 
   const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Use the appropriate endpoint based on the selected timeframe
-      const primaryEndpoint = timeframe === 'daily' 
-        ? `${API_BASE_URL}/api/teleporter/messages/daily-count`
-        : `${API_BASE_URL}/api/teleporter/messages/weekly-count`;
-
-      const response = await fetch(primaryEndpoint);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const rawData = await response.json();
-      const dataArray = Array.isArray(rawData) ? rawData : (rawData.data || []);
-      
-      // Process the API response format
-      if (!Array.isArray(dataArray)) {
-        throw new Error('Invalid data format: Missing data array');
-      }
-      
-      // Transform the data to our expected format
-      const messages = dataArray.map((item: any) => ({
-        source: item.sourceChain || 'Unknown',
-        target: item.destinationChain || 'Unknown',
-        value: Number(item.messageCount) || 0
-      }));
-      
-      // Sort messages by value in descending order
-      messages.sort((a, b) => b.value - a.value);
-      
-      const totalMessages = rawData.metadata?.totalMessages || 
-        messages.reduce((sum, msg) => sum + msg.value, 0);
-      
-      const processedData: TeleporterData = {
-        messages,
-        metadata: {
-          totalMessages,
-          timeWindow: timeframe === 'daily' ? 24 : 7,
-          timeWindowUnit: timeframe === 'daily' ? 'hours' : 'days',
-          updatedAt: rawData.metadata?.updatedAt || new Date().toISOString()
-        }
-      };
-      
-      setData(processedData);
-    } catch (err) {
-      console.error(`Failed to fetch ${timeframe} Teleporter messages:`, err);
-      
-      // Use sample data for demonstration when there's an error
-      const sampleData = generateSampleData();
-      setData(sampleData);
-      setError(`Using sample data - API connection failed for ${timeframe} data`);
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+    // Same source and cache as the Overview's stat bar: the indexer's C-Chain message counts.
+    const d = await getTeleporterMessages(timeframe);
+    if (!d.messages.length) {
+      setData(null);
+      setError("Message flows couldn't be loaded. Try again in a minute.");
+    } else {
+      setData({
+        messages: d.messages,
+        metadata: { totalMessages: d.metadata.totalMessages, startDate: d.metadata.startDate, endDate: d.metadata.endDate, updatedAt: d.metadata.updatedAt },
+      });
     }
+    setLoading(false);
   }, [timeframe]);
-
-  // Generate sample data for demonstration
-  const generateSampleData = (): TeleporterData => {
-    // Different sample data based on timeframe
-    const dailySampleMessages = [
-      { source: 'Dexalot L1', target: 'Avalanche (C-Chain)', value: 408 },
-      { source: 'Avalanche (C-Chain)', target: 'Dexalot L1', value: 362 },
-      { source: 'Avalanche (C-Chain)', target: 'zeroone Mainnet L1', value: 24 },
-      { source: 'Lamina1 L1', target: 'Avalanche (C-Chain)', value: 17 },
-      { source: 'zeroone Mainnet L1', target: 'Avalanche (C-Chain)', value: 16 },
-      { source: 'Avalanche (C-Chain)', target: '898b8aa8', value: 12 },
-      { source: 'Avalanche (C-Chain)', target: 'PLYR PHI L1', value: 6 },
-      { source: 'PLYR PHI L1', target: 'Avalanche (C-Chain)', value: 2 }
-    ];
-    
-    const weeklySampleMessages = [
-      { source: 'Dexalot L1', target: 'Avalanche (C-Chain)', value: 2845 },
-      { source: 'Avalanche (C-Chain)', target: 'Dexalot L1', value: 2532 },
-      { source: 'Avalanche (C-Chain)', target: 'zeroone Mainnet L1', value: 168 },
-      { source: 'zeroone Mainnet L1', target: 'Avalanche (C-Chain)', value: 112 },
-      { source: 'Lamina1 L1', target: 'Avalanche (C-Chain)', value: 119 },
-      { source: 'Avalanche (C-Chain)', target: 'Lamina1 L1', value: 84 },
-      { source: 'Avalanche (C-Chain)', target: '898b8aa8', value: 84 },
-      { source: 'Avalanche (C-Chain)', target: 'PLYR PHI L1', value: 42 },
-      { source: 'PLYR PHI L1', target: 'Avalanche (C-Chain)', value: 14 }
-    ];
-    
-    const messages = timeframe === 'daily' ? dailySampleMessages : weeklySampleMessages;
-    const totalMessages = messages.reduce((sum, msg) => sum + msg.value, 0);
-    
-    return {
-      messages,
-      metadata: {
-        totalMessages,
-        timeWindow: timeframe === 'daily' ? 24 : 7,
-        timeWindowUnit: timeframe === 'daily' ? 'hours' : 'days',
-        updatedAt: new Date().toISOString()
-      }
-    };
-  };
 
   // The parent cleared the selection (chip close, view switch).
   useEffect(() => {
