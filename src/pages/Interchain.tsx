@@ -8,7 +8,8 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { IcmByChain, ICM_RANGES, FROM_CCHAIN, TO_CCHAIN } from '../components/IcmByChain';
 import type { RangeValue } from '../components/IcmByChain';
-import { getChains, getIcmApps, getIcmMessages, getIcmSummary, getIcmTimeseries } from '../api';
+import { getChains, getIcmApps, getIcmMessages, getIcmSummary, getIcmTimeseries, getIcmTopTransfers, getIcmValue, getIcmValueTimeseries } from '../api';
+import { DailyBars } from '../components/instrument/DailyBars';
 import type { IcmApp, IcmDay, IcmMessage, IcmSummary, IcmToken } from '../api';
 import { usePolling } from '../hooks/usePolling';
 import type { Chain } from '../types';
@@ -204,6 +205,10 @@ export function Interchain() {
             <RecentMessages index={index} />
           </SectionErrorBoundary>
         </div>
+
+        <SectionErrorBoundary label="token transfers">
+          <TokenTransfers range={range} index={index} />
+        </SectionErrorBoundary>
 
         <SectionErrorBoundary label="adoption">
           <Adoption days={history.data} state={history.state} index={index} />
@@ -985,6 +990,9 @@ function RecentMessages({ index }: { index: ChainIndex }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12px] text-foreground">
                         {toC ? `${cname} to C-Chain` : `C-Chain to ${cname}`}
+                        {toC && m.executed === false && (
+                          <span className="ml-1.5 text-[10px] text-muted-foreground" title="The message arrived but its call on the C-Chain failed, so nothing moved">failed to execute</span>
+                        )}
                       </span>
                       <span className="flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
                         <span className="truncate">{appName(m.app, m.local_address)}</span>
@@ -1006,6 +1014,125 @@ function RecentMessages({ index }: { index: ChainIndex }) {
             </button>
           )}
         </>
+      )}
+    </section>
+  );
+}
+
+const usd = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e4 ? `$${(v / 1e3).toFixed(1)}K` : `$${Math.round(v).toLocaleString('en-US')}`);
+/** A base-unit amount as a short token figure. */
+function tokenAmount(raw: string, decimals: number): string {
+  const v = Number(raw) / 10 ** decimals;
+  if (!Number.isFinite(v)) return '—';
+  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e4) return `${(v / 1e3).toFixed(1)}K`;
+  return v.toLocaleString('en-US', { maximumFractionDigits: v >= 100 ? 0 : 2 });
+}
+const VALUE_BAR = 'rgb(57, 135, 229)';
+
+/** Tokens moved through ICTT bridges, valued where a price exists. */
+function TokenTransfers({ range, index }: { range: RangeValue; index: ChainIndex }) {
+  const value = useLoad(() => getIcmValue(Number(range)), range);
+  const series = useLoad(() => getIcmValueTimeseries(Number(range)), range);
+  const top = useLoad(() => getIcmTopTransfers(Number(range), 8), range);
+  const v = value.data;
+  const t = v?.totals;
+  const windowText = !v ? '' : v.days > 365 ? `since ${day(v.from, 'MMMM yyyy')}` : v.days === 365 ? 'in the last year' : `in the last ${v.days} days`;
+  const tokens = (v?.by_token ?? []).filter((x) => x.transfers > 0).slice(0, 10);
+  const days = series.data ?? [];
+  const showBars = days.length > 1 && days.length <= 400 && days.some((d) => d.total_usd > 0);
+
+  return (
+    <section className="rounded-md border border-border bg-card">
+      <header className="px-4 sm:px-5 pt-4 pb-3">
+        <h2 className="text-[14px] font-semibold text-foreground">Token transfers</h2>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Tokens moved through ICTT bridges, valued in dollars where a price exists. Most ICTT tokens are L1 tokens without a market price, so dollar figures cover part of the traffic.
+        </p>
+      </header>
+      {value.state === 'error' && !v ? (
+        <p className="px-5 pb-5 text-[12px] text-muted-foreground">Token transfers couldn't be loaded. Try again in a minute.</p>
+      ) : !v || !t ? (
+        <div className="px-5 pb-5"><div className="h-40 rounded bg-muted/50 animate-pulse" /></div>
+      ) : (
+        <div className={value.state === 'loading' ? 'opacity-60' : ''}>
+          <div className="px-4 sm:px-5 pb-3">
+            <p className="text-[13px] text-foreground">
+              <span className="num">{usd(t.total_usd)}</span> moved in priced tokens {windowText}
+              <span className="text-muted-foreground">
+                : <span className="num text-foreground">{usd(t.sent_usd)}</span> left the C-Chain and <span className="num text-foreground">{usd(t.received_usd)}</span> arrived.
+                {' '}That's <span className="num text-foreground">{num(t.priced_transfers)}</span> of <span className="num text-foreground">{num(t.transfers)}</span> transfers; the rest are in tokens without a price.
+              </span>
+            </p>
+          </div>
+          {showBars && (
+            <div className="px-2 sm:px-3 pb-3 h-[150px]">
+              <DailyBars values={days.map((d) => d.total_usd)} dates={days.map((d) => d.date)} color={VALUE_BAR} format={(x) => `${usd(x)} moved`} />
+            </div>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 border-t border-border lg:divide-x divide-border">
+            <div className="min-w-0">
+              <div className="px-4 sm:px-5 pt-3 pb-1.5 text-[12px] font-medium text-foreground">By token</div>
+              <table className="w-full text-[12px] whitespace-nowrap">
+                <thead>
+                  <tr className="border-y border-border text-[11px] text-muted-foreground">
+                    <th className="text-left font-normal px-4 sm:px-5 py-2">Token</th>
+                    <th className="text-right font-normal px-3 py-2">Transfers</th>
+                    <th className="text-right font-normal px-3 py-2 hidden sm:table-cell">Amount</th>
+                    <th className="text-right font-normal px-4 sm:px-5 py-2">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {tokens.map((x) => {
+                    const amt = (BigInt(x.sent_amount || '0') + BigInt(x.received_amount || '0')).toString();
+                    const val = x.priced ? (x.sent_usd ?? 0) + (x.received_usd ?? 0) : null;
+                    return (
+                      <tr key={x.token.address}>
+                        <td className="px-4 sm:px-5 py-2"><TokenTag token={x.token} /></td>
+                        <td className="num text-right px-3 py-2 text-foreground">{num(x.transfers)}</td>
+                        <td className="num text-right px-3 py-2 text-muted-foreground hidden sm:table-cell">{tokenAmount(amt, x.token.decimals)}</td>
+                        <td className="num text-right px-4 sm:px-5 py-2 text-foreground">{val != null ? usd(val) : <span className="text-muted-foreground">no price</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="min-w-0 border-t lg:border-t-0 border-border">
+              <div className="px-4 sm:px-5 pt-3 pb-1.5 text-[12px] font-medium text-foreground">Largest transfers</div>
+              {!top.data?.length ? (
+                <p className="px-4 sm:px-5 pb-4 text-[12px] text-muted-foreground">{top.state === 'loading' ? 'Loading…' : 'No priced transfers in this period.'}</p>
+              ) : (
+                <ul className="divide-y divide-border border-t border-border">
+                  {top.data.map((x) => {
+                    const toC = x.direction === 'received';
+                    const cname = nameOf(index, x.counterparty.blockchain_id, x.counterparty.name);
+                    return (
+                      <li key={`${x.message_id}-${x.direction}`}>
+                        <a href={`https://snowtrace.io/tx/${x.tx_hash}`} target="_blank" rel="noopener noreferrer" className="px-4 sm:px-5 py-2 flex items-center gap-3 hover:bg-accent/40" title="Open the transaction">
+                          <span className="relative inline-flex shrink-0">
+                            <L1Logo src={index.get(x.counterparty.blockchain_id)?.chainLogoUri} name={cname} size={22} />
+                            <span className="absolute -right-1 -bottom-1 w-3 h-3 rounded-full ring-2 ring-card" style={{ background: toC ? TO_CCHAIN : FROM_CCHAIN }} aria-hidden />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12px] text-foreground">
+                              <span className="num">{tokenAmount(x.amount, x.token.decimals)} {x.token.symbol}</span> {toC ? `from ${cname}` : `to ${cname}`}
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground truncate">
+                              {x.app_name}, {format(parseISO(x.block_time.slice(0, 19)), 'MMM d, yyyy HH:mm')} UTC
+                            </span>
+                          </span>
+                          <span className="num shrink-0 text-[13px] text-foreground">{usd(x.usd)}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

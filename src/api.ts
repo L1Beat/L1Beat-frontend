@@ -1037,6 +1037,8 @@ export interface IcmMessage {
   remote_address: string;
   app: IcmAppRef | null;
   ictt: { type: string; recipient: string; amount_raw: string; token: IcmToken | null } | null;
+  /** Receives only: false when the message arrived but failed to execute. */
+  executed?: boolean | null;
 }
 export interface IcmApp {
   address: string;
@@ -1053,6 +1055,33 @@ export interface IcmApp {
 }
 export const getIcmApps = (days: number, limit = 50) =>
   getDexData<{ as_of: string; from: string; days: number; apps: IcmApp[] }>(`icm-apps-${days}-${limit}`, `/api/v1/metrics/icm/apps?days=${days}&limit=${limit}`);
+export interface IcmValue {
+  as_of: string;
+  from: string;
+  days: number;
+  totals: { transfers: number; priced_transfers: number; sent_usd: number; received_usd: number; total_usd: number };
+  /** Amounts in C-Chain base units; USD is null for tokens without a price. */
+  by_token: { token: IcmToken; priced: boolean; transfers: number; sent_amount: string; received_amount: string; sent_usd: number | null; received_usd: number | null }[];
+  by_chain: { blockchain_id: string; name: string; transfers: number; sent_usd: number; received_usd: number; total_usd: number }[];
+}
+export interface IcmValueDay { date: string; transfers: number; sent_usd: number; received_usd: number; total_usd: number }
+export interface IcmTransfer {
+  message_id: string;
+  direction: 'sent' | 'received';
+  counterparty: { blockchain_id: string; name: string };
+  block_time: string;
+  tx_hash: string;
+  app_name: string;
+  token: IcmToken;
+  amount: string;
+  usd: number;
+}
+/** Token value moved through ICTT bridges: sent left the C-Chain, received arrived and executed. */
+export const getIcmValue = (days: number) => getDexData<IcmValue>(`icm-value-${days}`, `/api/v1/metrics/icm/value?days=${days}`);
+export const getIcmValueTimeseries = (days: number) =>
+  getDexData<IcmValueDay[]>(`icm-value-ts-${days}`, `/api/v1/metrics/icm/value/timeseries?days=${days}`, days <= 365);
+export const getIcmTopTransfers = (days: number, limit = 8) =>
+  getDexData<IcmTransfer[]>(`icm-top-${days}-${limit}`, `/api/v1/metrics/icm/transfers/top?days=${days}&limit=${limit}`);
 /** Newest messages first; not cached here, the list is refreshed while the page is open. */
 export async function getIcmMessages(limit = 25, before?: string): Promise<{ data: IcmMessage[]; next: string | null } | null> {
   try {
