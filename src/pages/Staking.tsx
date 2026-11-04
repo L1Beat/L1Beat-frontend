@@ -77,6 +77,9 @@ export function Staking() {
     };
   }, []);
 
+  const reach = useMemo(() => stakeReach(validators), [validators]);
+  const third = reach?.third ?? summary?.concentration.nakamoto_33 ?? 0;
+  const half = reach?.half ?? summary?.concentration.nakamoto_50 ?? 0;
   const stats: StatItem[] = summary
     ? [
         {
@@ -98,9 +101,9 @@ export function Staking() {
         },
         {
           label: 'Nakamoto (33%)',
-          value: summary.concentration.nakamoto_33.toLocaleString(),
+          value: third.toLocaleString(),
           sub: 'validators to control a third',
-          tooltip: `The fewest validators whose combined stake, own plus delegated, passes a third of the total; ${summary.concentration.nakamoto_50} pass half. Fewer means more concentrated.`,
+          tooltip: `The fewest validators whose combined stake, own plus delegated, passes a third of the total; ${half} pass half. Fewer means more concentrated.`,
         },
       ]
     : ['Total staked', 'Validators', 'Delegations', 'Nakamoto (33%)'].map((label) => ({
@@ -147,7 +150,7 @@ export function Staking() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-stretch">
           <SectionErrorBoundary label="stake concentration">
-            <ConcentrationCard summary={summary} state={summaryState} />
+            <ConcentrationCard summary={summary} state={summaryState} third={third} half={half} />
           </SectionErrorBoundary>
           <SectionErrorBoundary label="delegation fees">
             <FeesCard summary={summary} state={summaryState} />
@@ -202,6 +205,26 @@ function squarify(values: number[], W: number, H: number): Tile[] {
   return tiles;
 }
 
+/**
+ * The fewest validators whose stake, own plus delegated, passes a third and half of
+ * the total. Counted here from the validator list so every figure on the page agrees;
+ * the summary endpoint uses 33% rather than a full third and can come out one lower.
+ */
+function stakeReach(validators: PrimaryValidator[] | null): { third: number; half: number } | null {
+  if (!validators?.length) return null;
+  const totals = validators.map((v) => toAvax(v.total_stake ?? v.weight)).sort((a, b) => b - a);
+  const sum = totals.reduce((a, b) => a + b, 0);
+  let run = 0;
+  let third = 0;
+  let half = 0;
+  for (let i = 0; i < totals.length; i++) {
+    run += totals[i];
+    if (!third && run > sum / 3) third = i + 1;
+    if (!half && run > sum / 2) { half = i + 1; break; }
+  }
+  return { third, half };
+}
+
 // Tiers by running share of stake: the validators that make up a third, then half, then the rest.
 const TIER_OPACITY = [1, 0.68, 0.42];
 
@@ -230,7 +253,7 @@ function StakeSkyline({ validators, state, loadedAt }: {
     const sum = rows.reduce((s, r) => s + r.total, 0);
     let run = 0;
     const cum = rows.map((r) => (run += r.total) / sum);
-    const reach = (share: number) => cum.findIndex((c) => c >= share) + 1;
+    const reach = (share: number) => cum.findIndex((c) => c > share) + 1;
     const third = reach(1 / 3);
     const half = reach(0.5);
     const tierOf = (i: number) => (i < third ? 0 : i < half ? 1 : 2);
@@ -574,7 +597,7 @@ function ShareBar({ label, value, detail }: { label: string; value: number; deta
   );
 }
 
-function ConcentrationCard({ summary, state }: { summary: StakingSummary | null; state: 'loading' | 'ready' | 'error' }) {
+function ConcentrationCard({ summary, state, third, half }: { summary: StakingSummary | null; state: 'loading' | 'ready' | 'error'; third: number; half: number }) {
   const c = summary?.concentration;
   const total = summary ? toAvax(summary.total_stake) : 0;
   return (
@@ -589,11 +612,11 @@ function ConcentrationCard({ summary, state }: { summary: StakingSummary | null;
           <dl className="grid grid-cols-2 gap-px rounded border border-border bg-border overflow-hidden">
             <div className="bg-card px-3 py-2">
               <dt className="text-[11px] text-muted-foreground">To control a third</dt>
-              <dd className="num text-[18px] text-foreground">{c.nakamoto_33}</dd>
+              <dd className="num text-[18px] text-foreground">{third}</dd>
             </div>
             <div className="bg-card px-3 py-2">
               <dt className="text-[11px] text-muted-foreground">To control half</dt>
-              <dd className="num text-[18px] text-foreground">{c.nakamoto_50}</dd>
+              <dd className="num text-[18px] text-foreground">{half}</dd>
             </div>
           </dl>
         </div>

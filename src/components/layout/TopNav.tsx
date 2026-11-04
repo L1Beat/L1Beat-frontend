@@ -20,28 +20,36 @@ export type NavEntry = NavLink | { id: string; label: string; items: NavLink[] }
 // small menus so the bar stays short as pages are added.
 export const PRIMARY_NAV: NavEntry[] = [
   { id: 'overview', label: 'Overview', path: '/' },
+  // How the network is used and connected: messages inside Avalanche, money in and out of it.
   {
     id: 'network',
     label: 'Network',
     items: [
       { id: 'metrics', label: 'Metrics', path: '/metrics', hint: 'Activity and fees across every L1' },
       { id: 'interchain', label: 'Interchain', path: '/interchain', hint: 'Messages between L1s and the C-Chain' },
-      { id: 'burn', label: 'Burn', path: '/burn', hint: 'AVAX burned on the C-Chain, live' },
+      { id: 'bridges', label: 'Bridges', path: '/bridges', hint: 'Money bridged in and out of Avalanche' },
     ],
   },
   {
     id: 'markets',
     label: 'Markets',
     items: [
-      { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', hint: 'Supply, volume and holders' },
       { id: 'trading', label: 'Trading', path: '/trading', hint: 'DEX volume and top pools' },
       { id: 'perps', label: 'Perpetuals', path: '/perps', hint: 'Leveraged trading on GMX' },
       { id: 'lending', label: 'Lending', path: '/lending', hint: 'Rates, usage and caps on Aave and BENQI' },
-      { id: 'bridges', label: 'Bridges', path: '/bridges', hint: 'Money bridged in and out of Avalanche' },
+      { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', hint: 'Supply, volume and holders' },
+    ],
+  },
+  // The token itself: staked, burned and held.
+  {
+    id: 'avax',
+    label: 'AVAX',
+    items: [
+      { id: 'staking', label: 'Staking', path: '/staking', hint: 'Validators, delegators and liquid staking' },
+      { id: 'burn', label: 'Burn', path: '/burn', hint: 'AVAX burned on the C-Chain, live' },
       { id: 'treasuries', label: 'Treasuries & ETFs', path: '/treasuries', hint: 'AVAX held by companies and funds' },
     ],
   },
-  { id: 'staking', label: 'Staking', path: '/staking' },
   { id: 'acps', label: 'ACPs', path: '/acps' },
   {
     id: 'more',
@@ -57,6 +65,8 @@ export function isNavActive(pathname: string, path: string) {
   if (path === '/') {
     return pathname === '/' || pathname.startsWith('/chain/') || pathname.startsWith('/validator/');
   }
+  // A delegator's page belongs with Staking.
+  if (path === '/staking' && pathname.startsWith('/delegator/')) return true;
   return pathname === path || pathname.startsWith(path + '/');
 }
 

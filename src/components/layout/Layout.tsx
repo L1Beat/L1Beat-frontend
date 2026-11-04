@@ -35,7 +35,7 @@ const DOCK_ICONS: Record<string, typeof LayoutGrid> = {
   overview: LayoutGrid,
   network: Activity,
   markets: CandlestickChart,
-  staking: Coins,
+  avax: Coins,
   acps: FileText,
   more: MoreHorizontal,
 };

@@ -285,7 +285,10 @@ export function ChainDetails() {
   // Even if EVM-native AVAX uses 18 decimals, we should display validator stake using 9 decimals.
   const stakeTokenDecimals = tokenSymbol === 'AVAX' ? 9 : tokenDecimals;
 
-  const getStakeBaseUnits = (v: { weight: string }) => parseBaseUnits(v.weight) ?? 0n;
+  // Consensus weight: on the Primary Network a validator's delegations count with its own
+  // stake (both in nAVAX); L1 validators carry no delegations, so this is just their weight.
+  const getStakeBaseUnits = (v: { weight: string; delegated?: number }) =>
+    (parseBaseUnits(v.weight) ?? 0n) + BigInt(Math.round(v.delegated ?? 0));
 
   const filteredValidators = chain?.validators.filter(validator => {
     if (validatorStatus === 'active' && validator.active !== true) return false;
@@ -377,8 +380,10 @@ export function ChainDetails() {
     const total = weights.reduce((a, b) => a + b, 0);
     let shares: number[] = [];
     if (total > 0) {
-      const head = weights.slice(0, 24).map((n) => n / total);
-      const tail = weights.slice(24).reduce((a, n) => a + n, 0) / total;
+      // At least every validator in the controlling group gets its own slice.
+      const shown = Math.max(24, dec.nakamoto_33 ?? 0);
+      const head = weights.slice(0, shown).map((n) => n / total);
+      const tail = weights.slice(shown).reduce((a, n) => a + n, 0) / total;
       shares = tail > 0 ? [...head, tail] : head;
     }
     return {
@@ -1316,8 +1321,8 @@ export function ChainDetails() {
                             const index = virtualRow.index;
                             const validator = filteredValidators[index];
                             const percentage = (() => {
-                              const v = unitsToNumber(validator.weight, stakeIsWeight ? 0 : stakeTokenDecimals);
-                              const t = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
+                              const v = Number(getStakeBaseUnits(validator));
+                              const t = Number(totalStakeBaseUnits);
                               if (!Number.isFinite(v) || !Number.isFinite(t) || t <= 0) return '0.00';
                               return ((v / t) * 100).toFixed(2);
                             })();
@@ -1353,7 +1358,7 @@ export function ChainDetails() {
                                         formatWeight(validator.weight)
                                       ) : (
                                         <>
-                                          {formatStakedTokens(validator.stakedAmount)}{' '}
+                                          {splitDelegation ? formatStakedTokens(String(ownOf(validator) + delegatedOf(validator))) : formatStakedTokens(validator.stakedAmount)}{' '}
                                           <span className="text-[11px] text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
                                         </>
                                       )}
@@ -2194,7 +2199,7 @@ function DecentralizationCard({
                       title={`#${i + 1}: ${(s * 100).toFixed(1)}% of stake`}
                     />
                   ))}
-                  <span className="absolute inset-y-0 w-px bg-foreground/45" style={{ left: '33%' }} />
+                  <span className="absolute inset-y-0 w-px bg-foreground/45" style={{ left: '33.333%' }} />
                   <span className="absolute inset-y-0 w-px bg-foreground/25" style={{ left: '50%' }} />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">

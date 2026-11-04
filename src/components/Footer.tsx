@@ -6,37 +6,42 @@ import { L1BeatLogo } from './L1BeatLogo';
 
 type FooterLink = { label: string; to?: string; href?: string };
 
-// Every page is listed here: on phones the dock only carries seven of them.
+// Every page is listed here: on phones the dock only carries a few of them.
 const GROUPS: { title: string; links: FooterLink[] }[] = [
+  // The same groups as the header menus.
   {
-    title: 'Data',
+    title: 'Network',
     links: [
       { label: 'Overview', to: '/' },
       { label: 'Metrics', to: '/metrics' },
       { label: 'Interchain', to: '/interchain' },
-      { label: 'Stablecoins', to: '/stablecoins' },
-      { label: 'Staking', to: '/staking' },
-      { label: 'Treasuries & ETFs', to: '/treasuries' },
+      { label: 'Bridges', to: '/bridges' },
+    ],
+  },
+  {
+    title: 'Markets',
+    links: [
       { label: 'Trading', to: '/trading' },
       { label: 'Perpetuals', to: '/perps' },
       { label: 'Lending', to: '/lending' },
-      { label: 'Bridges', to: '/bridges' },
-      { label: 'Burn', to: '/burn' },
+      { label: 'Stablecoins', to: '/stablecoins' },
     ],
   },
   {
-    title: 'Protocol',
+    title: 'AVAX',
+    links: [
+      { label: 'Staking', to: '/staking' },
+      { label: 'Burn', to: '/burn' },
+      { label: 'Treasuries & ETFs', to: '/treasuries' },
+    ],
+  },
+  {
+    title: 'Resources',
     links: [
       { label: 'ACPs', to: '/acps' },
       { label: 'Blog', to: '/blog' },
-    ],
-  },
-  {
-    title: 'Developers',
-    links: [
       { label: 'API', to: '/api' },
       { label: 'Brand', to: '/brand' },
-      { label: 'GitHub', href: 'https://github.com/L1Beat' },
     ],
   },
   {
@@ -91,8 +96,8 @@ export function Footer() {
           <path d="M0 10H18L22 3L28 17L32 10H56" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" />
         </svg>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-8 pt-10 pb-8 md:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]">
-          <div className="col-span-2 md:col-span-1 max-w-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-8 pt-10 pb-8 lg:grid-cols-[minmax(0,1.4fr)_repeat(5,minmax(0,1fr))]">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-1 max-w-xs">
             <div className="w-fit">
               <L1BeatLogo size="small" theme={theme} />
             </div>

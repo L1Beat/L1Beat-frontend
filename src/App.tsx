@@ -122,7 +122,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/chain/:chainId" element={<ChainDetails />} />
         <Route path="/metrics" element={<Metrics />} />
         {/* The Flows page folded into the Overview hero; keep old links alive. */}
-        <Route path="/flows" element={<Navigate to="/?view=flows" replace />} />
+        <Route path="/flows" element={<Navigate to="/interchain" replace />} />
         <Route path="/stablecoins" element={<Stablecoins />} />
         <Route path="/burn" element={<Burn />} />
         <Route path="/staking" element={<Staking />} />

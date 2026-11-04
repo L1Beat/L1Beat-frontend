@@ -84,9 +84,12 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
     // matching the decentralization counts.
     const byNode = new Map<string, { v: Validator; w: number; tokens: number | null; entries: number }>();
     for (const v of validators) {
-      const w = unitsToNumber(v.weight, isWeightMode ? 0 : decimals);
+      // On the Primary Network delegations count toward a validator's weight, so
+      // they're part of its box (and of the third and half counts).
+      const delegated = !isWeightMode && v.delegated ? v.delegated / 10 ** decimals : 0;
+      const w = unitsToNumber(v.weight, isWeightMode ? 0 : decimals) + delegated;
       if (!Number.isFinite(w) || w <= 0) continue;
-      const tokens = !isWeightMode && v.stakedAmount != null ? Number(v.stakedAmount) || 0 : null;
+      const tokens = !isWeightMode && v.stakedAmount != null ? (Number(v.stakedAmount) || 0) + delegated : null;
       const e = byNode.get(v.address);
       if (e) {
         e.w += w;
@@ -105,6 +108,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
   }, [validators, isWeightMode, decimals]);
 
   const equal = rows.length > 1 && rows[0].w === rows[rows.length - 1].w;
+  const hasDelegations = validators.some((v) => (v.delegated ?? 0) > 0);
   const tierCount = [0, 1, 2].map((t) => rows.filter((r) => r.tier === t).length);
   const totalTokens = rows.reduce((s, r) => s + (r.tokens ?? r.w), 0);
 
@@ -129,7 +133,7 @@ export function StakeDistributionChart({ validators, mode, tokenSymbol, tokenDec
         <div className="min-w-0">
           <h2 className="text-[14px] font-semibold text-foreground">{isWeightMode ? 'Weight distribution' : 'Stake distribution'}</h2>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Each box is one active validator node, sized by its {isWeightMode ? 'weight' : 'stake'}. Click one for its details.
+            Each box is one active validator node, sized by its {isWeightMode ? 'weight' : hasDelegations ? 'stake, own plus delegated' : 'stake'}. Click one for its details.
           </p>
         </div>
         <span className="text-[11px] text-muted-foreground">
