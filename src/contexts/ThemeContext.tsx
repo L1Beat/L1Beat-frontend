@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, startTransition, ReactNode } from 'react';
+import { createContext, useState, useEffect, useCallback, useMemo, startTransition, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -57,15 +57,13 @@ export function ThemeProvider({ children, hydrating = false }: ThemeProviderProp
     window.dispatchEvent(event);
   }, [theme, synced]);
 
-  const toggleTheme = () => {
-    setTheme(prev => {
-      const newTheme = prev === 'dark' ? 'light' : 'dark';
-      return newTheme;
-    });
-  };
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

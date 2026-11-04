@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -25,7 +25,8 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
   // The portal waits for mount: the pre-rendered HTML has no toast container,
   // and rendering one during hydration made React discard the whole page.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // A transition, so parts of the page still hydrating aren't thrown away (React error 421).
+  useEffect(() => startTransition(() => setMounted(true)), []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -36,9 +37,11 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => [...prev, { id, message, variant }].slice(-MAX_TOASTS));
     setTimeout(() => dismiss(id), TOAST_DURATION);
   }, [dismiss]);
+  // Stable, so re-rendering the provider doesn't count as a context change.
+  const value = useMemo(() => ({ toast }), [toast]);
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={value}>
       {children}
       {mounted &&
         createPortal(
