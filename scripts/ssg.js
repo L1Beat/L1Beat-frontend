@@ -78,10 +78,12 @@ async function generate() {
     // Preview images are served by whichever site built this, so a dev or preview
     // deploy shows its own cards before they reach l1beat.io. Cloudflare Pages
     // sets CF_PAGES_URL to each deploy's address; production (main) uses
-    // l1beat.io. Netlify sets URL and DEPLOY_PRIME_URL the same way. Canonical
-    // links keep pointing at l1beat.io.
+    // l1beat.io and dev uses dev.l1beat.io, since some ISPs block *.pages.dev
+    // and cards hosted there fail to load. Netlify sets URL and DEPLOY_PRIME_URL
+    // the same way. Canonical links keep pointing at l1beat.io.
+    const branchOrigins = { main: '', dev: 'https://dev.l1beat.io' };
     const deployOrigin = process.env.CF_PAGES
-      ? (process.env.CF_PAGES_BRANCH === 'main' ? '' : process.env.CF_PAGES_URL || '')
+      ? (branchOrigins[process.env.CF_PAGES_BRANCH] ?? process.env.CF_PAGES_URL ?? '')
       : (process.env.CONTEXT === 'production' ? process.env.URL : process.env.DEPLOY_PRIME_URL) || '';
     const imageOrigin = /^https?:\/\//.test(deployOrigin) ? deployOrigin.replace(/\/$/, '') : 'https://l1beat.io';
     const localImages = (head) =>
