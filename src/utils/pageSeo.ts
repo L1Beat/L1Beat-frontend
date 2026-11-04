@@ -72,7 +72,7 @@ export const PAGE_SEO = {
   },
   brand: {
     title: 'Brand Guidelines',
-    description: 'L1Beat brand kit: logo, colors, typography, usage rules, and downloadable assets.',
+    description: 'The L1Beat logo, colors, type and writing rules, with downloadable logo files.',
     url: '/brand',
     image: '/og/brand.png',
   },
