@@ -1417,7 +1417,7 @@ function SortableTh({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 transition-colors ${
+        className={`inline-flex items-center gap-1 whitespace-nowrap transition-colors ${
           active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >

@@ -3033,7 +3033,7 @@ export async function getTokenLogos(
 }
 
 // FX rates for non-USD pegs. Cached for ~6h since rates barely move intraday.
-// Source: frankfurter.app (ECB rates, free, no key). Falls back to a rough
+// Source: frankfurter.dev (ECB rates, free, no key). Falls back to a rough
 // snapshot if the call fails so the page never breaks.
 export interface FxRates {
   EUR: number;
@@ -3059,7 +3059,7 @@ export async function getFxRates(): Promise<FxRates> {
   return fetchWithCache('fx-rates-usd', async () => {
     try {
       const res = await fetch(
-        `https://api.frankfurter.app/latest?from=USD&to=${FX_CODES.join(',')}`,
+        `https://api.frankfurter.dev/v1/latest?from=USD&to=${FX_CODES.join(',')}`,
       );
       if (!res.ok) throw new Error(`fx http ${res.status}`);
       const json = (await res.json()) as { rates?: Record<string, number> };

@@ -66,6 +66,8 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
     };
 
     const handleLinkClick = (event: MouseEvent) => {
+      // Leave new-tab and new-window clicks to the browser.
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target as HTMLElement;
       const link = target.closest('a');
 

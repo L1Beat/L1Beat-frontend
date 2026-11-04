@@ -7,7 +7,8 @@ export function chainSeo(chain: Chain) {
     description:
       chain.description?.slice(0, 200) ||
       `${chain.chainName} on Avalanche: current TPS, validators, economics, and a side-by-side compare against other L1s.`,
-    image: chain.chainLogoUri,
+    // Link previews can't show SVGs; those chains use the default card.
+    image: chain.chainLogoUri && !/\.svg(\?|$)/i.test(chain.chainLogoUri) ? chain.chainLogoUri : undefined,
     url: `/chain/${chain.chainId}`,
   };
 }

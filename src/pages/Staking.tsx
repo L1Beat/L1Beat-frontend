@@ -90,7 +90,8 @@ export function Staking() {
         },
         {
           label: 'Validators',
-          value: summary.validator_count.toLocaleString(),
+          // The list refreshes more often than the summary; count it so the page agrees with itself.
+          value: (validators?.length ?? summary.validator_count).toLocaleString(),
           sub: `${compact(toAvax(summary.own_stake))} AVAX own stake`,
         },
         {
@@ -862,8 +863,8 @@ function AssetSplit({ title, lead, leadUnit, detail, parts, unit }: {
   return (
     <div>
       <div className="text-[13px] font-semibold text-foreground">{title}</div>
-      <div className="mt-2 num text-[26px] leading-8 font-medium text-foreground">
-        {lead} <span className="font-sans text-[14px] text-muted-foreground">{leadUnit}</span>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 num text-[26px] leading-8 font-medium text-foreground">
+        {lead}<span className="font-sans text-[14px] leading-5 text-muted-foreground">{leadUnit}</span>
       </div>
       <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
       <div className="mt-3 flex h-2 rounded-sm overflow-hidden bg-muted" role="img" aria-label={`${title} supplied by protocol`}>

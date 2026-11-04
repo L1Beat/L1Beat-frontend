@@ -477,7 +477,7 @@ export function ChainSpecificMetrics() {
           <div className="export-show hidden items-center justify-between mb-2">
             <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
             <span className="text-sm text-muted-foreground">
-              {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
+              {timeframe === 360 ? '1y' : `${timeframe}d`}, {format(new Date(), 'MMM d, yyyy')}
             </span>
           </div>
         }
@@ -632,7 +632,7 @@ export function ChainSpecificMetrics() {
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {days === 360 ? '1Y' : `${days}D`}
+                  {days === 360 ? '1y' : `${days}d`}
                 </button>
               ))}
 

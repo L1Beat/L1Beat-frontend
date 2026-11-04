@@ -24,7 +24,9 @@ export function SegmentedControl<T extends string>({
     >
       {options.map((o) => {
         const v = (typeof o === 'string' ? o : o.value) as T;
-        const label = typeof o === 'string' ? o : o.label;
+        const raw = typeof o === 'string' ? o : o.label;
+        // Ranges read the same everywhere: 24h, 7d, 30d, 1y.
+        const label = /^\d+[HDY]$/.test(raw) ? raw.toLowerCase() : raw;
         const active = v === value;
         return (
           <button

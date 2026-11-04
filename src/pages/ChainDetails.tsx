@@ -913,7 +913,7 @@ export function ChainDetails() {
                               </p>
                             </div>
                             <div className="flex gap-1.5">
-                              {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+                              {([{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
                                 <button
                                   key={value}
                                   onClick={() => setFeeBurnTimeframe(value as 0 | 7 | 30 | 90)}
@@ -1559,7 +1559,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
           </p>
         </div>
         <div className="flex gap-1.5">
-          {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+          {([{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
             <button
               key={value}
               onClick={() => setTf(value as 0 | 7 | 30 | 90)}

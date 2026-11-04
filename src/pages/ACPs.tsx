@@ -1,6 +1,6 @@
 // src/pages/ACPs.tsx
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
 import { SegmentedControl } from '../components/instrument';
@@ -452,7 +452,15 @@ export default function ACPs() {
                         >
                           <td className="num text-[12px] text-muted-foreground pr-3">{acp.number}</td>
                           <td className="pr-4">
-                            <span className="text-[12.5px] font-medium text-foreground line-clamp-2 sm:line-clamp-1">{acp.title}</span>
+                            {/* A real link, so the row can be opened in a new tab. */}
+                            <Link
+                              to={`/acps/${acp.number}`}
+                              onClick={(e) => e.stopPropagation()}
+                              tabIndex={-1}
+                              className="text-[12.5px] font-medium text-foreground line-clamp-2 sm:line-clamp-1"
+                            >
+                              {acp.title}
+                            </Link>
                           </td>
                           <td>
                             <AcpStatusChip status={acp.status} />

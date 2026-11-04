@@ -39,7 +39,8 @@ function compact(v: number): string {
   if (a >= 1e3) return `${trim(v / 1e3)}K`;
   return Math.round(v).toLocaleString();
 }
-const usd = (v: number | null | undefined) => (v == null ? '—' : `$${compact(v)}`);
+// Dust amounts read "<$1" rather than a misleading "$0".
+const usd = (v: number | null | undefined) => (v == null ? '—' : v > 0 && v < 0.5 ? '<$1' : `$${compact(v)}`);
 const apy = (v: number | null | undefined) => (v == null ? '—' : v <= 0 ? '0%' : v < 0.1 ? '<0.1%' : `${v.toFixed(1)}%`);
 /** A 0% borrow rate with nothing borrowed means borrowing is off, not free. */
 const borrowApy = (m: LendingMarket) => (!m.borrow_apy_percent && !Number(m.total_borrowed) ? '—' : apy(m.borrow_apy_percent));

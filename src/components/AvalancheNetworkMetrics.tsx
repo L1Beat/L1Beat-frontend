@@ -581,7 +581,7 @@ export function AvalancheNetworkMetrics({
               : 'text-muted-foreground hover:text-foreground hover:bg-accent'
           }`}
         >
-          {days === 360 ? '1Y' : `${days}D`}
+          {days === 360 ? '1y' : `${days}d`}
         </button>
       ))}
     </div>
@@ -680,7 +680,7 @@ export function AvalancheNetworkMetrics({
         })()}
       </div>
       <span className="text-sm text-muted-foreground">
-        {timeframe === 360 ? '1Y' : `${timeframe}D`}, {format(new Date(), 'MMM d, yyyy')}
+        {timeframe === 360 ? '1y' : `${timeframe}d`}, {format(new Date(), 'MMM d, yyyy')}
       </span>
     </div>
   );

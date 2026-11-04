@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useState, useEffect, startTransition, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -36,8 +36,12 @@ export function ThemeProvider({ children, hydrating = false }: ThemeProviderProp
 
   useEffect(() => {
     if (synced) return;
-    setTheme(preferredTheme());
-    setSynced(true);
+    // A transition, so lazy parts still hydrating finish first instead of
+    // being thrown away and rendered again (React error 421).
+    startTransition(() => {
+      setTheme(preferredTheme());
+      setSynced(true);
+    });
   }, [synced]);
 
   useEffect(() => {
