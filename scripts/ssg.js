@@ -76,10 +76,13 @@ async function generate() {
     // crawlers don't see two conflicting sets. A page with only a title keeps
     // the default previews but not the default title.
     // Preview images are served by whichever site built this, so a dev or preview
-    // deploy shows its own cards before they reach l1beat.io. Netlify sets URL to
-    // the site's address and DEPLOY_PRIME_URL to a branch or preview deploy's;
-    // canonical links keep pointing at l1beat.io.
-    const deployOrigin = (process.env.CONTEXT === 'production' ? process.env.URL : process.env.DEPLOY_PRIME_URL) || '';
+    // deploy shows its own cards before they reach l1beat.io. Cloudflare Pages
+    // sets CF_PAGES_URL to each deploy's address; production (main) uses
+    // l1beat.io. Netlify sets URL and DEPLOY_PRIME_URL the same way. Canonical
+    // links keep pointing at l1beat.io.
+    const deployOrigin = process.env.CF_PAGES
+      ? (process.env.CF_PAGES_BRANCH === 'main' ? '' : process.env.CF_PAGES_URL || '')
+      : (process.env.CONTEXT === 'production' ? process.env.URL : process.env.DEPLOY_PRIME_URL) || '';
     const imageOrigin = /^https?:\/\//.test(deployOrigin) ? deployOrigin.replace(/\/$/, '') : 'https://l1beat.io';
     const localImages = (head) =>
       imageOrigin === 'https://l1beat.io'
@@ -127,7 +130,9 @@ async function generate() {
     const apiBaseUrl = await getApiUrl();
     console.log('Fetching routes from', apiBaseUrl);
     
-    const routes = ['/', '/blog', '/acps', '/404'];
+    // No /404 here: a top-level 404.html turns off Cloudflare Pages' SPA
+    // fallback, and client-only routes (validators, delegators) would answer 404.
+    const routes = ['/', '/blog', '/acps'];
 
     // Fetch blog posts
     const blogPosts = new Map(); // Store blog posts by slug
