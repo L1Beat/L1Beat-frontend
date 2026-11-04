@@ -270,6 +270,20 @@ async function generate() {
       console.error('Failed to generate sitemap', e);
     }
 
+    // Dev and preview deploys are full copies of the site; keep them out of
+    // search results so they don't compete with l1beat.io.
+    const isPreview = process.env.CF_PAGES
+      ? process.env.CF_PAGES_BRANCH !== 'main'
+      : Boolean(process.env.CONTEXT) && process.env.CONTEXT !== 'production';
+    if (isPreview) {
+      // Added to the existing /* rule: a second /* rule drops some of the
+      // first one's headers.
+      const headersPath = path.resolve(root, 'dist/_headers');
+      const headers = await fs.readFile(headersPath, 'utf-8');
+      await fs.writeFile(headersPath, headers.replace(/^\/\*\n/m, '/*\n  X-Robots-Tag: noindex\n'));
+      console.log('Preview deploy: added X-Robots-Tag noindex');
+    }
+
     // Cleanup server build
     // await fs.rm(path.resolve(root, 'dist/server'), { recursive: true, force: true });
     console.log('SSG Build Complete!');
