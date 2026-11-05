@@ -265,6 +265,8 @@ async function loadIntoCache<T>(key: string, fetcher: () => Promise<T>): Promise
 function isCacheable(data: unknown): boolean {
   if (data == null) return false;
   if (Array.isArray(data)) return data.length > 0;
+  // Map-style fetchers return {} on failure in the same way.
+  if (typeof data === 'object' && Object.keys(data).length === 0) return false;
   return true;
 }
 
@@ -1653,7 +1655,9 @@ const singleMetricHistory: Record<ChainMetric, (chainId: string, days: number) =
 export async function getChainMetricsHistory(chainId: string, days: number, metrics: ChainMetric[]): Promise<ChainMetricsHistory> {
   const wanted = [...new Set(metrics)].sort();
   if (wanted.length === 0) return {};
-  let missingRoute = false;
+  // Null means the backend has no batch route. Read from the result, not a
+  // flag set inside the loader: concurrent callers share one load and only
+  // the first would see the flag.
   const batch = await fetchWithCache(`chain-metrics-history-${chainId}-${days}-${wanted.join(',')}`, async () => {
     try {
       const response = await fetchWithRetry<{ success: boolean; data: Record<string, any[]> }>(
@@ -1674,14 +1678,11 @@ export async function getChainMetricsHistory(chainId: string, days: number, metr
       }
       return result as ChainMetricsHistory;
     } catch (error) {
-      if (error instanceof ClientError && error.message.includes('status: 404')) {
-        missingRoute = true;
-        return null;
-      }
+      if (error instanceof ClientError && error.message.includes('status: 404')) return null;
       throw error;
     }
   });
-  if (!missingRoute) return batch ?? {};
+  if (batch !== null) return batch;
   const series = await Promise.all(wanted.map(m => singleMetricHistory[m](chainId, days).catch(() => [])));
   return Object.fromEntries(wanted.map((m, i) => [m, series[i]]));
 }
