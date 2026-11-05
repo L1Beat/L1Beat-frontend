@@ -70,7 +70,47 @@ async function generate() {
 
     // 3. Load server entry
     const template = await fs.readFile(path.resolve(root, 'dist/index.html'), 'utf-8');
-    const { render } = await import(path.resolve(root, 'dist/server/entry-server.js'));
+    const { render, renderHead, getChainPages, staticPages } = await import(path.resolve(root, 'dist/server/entry-server.js'));
+
+    // When a page brings its own preview tags, drop the template's defaults so
+    // crawlers don't see two conflicting sets. A page with only a title keeps
+    // the default previews but not the default title.
+    // Preview images are served by whichever site built this, so a dev or preview
+    // deploy shows its own cards before they reach l1beat.io. Cloudflare Pages
+    // sets CF_PAGES_URL to each deploy's address; production (main) uses
+    // l1beat.io and dev uses dev.l1beat.io, since some ISPs block *.pages.dev
+    // and cards hosted there fail to load. Netlify sets URL and DEPLOY_PRIME_URL
+    // the same way. Canonical links keep pointing at l1beat.io.
+    const branchOrigins = { main: '', dev: 'https://dev.l1beat.io' };
+    const deployOrigin = process.env.CF_PAGES
+      ? (branchOrigins[process.env.CF_PAGES_BRANCH] ?? process.env.CF_PAGES_URL ?? '')
+      : (process.env.CONTEXT === 'production' ? process.env.URL : process.env.DEPLOY_PRIME_URL) || '';
+    const imageOrigin = /^https?:\/\//.test(deployOrigin) ? deployOrigin.replace(/\/$/, '') : 'https://l1beat.io';
+    const localImages = (head) =>
+      imageOrigin === 'https://l1beat.io'
+        ? head
+        : head.replace(/content="https:\/\/l1beat\.io\/(og\/[^"]+)"/g, `content="${imageOrigin}/$1"`);
+    const withHead = (html, head) => {
+      head = localImages(head);
+      html = localImages(html);
+      head = head.replace(/<title[^>]*><\/title>/g, '');
+      if (head.includes('og:title')) {
+        html = html.replace(/<!--default-meta-->[\s\S]*?<!--\/default-meta-->/, '');
+      } else if (/<title[^>]*>[^<]+<\/title>/.test(head)) {
+        html = html.replace(/(<!--default-meta-->[\s\S]*?)<title>[^<]*<\/title>/, '$1');
+      }
+      return html.replace('<!--head-meta-->', head);
+    };
+    const helmetTags = (helmet) => [helmet?.title, helmet?.meta, helmet?.link, helmet?.script]
+      .map((t) => t?.toString() || '').join('\n');
+    // /chain/beam is written as chain/beam.html, not chain/beam/index.html:
+    // Netlify serves the .html file at the bare path, while a directory index
+    // costs a 301 to the trailing-slash URL.
+    const writePage = async (url, html) => {
+      const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}.html`);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, html);
+    };
 
     // 4. Get API URL
     const getApiUrl = async () => {
@@ -92,7 +132,9 @@ async function generate() {
     const apiBaseUrl = await getApiUrl();
     console.log('Fetching routes from', apiBaseUrl);
     
-    const routes = ['/', '/blog', '/acps', '/404'];
+    // No /404 here: a top-level 404.html turns off Cloudflare Pages' SPA
+    // fallback, and client-only routes (validators, delegators) would answer 404.
+    const routes = ['/', '/blog', '/acps'];
 
     // Fetch blog posts
     const blogPosts = new Map(); // Store blog posts by slug
@@ -125,6 +167,9 @@ async function generate() {
           const { html: appHtml, helmet } = render(url, {});
 
           let html = template.replace('<!--app-html-->', appHtml);
+          // Record which route this HTML is for. Netlify serves the root index.html
+          // for client-only routes too, and hydrating it as another page fails.
+          html = html.replace('<div id="root">', `<div id="root" data-prerendered="${url}">`);
 
           // Check if this is a blog post route
           const blogSlug = url.match(/^\/blog\/(.+)$/)?.[1];
@@ -133,7 +178,7 @@ async function generate() {
           let helmetHead = '';
           if (post) {
               // For blog posts, generate custom meta tags with extracted image
-              const imageUrl = post.imageUrl || extractImageFromContent(post.mainContent || post.content) || 'https://l1beat.io/banner.png';
+              const imageUrl = post.imageUrl || extractImageFromContent(post.mainContent || post.content) || 'https://l1beat.io/og/default.png';
               const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `https://l1beat.io${imageUrl}`;
               const description = post.excerpt || post.subtitle || '';
               const title = post.title || 'L1Beat - Avalanche L1 Analytics Platform';
@@ -156,26 +201,89 @@ async function generate() {
                   <link rel="canonical" href="https://l1beat.io${url}" />
               `;
           } else {
-              // Use Helmet tags for non-blog routes
-              helmetHead = `
-                  ${helmet.title?.toString() || ''}
-                  ${helmet.meta?.toString() || ''}
-                  ${helmet.link?.toString() || ''}
-                  ${helmet.script?.toString() || ''}
-              `;
+              helmetHead = helmetTags(helmet);
           }
 
-          html = html.replace('<!--head-meta-->', helmetHead);
-
-          const filePath = path.resolve(root, 'dist', url === '/' ? 'index.html' : `${url.replace(/^\//, '')}/index.html`);
-          await fs.mkdir(path.dirname(filePath), { recursive: true });
-          await fs.writeFile(filePath, html);
+          await writePage(url, withHead(html, helmetHead));
           console.log(`Generated ${url}`);
       } catch (e) {
           console.error(`Error rendering ${url}:`, e);
       }
     }
     
+    // Fixed pages that render in the browser get head-only files the same way.
+    try {
+      for (const seo of staticPages) {
+        await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+      }
+      console.log(`Generated ${staticPages.length} page heads`);
+    } catch (e) {
+      console.error('Failed to generate page heads', e);
+    }
+
+    // Chain pages render in the browser (their data is live), but each gets its
+    // own HTML file so search results and link previews name the chain. The root
+    // stays empty and unmarked, so the client renders it fresh.
+    let chainPages = [];
+    try {
+      chainPages = await getChainPages();
+      for (const seo of chainPages) {
+        await writePage(seo.url, withHead(template.replace('<!--app-html-->', ''), helmetTags(renderHead(seo))));
+      }
+      console.log(`Generated ${chainPages.length} chain page heads`);
+    } catch (e) {
+      console.error('Failed to generate chain pages', e);
+    }
+
+    // sitemap.xml and robots.txt. Without them Netlify answers both paths with
+    // the app's index.html.
+    try {
+      const siteUrl = 'https://l1beat.io';
+      const entries = ['/', '/metrics', '/stablecoins', '/staking', '/treasuries', '/trading', '/perps', '/lending', '/bridges', '/interchain', '/burn', '/acps', '/blog', '/api', '/brand']
+        .map((url) => ({ url }));
+      try {
+        const { acps } = JSON.parse(await fs.readFile(path.resolve(root, 'dist/acps/processed-acps.json'), 'utf-8'));
+        for (const acp of acps ?? []) if (acp.number != null) entries.push({ url: `/acps/${acp.number}` });
+      } catch (e) {
+        console.error('Sitemap: no ACP list', e.message);
+      }
+      for (const [slug, post] of blogPosts) {
+        // publishedAt, not updatedAt: the backend bumps updatedAt on every sync.
+        const date = post.publishedAt;
+        entries.push({ url: `/blog/${slug}`, lastmod: date ? new Date(date).toISOString().slice(0, 10) : undefined });
+      }
+      for (const seo of chainPages) entries.push({ url: seo.url });
+
+      const xmlEscape = (v) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const sitemap = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...entries.map(({ url, lastmod }) =>
+          `  <url><loc>${xmlEscape(siteUrl + url)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`),
+        '</urlset>',
+        '',
+      ].join('\n');
+      await fs.writeFile(path.resolve(root, 'dist/sitemap.xml'), sitemap);
+      await fs.writeFile(path.resolve(root, 'dist/robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
+      console.log(`Generated sitemap.xml with ${entries.length} URLs`);
+    } catch (e) {
+      console.error('Failed to generate sitemap', e);
+    }
+
+    // Dev and preview deploys are full copies of the site; keep them out of
+    // search results so they don't compete with l1beat.io.
+    const isPreview = process.env.CF_PAGES
+      ? process.env.CF_PAGES_BRANCH !== 'main'
+      : Boolean(process.env.CONTEXT) && process.env.CONTEXT !== 'production';
+    if (isPreview) {
+      // Added to the existing /* rule: a second /* rule drops some of the
+      // first one's headers.
+      const headersPath = path.resolve(root, 'dist/_headers');
+      const headers = await fs.readFile(headersPath, 'utf-8');
+      await fs.writeFile(headersPath, headers.replace(/^\/\*\n/m, '/*\n  X-Robots-Tag: noindex\n'));
+      console.log('Preview deploy: added X-Robots-Tag noindex');
+    }
+
     // Cleanup server build
     // await fs.rm(path.resolve(root, 'dist/server'), { recursive: true, force: true });
     console.log('SSG Build Complete!');

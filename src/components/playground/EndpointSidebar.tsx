@@ -23,13 +23,13 @@ interface EndpointSidebarProps {
 function MethodBadge({ method }: { method: 'GET' | 'WS' }) {
   if (method === 'WS') {
     return (
-      <span className="bg-purple-500/15 text-purple-600 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0">
+      <span className="bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0">
         WS
       </span>
     );
   }
   return (
-    <span className="bg-green-500/15 text-green-600 dark:text-green-400 text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0">
+    <span className="bg-green-500/15 text-green-800 dark:text-up text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0">
       GET
     </span>
   );
@@ -101,8 +101,9 @@ export function EndpointSidebar({ selectedId, onSelect }: EndpointSidebarProps) 
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search endpoints"
               placeholder="Search endpoints..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] placeholder:text-muted-foreground"
+              className="w-full pl-8 pr-3 py-1.5 rounded bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-foreground/30 placeholder:text-muted-foreground"
             />
           </div>
         </div>
@@ -118,7 +119,7 @@ export function EndpointSidebar({ selectedId, onSelect }: EndpointSidebarProps) 
                   onClick={() => onSelect(endpoint.id)}
                   className={`w-full text-left flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                     isActive
-                      ? 'border-l-2 border-[#ef4444] bg-[#ef4444]/5 text-foreground font-medium'
+                      ? 'border-l-2 border-foreground bg-accent/60 text-foreground font-medium'
                       : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   }`}
                 >
@@ -147,8 +148,9 @@ export function EndpointSidebar({ selectedId, onSelect }: EndpointSidebarProps) 
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search endpoints"
             placeholder="Search endpoints..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] placeholder:text-muted-foreground"
+            className="w-full pl-8 pr-3 py-1.5 rounded bg-muted border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-foreground/30 placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -168,7 +170,7 @@ export function EndpointSidebar({ selectedId, onSelect }: EndpointSidebarProps) 
               }}
             >
               <CollapsibleTrigger asChild>
-                <button className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
+                <button className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
                   <span className="flex items-center gap-1.5">
                     {isOpen ? (
                       <ChevronDown className="w-3 h-3" />
@@ -193,7 +195,7 @@ export function EndpointSidebar({ selectedId, onSelect }: EndpointSidebarProps) 
                       onClick={() => onSelect(endpoint.id)}
                       className={`w-full text-left flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                         isActive
-                          ? 'border-l-2 border-[#ef4444] bg-[#ef4444]/5 text-foreground font-medium'
+                          ? 'border-l-2 border-foreground bg-accent/60 text-foreground font-medium'
                           : 'border-l-2 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                       }`}
                     >

@@ -14,7 +14,7 @@ export function TimeRangeSlider({
   startIndex,
   endIndex,
   onChange,
-  color = '#ef4444'
+  color = 'rgb(140, 148, 158)'
 }: TimeRangeSliderProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -144,9 +144,9 @@ export function TimeRangeSlider({
       {/* Slider container */}
       <div 
         ref={containerRef}
-        className="relative h-12 rounded-lg overflow-hidden select-none border-2"
+        className="relative h-12 rounded overflow-hidden select-none border"
         style={{ 
-          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
+          backgroundColor: isDark ? 'rgba(148, 163, 184, 0.10)' : 'rgba(0, 0, 0, 0.04)',
           borderColor: color
         }}
       >
@@ -159,13 +159,13 @@ export function TimeRangeSlider({
           {/* Fill area */}
           <path
             d={getFillPath()}
-            fill="rgba(239, 68, 68, 0.3)"
+            fill="rgba(148, 163, 184, 0.25)"
           />
           {/* Line */}
           <path
             d={getSparklinePath()}
             fill="none"
-            stroke="rgba(239, 68, 68, 0.8)"
+            stroke="rgba(148, 163, 184, 0.8)"
             strokeWidth="2"
             vectorEffect="non-scaling-stroke"
           />

@@ -30,7 +30,7 @@ export function SEO({
     // Use a default image if none provided
     const ogImage = image 
         ? (image.startsWith('http') ? image : `${siteUrl}${image}`)
-        : `${siteUrl}/banner.png`;
+        : `${siteUrl}/og/default.png`;
 
     return (
         <Helmet>

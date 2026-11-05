@@ -1,24 +1,17 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { Line } from 'react-chartjs-2';
-import { Chart as ChartJSInstance } from 'chart.js';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import { useSearchParams } from 'react-router-dom';
-import { getAllChainsCumulativeTxCountLatest, getChains, getChainTxCountHistory, getChainMaxTPSHistory, getChainGasUsedHistory, getChainAvgGasPriceHistory, getChainFeesPaidHistory, getDailyActiveAddresses } from '../api';
+import { getAllChainsActiveAddressesLatest, getAllChainsCumulativeTxCountLatest, getAllChainsTxCountLatest, getChains, getChainMetricsHistory } from '../api';
+import type { ChainMetricsHistory } from '../api';
 import { Chain } from '../types';
 import { ChevronDown, BarChart3, Users, Activity, Fuel, Download, Share2 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { useMediaQuery, breakpoints } from '../hooks/useMediaQuery';
-import { TimeRangeSlider } from './TimeRangeSlider';
+import { SeriesSummary, Sparkline } from './instrument';
+import { DailyBars, parseDay } from './instrument/DailyBars';
 import { LoadingSpinner } from './LoadingSpinner';
-import {
-  crosshairPlugin,
-  watermarkPlugin,
-  lineShadowPlugin,
-  prefersReducedMotion
-} from '../utils/chartConfig';
 
-type TimeframeOption = 7 | 14 | 30 | 90 | 360;
+type TimeframeOption = 30 | 90 | 360;
 
 interface MetricData {
   timestamp: number;
@@ -28,14 +21,24 @@ interface MetricData {
 
 type MetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid';
 
-// Colors for each metric
+// One color per metric, from the categorical palette.
 const METRIC_COLORS = {
-  dailyActiveAddresses: { main: 'rgb(59, 130, 246)', fill: 'rgba(59, 130, 246, 0.15)' },
-  dailyTxCount: { main: 'rgb(168, 85, 247)', fill: 'rgba(168, 85, 247, 0.15)' },
-  maxTPS: { main: 'rgb(34, 197, 94)', fill: 'rgba(34, 197, 94, 0.15)' },
-  gasUsed: { main: 'rgb(249, 115, 22)', fill: 'rgba(249, 115, 22, 0.15)' },
-  avgGasPrice: { main: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.15)' },
-  feesPaid: { main: 'rgb(236, 72, 153)', fill: 'rgba(236, 72, 153, 0.15)' },
+  dailyActiveAddresses: { main: '#3987e5', fill: 'rgba(57, 135, 229, 0.15)' },
+  dailyTxCount: { main: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.15)' },
+  maxTPS: { main: '#d4a017', fill: 'rgba(212, 160, 23, 0.15)' },
+  gasUsed: { main: '#d95926', fill: 'rgba(217, 89, 38, 0.15)' },
+  avgGasPrice: { main: '#6b7280', fill: 'rgba(107, 114, 128, 0.15)' },
+  feesPaid: { main: '#199e70', fill: 'rgba(25, 158, 112, 0.15)' },
+};
+
+// How a metric reads over a window: flows add up, levels and peaks don't.
+const SUMMARY: Record<MetricType, 'total' | 'average' | 'peak'> = {
+  dailyActiveAddresses: 'average',
+  dailyTxCount: 'total',
+  maxTPS: 'peak',
+  gasUsed: 'total',
+  avgGasPrice: 'average',
+  feesPaid: 'total',
 };
 
 const METRICS = [
@@ -118,11 +121,11 @@ export function ChainSpecificMetrics() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metricsData, setMetricsData] = useState<Record<string, MetricData[]>>({});
-  const [dailyActiveLatestByChainId, setDailyActiveLatestByChainId] = useState<Record<string, number>>({});
-  const chartRefs = useRef<Record<string, ChartJSInstance<'line'> | null>>({});
+  const [ranking, setRanking] = useState<{ by: 'active addresses' | 'transactions'; latest: Record<string, number> }>({ by: 'active addresses', latest: {} });
   const chartContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const reducedMotion = prefersReducedMotion();
   const [copied, setCopied] = useState(false);
+  // The metric drawn large; the rest sit below as small panels that swap in on click.
+  const [lead, setLead] = useState<MetricType>('dailyTxCount');
 
   // Range selection states for each metric
   const [rangeStates, setRangeStates] = useState<Record<string, { start: number; end: number }>>({});
@@ -134,11 +137,11 @@ export function ChainSpecificMetrics() {
   // Read timeframe from URL
   const timeframeParam = searchParams.get('chainMetricsTimeframe');
   const timeframe = useMemo(() => {
-    const parsed = parseInt(timeframeParam || '7', 10);
-    if ([7, 14, 30, 90, 360].includes(parsed)) {
+    const parsed = parseInt(timeframeParam || '30', 10);
+    if ([30, 90, 360].includes(parsed)) {
       return parsed as TimeframeOption;
     }
-    return 7 as TimeframeOption;
+    return 30 as TimeframeOption;
   }, [timeframeParam]);
 
   // Read chain from URL
@@ -152,9 +155,9 @@ export function ChainSpecificMetrics() {
     } else {
       newParams.delete('chainMetricsChain');
     }
-    if (newTimeframe && newTimeframe !== 7) {
+    if (newTimeframe && newTimeframe !== 30) {
       newParams.set('chainMetricsTimeframe', String(newTimeframe));
-    } else if (newTimeframe === 7) {
+    } else if (newTimeframe === 30) {
       newParams.delete('chainMetricsTimeframe');
     }
     setSearchParams(newParams, { replace: true });
@@ -181,12 +184,10 @@ export function ChainSpecificMetrics() {
       console.warn('Clipboard write failed');
     });
   }, []);
-  const isMobile = useMediaQuery(breakpoints.sm);
 
-  // Note: there's no bulk "active addresses latest" endpoint; we compute this client-side
-  // with a bounded number of requests (cached) to avoid hammering the API.
-  const topChainsByDailyActive = useMemo(() => {
-    const getLatest = (c: Chain) => Number(dailyActiveLatestByChainId[c.chainId] ?? 0);
+  // Ranked by the latest day's active addresses, from one bulk request.
+  const topChains = useMemo(() => {
+    const getLatest = (c: Chain) => Number(ranking.latest[c.chainId] ?? 0);
     const sorted = [...chains].sort((a, b) => {
       const aVal = getLatest(a);
       const bVal = getLatest(b);
@@ -197,7 +198,7 @@ export function ChainSpecificMetrics() {
     const top = sorted.slice(0, 6);
     if (selectedChain && !top.some(c => c.chainId === selectedChain.chainId)) top.push(selectedChain);
     return top;
-  }, [chains, selectedChain, dailyActiveLatestByChainId]);
+  }, [chains, selectedChain, ranking]);
 
   // Load chains on mount
   useEffect(() => {
@@ -293,41 +294,28 @@ export function ChainSpecificMetrics() {
 
     let cancelled = false;
 
-    const getActiveAddressLookupId = (chain: Chain) =>
-      (chain.evmChainId ? String(chain.evmChainId) : undefined) || chain.originalChainId || chain.chainId;
-
-    // Limit to a reasonable subset first (already sorted with C-Chain first and by cumulative tx),
-    // so we don't fire a request for every chain on initial load.
-    const candidateChains = chains.slice(0, 25);
-
-    async function run() {
-      const concurrency = 6;
-      const queue = [...candidateChains];
+    const byChain = (latest: Record<string, { value: number }>) => {
       const results: Record<string, number> = {};
-
-      async function worker() {
-        while (queue.length && !cancelled) {
-          const chain = queue.shift();
-          if (!chain) return;
-
-          const lookupId = getActiveAddressLookupId(chain);
-          if (!lookupId) continue;
-
-          try {
-            const data = await getDailyActiveAddresses(lookupId, 7);
-            const latest = data?.[data.length - 1];
-            const value = Number(latest?.activeAddresses ?? (latest as { value?: number } | undefined)?.value ?? 0);
-            results[chain.chainId] = Number.isFinite(value) ? value : 0;
-          } catch {
-            results[chain.chainId] = 0;
-          }
-        }
+      for (const chain of chains) {
+        const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
+          .map(k => (k == null ? '' : String(k)))
+          .find(k => k && latest[k]);
+        if (hit) results[chain.chainId] = latest[hit].value;
       }
+      return results;
+    };
 
-      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    // One bulk request. Daily transactions stand in when no chain has an
+    // active-address count yet.
+    async function run() {
+      const active = byChain(await getAllChainsActiveAddressesLatest());
       if (cancelled) return;
-
-      setDailyActiveLatestByChainId(prev => ({ ...prev, ...results }));
+      if (Object.keys(active).length > 0) {
+        setRanking({ by: 'active addresses', latest: active });
+        return;
+      }
+      const tx = byChain(await getAllChainsTxCountLatest());
+      if (!cancelled) setRanking({ by: 'transactions', latest: tx });
     }
 
     run();
@@ -344,42 +332,34 @@ export function ChainSpecificMetrics() {
     async function fetchMetrics() {
       if (!selectedChain) return;
       const chainId = selectedChain.originalChainId || selectedChain.chainId;
-      const evmChainIdStr = selectedChain.evmChainId ? String(selectedChain.evmChainId) : chainId;
+
+      // Each series drops today's unfinished day; ask for one more so the
+      // window is full.
+      const fetchDays = timeframe + 1;
+      const full = <T,>(xs: T[]) => xs.slice(-timeframe);
 
       try {
-        const [
-          activeAddresses,
-          dailyTxCount,
-          maxTPS,
-          gasUsed,
-          avgGasPrice,
-          feesPaid
-        ] = await Promise.all([
-          getDailyActiveAddresses(evmChainIdStr, timeframe).catch(() => []),
-          getChainTxCountHistory(chainId, timeframe).catch(() => []),
-          getChainMaxTPSHistory(chainId, timeframe).catch(() => []),
-          getChainGasUsedHistory(chainId, timeframe).catch(() => []),
-          getChainAvgGasPriceHistory(chainId, timeframe).catch(() => []),
-          getChainFeesPaidHistory(chainId, timeframe).catch(() => [])
-        ]);
+        const history = await getChainMetricsHistory(chainId, fetchDays,
+          ['activeAddresses', 'txCount', 'maxTps', 'gasUsed', 'avgGasPrice', 'feesPaid']).catch((): ChainMetricsHistory => ({}));
 
         // Transform all data to MetricData format
         const transformData = (data: any[]): MetricData[] => {
           return data.map(item => {
             const timestamp = item.timestamp;
-            const date = format(new Date(timestamp * 1000), 'yyyy-MM-dd');
+            // UTC day: a local format would label every bar a day early west of UTC.
+            const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
             const value = item.value !== undefined ? item.value : (item.activeAddresses || 0);
             return { timestamp, date, value };
           });
         };
 
         const newMetricsData: Record<string, MetricData[]> = {
-          dailyActiveAddresses: transformData(activeAddresses),
-          dailyTxCount: transformData(dailyTxCount),
-          maxTPS: transformData(maxTPS),
-          gasUsed: transformData(gasUsed),
-          avgGasPrice: transformData(avgGasPrice),
-          feesPaid: transformData(feesPaid),
+          dailyActiveAddresses: full(transformData(history.activeAddresses ?? [])),
+          dailyTxCount: full(transformData(history.txCount ?? [])),
+          maxTPS: full(transformData(history.maxTps ?? [])),
+          gasUsed: full(transformData(history.gasUsed ?? [])),
+          avgGasPrice: full(transformData(history.avgGasPrice ?? [])),
+          feesPaid: full(transformData(history.feesPaid ?? [])),
         };
 
         setMetricsData(newMetricsData);
@@ -402,12 +382,6 @@ export function ChainSpecificMetrics() {
   }, [selectedChain, timeframe]);
 
   // Handler for range changes
-  const handleRangeChange = useCallback((metricId: string, start: number, end: number) => {
-    setRangeStates(prev => ({
-      ...prev,
-      [metricId]: { start, end }
-    }));
-  }, []);
 
   // Toggle export dropdown for a specific metric
   const toggleExportDropdown = useCallback((metricId: string) => {
@@ -481,7 +455,7 @@ export function ChainSpecificMetrics() {
   }, [selectedChain, timeframe, isDark]);
 
   // Create chart component for each metric
-  const renderMetricChart = (metricId: MetricType) => {
+  const renderMetricChart = (metricId: MetricType, tall = false) => {
     const metric = METRICS.find(m => m.id === metricId);
     if (!metric) return null;
 
@@ -492,207 +466,58 @@ export function ChainSpecificMetrics() {
     const { start, end } = rangeState;
     const filteredData = data.slice(start, end + 1);
 
-    const chartData = {
-      labels: filteredData.map(item => {
-        const [year, month, day] = item.date.split('-');
-        return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), isMobile ? 'd MMM' : 'MMM d');
-      }),
-      datasets: [{
-        label: metric.name,
-        data: filteredData.map(item => item.value),
-        fill: true,
-        borderColor: metric.color.main,
-        backgroundColor: (context: any) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          if (!chartArea) return metric.color.fill;
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          const baseColor = metric.color.main;
-          gradient.addColorStop(0, baseColor.replace('rgb', 'rgba').replace(')', ', 0.35)'));
-          gradient.addColorStop(0.4, baseColor.replace('rgb', 'rgba').replace(')', ', 0.15)'));
-          gradient.addColorStop(1, baseColor.replace('rgb', 'rgba').replace(')', ', 0.02)'));
-          return gradient;
-        },
-        borderWidth: isDark ? 2.5 : 2,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: isMobile ? 5 : 7,
-        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-        pointHoverBorderColor: metric.color.main,
-        pointHoverBorderWidth: 2.5,
-      }],
-    };
-
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {
-        duration: reducedMotion ? 0 : 750,
-        easing: 'easeInOutQuart' as const,
-      },
-      interaction: {
-        mode: 'index' as const,
-        intersect: false,
-      },
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          enabled: true,
-          backgroundColor: isDark ? 'rgba(15, 23, 42, 0.97)' : 'rgba(255, 255, 255, 0.98)',
-          titleColor: isDark ? '#f1f5f9' : '#0f172a',
-          bodyColor: isDark ? '#cbd5e1' : '#334155',
-          borderColor: isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(0, 0, 0, 0.1)',
-          borderWidth: 1,
-          padding: isMobile ? 12 : 16,
-          boxPadding: 8,
-          cornerRadius: 12,
-          titleFont: {
-            size: isMobile ? 13 : 15,
-            weight: 'bold' as const,
-          },
-          bodyFont: {
-            size: isMobile ? 12 : 14,
-          },
-          callbacks: {
-            title: (items: any[]) => {
-              if (items.length === 0) return '';
-              const dataIndex = items[0].dataIndex;
-              const dataPoint = filteredData[dataIndex];
-              if (!dataPoint) return '';
-              return format(parseISO(dataPoint.date), 'MMMM d, yyyy');
-            },
-            label: (context: any) => {
-              const value = context.parsed.y;
-              const formattedValue = metric.valueFormatter(value);
-              return `${metric.name}: ${formattedValue}${metric.unit ? ' ' + metric.unit : ''}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          grid: {
-            display: false,
-          },
-          ticks: {
-            color: isDark ? '#94a3b8' : '#64748b',
-            font: {
-              size: isMobile ? 10 : 11,
-            },
-            maxRotation: isMobile ? 45 : 0,
-            autoSkip: true,
-            autoSkipPadding: isMobile ? 20 : 30,
-            maxTicksLimit: isMobile ? 7 : undefined,
-          },
-        },
-        y: {
-          beginAtZero: true,
-          grid: {
-            color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-          },
-          ticks: {
-            color: metric.color.main,
-            font: {
-              size: isMobile ? 10 : 11,
-            },
-            callback: (value: any) => {
-              if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-              if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-              return value;
-            },
-            maxTicksLimit: isMobile ? 5 : 8,
-          },
-        },
-      },
-    };
-
-    const latestValue = filteredData[filteredData.length - 1]?.value || 0;
-    const Icon = metric.icon;
-
     return (
-      <div key={metricId} ref={(el) => { chartContainerRefs.current[metricId] = el; }} className="bg-card rounded-xl border border-border p-6">
-        {/* Export-only chain name */}
-        <div className="export-show hidden items-center justify-between mb-2">
-          <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
-          <span className="text-sm text-muted-foreground">
-            {timeframe === 360 ? '1Y' : `${timeframe}D`} · {format(new Date(), 'MMM d, yyyy')}
-          </span>
-        </div>
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: metric.color.main.replace('rgb', 'rgba').replace(')', ', 0.1)') }}
-            >
-              <Icon className="w-5 h-5" style={{ color: metric.color.main }} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">{metric.name}</h3>
-              <p className="text-2xl font-bold" style={{ color: metric.color.main }}>
-                {metric.valueFormatter(latestValue)}
-                {metric.unit && <span className="text-sm ml-1 text-muted-foreground">{metric.unit}</span>}
-              </p>
-            </div>
+      <ChainMetricCard
+        key={metricId}
+        metric={metric}
+        data={filteredData}
+        tall={tall}
+        containerRef={(el) => { chartContainerRefs.current[metricId] = el; }}
+        exportHeader={
+          <div className="export-show hidden items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">{selectedChain?.chainName}</span>
+            <span className="text-sm text-muted-foreground">
+              {timeframe === 360 ? '1y' : `${timeframe}d`}, {format(new Date(), 'MMM d, yyyy')}
+            </span>
           </div>
+        }
+        exportMenu={
           <div className="relative export-hide">
             <button
               onClick={() => toggleExportDropdown(metricId)}
-              className="p-2 rounded-lg hover:bg-accent transition-colors"
+              className="inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="Export chart"
+              aria-label="Export chart"
             >
-              <Download className="w-4 h-4 text-muted-foreground" />
+              <Download className="w-3.5 h-3.5" />
             </button>
             {exportDropdownStates[metricId] && (
-              <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 mt-1 w-40 bg-popover border border-border rounded shadow-lg z-10 py-1">
                 <button
                   onClick={() => handleDownloadPNG(metricId)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-t-lg flex items-center gap-2"
+                  className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                   Export as PNG
                 </button>
                 <button
                   onClick={() => handleDownloadCSV(metricId)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors rounded-b-lg flex items-center gap-2"
+                  className="w-full px-3 h-8 text-left text-[12px] hover:bg-accent transition-colors flex items-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                   Export as CSV
                 </button>
               </div>
             )}
           </div>
-        </div>
-
-        {/* Chart */}
-        <div className="h-[300px] mb-4">
-          <Line
-            ref={(ref) => {
-              if (ref) chartRefs.current[metricId] = ref;
-            }}
-            data={chartData}
-            options={options}
-            plugins={[crosshairPlugin, watermarkPlugin, lineShadowPlugin]}
-          />
-        </div>
-
-        {/* Time Range Slider */}
-        <TimeRangeSlider
-          data={data.map(item => ({ date: item.date, value: item.value }))}
-          startIndex={start}
-          endIndex={end}
-          onChange={(newStart, newEnd) => handleRangeChange(metricId, newStart, newEnd)}
-          color={metric.color.main}
-        />
-      </div>
+        }
+      />
     );
   };
 
   if (loading) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8">
+      <div className="bg-card border border-border rounded-md p-8">
         <div className="flex items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
@@ -701,38 +526,32 @@ export function ChainSpecificMetrics() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Section Header with Chain Selector */}
-      <div className="bg-card border border-border rounded-xl p-5 sm:p-6">
-        <div className="flex flex-col gap-5">
+      <div className="border-b border-border pb-4">
+        <div className="flex flex-col gap-3">
           {/* Top row: Title + dropdown */}
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#ef4444]" />
-              <div>
-                <h2 className="text-base sm:text-lg font-semibold text-foreground">
-                  Chain-specific metrics
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Detailed metrics for individual chains
-                </p>
-              </div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold text-foreground">Chain-specific metrics</h2>
+              <p className="text-[12px] text-muted-foreground">One chain at a time. Pick from the list or the most active chains.</p>
             </div>
 
             {/* Chain Selector Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full sm:w-72 px-4 py-2.5 bg-muted/40 border border-border rounded-xl flex items-center justify-between hover:bg-muted/70 hover:border-[#ef4444]/20 transition-colors"
+                className="w-full sm:w-64 h-8 px-3 bg-background border border-border rounded flex items-center justify-between hover:border-foreground/30 transition-colors"
               >
-                <span className="text-sm font-medium text-foreground truncate">
-                  {selectedChain?.chainName || 'Select Chain'}
+                <span className="flex items-center gap-2 min-w-0">
+                  {selectedChain && <ChainMark chain={selectedChain} />}
+                  <span className="text-[12px] font-medium text-foreground truncate">{selectedChain?.chainName || 'Select Chain'}</span>
                 </span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-full sm:w-72 bg-card border border-border rounded-xl shadow-lg z-10 max-h-80 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-full sm:w-72 bg-card border border-border rounded-md shadow-lg z-10 max-h-80 overflow-y-auto">
                   {chains.map((chain) => (
                     <button
                       key={chain.chainId}
@@ -740,13 +559,14 @@ export function ChainSpecificMetrics() {
                         handleChainChange(chain);
                         setIsDropdownOpen(false);
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted/30 transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-[12px] hover:bg-accent/50 transition-colors flex items-center gap-2 ${
                         selectedChain?.chainId === chain.chainId
-                          ? 'bg-[#ef4444]/10 text-[#ef4444] font-medium'
+                          ? 'bg-accent text-foreground font-medium'
                           : 'text-foreground'
                       }`}
                     >
-                      {chain.chainName}
+                      <ChainMark chain={chain} />
+                      <span className="truncate">{chain.chainName}</span>
                     </button>
                   ))}
                 </div>
@@ -756,18 +576,18 @@ export function ChainSpecificMetrics() {
 
           {/* Second row: Top chains + timeframe */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Quick select: top chains by Daily Active Addresses */}
-            {topChainsByDailyActive.length > 0 && (
+            {/* Quick select: top chains by the latest day */}
+            {topChains.length > 0 && (
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
                   <div className="text-xs font-medium text-muted-foreground">Top chains</div>
-                  <div className="text-[11px] text-muted-foreground/80">by daily active addresses</div>
+                  <div className="text-[11px] text-muted-foreground">by daily {ranking.by}</div>
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                  {topChainsByDailyActive.map((chain) => {
+                  {topChains.map((chain) => {
                     const isActive = selectedChain?.chainId === chain.chainId;
                     const logoSrc = chain.chainLogoUri || '/icon-dark-animated.svg';
-                    const latestDAA = Number(dailyActiveLatestByChainId[chain.chainId] ?? 0);
+                    const latest = Number(ranking.latest[chain.chainId] ?? 0);
                     return (
                       <button
                         key={chain.chainId}
@@ -775,19 +595,19 @@ export function ChainSpecificMetrics() {
                           handleChainChange(chain);
                           setIsDropdownOpen(false);
                         }}
-                        title={`${chain.chainName}${Number.isFinite(latestDAA) && latestDAA > 0 ? ` • ${latestDAA.toLocaleString()} DAA` : ''}`}
+                        title={`${chain.chainName}${Number.isFinite(latest) && latest > 0 ? `: ${latest.toLocaleString()} ${ranking.by}` : ''}`}
                         className={[
-                          'h-11 w-11 rounded-2xl border transition-all flex items-center justify-center shrink-0',
-                          'bg-muted/20 hover:bg-muted/40',
+                          'h-9 w-9 rounded border transition-colors flex items-center justify-center shrink-0',
+                          'bg-background hover:bg-accent/50',
                           isActive
-                            ? 'border-[#ef4444]/40 ring-2 ring-[#ef4444]/20'
-                            : 'border-border hover:border-[#ef4444]/20'
+                            ? 'border-foreground/60'
+                            : 'border-border hover:border-foreground/30'
                         ].join(' ')}
                       >
                         <img
                           src={logoSrc}
                           alt={chain.chainName}
-                          className="h-8 w-8 rounded-xl bg-muted/30 ring-1 ring-border"
+                          className="h-6 w-6 rounded bg-muted/30"
                           onError={(e) => {
                             e.currentTarget.src = '/icon-dark-animated.svg';
                             e.currentTarget.onerror = null;
@@ -802,28 +622,28 @@ export function ChainSpecificMetrics() {
 
             {/* Timeframe Selector + Share */}
             <div className="flex flex-wrap items-center gap-1.5 justify-start lg:justify-end">
-              {[7, 30, 90, 360].map((days) => (
+              {[30, 90, 360].map((days) => (
                 <button
                   key={days}
                   onClick={() => handleTimeframeChange(days as TimeframeOption)}
-                  className={`h-8 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`h-8 px-3 rounded text-xs font-medium border transition-colors ${
                     timeframe === days
-                      ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
+                      ? 'bg-foreground border-foreground text-background'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {days === 360 ? '1Y' : `${days}D`}
+                  {days === 360 ? '1y' : `${days}d`}
                 </button>
               ))}
 
               {/* Share Button */}
               <button
                 onClick={handleShare}
-                className="p-2 rounded-xl bg-muted/40 border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 transition-all ml-2"
+                className="p-2 rounded-md bg-muted/40 border border-border hover:bg-muted/70 hover:border-foreground/30 transition-all ml-2"
                 title="Share this view"
               >
                 {copied ? (
-                  <span className="text-xs font-medium text-green-500 px-1">Copied!</span>
+                  <span className="text-xs font-medium text-up px-1">Copied!</span>
                 ) : (
                   <Share2 className="w-4 h-4 text-muted-foreground" />
                 )}
@@ -833,12 +653,153 @@ export function ChainSpecificMetrics() {
         </div>
       </div>
 
-      {/* Metrics Charts Grid */}
-      {selectedChain && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {METRICS.map(metric => renderMetricChart(metric.id))}
+      {/* One metric large, the others as small panels */}
+      {selectedChain && (() => {
+        const withData = METRICS.filter((m) => (metricsData[m.id] ?? []).length > 0);
+        const shownLead = withData.some((m) => m.id === lead) ? lead : withData[0]?.id;
+        const rest = withData.filter((m) => m.id !== shownLead);
+        const cols =
+          rest.length >= 5 ? 'lg:grid-cols-5' : rest.length === 4 ? 'lg:grid-cols-4' : rest.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
+        return (
+          <div className="space-y-4">
+            {shownLead && renderMetricChart(shownLead, true)}
+            {rest.length > 0 && (
+              <div className={`grid grid-cols-2 ${cols} gap-4`}>
+                {rest.map((m) => (
+                  <MetricPanel key={m.id} metric={m} data={metricsData[m.id] ?? []} onSelect={() => setLead(m.id)} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/**
+ * One metric as daily bars. The headline shows the latest day, or the hovered
+ * day while the pointer is over the chart.
+ */
+function ChainMetricCard({
+  metric,
+  data,
+  tall = false,
+  containerRef,
+  exportHeader,
+  exportMenu,
+}: {
+  metric: (typeof METRICS)[number];
+  data: MetricData[];
+  tall?: boolean;
+  containerRef: (el: HTMLDivElement | null) => void;
+  exportHeader: React.ReactNode;
+  exportMenu: React.ReactNode;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const values = useMemo(() => data.map((d) => d.value), [data]);
+  const dates = useMemo(() => data.map((d) => d.date), [data]);
+  const i = hoverIdx ?? data.length - 1;
+  const point = data[i];
+  const Icon = metric.icon;
+
+  return (
+    <div ref={containerRef} className="bg-card rounded-md border border-border p-4">
+      {exportHeader}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
+            <Icon className="w-3.5 h-3.5" style={{ color: metric.color.main }} />
+            {metric.name}
+          </h3>
+          <p className="num text-[22px] leading-7 font-medium text-foreground">
+            {point ? metric.valueFormatter(point.value) : '—'}
+            {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
+          </p>
+          {point && (
+            <p className="text-[11px] text-muted-foreground leading-4">
+              {hoverIdx == null ? 'Latest, ' : ''}
+              {format(parseDay(point.date), hoverIdx == null ? 'MMM d' : 'EEE, MMM d, yyyy')}
+            </p>
+          )}
         </div>
+        {exportMenu}
+      </div>
+
+      <div className={tall ? 'h-[300px]' : 'h-[220px]'}>
+        <DailyBars
+          values={values}
+          dates={dates}
+          color={metric.color.main}
+          format={(v) => metric.valueFormatter(v)}
+          onHover={setHoverIdx}
+        />
+      </div>
+
+      {data.length > 1 && (
+        <SeriesSummary
+          values={values}
+          format={(v) => metric.valueFormatter(v)}
+          className="mt-2 export-hide"
+        />
       )}
     </div>
+  );
+}
+
+/** A chain's own logo, small, with the L1Beat mark when it has none. */
+function ChainMark({ chain }: { chain: Chain }) {
+  return (
+    <img
+      src={chain.chainLogoUri || '/icon-dark-animated.svg'}
+      alt=""
+      loading="lazy"
+      className="w-4 h-4 rounded-full bg-muted object-cover shrink-0"
+      onError={(e) => {
+        e.currentTarget.src = '/icon-dark-animated.svg';
+        e.currentTarget.onerror = null;
+      }}
+    />
+  );
+}
+
+/**
+ * A metric in brief: its total, average or peak over the window, the busiest
+ * day, and a trend line. Clicking it draws it large above.
+ */
+function MetricPanel({ metric, data, onSelect }: { metric: (typeof METRICS)[number]; data: MetricData[]; onSelect: () => void }) {
+  const values = data.map((d) => d.value);
+  const kind = SUMMARY[metric.id];
+  const peakIdx = values.indexOf(Math.max(...values));
+  const figure =
+    kind === 'total' ? values.reduce((a, b) => a + b, 0) : kind === 'peak' ? values[peakIdx] : values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+  const caption = kind === 'total' ? `total over ${values.length} days` : kind === 'peak' ? 'highest day' : 'a day on average';
+  const Icon = metric.icon;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      title="Show this metric large"
+      className="text-left bg-card rounded-md border border-border px-4 pt-3 pb-2 min-w-0 hover:border-foreground/30 hover:bg-accent/30 transition-colors"
+    >
+      <span className="text-[12px] text-muted-foreground leading-4 flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: metric.color.main }} />
+        <span className="truncate">{metric.name.replace(/^Daily /, '')}</span>
+      </span>
+      <span className="block mt-1 num text-[20px] leading-7 font-medium text-foreground truncate">
+        {metric.valueFormatter(figure)}
+        {metric.unit && <span className="font-sans text-[11px] ml-1.5 text-muted-foreground">{metric.unit}</span>}
+      </span>
+      <span className="block text-[11px] text-muted-foreground leading-4 truncate">{caption}</span>
+      {kind !== 'peak' && peakIdx >= 0 && (
+        <span className="block text-[11px] text-muted-foreground leading-4 truncate">
+          busiest <span className="num text-foreground">{metric.valueFormatter(values[peakIdx])}</span> on {format(parseDay(data[peakIdx].date), 'MMM d')}
+        </span>
+      )}
+      {kind === 'peak' && peakIdx >= 0 && (
+        <span className="block text-[11px] text-muted-foreground leading-4 truncate">on {format(parseDay(data[peakIdx].date), 'MMM d, yyyy')}</span>
+      )}
+      <Sparkline data={values} width={240} height={36} color={metric.color.main} fill className="mt-2 w-full h-9" />
+    </button>
   );
 }

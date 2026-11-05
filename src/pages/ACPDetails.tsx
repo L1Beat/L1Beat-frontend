@@ -1,6 +1,6 @@
 // src/pages/ACPDetails.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -19,13 +19,13 @@ import {
   List,
   Copy,
   Check,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
   RefreshCw,
   Info
 } from 'lucide-react';
 import { acpService } from '../services/acpService';
+import { ComplexityDots } from '../components/acp/AcpStatus';
+import { AcpStatusChip } from '../components/acp/AcpStatusChip';
 import type { Author, EnhancedACP } from '../types';
 
 // Lazy-load mermaid (and its diagram renderers + cytoscape) only when an ACP
@@ -86,12 +86,44 @@ function extractTocHeadings(content: string): TocItem[] {
   }
   return out;
 }
+/**
+ * Splits the metadata table every ACP opens with from the body, as [key, value]
+ * rows. The side card shows them, so the body starts at the abstract.
+ */
+function splitPreamble(content: string): { rows: [string, string][]; body: string } {
+  const lines = (content || '').replace(/\r/g, '').split('\n');
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  const rows: [string, string][] = [];
+  while (i < lines.length && lines[i].trim().startsWith('|')) {
+    const cells = lines[i].trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+    if (cells.length >= 2 && !/^:?-+:?$/.test(cells[0])) rows.push([cells[0].replace(/\*\*/g, ''), cells.slice(1).join('|').trim()]);
+    i++;
+  }
+  return rows.length ? { rows, body: lines.slice(i).join('\n') } : { rows: [], body: content };
+}
+
+/** Links between ACPs point at ../13-name/README.md in the repo; on L1Beat they open /acps/13. */
+function acpRoute(href?: string): string | null {
+  const m = href?.match(/(?:^|\/)(\d+)-[^/]*\/README\.md$/i) ?? href?.match(/^\.\.\/(\d+)-[^/]*\/?$/);
+  return m ? `/acps/${Number(m[1])}` : null;
+}
+
+function MdLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+  const route = acpRoute(href);
+  const cls = 'text-foreground underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground';
+  return route ? (
+    <Link to={route} className={cls}>{children}</Link>
+  ) : (
+    <a href={href} className={cls} target="_blank" rel="noopener noreferrer">{children}</a>
+  );
+}
+
 const preprocessContent = (content: string) => {
   return content
-    // Remove metadata table at the start of the document
-    // Matches lines starting with | at the very beginning (ignoring leading whitespace) until a line that doesn't start with |
-    .replace(/^\s*\| ACP \|[\s\S]*?(?:\n\n|\n(?![|]))/g, '')
     // Only escape very specific, obvious currency tokens - be extremely conservative
+    // "2000 $AVAX ($70k at time of writing)": two prices, not a formula.
+    .replace(/\$AVAX \(\$/g, '&#36;AVAX (&#36;')
     .replace(/\$AVAX(?!\s*[+\-*/=<>≥≤\\{}()^_])/g, '&#36;AVAX')
     .replace(/\$AVAX-([A-Za-z][A-Za-z\-]*)/g, '&#36;AVAX-$1')
     .replace(/\$ETH(?!\s*[+\-*/=<>≥≤\\{}()^_])/g, '&#36;ETH')
@@ -125,15 +157,9 @@ export default function ACPDetails() {
   useEffect(() => {
     // Only load on client side
     if (typeof window !== 'undefined') {
-      Promise.all([
-        import('react-syntax-highlighter').then(mod => mod.Prism),
-        import('react-syntax-highlighter/dist/esm/styles/prism').then(styles => ({
-          vscDarkPlus: styles.vscDarkPlus,
-          oneLight: styles.oneLight
-        }))
-      ]).then(([Highlighter, styles]) => {
+      import('../utils/codeHighlighter').then(({ SyntaxHighlighter: Highlighter, vscDarkPlus, oneLight }) => {
         setSyntaxHighlighter(() => Highlighter);
-        setSyntaxStyles(styles);
+        setSyntaxStyles({ vscDarkPlus, oneLight });
       }).catch(err => console.error('Failed to load syntax highlighter:', err));
     }
   }, []);
@@ -294,7 +320,7 @@ export default function ACPDetails() {
                   startOnLoad: false,
                   theme: 'base',
                   securityLevel: 'loose',
-                  fontFamily: 'Inter, system-ui, sans-serif',
+                  fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
                   themeVariables,
                   flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
                   sequence: { useMaxWidth: true },
@@ -304,7 +330,7 @@ export default function ACPDetails() {
               } catch (renderError) {
                 console.error('Mermaid render failed:', renderError);
                 element.innerHTML = `
-                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded-lg p-4">
+                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded p-4">
                     <p class="font-medium mb-2">Failed to render diagram</p>
                     <pre class="text-xs bg-card p-2 rounded overflow-auto border border-border">${cleanContent}</pre>
                   </div>
@@ -321,7 +347,7 @@ export default function ACPDetails() {
       }, [chartId, content, isDark]); // Re-render on theme change
 
       return (
-        <div className="my-8 p-4 rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-colors duration-200">
+        <div className="my-8 p-4 rounded-md border border-border bg-card shadow-sm overflow-hidden transition-colors duration-200">
           <div id={chartId} className="flex justify-center min-h-[150px] items-center w-full overflow-x-auto" />
         </div>
       );
@@ -338,25 +364,20 @@ export default function ACPDetails() {
       };
 
       return (
-        <div className="my-6 rounded-xl overflow-hidden border border-border bg-card shadow-sm transition-colors duration-200">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted">
+        <div className="my-6 rounded-md overflow-hidden border border-border bg-card shadow-sm transition-colors duration-200">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted">
             <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]" />
-                <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]" />
-                <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]" />
-              </div>
-              <span className="ml-2 text-xs font-medium font-mono text-muted-foreground">
+              <span className="text-xs font-medium font-mono text-muted-foreground">
                 {match[1]}
               </span>
             </div>
             <button
               onClick={handleCopy}
-              className="p-1.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]"
+              className="p-1.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/30"
               title="Copy code"
             >
               {isCopied ? (
-                <Check className="w-4 h-4 text-green-500" />
+                <Check className="w-4 h-4 text-up" />
               ) : (
                 <Copy className="w-4 h-4" />
               )}
@@ -382,7 +403,7 @@ export default function ACPDetails() {
                 {content}
               </SyntaxHighlighter>
             ) : (
-              <pre className="p-6 overflow-x-auto bg-muted rounded-b-lg">
+              <pre className="p-6 overflow-x-auto bg-muted rounded-b">
                 <code className="text-foreground text-sm font-mono">{content}</code>
               </pre>
             )}
@@ -398,46 +419,7 @@ export default function ACPDetails() {
     );
   };
 
-  const getCleanStatus = (status: string) => {
-    if (!status) return 'Unknown';
-    const match = status.match(/^[a-zA-Z]+/);
-    return match ? match[0] : 'Unknown';
-  };
 
-  const getStatusIcon = (status: string) => {
-      const cleanStatus = getCleanStatus(status); // Add this line
-      switch (cleanStatus?.toLowerCase()) {
-      case 'activated':
-      case 'final':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'draft':
-      case 'review':
-        return <Clock className="w-5 h-5 text-yellow-500" />;
-      case 'stagnant':
-      case 'withdrawn':
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <AlertTriangle className="w-5 h-5 text-muted-foreground" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-      const cleanStatus = getCleanStatus(status);
-    switch (cleanStatus?.toLowerCase()) {
-      case 'activated':
-      case 'final':
-        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-400 dark:border-green-500/30';
-      case 'draft':
-        return 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20 dark:bg-[#ef4444]/20 dark:text-[#ef4444] dark:border-[#ef4444]/30';
-      case 'review':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-400 dark:border-yellow-500/30';
-      case 'stagnant':
-      case 'withdrawn':
-        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30';
-      default:
-        return 'bg-muted text-muted-foreground border-border border';
-    }
-  };
 
   if (loading) {
     return (
@@ -472,14 +454,14 @@ export default function ACPDetails() {
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => navigate('/acps')}
-                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-border rounded-md shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-foreground/30 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to ACPs
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626]"
+                className="inline-flex items-center h-8 px-3 rounded bg-foreground text-background hover:bg-foreground/90 text-[13px] font-medium"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Retry
@@ -492,6 +474,7 @@ export default function ACPDetails() {
   }
 
   const githubUrl = `https://github.com/avalanche-foundation/ACPs/blob/main/ACPs/${acp.folderName || acp.number}/README.md`;
+  const preamble = splitPreamble(acp.content);
 
   return (
     <div className="bg-background text-foreground">
@@ -501,154 +484,102 @@ export default function ACPDetails() {
         url={`/acps/${acp.number}`}
       />
       <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <button
-              onClick={() => navigate('/acps')}
-              className="inline-flex items-center px-3 h-9 border border-border text-sm font-medium rounded-lg text-muted-foreground bg-card hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to ACPs
-            </button>
-          </div>
+          <button
+            onClick={() => navigate('/acps')}
+            className="inline-flex items-center gap-1.5 h-7 px-2 -ml-2 mb-3 text-[12px] rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            All ACPs
+          </button>
 
-          {/* ACP Header */}
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-card mb-5">
-            <div aria-hidden className="pointer-events-none absolute inset-0">
-              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/10 blur-3xl" />
+          {/* Compact header: number and status, title, authors, actions. */}
+          <header className="border-b border-border pb-5 mb-6">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="num text-[13px] text-muted-foreground">ACP-{acp.number}</span>
+              <AcpStatusChip status={acp.status} size="md" />
+              {acp.track && <span className="text-[12px] text-muted-foreground">{acp.track.replace(/ Track$/, '')} track</span>}
             </div>
-
-            <div className="relative p-6 sm:p-7">
-              <div className="flex flex-col gap-6">
-                {/* Top Row: ID and Status */}
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div className="flex items-center gap-4">
-                    <span className="text-3xl font-mono font-bold text-[#ef4444]">
-                      ACP-{acp.number}
-                    </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 ${getStatusColor(acp.status)}`}>
-                      {getStatusIcon(acp.status)}
-                      {acp.status}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                      {acp.track} Track
-                    </span>
-                    {acp.complexity && (
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
-                        {acp.complexity} Complexity
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground leading-tight">
-                  <ReactMarkdown>{acp.title}</ReactMarkdown>
-                </h1>
-
-                {/* Author and Meta */}
-                <div className="flex flex-wrap items-center gap-6 text-sm border-y border-border py-6">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-muted-foreground" />
-                    <div className="flex flex-wrap items-center gap-2">
-                      {acp.authors?.map((author: Author, index: number) => (
-                        <React.Fragment key={index}>
-                          {index > 0 && <span className="text-muted-foreground">|</span>}
-                          <a
-                            href={author.url || `https://github.com/${author.github}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-medium text-foreground hover:text-[#ef4444] transition-colors"
-                          >
-                            {author.name}
-                          </a>
-                        </React.Fragment>
-                      )) || <span className="text-muted-foreground">Unknown</span>}
-                    </div>
-                  </div>
-
-                  {acp.created && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <span>Created {new Date(acp.created).toLocaleDateString()}</span>
-                    </div>
-                  )}
-
-                  {acp.updated && (
-                    <>
-                      <div className="w-px h-4 bg-border hidden sm:block" />
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <RefreshCw className="w-4 h-4" />
-                        <span>Last updated {new Date(acp.updated).toLocaleDateString()}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3 flex-wrap">
-                  <button
-                    onClick={() => window.open(githubUrl, '_blank', 'noopener,noreferrer')}
-                    className="inline-flex items-center px-5 py-2.5 rounded-lg shadow-sm text-sm font-medium text-white bg-[#ef4444] hover:bg-[#dc2626] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ef4444] transition-all cursor-pointer"
+            <h1 className="mt-2 text-[26px] sm:text-[34px] font-medium text-foreground leading-tight max-w-4xl">
+              <ReactMarkdown components={{ p: ({ children }) => <>{children}</> }}>{acp.title}</ReactMarkdown>
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+              <span className="inline-flex items-start gap-1.5 text-muted-foreground">
+                <Users className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+                <span>
+                {acp.authors?.length ? (
+                  acp.authors.map((author: Author, index: number) => (
+                    <React.Fragment key={index}>
+                      {index > 0 && ', '}
+                      <a
+                        href={author.url || `https://github.com/${author.github}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-foreground hover:underline underline-offset-4"
+                      >
+                        {author.name}
+                      </a>
+                    </React.Fragment>
+                  ))
+                ) : (
+                  'Unknown'
+                )}
+                </span>
+              </span>
+              {acp.readingTime ? (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Clock className="w-4 h-4" aria-hidden />
+                  {acp.readingTime} min read
+                </span>
+              ) : null}
+              <span className="flex-1" />
+              <div className="flex gap-2">
+                <a
+                  href={githubUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 h-7 px-3 rounded text-[12px] font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                >
+                  <Github className="w-3.5 h-3.5" />
+                  GitHub
+                </a>
+                {acp.discussion && (
+                  <a
+                    href={acp.discussion}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 h-7 px-3 border border-border rounded text-[12px] font-medium text-foreground hover:bg-accent transition-colors"
                   >
-                    <Github className="w-4 h-4 mr-2" />
-                    View on GitHub
-                  </button>
-
-                  {acp.discussion && (
-                    <button
-                      onClick={() => window.open(acp.discussion, '_blank', 'noopener,noreferrer')}
-                      className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all cursor-pointer"
-                    >
-                      <LinkIcon className="w-4 h-4 mr-2" />
-                      View Discussion
-                    </button>
-                  )}
-
-                  <button
-                    onClick={copyToClipboard}
-                    className="inline-flex items-center px-5 py-2.5 border border-border rounded-lg shadow-sm text-sm font-medium text-foreground bg-muted hover:bg-accent hover:border-[#ef4444]/20 transition-all ml-auto"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-4 h-4 mr-2 text-green-500" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Link
-                      </>
-                    )}
-                  </button>
-                </div>
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    Discussion
+                  </a>
+                )}
+                <button
+                  onClick={copyToClipboard}
+                  className="inline-flex items-center gap-1.5 h-7 px-3 border border-border rounded text-[12px] font-medium text-foreground hover:bg-accent transition-colors"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-up" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
               </div>
             </div>
-          </div>
+          </header>
 
           {/* Content + right rail */}
           <div className="lg:flex lg:gap-8 lg:items-start">
-          <div className="bg-card rounded-2xl border border-border p-6 sm:p-7 flex-1 min-w-0">
-            <div className="max-w-none break-words">
+          <div className="flex-1 min-w-0">
+            <div className="lg:hidden mb-6">
+              <MetaCard acp={acp} rows={preamble.rows} githubUrl={githubUrl} />
+            </div>
+            {/* About 75 characters a line at the body size. */}
+            <div className="max-w-[75ch] break-words text-[15px] [&>h2:first-child]:mt-0">
             <ReactMarkdown
   remarkPlugins={[remarkGfm, remarkMath]}
   rehypePlugins={[rehypeKatex]}
   components={{
     code: CodeBlock,
-    a: ({ children, ...props }) => (
-      <a
-        {...props}
-        className="text-[#ef4444] hover:text-[#dc2626] underline underline-offset-4 decoration-[#ef4444]/30"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {children}
-      </a>
-    ),
+    a: ({ href, children }) => <MdLink href={href}>{children}</MdLink>,
     h1: ({ children, ...props }) => (
-      <h1 {...props} className="mt-10 mb-4 text-3xl font-semibold tracking-tight text-foreground">
+      <h1 {...props} className="mt-10 mb-4 text-[26px] leading-tight font-semibold text-foreground">
         {children}
       </h1>
     ),
@@ -662,7 +593,7 @@ export default function ACPDetails() {
         <h2
           {...props}
           id={id || undefined}
-          className="mt-10 mb-4 text-2xl font-semibold tracking-tight text-foreground scroll-mt-24"
+          className="mt-10 mb-3 text-[22px] leading-snug font-semibold text-foreground scroll-mt-24"
         >
           {children}
         </h2>
@@ -678,38 +609,38 @@ export default function ACPDetails() {
         <h3
           {...props}
           id={id || undefined}
-          className="mt-8 mb-3 text-xl font-semibold text-foreground scroll-mt-24"
+          className="mt-8 mb-2.5 text-[17px] leading-snug font-semibold text-foreground scroll-mt-24"
         >
           {children}
         </h3>
       );
     },
     h4: ({ children, ...props }) => (
-      <h4 {...props} className="mt-6 mb-3 text-lg font-semibold text-foreground">
+      <h4 {...props} className="mt-6 mb-2 text-[15px] font-semibold text-foreground">
         {children}
       </h4>
     ),
     ul: ({ children, ...props }) => (
-      <ul {...props} className="my-4 ml-6 list-disc space-y-2 text-muted-foreground">
+      <ul {...props} className="my-4 ml-6 list-disc space-y-1.5 leading-7 text-foreground/80">
         {children}
       </ul>
     ),
     ol: ({ children, ...props }) => (
-      <ol {...props} className="my-4 ml-6 list-decimal space-y-2 text-muted-foreground">
+      <ol {...props} className="my-4 ml-6 list-decimal space-y-1.5 leading-7 text-foreground/80">
         {children}
       </ol>
     ),
     blockquote: ({ children, ...props }) => (
       <blockquote
         {...props}
-        className="my-6 rounded-r-lg border-l-4 border-[#ef4444]/30 bg-[#ef4444]/5 px-4 py-3 text-muted-foreground"
+        className="my-6 border-l-2 border-border pl-4 py-1 text-muted-foreground"
       >
         {children}
       </blockquote>
     ),
     table: ({ children, ...props }) => (
       <div className="my-6 overflow-x-auto">
-        <table {...props} className="min-w-full border-collapse text-sm">
+        <table {...props} className="min-w-full border-collapse text-[13px]">
           {children}
         </table>
       </div>
@@ -737,7 +668,7 @@ export default function ACPDetails() {
         <img
           {...props}
           src={src}
-          className="max-w-full h-auto rounded-lg shadow-md my-8 border border-border block mx-auto bg-card"
+          className="max-w-full h-auto rounded shadow-md my-8 border border-border block mx-auto bg-card"
           loading="lazy"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -758,10 +689,10 @@ export default function ACPDetails() {
       if (text.startsWith(':::note')) {
         const noteContent = text.replace(/^:::note\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-[#ef4444] bg-[#ef4444]/5 dark:bg-[#ef4444]/10">
+          <div className="my-6 rounded-md border border-border bg-muted/40">
             <div className="p-4">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-5 h-5 text-[#ef4444] mt-0.5">
+                <div className="flex-shrink-0 w-5 h-5 text-muted-foreground mt-0.5">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="flex-1 text-sm leading-relaxed text-muted-foreground">
@@ -777,7 +708,7 @@ export default function ACPDetails() {
       if (text.startsWith(':::warning')) {
         const warningContent = text.replace(/^:::warning\s*/, '').replace(/:::$/, '');
         return (
-          <div className="my-6 rounded-lg overflow-hidden border-l-4 border-yellow-500 bg-yellow-500/5 dark:bg-yellow-500/10">
+          <div className="my-6 rounded overflow-hidden border-l-4 border-yellow-500 bg-yellow-500/5 dark:bg-yellow-500/10">
             <div className="p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5">
@@ -794,15 +725,16 @@ export default function ACPDetails() {
       }
       
       // Regular paragraph
-      return <p {...props} className="mb-4 leading-relaxed text-muted-foreground">{children}</p>;
+      return <p {...props} className="mb-4 leading-7 text-foreground/80">{children}</p>;
     }
   }}
 >
-  {preprocessContent(acp.content)}
+  {preprocessContent(preamble.body)}
 </ReactMarkdown>
             </div>
           </div>
             <ACPSideRail
+              meta={<MetaCard acp={acp} rows={preamble.rows} githubUrl={githubUrl} />}
               tocItems={tocItems}
               activeTocId={activeTocId}
               onActivate={setActiveTocId}
@@ -814,19 +746,23 @@ export default function ACPDetails() {
 }
 
 function ACPSideRail({
+  meta,
   tocItems,
   activeTocId,
   onActivate,
 }: {
+  meta: React.ReactNode;
   tocItems: TocItem[];
   activeTocId: string;
   onActivate: (id: string) => void;
 }) {
-  if (tocItems.length === 0) return null;
   return (
-    <aside className="hidden lg:block w-64 shrink-0 self-start sticky top-20">
+    <aside className="hidden lg:block w-72 shrink-0 self-start sticky top-20">
       <div className="max-h-[calc(100vh-6rem)] overflow-y-auto pr-1 -mr-1">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-foreground mb-3">
+        {meta}
+        {tocItems.length > 0 && (
+        <>
+        <div className="mt-6 flex items-center gap-2 text-[13px] font-medium text-foreground mb-3">
           <List className="w-3.5 h-3.5 text-muted-foreground" />
           On this page
         </div>
@@ -857,7 +793,7 @@ function ACPSideRail({
                   {title}
                 </a>
                 {active && (
-                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-[#ef4444]" />
+                  <span className="absolute left-[-1px] top-1.5 bottom-1.5 w-0.5 bg-foreground" />
                 )}
               </li>
             );
@@ -871,7 +807,58 @@ function ACPSideRail({
           <ArrowUpCircle className="w-3.5 h-3.5" />
           Back to top
         </button>
+        </>
+        )}
       </div>
     </aside>
+  );
+}
+
+// Preamble rows the header and card already cover.
+const SHOWN_KEYS = new Set(['acp', 'title', 'author(s)', 'authors', 'author', 'status', 'track']);
+
+/** The proposal's facts in one card: status, track, area, links and any preamble rows like Replaces. */
+function MetaCard({ acp, rows, githubUrl }: { acp: EnhancedACP; rows: [string, string][]; githubUrl: string }) {
+  const extra = rows.filter(([k]) => !SHOWN_KEYS.has(k.toLowerCase()));
+  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="flex items-start justify-between gap-3 py-2 border-t border-border first:border-t-0 text-[12px]">
+      <dt className="text-muted-foreground shrink-0">{label}</dt>
+      <dd className="text-foreground text-right min-w-0 break-words">{children}</dd>
+    </div>
+  );
+  return (
+    <section className="rounded-md border border-border bg-card px-4 py-2">
+      <dl>
+        <Row label="Status"><AcpStatusChip status={acp.status} /></Row>
+        {acp.track && <Row label="Track">{acp.track.replace(/ Track$/, '')}</Row>}
+        {acp.category && <Row label="Area">{acp.category}</Row>}
+        {acp.complexity && (
+          <Row label="Complexity">
+            <span className="inline-flex items-center gap-2">
+              <ComplexityDots level={acp.complexity} />
+              {acp.complexity}
+            </span>
+          </Row>
+        )}
+        {acp.created && <Row label="Created">{new Date(acp.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Row>}
+        {extra.map(([k, v]) => (
+          <Row key={k} label={k}>
+            <ReactMarkdown components={{ p: ({ children }) => <>{children}</>, a: ({ href, children }) => <MdLink href={href}>{children}</MdLink> }}>{v}</ReactMarkdown>
+          </Row>
+        ))}
+        {acp.discussion && (
+          <Row label="Discussion">
+            <a href={acp.discussion} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground">
+              GitHub discussion
+            </a>
+          </Row>
+        )}
+        <Row label="Source">
+          <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground">
+            README on GitHub
+          </a>
+        </Row>
+      </dl>
+    </section>
   );
 }

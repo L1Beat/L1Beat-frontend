@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Wallet, Check, AlertCircle, ExternalLink } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Chain } from '../types';
 import { isCoreInstalled, addNetworkToWallet, switchToNetwork } from '../utils/metamask';
 import { useToast } from './Toaster';
@@ -68,13 +67,8 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
     if (!isCoreInstalled()) {
       return (
         <>
-          <motion.div
-            whileHover={{ rotate: 15 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
-            <ExternalLink className="w-4 h-4" />
-          </motion.div>
-          {variant === 'compact' ? 'CORE' : 'Install CORE'}
+          <ExternalLink className="w-4 h-4" />
+          {variant === 'compact' ? 'Get Core' : 'Install Core'}
         </>
       );
     }
@@ -83,49 +77,32 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
       case 'adding':
         return (
           <>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className="w-4 h-4 rounded-full border-2 border-current border-t-transparent"
-            />
+            <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
             {variant === 'compact' ? 'Adding...' : 'Adding to Wallet...'}
           </>
         );
       case 'success':
         return (
           <>
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-            >
+            <span className="animate-scale-in">
               <Check className="w-4 h-4" />
-            </motion.div>
+            </span>
             {variant === 'compact' ? 'Added!' : 'Added to Wallet!'}
           </>
         );
       case 'error':
         return (
           <>
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: [0, 1.2, 1] }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            >
+            <span className="animate-scale-in">
               <AlertCircle className="w-4 h-4" />
-            </motion.div>
+            </span>
             {variant === 'compact' ? 'Error' : 'Try Again'}
           </>
         );
       default:
         return (
           <>
-            <motion.div
-              whileHover={{ y: -1 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <Wallet className="w-4 h-4" />
-            </motion.div>
+            <Wallet className="w-4 h-4" />
             {variant === 'compact' ? 'Add' : 'Add to Wallet'}
           </>
         );
@@ -134,92 +111,64 @@ export function AddToMetaMask({ chain, variant = 'default', className = '' }: Ad
 
   const getButtonStyles = () => {
     const baseStyles =
-      "inline-flex items-center gap-2 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+      "inline-flex items-center gap-2 font-medium rounded focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
     
     if (variant === 'compact') {
       switch (status) {
         case 'success':
-          return `${baseStyles} px-3 py-1.5 text-xs bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20`;
+          return `${baseStyles} px-3 py-1.5 text-xs bg-green-500/10 text-up border border-green-500/20`;
         case 'error':
           return `${baseStyles} px-3 py-1.5 text-xs bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/15 focus:ring-red-500`;
         default:
           // Brand-consistent "quiet" button for header toolbars
-          return `${baseStyles} px-3 py-1.5 text-xs bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] focus:ring-[#ef4444]`;
+          return `${baseStyles} px-3 py-1.5 text-xs bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-foreground/30 hover:text-foreground focus:ring-foreground/30`;
       }
     } else {
       switch (status) {
         case 'success':
-          return `${baseStyles} px-4 py-2 text-sm bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20`;
+          return `${baseStyles} px-4 py-2 text-sm bg-green-500/10 text-up border border-green-500/20`;
         case 'error':
           return `${baseStyles} px-4 py-2 text-sm bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 hover:bg-red-500/15 focus:ring-red-500`;
         default:
-          return `${baseStyles} px-4 py-2 text-sm bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-[#ef4444]/20 hover:text-[#ef4444] focus:ring-[#ef4444]`;
+          return `${baseStyles} px-4 py-2 text-sm bg-muted/40 text-foreground border border-border hover:bg-muted/70 hover:border-foreground/30 hover:text-foreground focus:ring-foreground/30`;
       }
     }
   };
 
   return (
     <div className={`relative ${className}`}>
-      <motion.button
+      <button
+        type="button"
         onClick={handleAddToWallet}
         disabled={status === 'adding' || status === 'success'}
         className={getButtonStyles()}
         title={
           !isCoreInstalled()
-            ? "Install CORE wallet to add this network"
+            ? "Install the Core wallet to add this network"
             : `Add ${chain.chainName} network to wallet`
         }
-        whileHover={{
-          scale: status === 'adding' || status === 'success' ? 1 : 1.02,
-          y: status === 'adding' || status === 'success' ? 0 : -1,
-          transition: { duration: 0.2, ease: "easeOut" }
-        }}
-        whileTap={{
-          scale: status === 'adding' || status === 'success' ? 1 : 0.98,
-          transition: { duration: 0.1, ease: "easeOut" }
-        }}
-        animate={{
-          scale: status === 'success' ? [1, 1.05, 1] : 1,
-          transition: status === 'success' ? { duration: 0.6, ease: "easeOut" } : { duration: 0.2 }
-        }}
       >
         <div className="flex items-center gap-2">
           {getButtonContent()}
         </div>
-      </motion.button>
+      </button>
       
       {/* Error tooltip */}
-      <AnimatePresence>
-        {status === 'error' && errorMessage && (
-          <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded-lg shadow-lg z-10 max-w-xs"
-            initial={{ opacity: 0, y: -10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
+      {status === 'error' && errorMessage && (
+          <div className="animate-fade-in absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10 max-w-xs">
             <div className="flex items-start gap-1">
               <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0 text-red-500" />
               <span>{errorMessage}</span>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
       
       {/* Success message for compact variant */}
-      <AnimatePresence>
-        {status === 'success' && variant === 'compact' && (
-          <motion.div
-            className="absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded-lg shadow-lg z-10"
-            initial={{ opacity: 0, y: -10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-          >
+      {status === 'success' && variant === 'compact' && (
+          <div className="animate-fade-in absolute top-full left-0 mt-2 p-2 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg z-10">
             Network added to Wallet!
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }

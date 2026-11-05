@@ -1,12 +1,18 @@
 import type { Chain, TVLHistory, TVLHealth, NetworkTPS, TPSHistory, HealthStatus, TeleporterMessageData, TeleporterDailyData, CumulativeTxCount, CumulativeTxCountResponse, DailyTxCount, DailyTxCountLatest, MaxTPSHistory, MaxTPSLatest, GasUsedHistory, GasUsedLatest, AvgGasPriceHistory, AvgGasPriceLatest, FeesPaidHistory, FeesPaidLatest, NetworkValidatorTotal, Validator, L1BeatFeeMetrics, L1BeatFeeSummary, ValidatorDeposit, Stablecoin, StablecoinsResponse, StablecoinSeries, StablecoinTimeseriesResponse, StablecoinMetric, StablecoinGranularity, ChainRisk } from './types';
 import type { DailyActiveAddresses } from './types';
 import { config } from './config';
+import { getFallbackChainLogos } from './services/chainLogos';
+
+/** What the indexer's chain list gets when a chain has no logo. */
+export const PLACEHOLDER_CHAIN_LOGO = '/icon-dark-animated.svg';
 
 // Filter predicate to exclude today's partial data from time-series arrays.
 // Data for the current day is incomplete and causes misleading dips in charts.
 function isNotToday(d: { timestamp: number }): boolean {
+  // Daily points are UTC days. Measuring from local midnight let the unfinished
+  // UTC day through for anyone east of UTC, in the hours after their midnight.
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000;
   return d.timestamp < todayStart;
 }
 
@@ -58,7 +64,7 @@ const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 // sessionStorage (not localStorage) is deliberate: it survives reloads but
 // clears when the tab closes, which bounds how stale data can get.
 // Bump PERSIST_VERSION whenever a cached response shape changes to bust old data.
-const PERSIST_VERSION = 'v1';
+const PERSIST_VERSION = 'v2';
 const PERSIST_PREFIX = `l1beat-cache-${PERSIST_VERSION}:`;
 
 const persistAvailable = (() => {
@@ -130,9 +136,9 @@ function readCache(key: string, duration: number): any {
   return undefined;
 }
 
-function writeCache(key: string, data: any, timestamp: number): void {
+function writeCache(key: string, data: any, timestamp: number, persist = true): void {
   cache.set(key, { data, timestamp });
-  persistSet(key, { data, timestamp });
+  if (persist) persistSet(key, { data, timestamp });
 }
 
 // Export function to clear cache (for debugging/forcing refresh)
@@ -146,17 +152,14 @@ export function clearChainsCache() {
   clearPersistedCache((key) => key.startsWith('chains'));
 }
 
-// Clear chains cache on module load to ensure fresh data after code changes
-clearChainsCache();
-
 const BASE_URL = config.apiBaseUrl;
 const API_URL = `${BASE_URL}/api`;
 const EXPLORER_URL = 'https://subnets.avax.network';
 
+// Only CORS-safelisted headers, so a GET goes out without an OPTIONS preflight
+// first. Content-Type and Cache-Control each cost one; the browser sets Origin.
 const DEFAULT_HEADERS = {
   'Accept': 'application/json',
-  'Content-Type': 'application/json',
-  'Origin': typeof window !== 'undefined' ? window.location.origin : '',
 };
 
 // Define constants for rate limiting
@@ -204,17 +207,31 @@ const apiRequestTracker = {
   }
 };
 
+// Requests in flight by cache key. Two parts of a page asking for the same
+// data at once share one request instead of sending two.
+const inFlight = new Map<string, Promise<unknown>>();
+function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+  const promise = load().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
 async function fetchWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
   duration: number = CACHE_DURATION
 ): Promise<T> {
-  const now = Date.now();
-
   const fresh = readCache(key, duration);
   if (fresh !== undefined) {
     return fresh as T;
   }
+  return shared(key, () => loadIntoCache(key, fetcher));
+}
+
+async function loadIntoCache<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const now = Date.now();
 
   // Check if we're rate-limited
   if (apiRequestTracker.isRateLimited) {
@@ -237,10 +254,30 @@ async function fetchWithCache<T>(
   const sanitizedData = sanitizeResponse(data);
 
   // Cache the sanitized data (memory + sessionStorage)
-  writeCache(key, sanitizedData, now);
+  if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now);
 
   return sanitizedData;
 }
+
+// Fetchers swallow errors and return an empty list, so an empty result often
+// means "the request failed" (a 429, a timeout). Caching it would pin the
+// empty state for the whole cache window and make Retry a no-op.
+function isCacheable(data: unknown): boolean {
+  if (data == null) return false;
+  if (Array.isArray(data)) return data.length > 0;
+  // Map-style fetchers return {} on failure in the same way.
+  if (typeof data === 'object' && Object.keys(data).length === 0) return false;
+  return true;
+}
+
+// When the backend last answered 429. Fetchers turn failures into empty lists,
+// so views use this to tell "rate limited" apart from "no data".
+let lastRateLimitedAt = 0;
+export function recentlyRateLimited(withinMs = 60_000): boolean {
+  return Date.now() - lastRateLimitedAt < withinMs;
+}
+
+class ClientError extends Error {}
 
 async function fetchWithRetry<T>(
   url: string,
@@ -267,7 +304,6 @@ async function fetchWithRetry<T>(
         headers: {
           ...DEFAULT_HEADERS,
           ...options.headers,
-          'Cache-Control': 'no-cache',
         },
       });
 
@@ -279,7 +315,11 @@ async function fetchWithRetry<T>(
           throw new Error('Server timeout - The request took too long to complete');
         }
         if (response.status === 429) {
-          throw new Error('Rate limit exceeded - Please try again later');
+          lastRateLimitedAt = Date.now();
+          throw new ClientError('Rate limit exceeded - Please try again later');
+        }
+        if (response.status >= 400 && response.status < 500) {
+          throw new ClientError(`HTTP error! status: ${response.status}`);
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -294,6 +334,10 @@ async function fetchWithRetry<T>(
     } catch (error) {
       clearTimeout(timeoutId);
       lastError = error as Error;
+
+      // A 4xx won't change on retry, and retrying a 429 only spends more of
+      // the rate limit.
+      if (error instanceof ClientError) break;
 
       // Check if the request was aborted (timeout)
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -373,26 +417,39 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
 
   return fetchExternalWithCache(cacheKey, async () => {
     try {
-      const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' });
+      const allChains = await fetchAllL1BeatPages<any>('/api/v1/data/chains', { active: activeParam, count: 'true' }, { parallel: true });
 
-      // Track seen slugs to prevent routing collisions
+      // URL slugs come from chain names, and names repeat (redeployments keep
+      // the old chain's name). Assign them in a fixed order, active chains
+      // first and then by P-Chain id, so a chain gets the same slug whether it
+      // was loaded with or without inactive chains, and active chains keep the
+      // plain name.
+      const baseSlugOf = (chain: any) => {
+        const name = chain.name || chain.chain_name || '';
+        const raw = (chain.evm_chain_id ? String(chain.evm_chain_id) : '') || chain.chain_id || '';
+        return name
+          ? name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+          : String(raw || Math.random().toString(36).substring(7));
+      };
+      const slugById = new Map<string, string>();
       const seenSlugs = new Map<string, number>();
+      [...allChains]
+        .sort((a, b) =>
+          Number(b.is_active ?? false) - Number(a.is_active ?? false) ||
+          String(a.chain_id ?? '').localeCompare(String(b.chain_id ?? '')))
+        .forEach((chain) => {
+          const base = baseSlugOf(chain);
+          const count = seenSlugs.get(base) ?? 0;
+          seenSlugs.set(base, count + 1);
+          slugById.set(String(chain.chain_id), count === 0 ? base : `${base}-${count + 1}`);
+        });
 
       const chains = allChains
         .map((chain) => {
           const chainName = chain.name || chain.chain_name || '';
           const evmChainId = chain.evm_chain_id ? String(chain.evm_chain_id) : '';
           const rawChainId = evmChainId || chain.chain_id || '';
-
-          // Generate URL-friendly slug from chain name
-          let baseSlug = chainName
-            ? chainName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-            : String(rawChainId || Math.random().toString(36).substring(7));
-
-          // Deduplicate slugs
-          const count = seenSlugs.get(baseSlug) ?? 0;
-          seenSlugs.set(baseSlug, count + 1);
-          const chainSlug = count === 0 ? baseSlug : `${baseSlug}-${count + 1}`;
+          const chainSlug = slugById.get(String(chain.chain_id)) ?? baseSlugOf(chain);
 
           const t = chain.network_token;
 
@@ -400,7 +457,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             chainId: chainSlug,
             originalChainId: rawChainId,
             chainName,
-            chainLogoUri: chain.logo_url || '/icon-dark-animated.svg',
+            chainLogoUri: chain.logo_url || PLACEHOLDER_CHAIN_LOGO,
             description: chain.description || '',
             website: chain.website_url || '',
             socials: chain.socials || [],
@@ -415,6 +472,7 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
             rpcUrl: chain.rpc_url || '',
             explorerUrl: chain.explorer_url || '',
             validatorCount: chain.active_validators ?? chain.validator_count ?? 0,
+            totalFeesPaid: typeof chain.total_fees_paid === 'number' ? chain.total_fees_paid : null,
             decentralization: chain.decentralization || undefined,
             validators: [],
             tps: null,
@@ -438,6 +496,17 @@ export async function getChains(filters?: { category?: string; network?: 'mainne
           if (filters?.network && chain.network !== filters.network) return false;
           return true;
         });
+
+      // The indexer has no logo for about half the chains. Fill what Glacier
+      // knows; the rest keep the placeholder and render as a lettered disc.
+      const missing = chains.filter((c) => c.chainLogoUri === PLACEHOLDER_CHAIN_LOGO && c.platformChainId);
+      if (missing.length > 0) {
+        const fallback = await getFallbackChainLogos();
+        for (const c of missing) {
+          const uri = fallback[c.platformChainId];
+          if (uri) c.chainLogoUri = uri;
+        }
+      }
 
       return chains;
     } catch (error) {
@@ -612,6 +681,35 @@ export async function getTPSHistory(days: number = 7, chainId?: string): Promise
     } catch (error) {
       console.error('TPS history fetch error:', error);
       return [];
+    }
+  // The network series changes while chains are being backfilled; a short
+  // cache keeps headline figures in step with the per-chain table.
+  }, chainId ? CACHE_DURATION : 60 * 1000);
+}
+
+// Daily TPS for every chain in one request, oldest first, keyed by every id a
+// chain might be looked up by. Null when the backend has no such route (404)
+// or the request fails, so callers can fall back to per-chain requests.
+export async function getAllChainsTpsHistory(days: number = 7): Promise<Record<string, number[]> | null> {
+  return fetchWithCache(`tps-all-history-${days}`, async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: any[] }>(`${API_URL}/tps/all/history?days=${days}`);
+      if (!response.success || !Array.isArray(response.data)) return null;
+      const map: Record<string, number[]> = {};
+      for (const row of response.data) {
+        const values = (Array.isArray(row?.history) ? row.history : [])
+          .filter((p: any) => p && typeof p.timestamp === 'number' && typeof p.value === 'number')
+          .sort((a: any, b: any) => a.timestamp - b.timestamp)
+          .filter(isNotToday)
+          .map((p: any) => Number(p.value));
+        for (const k of [row.evmChainId, row.subnetId, row.chainId]) {
+          if (k != null && String(k).trim()) map[String(k).trim()] = values;
+        }
+      }
+      return map;
+    } catch (error) {
+      console.error('All chains TPS history fetch error:', error);
+      return null;
     }
   });
 }
@@ -803,6 +901,48 @@ export async function getAllChainsTPSLatest(): Promise<Record<string, { value: n
   }, 60 * 1000); // Cache for 1 minute
 }
 
+export interface DailyTxLatest {
+  /** Transactions on the latest complete UTC day. */
+  value: number;
+  /** The day before, for day-over-day change. */
+  previous: number | null;
+  /** UTC midnight (seconds) of the day `value` covers. */
+  timestamp: number;
+}
+
+// Latest complete day of one metric for every chain, keyed by every id a chain
+// might be looked up by. Empty when the backend doesn't serve it yet.
+async function getAllChainsLatest(path: string, field: string): Promise<Record<string, DailyTxLatest>> {
+  return fetchWithCache(`${field}-all-latest`, async () => {
+    try {
+      const response = await fetchWithRetry<any>(`${API_URL}/${path}/all/latest`);
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const map: Record<string, DailyTxLatest> = {};
+      for (const row of rows) {
+        const latest = row?.[field];
+        const value = Number(latest?.value);
+        if (!latest || !Number.isFinite(value)) continue;
+        const previous = latest.previous == null ? null : Number(latest.previous);
+        const entry = {
+          value,
+          previous: Number.isFinite(previous) ? previous : null,
+          timestamp: Number(latest.timestamp) || 0,
+        };
+        for (const k of [row.evmChainId, row.subnetId, row.chainId]) {
+          if (k != null && String(k).trim()) map[String(k).trim()] = entry;
+        }
+      }
+      return map;
+    } catch (error) {
+      console.error(`All chains ${field} latest fetch error:`, error);
+      return {};
+    }
+  }, 60 * 1000);
+}
+
+export const getAllChainsTxCountLatest = () => getAllChainsLatest('tx-count', 'txCount');
+export const getAllChainsActiveAddressesLatest = () => getAllChainsLatest('active-addresses', 'activeAddresses');
+
 export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPSHistory[]> {
   return fetchWithCache(`network-max-tps-history-${days}`, async () => {
     try {
@@ -822,7 +962,8 @@ export async function getNetworkMaxTPSHistory(days: number = 30): Promise<MaxTPS
         .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
         .map(item => ({
           timestamp: Number(item.timestamp),
-          value: Number(item.value)
+          value: Number(item.value),
+          chainCount: typeof item.chainCount === 'number' ? item.chainCount : undefined,
         }))
         .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
@@ -861,35 +1002,99 @@ export async function getChainMaxTPSHistory(chainId: string, days: number = 30):
   });
 }
 
-export async function getDailyMessageVolumeFromExternal(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
-  // Use 365 days as default if user asks for more data, but respect the 'days' parameter if it's smaller
-  // The external API supports 'days' parameter
-  return fetchWithCache(`daily-message-volume-external-${days}`, async () => {
-    try {
-      const url = `https://idx6.solokhin.com/api/global/metrics/dailyMessageVolume?days=${days}`;
-      const response = await fetchWithRetry<{
-        success: boolean;
-        data: Array<any>;
-      }>(url);
+// Daily ICM messages through the C-Chain's TeleporterMessenger, sent plus received,
+// from our indexer. Exact UTC days back to 2024-03-05; quiet days come back as zero.
+// Direct L1-to-L1 messages (about 0.02%) aren't counted.
+export interface IcmDay {
+  date: string;
+  sent: number;
+  received: number;
+  total: number;
+  by_chain: { blockchain_id: string; name: string; sent: number; received: number; total: number }[];
+}
+export const getIcmTimeseries = (days: number) =>
+  getDexData<IcmDay[]>(`icm-ts-${days}`, `/api/v1/metrics/icm/timeseries?days=${days}`, days <= 365);
+export interface IcmSummary {
+  as_of: string;
+  from: string;
+  days: number;
+  /** From the C-Chain's side: sent = C-Chain to the L1, received = the L1 to C-Chain. */
+  totals: { sent: number; received: number; total: number };
+  by_chain: IcmDay['by_chain'];
+}
+export const getIcmSummary = (days: number) => getDexData<IcmSummary>(`icm-${days}`, `/api/v1/metrics/icm?days=${days}`);
 
-      // The external API returns an array directly or inside data property
-      const dataArray = Array.isArray(response) ? response : (response.data || []);
-
-      if (!Array.isArray(dataArray)) {
-        return [];
-      }
-
-      return dataArray
-        .map(item => ({
-          timestamp: Math.floor(new Date(item.date).getTime() / 1000),
-          value: Number(item.messageCount || item.count || item.value || 0)
-        }))
-        .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
-    } catch (error) {
-      console.error('Daily message volume fetch error:', error);
-      return [];
-    }
-  }, 5 * 60 * 1000); // Cache for 5 minutes
+export interface IcmToken { address: string; symbol: string; decimals: number }
+export interface IcmAppRef { name: string; kind: 'ictt-home' | 'ictt-remote' | 'other'; label: { name: string; kind: string } | null }
+/** One message through the C-Chain's TeleporterMessenger; direction is from the C-Chain's side. */
+export interface IcmMessage {
+  message_id: string;
+  direction: 'sent' | 'received';
+  counterparty: { blockchain_id: string; name: string };
+  block_time: string;
+  block_number: number;
+  tx_hash: string;
+  /** The C-Chain contract: the sender for sends, the receiver for receives. */
+  local_address: string;
+  remote_address: string;
+  app: IcmAppRef | null;
+  ictt: { type: string; recipient: string; amount_raw: string; token: IcmToken | null } | null;
+  /** Receives only: false when the message arrived but failed to execute. */
+  executed?: boolean | null;
+}
+export interface IcmApp {
+  address: string;
+  name: string;
+  kind: 'ictt-home' | 'ictt-remote' | 'other';
+  token: IcmToken | null;
+  label: { name: string; kind: string } | null;
+  sent: number;
+  received: number;
+  total: number;
+  first_seen: string;
+  last_seen: string;
+  top_chains: { blockchain_id: string; name: string; sent: number; received: number; total: number }[];
+}
+export const getIcmApps = (days: number, limit = 50) =>
+  getDexData<{ as_of: string; from: string; days: number; apps: IcmApp[] }>(`icm-apps-${days}-${limit}`, `/api/v1/metrics/icm/apps?days=${days}&limit=${limit}`);
+export interface IcmValue {
+  as_of: string;
+  from: string;
+  days: number;
+  totals: { transfers: number; priced_transfers: number; sent_usd: number; received_usd: number; total_usd: number };
+  /** Amounts in C-Chain base units; USD is null for tokens without a price. */
+  by_token: { token: IcmToken; priced: boolean; transfers: number; sent_amount: string; received_amount: string; sent_usd: number | null; received_usd: number | null }[];
+  by_chain: { blockchain_id: string; name: string; transfers: number; sent_usd: number; received_usd: number; total_usd: number }[];
+}
+export interface IcmValueDay { date: string; transfers: number; sent_usd: number; received_usd: number; total_usd: number }
+export interface IcmTransfer {
+  message_id: string;
+  direction: 'sent' | 'received';
+  counterparty: { blockchain_id: string; name: string };
+  block_time: string;
+  tx_hash: string;
+  app_name: string;
+  token: IcmToken;
+  amount: string;
+  usd: number;
+}
+/** Token value moved through ICTT bridges: sent left the C-Chain, received arrived and executed. */
+export const getIcmValue = (days: number) => getDexData<IcmValue>(`icm-value-${days}`, `/api/v1/metrics/icm/value?days=${days}`);
+export const getIcmValueTimeseries = (days: number) =>
+  getDexData<IcmValueDay[]>(`icm-value-ts-${days}`, `/api/v1/metrics/icm/value/timeseries?days=${days}`, days <= 365);
+export const getIcmTopTransfers = (days: number, limit = 8) =>
+  getDexData<IcmTransfer[]>(`icm-top-${days}-${limit}`, `/api/v1/metrics/icm/transfers/top?days=${days}&limit=${limit}`);
+/** Newest messages first; not cached here, the list is refreshed while the page is open. */
+export async function getIcmMessages(limit = 25, before?: string, chain?: string): Promise<{ data: IcmMessage[]; next: string | null } | null> {
+  try {
+    const r = await fetchExternalWithRetry<{ data: IcmMessage[]; meta?: { has_more?: boolean; next_cursor?: string } }>(
+      `${L1BEAT_EXTERNAL_API}/api/v1/metrics/icm/messages?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ''}${chain ? `&chain=${encodeURIComponent(chain)}` : ''}`,
+    );
+    return { data: r.data ?? [], next: r.meta?.has_more ? r.meta.next_cursor ?? null : null };
+  } catch (error) {
+    console.error('ICM messages fetch error:', error);
+    return null;
+  }
 }
 
 export async function getNetworkMaxTPSLatest(): Promise<MaxTPSLatest | null> {
@@ -959,14 +1164,15 @@ export async function getNetworkTxCountHistory(days: number = 30): Promise<Daily
         .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
         .map(item => ({
           timestamp: Number(item.timestamp),
-          value: Number(item.value)
+          value: Number(item.value),
+          chainCount: typeof item.chainCount === 'number' ? item.chainCount : undefined,
         }))
         .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
     } catch (error) {
       console.error('Network tx count history fetch error:', error);
       return [];
     }
-  });
+  }, 60 * 1000);
 }
 
 export async function getChainTxCountHistory(chainId: string, days: number = 30): Promise<DailyTxCount[]> {
@@ -1423,6 +1629,64 @@ export async function getDailyActiveAddresses(chainId: string, days: number = 30
   });
 }
 
+export type ChainMetric = 'txCount' | 'maxTps' | 'activeAddresses' | 'gasUsed' | 'feesPaid' | 'avgGasPrice';
+
+export interface ChainMetricsHistory {
+  txCount?: DailyTxCount[];
+  maxTps?: MaxTPSHistory[];
+  activeAddresses?: DailyActiveAddresses[];
+  gasUsed?: GasUsedHistory[];
+  feesPaid?: FeesPaidHistory[];
+  avgGasPrice?: AvgGasPriceHistory[];
+}
+
+const singleMetricHistory: Record<ChainMetric, (chainId: string, days: number) => Promise<unknown[]>> = {
+  txCount: getChainTxCountHistory,
+  maxTps: getChainMaxTPSHistory,
+  activeAddresses: getDailyActiveAddresses,
+  gasUsed: getChainGasUsedHistory,
+  feesPaid: getChainFeesPaidHistory,
+  avgGasPrice: getChainAvgGasPriceHistory,
+};
+
+// Several of a chain's daily series in one request. A backend without the
+// batch route (404) gets one request per series instead. Throws when the
+// request fails, so callers can tell a failure from a chain without data.
+export async function getChainMetricsHistory(chainId: string, days: number, metrics: ChainMetric[]): Promise<ChainMetricsHistory> {
+  const wanted = [...new Set(metrics)].sort();
+  if (wanted.length === 0) return {};
+  // Null means the backend has no batch route. Read from the result, not a
+  // flag set inside the loader: concurrent callers share one load and only
+  // the first would see the flag.
+  const batch = await fetchWithCache(`chain-metrics-history-${chainId}-${days}-${wanted.join(',')}`, async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: Record<string, any[]> }>(
+        `${API_URL}/chains/${chainId}/metrics/history?days=${days}&metrics=${wanted.join(',')}`);
+      if (!response.success || !response.data) throw new Error('Invalid chain metrics history data format');
+      const result: Record<string, unknown[]> = {};
+      for (const metric of wanted) {
+        const points = (Array.isArray(response.data[metric]) ? response.data[metric] : [])
+          .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
+          .map(item => ({ timestamp: Number(item.timestamp), value: Number(item.value) }))
+          .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
+        result[metric] = metric === 'activeAddresses'
+          ? points.map(p => ({ timestamp: p.timestamp, activeAddresses: p.value, transactions: 0 }))
+          // Same C-Chain scaling as getChainAvgGasPriceHistory.
+          : metric === 'avgGasPrice' && chainId === '43114'
+            ? points.map(p => ({ ...p, value: p.value / 10 }))
+            : points;
+      }
+      return result as ChainMetricsHistory;
+    } catch (error) {
+      if (error instanceof ClientError && error.message.includes('status: 404')) return null;
+      throw error;
+    }
+  });
+  if (batch !== null) return batch;
+  const series = await Promise.all(wanted.map(m => singleMetricHistory[m](chainId, days).catch(() => [])));
+  return Object.fromEntries(wanted.map((m, i) => [m, series[i]]));
+}
+
 export async function getHealth(): Promise<HealthStatus> {
   return fetchWithCache('health-status', async () => {
     try {
@@ -1451,56 +1715,35 @@ export async function getHealth(): Promise<HealthStatus> {
   }, 30000); // Cache for 30 seconds
 }
 
+/**
+ * ICM message flows for the Overview's flow chart, from the indexer's C-Chain
+ * TeleporterMessenger counts: the last complete UTC day, or the last 7. Each L1
+ * is one pair of flows with the C-Chain. Direct L1-to-L1 messages (about 0.02%)
+ * aren't included. Chains that share a name get a short ID tag, so they stay apart.
+ */
 export async function getTeleporterMessages(
   timeframe: 'daily' | 'weekly' = 'daily'
 ): Promise<TeleporterMessageData> {
-  return fetchWithCache(`teleporter-messages-${timeframe}`, async () => {
-    try {
-      const endpoint = timeframe === 'weekly'
-        ? `${API_URL}/teleporter/messages/weekly-count`
-        : `${API_URL}/teleporter/messages/daily-count`;
-      const response = await fetchWithRetry<any>(endpoint);
-      
-      // Handle both raw array and { data: [...] } formats
-      const dataArray = Array.isArray(response) ? response : (response?.data || []);
-      
-      if (!Array.isArray(dataArray)) {
-        throw new Error('Invalid Teleporter message data format');
-      }
-      
-      // Map the API response to our internal format
-      const messages = dataArray.map((msg: any) => ({
-        source: msg.sourceChain || msg.source || 'Unknown',
-        target: msg.destinationChain || msg.target || 'Unknown',
-        value: Number(msg.messageCount || msg.count || msg.value || 0)
-      }));
-      
-      // Calculate total messages if metadata is missing
-      const totalMessages = response?.metadata?.totalMessages || 
-        messages.reduce((sum: number, msg: any) => sum + msg.value, 0);
-      
-      return {
-        messages,
-        metadata: {
-          totalMessages,
-          startDate: response?.metadata?.startDate || new Date().toISOString(),
-          endDate: response?.metadata?.endDate || new Date().toISOString(),
-          updatedAt: response?.metadata?.updatedAt || new Date().toISOString()
-        }
-      };
-    } catch (error) {
-      console.error('Teleporter messages fetch error:', error);
-      return {
-        messages: [],
-        metadata: {
-          totalMessages: 0,
-          startDate: new Date().toISOString(),
-          endDate: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
-    }
-  }, 15 * 60 * 1000); // Cache for 15 minutes
+  const s = await getIcmSummary(timeframe === 'weekly' ? 7 : 1);
+  const rows = (s?.by_chain ?? []).filter((c) => c.total > 0);
+  const seen = new Map<string, number>();
+  for (const c of rows) seen.set(c.name.toLowerCase(), (seen.get(c.name.toLowerCase()) ?? 0) + 1);
+  const label = (c: IcmSummary['by_chain'][number]) =>
+    !c.name ? `${c.blockchain_id.slice(0, 8)}…` : (seen.get(c.name.toLowerCase()) ?? 0) > 1 ? `${c.name} (${c.blockchain_id.slice(0, 4)})` : c.name;
+  const C = 'Avalanche C-Chain';
+  const messages = rows.flatMap((c) => [
+    ...(c.received > 0 ? [{ source: label(c), target: C, value: c.received }] : []),
+    ...(c.sent > 0 ? [{ source: C, target: label(c), value: c.sent }] : []),
+  ]).sort((a, b) => b.value - a.value);
+  return {
+    messages,
+    metadata: {
+      totalMessages: s?.totals.total ?? 0,
+      startDate: s?.from ?? '',
+      endDate: s?.as_of ?? '',
+      updatedAt: s?.as_of ?? '',
+    },
+  };
 }
 
 export async function getTeleporterDailyHistory(days: number = 30): Promise<TeleporterDailyData[]> {
@@ -1529,17 +1772,21 @@ const L1BEAT_EXTERNAL_API = import.meta.env.VITE_L1BEAT_EXTERNAL_API || 'https:/
 async function fetchExternalWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  duration: number = CACHE_DURATION
+  duration: number = CACHE_DURATION,
+  /** false keeps the entry in memory only, for large one-off lists that would crowd sessionStorage. */
+  persist = true
 ): Promise<T> {
-  const now = Date.now();
   const fresh = readCache(key, duration);
   if (fresh !== undefined) {
     return fresh as T;
   }
-  const data = await fetcher();
-  const sanitizedData = sanitizeResponse(data);
-  writeCache(key, sanitizedData, now);
-  return sanitizedData;
+  return shared(key, async () => {
+    const now = Date.now();
+    const data = await fetcher();
+    const sanitizedData = sanitizeResponse(data);
+    if (isCacheable(sanitizedData)) writeCache(key, sanitizedData, now, persist);
+    return sanitizedData;
+  });
 }
 
 // Fetch from external APIs with only CORS-safe headers (no Cache-Control /
@@ -1552,6 +1799,7 @@ async function fetchExternalWithRetry<T>(
   timeout: number = 30000
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error occurred');
+  let retryAfterMs: number | null = null;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     const controller = new AbortController();
@@ -1565,8 +1813,16 @@ async function fetchExternalWithRetry<T>(
         headers: { 'Accept': 'application/json' },
       });
 
+      if (response.status === 429) {
+        // The indexer's limit refills each second, so a wait usually clears it.
+        lastRateLimitedAt = Date.now();
+        const retryAfter = Number(response.headers.get('Retry-After'));
+        retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : null;
+        throw new Error('HTTP error! status: 429');
+      }
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const err = response.status < 500 ? new ClientError(`HTTP error! status: ${response.status}`) : new Error(`HTTP error! status: ${response.status}`);
+        throw err;
       }
 
       return await response.json() as T;
@@ -1574,10 +1830,13 @@ async function fetchExternalWithRetry<T>(
       lastError = error instanceof DOMException && error.name === 'AbortError'
         ? new Error('Request timeout')
         : error as Error;
+      // Other 4xx answers won't change on retry.
+      if (error instanceof ClientError) break;
 
       if (attempt < retries - 1) {
-        const delay = Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        const delay = retryAfterMs ?? Math.min(1000 * Math.pow(backoffFactor, attempt + 1), 10000);
+        retryAfterMs = null;
+        await new Promise(resolve => setTimeout(resolve, Math.min(delay, 10000)));
       }
     } finally {
       clearTimeout(timeoutId);
@@ -1593,22 +1852,24 @@ async function fetchExternalWithRetry<T>(
 async function fetchAllL1BeatPages<T>(
   endpoint: string,
   extraParams: Record<string, string> = {},
-  opts: { throttleMs?: number; maxPages?: number } = {}
+  opts: { throttleMs?: number; maxPages?: number; pageSize?: number; parallel?: boolean } = {}
 ): Promise<T[]> {
   // throttleMs: pause between pages to stay under the API's rate limit on
   //   endpoints with many pages (e.g. the Primary Network has 3000+ validators).
   // maxPages: hard safety bound on the number of requests.
-  const { throttleMs = 0, maxPages = Infinity } = opts;
+  // parallel: once the first page reports meta.total (sent with count=true),
+  //   request the remaining pages together instead of one after another.
+  const { throttleMs = 0, maxPages = Infinity, pageSize = 100, parallel = false } = opts;
   const all: T[] = [];
   let offset = 0;
-  const limit = 100;
+  const limit = pageSize;
   let page = 0;
 
   while (page < maxPages) {
     const params = new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(offset) });
-    let response: { data: T[]; meta: { has_more: boolean } };
+    let response: { data: T[]; meta: { has_more: boolean; total?: number } };
     try {
-      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean } }>(
+      response = await fetchExternalWithRetry<{ data: T[]; meta: { has_more: boolean; total?: number } }>(
         `${L1BEAT_EXTERNAL_API}${endpoint}?${params.toString()}`
       );
     } catch (error) {
@@ -1622,6 +1883,29 @@ async function fetchAllL1BeatPages<T>(
     page += 1;
     if (chunk.length === 0 || !response.meta?.has_more) break;
     offset += limit;
+    const total = response.meta?.total;
+    if (parallel && page === 1 && typeof total === 'number' && total > offset) {
+      const offsets: number[] = [];
+      for (let o = offset; o < total && offsets.length < maxPages - 1; o += limit) offsets.push(o);
+      const pageUrl = (o: number) =>
+        `${L1BEAT_EXTERNAL_API}${endpoint}?${new URLSearchParams({ ...extraParams, limit: String(limit), offset: String(o) })}`;
+      const pages = await Promise.allSettled(offsets.map((o) => fetchExternalWithRetry<{ data: T[] }>(pageUrl(o))));
+      // A page lost to a burst limit gets one more try on its own, so a gap in the
+      // middle of the list (which would shift later chains' slugs) is unlikely.
+      for (let i = 0; i < pages.length; i++) {
+        const r = pages[i];
+        if (r.status === 'fulfilled') {
+          all.push(...(r.value.data ?? []));
+          continue;
+        }
+        try {
+          all.push(...((await fetchExternalWithRetry<{ data: T[] }>(pageUrl(offsets[i]))).data ?? []));
+        } catch (error) {
+          console.warn(`fetchAllL1BeatPages: page at offset ${offsets[i]} failed for ${endpoint}:`, error);
+        }
+      }
+      break;
+    }
     if (throttleMs > 0) await new Promise((r) => setTimeout(r, throttleMs));
   }
 
@@ -1633,42 +1917,6 @@ async function fetchAllL1BeatPages<T>(
     seen.add(key);
     return true;
   });
-}
-
-// Fetch the count of active validators for a single subnet by requesting
-// limit=1 and reading meta.total.  Cached per subnet for 5 minutes.
-export async function getL1BeatActiveValidatorCount(subnetId: string): Promise<number> {
-  const cacheKey = `l1beat-active-validators-${subnetId}`;
-  return fetchExternalWithCache(cacheKey, async () => {
-    try {
-      const params = new URLSearchParams({ subnet_id: subnetId, active: 'true', count: 'true', limit: '1' });
-      const response = await fetchExternalWithRetry<{ data: unknown[]; meta: { total: number } }>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?${params.toString()}`
-      );
-      return response.meta?.total ?? 0;
-    } catch (error) {
-      console.error(`L1Beat active validator count fetch error (${subnetId}):`, error);
-      return 0;
-    }
-  }, 5 * 60 * 1000);
-}
-
-// Fetch active validator counts for multiple subnets in batches to avoid 429s.
-// Returns a map of subnetId -> active validator count.
-export async function getL1BeatActiveValidatorCounts(subnetIds: string[]): Promise<Record<string, number>> {
-  const unique = [...new Set(subnetIds.filter(Boolean))];
-  const counts: Record<string, number> = {};
-  const BATCH_SIZE = 5;
-
-  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
-    const batch = unique.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (id) => ({ id, count: await getL1BeatActiveValidatorCount(id) }))
-    );
-    results.forEach(({ id, count }) => { counts[id] = count; });
-  }
-
-  return counts;
 }
 
 // L1Beat subnet record as returned by /api/v1/data/subnets/{id}
@@ -1735,13 +1983,13 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
     try {
       const params: Record<string, string> = { subnet_id: subnetId };
       if (activeOnly) params['active'] = 'true';
-      // Chains like the Primary Network have 3000+ validators (31 pages). Throttle
-      // between pages so we don't trip the API rate limit (429) mid-pagination,
-      // and cap the page count as a safety bound.
+      // The API serves up to 10,000 rows per page, so even the Primary Network
+      // (5,000+ validators including inactive history) is one request. The
+      // paging loop stays for larger sets; the throttle and cap are safety bounds.
       const allValidators = await fetchAllL1BeatPages<L1BeatValidator>(
         '/api/v1/data/validators',
         params,
-        { throttleMs: 200, maxPages: 60 }
+        { throttleMs: 150, maxPages: 10, pageSize: 10000 }
       );
       return allValidators.map((v) => {
         // PoS chains return a real staked amount + token; PoA chains omit them
@@ -1762,6 +2010,9 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
           remainingBalance: v.balance,
           explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
           validationId: v.validation_id,
+          startTime: v.start_time,
+          delegated: v.total_delegated ?? undefined,
+          delegators: v.delegator_count ?? undefined,
         };
       });
     } catch (error) {
@@ -1889,6 +2140,34 @@ export async function getEvmFeesBurned(
   }, 5 * 60 * 1000);
 }
 
+/**
+ * A burn series between two dates. The endpoint returns at most 100 points per
+ * call, so longer spans are fetched as parallel pages and joined.
+ */
+export async function getEvmFeesBurnedSpan(
+  chainId: number | string,
+  granularity: 'day' | 'week' | 'month',
+  from: Date,
+  to: Date,
+): Promise<FeeBurnPoint[] | null> {
+  const step = { day: 1, week: 7, month: 31 }[granularity] * 86_400_000;
+  const pages: [Date, Date][] = [];
+  // Contiguous pages: each starts the day after the previous one ends.
+  for (let end = to.getTime(); end >= from.getTime(); ) {
+    const start = Math.max(from.getTime(), end - step * 99);
+    pages.push([new Date(start), new Date(end)]);
+    end = start - 86_400_000;
+  }
+  const iso = (d: Date) => `${d.toISOString().slice(0, 10)}T00:00:00Z`;
+  const results = await Promise.all(
+    pages.map(([f, t]) => getEvmFeesBurned(chainId, { granularity, limit: 100, from: iso(f), to: iso(t) })),
+  );
+  if (results.some((r) => !r)) return null;
+  const byPeriod = new Map<string, FeeBurnPoint>();
+  for (const r of results) for (const p of r!.series) byPeriod.set(p.period, p);
+  return [...byPeriod.values()].sort((a, b) => a.period.localeCompare(b.period));
+}
+
 // Network-wide all-time AVAX burned (nAVAX strings). The authoritative cumulative
 // for the live burn page; the websocket layers new-block deltas on top.
 export interface BurnedTotal {
@@ -1896,6 +2175,641 @@ export interface BurnedTotal {
   total_burned: string; // nAVAX
   by_chain: { p_chain: string | null; x_chain: string | null; c_chain: string | null };
   updated_at: string;
+}
+
+// --- Staking (Primary Network) ----------------------------------------------
+// Stake amounts in these endpoints are nAVAX decimal strings: totals pass 2^53.
+
+export const PRIMARY_NETWORK_SUBNET_ID = '11111111111111111111111111111111LpoYY';
+
+export interface StakingSummary {
+  as_of: string;
+  validator_count: number;
+  /** Active delegations, not unique delegators. */
+  delegation_count: number;
+  own_stake: string;
+  delegated_stake: string;
+  total_stake: string;
+  /** Total AVAX supply (platform.getCurrentSupply), not circulating. */
+  total_supply: string;
+  staked_supply_percent: number;
+  delegation_fee: {
+    median_percent: number;
+    histogram: {
+      label: string;
+      min_percent: number;
+      max_percent: number | null;
+      validator_count: number;
+      total_stake: string;
+    }[];
+  };
+  concentration: {
+    top10_percent: number;
+    top50_percent: number;
+    top100_percent: number;
+    nakamoto_33: number;
+    nakamoto_50: number;
+  };
+}
+
+export interface StakingUnlockWeek {
+  /** Monday 00:00 UTC; the first row is the current week. */
+  week_start: string;
+  validator_stake: string;
+  delegated_stake: string;
+  validator_count: number;
+  delegation_count: number;
+}
+
+export interface PrimaryValidator {
+  validation_id: string;
+  node_id: string;
+  /** Own stake, nAVAX. */
+  weight: number;
+  start_time: string;
+  end_time?: string;
+  uptime_percentage?: number;
+  delegation_fee_percent?: number;
+  delegator_count?: number;
+  total_delegated?: number;
+  total_stake?: number;
+}
+
+export async function getStakingSummary(): Promise<StakingSummary | null> {
+  return fetchExternalWithCache('staking-summary', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: StakingSummary }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Staking summary fetch error:', error);
+      return null;
+    }
+  }, 60 * 1000);
+}
+
+export async function getStakingUnlocks(weeks: number): Promise<StakingUnlockWeek[] | null> {
+  return fetchExternalWithCache(`staking-unlocks-${weeks}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: StakingUnlockWeek[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking/unlocks?weeks=${weeks}`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Staking unlocks fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+/** Every active Primary Network validator with its delegation numbers, in one request. */
+export async function getPrimaryNetworkValidators(): Promise<PrimaryValidator[] | null> {
+  return fetchExternalWithCache('primary-validators', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: PrimaryValidator[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/validators?subnet_id=${PRIMARY_NETWORK_SUBNET_ID}&active=true&limit=10000&sort=total_stake&order=desc`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Primary Network validators fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+export interface ValidatorDelegation {
+  tx_id: string;
+  /** P-avax1 reward addresses; null when the tx names none. */
+  reward_owner: string[] | null;
+  /** nAVAX. */
+  stake: string;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+}
+
+/** A Primary Network node's running delegations, all pages, largest first. */
+export async function getValidatorDelegations(nodeId: string): Promise<ValidatorDelegation[] | null> {
+  return fetchExternalWithCache(`validator-delegations-${nodeId}`, async () => {
+    try {
+      const rows: ValidatorDelegation[] = [];
+      // 500 is the endpoint's page cap; the busiest nodes need two or three pages.
+      for (let offset = 0; offset < 10_000; offset += 500) {
+        const response = await fetchExternalWithRetry<{ data: ValidatorDelegation[]; meta?: { has_more?: boolean } }>(
+          `${L1BEAT_EXTERNAL_API}/api/v1/data/validators/${encodeURIComponent(nodeId)}/delegations?active=true&sort=stake&order=desc&limit=500&offset=${offset}`,
+        );
+        rows.push(...(response.data ?? []));
+        if (!response.meta?.has_more) break;
+      }
+      return rows;
+    } catch (error) {
+      console.error('Validator delegations fetch error:', error);
+      return null;
+    }
+    // Busy nodes return hundreds of KB; persisting them would push the shared
+    // cache past its quota, which clears every persisted entry.
+  }, 5 * 60 * 1000, false);
+}
+
+export interface LiquidStakingProtocol {
+  id: string;
+  name: string;
+  token_symbol: string;
+  token_contract: string;
+  token_decimals: number;
+  status: 'live' | 'ended';
+  /** Whether the protocol has confirmed its P-Chain addresses, or they were matched on-chain. */
+  attribution: 'confirmed' | 'unconfirmed';
+  p_chain_addresses: string[];
+  // Live figures: null until sampled, always null once ended.
+  pooled_avax: string | null;
+  token_supply: string | null;
+  /** AVAX per token, decimal string. */
+  exchange_rate: string | null;
+  active_delegated: string | null;
+  active_delegations: number | null;
+  validator_count: number | null;
+  share_of_delegated_percent: number | null;
+  as_of: string | null;
+}
+
+export interface LiquidStaking {
+  protocols: LiquidStakingProtocol[];
+  totals: {
+    pooled_avax: string;
+    active_delegated: string;
+    active_delegations: number;
+    share_of_delegated_percent: number;
+  };
+  network_delegated_stake: string;
+}
+
+export async function getLiquidStaking(): Promise<LiquidStaking | null> {
+  return fetchExternalWithCache('staking-liquid', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: LiquidStaking }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/staking/liquid`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Liquid staking fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+export interface RestakingVault {
+  address: string;
+  collateral: { address: string; wrapper: string | null; symbol: string; decimals: number };
+  // Token base units.
+  deposited: string;
+  allocated: string;
+  idle: string;
+  limit: string | null;
+}
+
+export interface RestakedL1 {
+  subnet_id: string;
+  blockchain_id: string;
+  protocol_id: string;
+  is_active: boolean;
+  active_validators: number;
+  /** P-Chain weight of active validators registered through the restaking middleware. */
+  restaked_weight: number;
+  restaked_validators: number;
+  total_pchain_weight: number;
+  share_of_weight_percent: number | null;
+  operator_count: number;
+  vaults: RestakingVault[];
+  sampled_at: string;
+}
+
+export interface Restaking {
+  protocols: { id: string; name: string; url: string }[];
+  l1s: RestakedL1[];
+}
+
+/** Restaked collateral securing one L1, or null when none is registered. */
+export async function getChainRestaking(subnetId: string): Promise<{ l1: RestakedL1; protocol: Restaking['protocols'][number] | null } | null> {
+  // Cache the whole response, so chains without restaking (an empty l1s list)
+  // are cached too instead of refetched on every visit.
+  const data = await fetchExternalWithCache(`restaking-${subnetId}`, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: Restaking }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/restaking?subnet_id=${encodeURIComponent(subnetId)}`,
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Restaking fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+  const l1 = data?.l1s?.[0];
+  if (!l1) return null;
+  return { l1, protocol: data.protocols?.find((p) => p.id === l1.protocol_id) ?? null };
+}
+
+export interface TreasuryHolder {
+  id: string;
+  name: string;
+  ticker: string;
+  exchange: string;
+  kind: 'treasury' | 'etf';
+  sponsor: string | null;
+  /** Null until first fetched; never 0. */
+  avax_held: number | null;
+  /** The fund's own reported assets, not avax_held × price. */
+  aum_usd: number | null;
+  nav_per_share: number | null;
+  sponsor_fee_pct: number | null;
+  staking_pct: number | null;
+  staking_max_pct: number | null;
+  /** Date the figure is valid for (YYYY-MM-DD), not when it was fetched. */
+  as_of: string | null;
+  /** live: read from the issuer or CoinGecko; manual: taken from the latest filing. */
+  source: 'live' | 'manual';
+  source_url: string | null;
+  website_url: string | null;
+}
+
+export interface Treasuries {
+  holders: TreasuryHolder[];
+  totals: {
+    treasury_avax: number;
+    etf_avax: number;
+    combined_avax: number;
+    treasury_count: number;
+    etf_count: number;
+    avax_price_usd: number | null;
+    circulating_supply_avax: number | null;
+    combined_usd: number | null;
+    combined_share_of_circulating_percent: number | null;
+    market_as_of: string | null;
+  };
+  updated_at: string;
+}
+
+/** Companies and ETFs holding AVAX. */
+export async function getTreasuries(): Promise<Treasuries | null> {
+  return fetchWithCache('treasuries', async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean } & Treasuries>(`${API_URL}/treasuries`);
+      if (!response?.success || !Array.isArray(response.holders)) return null;
+      return { holders: response.holders, totals: response.totals, updated_at: response.updated_at };
+    } catch (error) {
+      console.error('Treasuries fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+export interface LendingMarket {
+  protocol_id: string;
+  market: string;
+  /** Zero address for native AVAX (BENQI qiAVAX). */
+  asset: string;
+  symbol: string;
+  decimals: number;
+  // Token base units.
+  total_supplied: string;
+  total_borrowed: string;
+  utilization_percent: number | null;
+  supply_apy_percent: number | null;
+  /** Aave V4: the base drawn rate, before each borrower's risk premium. */
+  borrow_apy_percent: number | null;
+  collateral_enabled: boolean | null;
+  ltv_percent: number | null;
+  liquidation_threshold_percent: number | null;
+  price_usd: number | null;
+  supplied_usd: number | null;
+  borrowed_usd: number | null;
+  supply_cap: string | null;
+  borrow_cap: string | null;
+  /**
+   * Aave E-Mode categories (V3) or spokes (V4) that include this asset; empty for
+   * BENQI. Missing on responses from before the field existed.
+   */
+  emode?: LendingEmodeEntry[];
+  sampled_at: string;
+}
+
+export interface LendingEmodeEntry {
+  /** Category id (V3) or spoke address (V4). */
+  id: string | number;
+  label: string;
+  /** Effective LTV, after any per-asset LTV-zero override. */
+  ltv_percent: number | null;
+  /** The category's own LTV before overrides. */
+  configured_ltv_percent?: number | null;
+  liquidation_threshold_percent: number | null;
+  liquidation_bonus_percent?: number | null;
+  as_collateral: boolean;
+  borrowable: boolean;
+  /** V4: the factor older positions keep from the previous config. */
+  previous_ltv_percent?: number | null;
+}
+
+interface LendingAssetSummary {
+  supplied: string;
+  borrowed: string;
+  by_protocol: { protocol_id: string; supplied: string; borrowed: string }[];
+}
+
+export interface Lending {
+  protocols: { id: string; name: string; url: string }[];
+  markets: LendingMarket[];
+  summary: {
+    /** WAVAX on Aave, native AVAX on BENQI. */
+    avax: LendingAssetSummary;
+    savax: LendingAssetSummary & { share_of_savax_supply_percent: number | null };
+    totals: {
+      supplied_usd: number;
+      borrowed_usd: number;
+      by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number }[];
+    };
+  };
+  sampled_at: string;
+}
+
+/** C-Chain lending markets (Aave V3, Aave V4, BENQI), sampled every few minutes. */
+export async function getLending(): Promise<Lending | null> {
+  return fetchExternalWithCache('lending', async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data?: Lending } & Partial<Lending>>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/lending`,
+      );
+      const data = response.data ?? (response.markets ? (response as Lending) : null);
+      return data?.summary ? data : null;
+    } catch (error) {
+      console.error('Lending fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+export interface DexVenue {
+  id: string;
+  name: string;
+  /** Groups versions of one protocol, e.g. Pharaoh V3 and Pharaoh DLMM. */
+  protocol: string;
+  volume_usd: number;
+  swaps: number;
+  /** 0–1: share of swaps that could be priced in USD. */
+  priced_share: number | null;
+  /** Distinct tx senders, bots included. */
+  unique_addresses: number;
+  flagged_swaps: number;
+}
+
+export interface DexSummary {
+  /** Last complete UTC day in the window; null before the first rollup. */
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  flag_threshold_usd: number;
+  dexes: DexVenue[];
+  totals: { volume_usd: number; swaps: number; priced_share: number | null; unique_addresses: number; flagged_swaps: number };
+}
+
+export interface DexDay {
+  date: string;
+  volume_usd: number;
+  swaps: number;
+  dexes: { id: string; volume_usd: number; swaps: number }[];
+}
+
+export interface DexPool {
+  pool: string;
+  dex: string;
+  protocol: string;
+  token0: { address: string; symbol: string };
+  token1: { address: string; symbol: string };
+  volume_usd: number;
+  swaps: number;
+}
+
+async function getDexData<T>(key: string, path: string, persist = true): Promise<T | null> {
+  return fetchExternalWithCache(key, async () => {
+    try {
+      const response = await fetchExternalWithRetry<{ data: T }>(`${L1BEAT_EXTERNAL_API}${path}`);
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`DEX fetch error (${path}):`, error);
+      return null;
+    }
+  }, 10 * 60 * 1000, persist);
+}
+
+/** Volume per tracked C-Chain DEX over the last `days` complete UTC days. */
+export const getDexSummary = (days: number) => getDexData<DexSummary>(`dex-${days}`, `/api/v1/metrics/dex?days=${days}`);
+export const getDexTimeseries = (days: number) => getDexData<DexDay[]>(`dex-ts-${days}`, `/api/v1/metrics/dex/timeseries?days=${days}`, days <= 365);
+export const getDexPools = (days: number, limit = 20) =>
+  getDexData<DexPool[]>(`dex-pools-${days}-${limit}`, `/api/v1/metrics/dex/pools?days=${days}&limit=${limit}`);
+
+// --- Perpetuals (GMX V2 and V1 on the C-Chain) ---
+export interface PerpsFlow {
+  volume_usd: number;
+  long_volume_usd: number;
+  short_volume_usd: number;
+  trades: number;
+  traders: number;
+  fees_usd: number;
+  liquidations: number;
+  liquidated_usd: number;
+}
+export interface PerpsSummary {
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  totals: PerpsFlow;
+  by_venue: (PerpsFlow & { id: string; name: string })[];
+}
+export interface PerpsDay {
+  date: string;
+  volume_usd: number;
+  trades: number;
+  fees_usd: number;
+  liquidated_usd: number;
+  venues: { id: string; volume_usd: number; trades: number }[];
+}
+export interface PerpsOpenInterestDay {
+  date: string;
+  long_usd: number;
+  short_usd: number;
+  by_market: { venue: string; market: string; name: string; pool?: string; long_usd: number; short_usd: number }[];
+}
+export interface PerpsLiquidation {
+  tx_hash: string;
+  time: string;
+  venue: string;
+  market: string;
+  market_name: string;
+  pool?: string;
+  account: string;
+  is_long: boolean;
+  size_usd: number;
+  collateral_usd: number;
+}
+const perpsPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/perps${path}`, persist);
+export const getPerpsSummary = (days: number) => perpsPath(`perps-${days}`, `?days=${days}`) as Promise<PerpsSummary | null>;
+export const getPerpsTimeseries = (days: number) =>
+  perpsPath(`perps-ts-${days}`, `/timeseries?days=${days}`, days <= 365) as Promise<PerpsDay[] | null>;
+export const getPerpsOpenInterest = (days: number) =>
+  perpsPath(`perps-oi-${days}`, `/open-interest?days=${days}`, days <= 90) as Promise<PerpsOpenInterestDay[] | null>;
+export const getPerpsTopLiquidations = (days: number, limit = 8) =>
+  perpsPath(`perps-liq-${days}-${limit}`, `/liquidations/top?days=${days}&limit=${limit}`) as Promise<PerpsLiquidation[] | null>;
+
+// --- Bridges (C-Chain side of CCTP, LayerZero, Stargate, Avalanche Bridge, CCIP) ---
+export interface BridgeFlow {
+  inflow_usd: number;
+  outflow_usd: number;
+  net_usd: number;
+  transfers: number;
+}
+export interface BridgeSummary {
+  as_of: string | null;
+  from: string | null;
+  days: number;
+  flag_threshold_usd: number;
+  totals: BridgeFlow & { priced_share: number | null; flagged_transfers: number; passthrough_count: number };
+  by_bridge: (BridgeFlow & { id: string; name: string; priced_share: number | null; flagged_transfers: number })[];
+  /** Counterparty chains, ordered by USD moved; avalanche_l1 marks Avalanche L1s reached over LayerZero. */
+  by_chain: (BridgeFlow & {
+    chain: string;
+    name: string;
+    avalanche_l1: boolean;
+    /** Per-bridge split of this chain's flow, when the indexer provides it. */
+    bridges?: { id: string; inflow_usd: number; outflow_usd: number; transfers: number }[];
+  })[];
+  by_token: (BridgeFlow & { token: string; symbol: string; decimals: number | null; priced: boolean; inflow_amount: string; outflow_amount: string })[];
+}
+export interface BridgeDay extends BridgeFlow {
+  date: string;
+  bridges: { id: string; inflow_usd: number; outflow_usd: number; transfers: number }[];
+}
+export interface BridgeTransfer {
+  tx_hash: string;
+  time: string;
+  bridge: string;
+  direction: 'in' | 'out';
+  chain: string;
+  chain_name: string;
+  token: string;
+  symbol: string;
+  decimals: number | null;
+  amount: string;
+  usd: number | null;
+  from: string | null;
+  to: string | null;
+  via?: string;
+  passthrough: boolean;
+}
+const bridgePath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/bridges${path}`, persist);
+export const getBridgeSummary = (days: number) => bridgePath(`bridges-${days}`, `?days=${days}`) as Promise<BridgeSummary | null>;
+export const getBridgeTimeseries = (days: number) =>
+  bridgePath(`bridges-ts-${days}`, `/timeseries?days=${days}`, days <= 365) as Promise<BridgeDay[] | null>;
+export const getBridgeTopTransfers = (days: number, limit = 10) =>
+  bridgePath(`bridges-top-${days}-${limit}`, `/transfers/top?days=${days}&limit=${limit}`) as Promise<BridgeTransfer[] | null>;
+export const getBridgeRecentTransfers = (limit = 10) =>
+  bridgePath(`bridges-recent-${limit}`, `/transfers/recent?limit=${limit}`) as Promise<BridgeTransfer[] | null>;
+
+export interface LendingTotalsDay {
+  date: string;
+  supplied_usd: number;
+  borrowed_usd: number;
+  /** Markets with deposits but no oracle price that day; left out of the USD sums. */
+  unpriced_markets?: number;
+  by_protocol: { protocol_id: string; supplied_usd: number; borrowed_usd: number; unpriced_markets?: number }[];
+}
+
+export interface LiquidationsDay {
+  date: string;
+  count: number;
+  /** Liquidations whose seized side has no USD price yet. */
+  unpriced: number;
+  /** Debt the liquidators paid back, priced by the protocol oracle. */
+  repaid_usd: number;
+  seized_usd: number;
+  by_protocol: { protocol_id: string; count: number; repaid_usd: number; seized_usd: number }[];
+}
+
+export interface Liquidation {
+  protocol_id: string;
+  tx_hash: string;
+  block_time: string;
+  borrower: string;
+  liquidator: string;
+  debt: { address: string; symbol: string; decimals: number; amount: string; usd: number | null };
+  collateral: { address: string; symbol: string; decimals: number; amount: string; usd: number | null };
+}
+
+// Long windows run to megabytes; persisting them would overflow sessionStorage,
+// whose quota error clears every cached entry, so they stay in memory.
+const lendingPath = (key: string, path: string, persist = true) => getDexData(key, `/api/v1/metrics/lending${path}`, persist);
+/** Daily supplied and borrowed USD per lending protocol. */
+export const getLendingTotals = (days: number) => lendingPath(`lending-totals-${days}`, `/timeseries/totals?days=${days}`, days <= 365) as Promise<LendingTotalsDay[] | null>;
+export interface LendingAssetDay {
+  date: string;
+  /** Token base units (18 decimals for AVAX and sAVAX). */
+  supplied: string;
+  borrowed: string;
+  by_protocol: { protocol_id: string; supplied: string; borrowed: string }[];
+}
+/** Daily AVAX or sAVAX supplied and borrowed in tokens, summed across protocols. */
+export const getLendingAsset = (asset: 'avax' | 'savax', days: number) =>
+  lendingPath(`lending-asset-${asset}-${days}`, `/timeseries?asset=${asset}&days=${days}`, days <= 365) as Promise<LendingAssetDay[] | null>;
+export const getLiquidationsDaily = (days: number) =>
+  lendingPath(`liq-daily-${days}`, `/liquidations?days=${days}`, days <= 90) as Promise<LiquidationsDay[] | null>;
+export const getLiquidationsTop = (days: number, limit = 10) =>
+  lendingPath(`liq-top-${days}-${limit}`, `/liquidations/top?days=${days}&limit=${limit}`) as Promise<Liquidation[] | null>;
+export const getLiquidationsRecent = (limit = 10) => lendingPath(`liq-recent-${limit}`, `/liquidations/recent?limit=${limit}`) as Promise<Liquidation[] | null>;
+
+export interface DelegatorDelegation {
+  tx_id: string;
+  node_id: string;
+  /** nAVAX. */
+  stake: string;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+}
+
+export interface DelegatorPage {
+  data: DelegatorDelegation[];
+  meta: {
+    /** Rows matching the active filter. */
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+    /** Always the address's full history, whatever the filter. */
+    summary: {
+      active_count: number;
+      active_stake: string;
+      validator_count: number;
+      first_delegation_time: string | null;
+    };
+  };
+}
+
+/** One page of a reward address's delegations. Addresses can have millions, so this never fetches them all. */
+export async function getDelegatorDelegations(
+  address: string,
+  opts: { active?: boolean; sort: 'stake' | 'start_time' | 'end_time'; order: 'asc' | 'desc'; limit: number; offset: number },
+): Promise<DelegatorPage | null> {
+  const params = new URLSearchParams({ sort: opts.sort, order: opts.order, limit: String(opts.limit), offset: String(opts.offset) });
+  if (opts.active != null) params.set('active', String(opts.active));
+  return fetchExternalWithCache(`delegator-${address}-${params.toString()}`, async () => {
+    try {
+      return await fetchExternalWithRetry<DelegatorPage>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/delegators/${encodeURIComponent(address)}/delegations?${params.toString()}`,
+      );
+    } catch (error) {
+      console.error('Delegator delegations fetch error:', error);
+      return null;
+    }
+  }, 5 * 60 * 1000);
 }
 
 export async function getBurnedTotal(): Promise<BurnedTotal | null> {
@@ -1912,40 +2826,24 @@ export async function getBurnedTotal(): Promise<BurnedTotal | null> {
   }, 60 * 1000);
 }
 
-// Aggregate daily fee burn across all L1 subnets for network-wide chart
+// Daily L1 validation fees summed across every L1. The indexer aggregates when
+// subnet_id is omitted, so this is one request instead of one per L1 (which ran
+// into the API's burst limit and dropped L1s from the daily totals).
 export async function getNetworkDailyFeeBurn(days: number = 30): Promise<{ timestamp: number; value: number }[]> {
   const cacheKey = `l1beat-network-daily-fees-${days}`;
   return fetchExternalWithCache(cacheKey, async () => {
     try {
-      // Get all L1 chains to find subnet IDs
-      const chains = await getChains();
-      const l1SubnetIds = [...new Set(
-        // Filter guarantees subnetId is present, so it is safe as a string here.
-        chains.filter(c => c.isL1 && c.subnetId).map(c => c.subnetId!)
-      )];
-
-      // Fetch daily fees for all subnets in parallel
-      const allFees = await Promise.all(
-        l1SubnetIds.map(id => getL1BeatDailyFeeBurn(id))
+      const response = await fetchExternalWithRetry<{ data: DailyFeeBurn[] }>(
+        `${L1BEAT_EXTERNAL_API}/api/v1/metrics/fees/daily?days=${days}`
       );
-
-      // Aggregate by date
-      const feesByDate = new Map<string, number>();
-      allFees.flat().forEach(entry => {
-        const current = feesByDate.get(entry.date) || 0;
-        feesByDate.set(entry.date, current + entry.total_fees_burned);
-      });
-
-      // Convert to sorted array, filter by days, convert nAVAX to AVAX
-      const sorted = Array.from(feesByDate.entries())
-        .map(([date, nAvax]) => ({
-          timestamp: Math.floor(new Date(date).getTime() / 1000),
-          value: nAvax / 1_000_000_000,
+      // nAVAX to AVAX, oldest first.
+      return (response.data ?? [])
+        .map((entry) => ({
+          timestamp: Math.floor(new Date(entry.date).getTime() / 1000),
+          value: entry.total_fees_burned / 1_000_000_000,
         }))
         .sort((a, b) => a.timestamp - b.timestamp)
         .slice(-days);
-
-      return sorted;
     } catch (error) {
       console.error('Network daily fee burn fetch error:', error);
       return [];
@@ -1966,6 +2864,23 @@ export async function getL1BeatValidator(id: string, subnetId?: string): Promise
     } catch (error) {
       console.error(`L1Beat validator fetch error (${id}):`, error);
       return null;
+    }
+  }, 5 * 60 * 1000);
+}
+
+// Every validation a node has run, active or ended, across all subnets.
+export async function getL1BeatNodeValidations(nodeId: string): Promise<L1BeatValidator[]> {
+  const cacheKey = `l1beat-node-validations-${nodeId}`;
+  return fetchExternalWithCache(cacheKey, async () => {
+    try {
+      return await fetchAllL1BeatPages<L1BeatValidator>(
+        '/api/v1/data/validators',
+        { node_id: nodeId },
+        { maxPages: 5, pageSize: 1000 }
+      );
+    } catch (error) {
+      console.error(`L1Beat node validations fetch error (${nodeId}):`, error);
+      return [];
     }
   }, 5 * 60 * 1000);
 }
@@ -2119,7 +3034,7 @@ export async function getTokenLogos(
 }
 
 // FX rates for non-USD pegs. Cached for ~6h since rates barely move intraday.
-// Source: frankfurter.app (ECB rates, free, no key). Falls back to a rough
+// Source: frankfurter.dev (ECB rates, free, no key). Falls back to a rough
 // snapshot if the call fails so the page never breaks.
 export interface FxRates {
   EUR: number;
@@ -2145,7 +3060,7 @@ export async function getFxRates(): Promise<FxRates> {
   return fetchWithCache('fx-rates-usd', async () => {
     try {
       const res = await fetch(
-        `https://api.frankfurter.app/latest?from=USD&to=${FX_CODES.join(',')}`,
+        `https://api.frankfurter.dev/v1/latest?from=USD&to=${FX_CODES.join(',')}`,
       );
       if (!res.ok) throw new Error(`fx http ${res.status}`);
       const json = (await res.json()) as { rates?: Record<string, number> };

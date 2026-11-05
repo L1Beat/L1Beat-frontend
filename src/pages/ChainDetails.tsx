@@ -1,39 +1,46 @@
+import { ChainIcmCard } from '../components/ChainIcmCard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useParams, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { getChains, getTPSHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, DailyFeeBurn } from '../api';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
+import { chainSeo } from '../utils/chainSeo';
+import { format, parseISO } from 'date-fns';
+import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, getChainRestaking, DailyFeeBurn } from '../api';
+import type { RestakedL1 } from '../api';
 import { Chain, TPSHistory, ChainRisk } from '../types';
 import {
-  Activity,
   ArrowLeft,
   Search,
   Info,
   Copy,
   Check,
   ExternalLink,
-  Users,
   TrendingUp,
   AlertTriangle,
   Shield,
   Globe,
   MessageCircle,
+  Send,
   Github,
-  BarChart3
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
-import { watermarkPlugin, smoothLinePath } from '../utils/chartConfig';
+import { watermarkPlugin, getInkRgb } from '../utils/chartConfig';
+import { NodeId } from '../components/NodeId';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip as ChartTooltip, Legend as ChartLegend, TooltipItem } from 'chart.js';
-import { StakeDistributionChart, getValidatorColor } from '../components/StakeDistributionChart';
+import { StakeDistributionChart } from '../components/StakeDistributionChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { SEO } from '../components/SEO';
+import { SegmentedControl, StatStrip } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
 import { useToast } from '../components/Toaster';
 import { useTheme } from '../hooks/useTheme';
 import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits';
+import { chartPointerProps } from '../utils/chartPointer';
+import { isStale, missingActivity } from '../utils/activityCoverage';
+import { uptimeFill, uptimeMinimum } from '../utils/uptime';
 
 // Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
 const NAV_SCROLL_OFFSET = 56 + 48 + 12;
@@ -50,6 +57,7 @@ export function ChainDetails() {
   const { toast } = useToast();
   const [chain, setChain] = useState<Chain | null>(null);
   const [tpsHistory, setTPSHistory] = useState<TPSHistory[]>([]);
+  const [txHistory, setTxHistory] = useState<{ timestamp: number; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   // Shell (header + KPIs) renders as soon as the chain is found; the heavy
   // per-chain data (validators, TPS history, fees) streams in afterwards while
@@ -68,7 +76,9 @@ export function ChainDetails() {
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
   const [activeSection, setActiveSection] = useState<string>('activity');
   const [subnetType, setSubnetType] = useState<'l1' | 'legacy' | null>(null);
+  const [activityOwner, setActivityOwner] = useState<Chain | null>(null);
   const [risk, setRisk] = useState<ChainRisk | null>(null);
+  const [restaking, setRestaking] = useState<Awaited<ReturnType<typeof getChainRestaking>>>(null);
   const [dailyFeeBurn, setDailyFeeBurn] = useState<DailyFeeBurn[]>([]);
   // Full-history series used for the "All" timeframe. For L1s this is the same
   // daily data; for C-Chain it's monthly, because daily is capped at 100 points
@@ -95,6 +105,7 @@ export function ChainDetails() {
       setDetailsLoading(true);
       setValidatorsLoading(true);
       setTPSHistory([]);
+      setTxHistory([]);
       setDailyFeeBurn([]);
       setFeeBurnAllSeries([]);
       setAllTimeFeesBurned(0);
@@ -102,13 +113,26 @@ export function ChainDetails() {
       setCchainBurnDaily([]);
       setCchainBurnMonthly([]);
       setSubnetType(null);
+      setActivityOwner(null);
 
       // Phase 1 — find the chain and paint the shell (header + KPIs) immediately.
       let foundChain;
+      let owner: Chain | undefined;
       try {
         const chains = await getChains({ includeInactive: true });
         if (cancelled) return;
         foundChain = chains.find(c => c.chainId === chainId);
+        if (foundChain) owner = activityOwnerOf(activityOwners(chains), foundChain);
+        if (!foundChain && chainId) {
+          // Registry renames that only add word breaks ("turingchain" became
+          // "Turing Chain") changed the slug; send old links to the new one.
+          const bare = chainId.replace(/-/g, '');
+          const renamed = chains.find(c => c.chainId.replace(/-/g, '') === bare);
+          if (renamed) {
+            navigate(`/chain/${renamed.chainId}${window.location.search}`, { replace: true });
+            return;
+          }
+        }
       } catch {
         if (!cancelled) {
           setError('Failed to load chain details');
@@ -128,6 +152,9 @@ export function ChainDetails() {
       }
 
       setChain({ ...foundChain, validators: [] });
+      // Its EVM ID's activity is counted on another blockchain's page.
+      const activityElsewhere = !!owner && owner !== foundChain;
+      setActivityOwner(activityElsewhere ? owner! : null);
       setError(null);
       setLoading(false);
       setValidatorsLoading(!!foundChain.subnetId);
@@ -137,8 +164,8 @@ export function ChainDetails() {
       const sid = foundChain.subnetId;
 
       // Kick off the validators fetch NOW (concurrent with the batch) but await
-      // it separately — for big chains it can take ~20s, and it must not hold
-      // up the fast TPS/fees data or the rest of the shell.
+      // it separately so it never holds up the TPS/fees data. One request
+      // returns every validator, active and inactive.
       const validatorsPromise = sid ? getL1BeatValidators(sid, false) : null;
 
       // The Primary Network / C-Chain burns EIP-1559 base fee + priority tip on
@@ -151,9 +178,11 @@ export function ChainDetails() {
       try {
         // C-Chain: fetch daily (recent, for 7/30/90 — capped at 100 points) AND
         // monthly (full history 2020→now, for the "All" view).
-        const [sType, history, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
+        const [sType, history, txCounts, feeBurnData, feeMetrics, cchainDaily, cchainMonthly] = await Promise.all([
           sid ? getL1BeatSubnetType(sid) : Promise.resolve(null),
-          getTPSHistory(30, apiChainId),
+          // One extra day: the unfinished current day is dropped, leaving 30.
+          activityElsewhere ? Promise.resolve([]) : getTPSHistory(31, apiChainId),
+          activityElsewhere ? Promise.resolve([]) : getChainTxCountHistory(apiChainId, 31),
           sid && !isPrimary ? getL1BeatDailyFeeBurn(sid) : Promise.resolve([]),
           sid && !isPrimary ? getL1BeatFeeMetrics(sid) : Promise.resolve([]),
           isPrimary ? getEvmFeesBurned(foundChain.originalChainId || 43114, { granularity: 'day', limit: 100 }) : Promise.resolve(null),
@@ -161,7 +190,8 @@ export function ChainDetails() {
         ]);
         if (cancelled) return;
         setSubnetType(sType);
-        setTPSHistory(history);
+        setTPSHistory(history.slice(-30));
+        setTxHistory(txCounts.slice(-30));
         if (isPrimary && cchainDaily) {
           // Map the C-Chain burn series into the shared DailyFeeBurn shape so it
           // reuses the same cumulative-burn chart. Daily nAVAX is well under
@@ -199,7 +229,7 @@ export function ChainDetails() {
         if (!cancelled) setDetailsLoading(false);
       }
 
-      // Phase 3 — validators (already in flight). Slow chains stream in here.
+      // Phase 3 — validators (already in flight).
       if (validatorsPromise) {
         try {
           const vals = await validatorsPromise;
@@ -245,23 +275,8 @@ export function ChainDetails() {
 
   const getCurrentTPS = () => {
     if (!tpsHistory.length) return 'N/A';
-    const latestTPS = tpsHistory[tpsHistory.length - 1].totalTps;
-    if (latestTPS === 0) {
-      return '< 1.00';
-    }
-    if (latestTPS < 1 && latestTPS > 0) {
-      return '< 1.00';
-    }
-    return latestTPS.toFixed(2);
-  };
-
-  const getTPSColor = (tpsStr: string) => {
-    if (tpsStr === 'N/A') return 'text-muted-foreground';
-    if (tpsStr === '< 1.00') return 'text-yellow-500 dark:text-yellow-400';
-    const tps = Number(tpsStr);
-    if (tps >= 1) return 'text-green-500 dark:text-green-400';
-    if (tps >= 0.1) return 'text-yellow-500 dark:text-yellow-400';
-    return 'text-red-500 dark:text-red-400';
+    // The real figure: quiet chains run well under 1 TPS, and "< 1.00" hid how far under.
+    return formatTpsExact(tpsHistory[tpsHistory.length - 1].totalTps);
   };
 
   const tokenDecimals = chain?.networkToken?.decimals ?? 18;
@@ -270,7 +285,10 @@ export function ChainDetails() {
   // Even if EVM-native AVAX uses 18 decimals, we should display validator stake using 9 decimals.
   const stakeTokenDecimals = tokenSymbol === 'AVAX' ? 9 : tokenDecimals;
 
-  const getStakeBaseUnits = (v: { weight: string }) => parseBaseUnits(v.weight) ?? 0n;
+  // Consensus weight: on the Primary Network a validator's delegations count with its own
+  // stake (both in nAVAX); L1 validators carry no delegations, so this is just their weight.
+  const getStakeBaseUnits = (v: { weight: string; delegated?: number }) =>
+    (parseBaseUnits(v.weight) ?? 0n) + BigInt(Math.round(v.delegated ?? 0));
 
   const filteredValidators = chain?.validators.filter(validator => {
     if (validatorStatus === 'active' && validator.active !== true) return false;
@@ -311,7 +329,9 @@ export function ChainDetails() {
     overscan: 12,
   });
 
-  const totalStakeBaseUnits = chain?.validators.reduce((sum, v) => sum + getStakeBaseUnits(v), 0n) || 0n;
+  // Shares are of the stake that is validating now; inactive validators would dilute them.
+  const totalStakeBaseUnits =
+    chain?.validators.reduce((sum, v) => (v.active ? sum + getStakeBaseUnits(v) : sum), 0n) || 0n;
   // L1 subnets use continuous fees — show remaining balance column.
   // Legacy subnets (primary network) use staking — show uptime column.
   const isL1Subnet = subnetType === 'l1';
@@ -360,8 +380,10 @@ export function ChainDetails() {
     const total = weights.reduce((a, b) => a + b, 0);
     let shares: number[] = [];
     if (total > 0) {
-      const head = weights.slice(0, 24).map((n) => n / total);
-      const tail = weights.slice(24).reduce((a, n) => a + n, 0) / total;
+      // At least every validator in the controlling group gets its own slice.
+      const shown = Math.max(24, dec.nakamoto_33 ?? 0);
+      const head = weights.slice(0, shown).map((n) => n / total);
+      const tail = weights.slice(shown).reduce((a, n) => a + n, 0) / total;
       shares = tail > 0 ? [...head, tail] : head;
     }
     return {
@@ -387,6 +409,19 @@ export function ChainDetails() {
       alive = false;
     };
   }, [chain?.platformChainId]);
+
+  useEffect(() => {
+    const id = chain?.subnetId || '';
+    setRestaking(null);
+    if (!id) return;
+    let alive = true;
+    getChainRestaking(id).then((r) => {
+      if (alive) setRestaking(r);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chain?.subnetId]);
 
   // Scroll-spy sections for the sticky nav. Validators now leads with the
   // decentralization summary, so it's a single validator-set section.
@@ -456,13 +491,13 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-[#ef4444]/15 flex items-center justify-center">
-          <AlertTriangle className="w-7 h-7 text-[#ef4444]" />
+        <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-muted-foreground" />
         </div>
         <h2 className="text-xl font-bold text-foreground mb-2">{error || 'Chain not found'}</h2>
         <button
           onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#ef4444] text-white text-sm font-semibold hover:bg-[#dc2626] transition-colors"
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded bg-foreground text-background hover:bg-foreground/90 text-sm font-semibold hover:bg-foreground/90 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Overview
@@ -472,8 +507,17 @@ export function ChainDetails() {
   }
 
   const tpsValue = getCurrentTPS();
-  const tpsColor = getTPSColor(tpsValue);
+  // Quiet chains read as 0 TPS, which hides real activity, so they get daily
+  // transaction counts instead. Busy chains stay on TPS.
+  const quiet = txHistory.length > 0 && Math.max(...txHistory.map((d) => d.value)) < QUIET_TX_PER_DAY;
+  const activityPoints = quiet
+    ? txHistory.map((d) => ({ t: d.timestamp, v: d.value }))
+    : tpsHistory.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
+  const latestTx = txHistory.length ? txHistory[txHistory.length - 1] : null;
   const lastUpdate = tpsHistory.length > 0 ? tpsHistory[tpsHistory.length - 1].timestamp : null;
+  // Old points shouldn't read as current; label them with their date.
+  const lastActivity = activityPoints.length ? activityPoints[activityPoints.length - 1].t : null;
+  const stale = isStale(lastActivity);
 
   // Validators stream in after the shell. Until they arrive, derive active/
   // inactive from the chain's validatorCount (already in the list payload) so
@@ -495,7 +539,8 @@ export function ChainDetails() {
     }
     if (lowerName.includes('discord')) return MessageCircle;
     if (lowerName.includes('github')) return Github;
-    if (lowerName.includes('telegram')) return MessageCircle;
+    // Paper plane, so Telegram and Discord don't share the speech bubble.
+    if (lowerName.includes('telegram')) return Send;
     if (lowerName.includes('youtube')) return ({ className }: { className?: string }) => (
       <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
@@ -520,16 +565,8 @@ export function ChainDetails() {
   };
 
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <SEO
-        title={chain.chainName}
-        description={
-          chain.description?.slice(0, 200) ||
-          `${chain.chainName} on Avalanche: current TPS, validators, economics, and a side-by-side compare against other L1s.`
-        }
-        image={chain.chainLogoUri}
-        url={`/chain/${chain.chainId}`}
-      />
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+      <SEO {...chainSeo(chain)} />
       <button
         onClick={() => navigate('/')}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -538,75 +575,53 @@ export function ChainDetails() {
         All chains
       </button>
 
-      <header className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[#ef4444]/15 blur-3xl" />
-        </div>
-        <div className="relative p-6 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="relative shrink-0">
-                <img
-                  src={chain.chainLogoUri || '/icon-dark-animated.svg'}
-                  alt=""
-                  className="w-14 h-14 rounded-2xl bg-background/40 p-1.5 ring-1 ring-white/[0.08]"
-                  onError={(e) => {
-                    e.currentTarget.src = '/icon-dark-animated.svg';
-                    e.currentTarget.onerror = null;
-                  }}
-                />
-                <div
-                  className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#1c1c1e] ${
-                    hasActiveValidators ? 'bg-green-500' : 'bg-muted'
-                  }`}
-                />
-              </div>
+      <header className="border-b border-border pb-5">
+        <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-start gap-4 min-w-0">
+              <img
+                src={chain.chainLogoUri || '/icon-dark-animated.svg'}
+                alt=""
+                className="w-11 h-11 rounded-md bg-muted shrink-0 object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = '/icon-dark-animated.svg';
+                  e.currentTarget.onerror = null;
+                }}
+              />
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight truncate">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h1 className="text-[22px] leading-7 font-semibold text-foreground truncate">
                     {chain.chainName}
                   </h1>
-                  {chain.network === 'mainnet' && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-[#ef4444]/15 text-[#ef4444]">
-                      MAINNET
-                    </span>
-                  )}
-                  {chain.network === 'fuji' && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-yellow-500/15 text-yellow-500">
-                      TESTNET
-                    </span>
-                  )}
-                  {hasActiveValidators ? (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-green-500/15 text-green-500">
-                      <span className="w-1 h-1 rounded-full bg-green-500" />
-                      ACTIVE
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                      INACTIVE
-                    </span>
-                  )}
-                  {(() => {
-                    const name = (chain.chainName || '').toLowerCase();
-                    const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
-                    const typeLabel = isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy Subnet';
-                    return (
-                      <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                        {typeLabel}
-                      </span>
-                    );
-                  })()}
-                  {chain.sybilResistanceType && (
-                    <span className="inline-flex items-center px-2 h-5 rounded-full text-[10px] font-bold tracking-wider bg-muted text-muted-foreground">
-                      {/proof of authority/i.test(chain.sybilResistanceType)
-                        ? 'PoA'
-                        : /proof of stake/i.test(chain.sybilResistanceType)
-                          ? 'PoS'
-                          : chain.sybilResistanceType}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${hasActiveValidators ? 'bg-up' : 'bg-muted-foreground/40'}`} />
+                    {hasActiveValidators ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {[
+                      chain.network === 'fuji' ? 'Fuji testnet' : chain.network === 'mainnet' ? 'Mainnet' : null,
+                      (() => {
+                        const name = (chain.chainName || '').toLowerCase();
+                        const isCC = name.includes('c-chain') || String(chain.originalChainId || '') === '43114';
+                        return isCC ? 'Primary Network' : chain.isL1 ? 'L1' : 'Legacy subnet';
+                      })(),
+                      risk?.validator_manager?.type === 'placeholder'
+                        ? 'Fixed validator set'
+                        : (restakedShare(risk?.validator_manager) ?? 0) > 0.5
+                        ? 'Restaked'
+                        : chain.sybilResistanceType
+                        ? /proof of authority/i.test(chain.sybilResistanceType)
+                          ? 'PoA'
+                          : /proof of stake/i.test(chain.sybilResistanceType)
+                            ? 'PoS'
+                            : chain.sybilResistanceType
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                   {chain.networkToken?.symbol && (
                     <span className="inline-flex items-center gap-1 font-medium text-foreground">
                       {chain.networkToken.logoUri && (
@@ -637,14 +652,14 @@ export function ChainDetails() {
                       <span>·</span>
                       <button
                         onClick={() => handleCopy('subnetId', chain.subnetId)}
-                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors font-mono"
+                        className="num inline-flex items-center gap-1 h-5 px-1.5 rounded bg-muted hover:bg-accent transition-colors"
                         title={chain.subnetId}
                       >
                         <span>
                           {chain.subnetId.slice(0, 6)}…{chain.subnetId.slice(-4)}
                         </span>
                         {copied === 'subnetId' ? (
-                          <Check className="w-2.5 h-2.5 text-green-500" />
+                          <Check className="w-2.5 h-2.5 text-up" />
                         ) : (
                           <Copy className="w-2.5 h-2.5" />
                         )}
@@ -663,7 +678,7 @@ export function ChainDetails() {
                             toast('Failed to copy RPC URL', 'error');
                           }
                         }}
-                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-background/40 hover:bg-background/70 transition-colors"
+                        className="inline-flex items-center gap-1 h-5 px-1.5 rounded bg-muted hover:bg-accent transition-colors"
                         title={chain.rpcUrls[0]}
                       >
                         <span>RPC</span>
@@ -673,18 +688,16 @@ export function ChainDetails() {
                   )}
                 </div>
                 {chain.description && (
-                  <p className="text-xs sm:text-[13px] text-muted-foreground leading-relaxed mt-3 max-w-2xl line-clamp-3">
+                  <p className="text-[12px] text-muted-foreground leading-relaxed mt-2 max-w-2xl line-clamp-2">
                     {chain.description}
                   </p>
                 )}
                 {chain.categories && chain.categories.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                  <div className="flex flex-wrap items-center gap-x-3 mt-2 text-[11px] text-muted-foreground capitalize">
                     {chain.categories.map((c) => (
-                      <span
-                        key={c}
-                        className="inline-flex items-center px-2 h-5 rounded text-[10px] font-semibold bg-[#ef4444]/10 text-[#ef4444]"
-                      >
-                        {c}
+                      <span key={c} className="inline-flex items-center gap-1.5">
+                        <span aria-hidden className="w-1.5 h-1.5 rounded-sm bg-muted-foreground/60" />
+                        {c.toLowerCase()}
                       </span>
                     ))}
                   </div>
@@ -697,7 +710,7 @@ export function ChainDetails() {
                   href={chain.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                   title="Website"
                 >
                   <Globe className="w-3.5 h-3.5 text-muted-foreground" />
@@ -708,7 +721,7 @@ export function ChainDetails() {
                   href={chain.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                   title="Explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
@@ -722,7 +735,7 @@ export function ChainDetails() {
                     href={social.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background/40 hover:bg-background/70 transition-colors"
+                    className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
                     title={social.name}
                   >
                     <Icon className="w-3.5 h-3.5 text-muted-foreground" />
@@ -735,45 +748,65 @@ export function ChainDetails() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          label="Current TPS"
-          value={tpsValue}
-          valueClassName={tpsColor}
-          icon={Activity}
-          loading={detailsLoading && tpsHistory.length === 0}
-        />
-        <KpiCard
-          label="Active Validators"
-          value={(chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString()}
-          icon={Users}
-        />
-        <KpiCard
-          label="Nakamoto (33%)"
-          value={decentralization?.nak33 != null ? String(decentralization.nak33) : '—'}
-          icon={Shield}
-          loading={detailsLoading && decentralization == null}
-        />
-        <KpiCard
-          label="Fees burned"
-          value={allTimeFeesBurned > 0 ? `${formatAvaxAmount(allTimeFeesBurned / 1_000_000_000)} AVAX` : '—'}
-          icon={TrendingUp}
-          loading={detailsLoading && allTimeFeesBurned === 0}
-        />
-      </div>
-
-      {lastUpdate && (
-        <div className="text-[11px] text-muted-foreground -mt-2">
-          Last updated {format(new Date(lastUpdate * 1000), 'MMM d, yyyy HH:mm')}
-        </div>
-      )}
+      <StatStrip
+        items={[
+          activityOwner
+            ? {
+                label: 'Activity',
+                value: '—',
+                sub: `Counted under ${activityOwner.chainName}`,
+                tooltip: `This chain shares EVM chain ID ${activityOwner.evmChainId} with another ${activityOwner.chainName} blockchain, so its transactions are shown there.`,
+              }
+            : !detailsLoading && tpsHistory.length === 0 && txHistory.length === 0
+            ? {
+                label: 'Activity',
+                value: '—',
+                sub: missingActivity(chain).short,
+                tooltip: missingActivity(chain).detail,
+              }
+            : quiet && latestTx
+            ? {
+                label: 'Transactions',
+                value: latestTx.value.toLocaleString(),
+                sub: `on ${utcDay(latestTx.timestamp, 'MMM d')}`,
+                tooltip: stale ? missingActivity(chain, lastActivity).detail : undefined,
+              }
+            : stale
+            ? {
+                label: 'TPS',
+                value: String(tpsValue),
+                sub: missingActivity(chain, lastActivity).short,
+                tooltip: missingActivity(chain, lastActivity).detail,
+              }
+            : {
+                label: lastUpdate ? `TPS, ${utcDay(lastUpdate, 'MMM d')}` : 'TPS',
+                value: detailsLoading && tpsHistory.length === 0 ? '—' : String(tpsValue),
+                sub: 'daily average',
+              },
+          {
+            label: 'Active validators',
+            value: (chain.validatorCount || chain.validators.filter((v) => v.active).length).toLocaleString(),
+          },
+          {
+            label: 'Nakamoto (33%)',
+            value: decentralization?.nak33 != null ? String(decentralization.nak33) : '—',
+            sub: 'validators to control a third of stake',
+            tooltip: 'Smallest number of validators that together control more than 33% of total stake. Higher means stake is more spread out.',
+          },
+          {
+            label: 'Fees burned',
+            value: allTimeFeesBurned > 0 ? formatAvaxAmount(allTimeFeesBurned / 1_000_000_000) : '—',
+            sub: allTimeFeesBurned > 0 ? 'AVAX, all time' : 'No burn data',
+          },
+        ]}
+      />
 
             {/* Sticky section nav — scroll-spy, matching the Metrics page */}
             <nav
-              className="sticky top-14 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 supports-[backdrop-filter]:bg-background/70 supports-[backdrop-filter]:backdrop-blur-md border-b border-border"
+              className="sticky top-12 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-background border-b border-border"
               aria-label="Sections"
             >
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar -mb-px">
                 {sections.map((s) => {
                   const isActive = activeSection === s.id;
                   return (
@@ -781,10 +814,10 @@ export function ChainDetails() {
                       key={s.id}
                       type="button"
                       onClick={() => scrollToSection(s.id)}
-                      className={`shrink-0 inline-flex items-center h-8 px-3 rounded-lg text-[12px] font-semibold tracking-wide transition-colors ${
+                      className={`shrink-0 inline-flex items-center h-10 px-2.5 border-b-2 text-[12px] font-medium transition-colors ${
                         isActive
-                          ? 'bg-[#ef4444]/12 text-[#ef4444]'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                          ? 'border-foreground text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       {s.label}
@@ -795,13 +828,26 @@ export function ChainDetails() {
             </nav>
 
             <div className="flex flex-col gap-4 sm:gap-6">
-              <section id="activity" className="order-1 scroll-mt-28">
+              <section id="activity" className="order-1 scroll-mt-24">
                 <SectionErrorBoundary label="activity">
-                  <ChainActivityCard history={tpsHistory} loading={detailsLoading && tpsHistory.length === 0} />
+                  <ChainActivityCard
+                    chain={chain}
+                    apiChainId={chain.originalChainId || chain.chainId}
+                    tps={tpsHistory}
+                    tx={txHistory}
+                    defaultUnit={quiet ? 'tx' : 'tps'}
+                    loading={detailsLoading && tpsHistory.length === 0}
+                    elsewhere={activityOwner}
+                  />
+                </SectionErrorBoundary>
+                <SectionErrorBoundary label="interchain messages">
+                  <div className="mt-4 sm:mt-6 empty:hidden">
+                    <ChainIcmCard chain={chain} />
+                  </div>
                 </SectionErrorBoundary>
               </section>
 
-              <section id="economics" className="order-3 scroll-mt-28">
+              <section id="economics" className="order-3 scroll-mt-24">
                 <SectionErrorBoundary label="economics">
                   {detailsLoading ? (
                     <EconomicsSkeleton />
@@ -816,7 +862,7 @@ export function ChainDetails() {
                 if (notApplicable) {
                   return (
                     <div className="space-y-4 sm:space-y-6">
-                      <div className="bg-card rounded-xl border border-border p-8 sm:p-10 text-center max-w-2xl mx-auto">
+                      <div className="bg-card rounded-md border border-border p-8 sm:p-10 text-center max-w-2xl mx-auto">
                         <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
                           <TrendingUp className="w-5 h-5 text-muted-foreground" />
                         </div>
@@ -845,31 +891,20 @@ export function ChainDetails() {
                     return (
                       <>
                         {/* Summary Cards — shared KpiCard style for page consistency */}
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                          <KpiCard
-                            label="Total burned (AVAX)"
-                            value={formatAvaxValue(allTimeBurnedAvax)}
-                            valueClassName="text-[#ef4444]"
-                            icon={Activity}
-                          />
-                          <KpiCard
-                            label="Today's burn (AVAX)"
-                            value={formatAvaxValue(latestDailyAvax)}
-                            icon={TrendingUp}
-                          />
-                          <KpiCard
-                            label="Avg daily burn (AVAX)"
-                            value={formatAvaxValue(avgDailyAvax)}
-                            icon={BarChart3}
-                          />
-                        </div>
+                        <StatStrip
+                          items={[
+                            { label: 'Total burned', value: formatAvaxValue(allTimeBurnedAvax), sub: 'AVAX, all time' },
+                            { label: "Today's burn", value: formatAvaxValue(latestDailyAvax), sub: 'AVAX' },
+                            { label: 'Avg daily burn', value: formatAvaxValue(avgDailyAvax), sub: `AVAX, ${filteredFeeBurn.length}-day window` },
+                          ]}
+                        />
 
                         {/* Cumulative Fee Burn Chart */}
-                        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
-                          <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="bg-card rounded-md border border-border overflow-hidden">
+                          <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                              <h3 className="text-base sm:text-lg font-bold text-foreground">Cumulative Fee Burn</h3>
-                              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                              <h3 className="text-[14px] font-semibold text-foreground">Cumulative fee burn</h3>
+                              <p className="text-[12px] text-muted-foreground mt-0.5">
                                 {isPrimaryNetwork
                                   ? feeBurnSplit
                                     ? `AVAX burned via EIP-1559 · ${feeBurnSplit.basePct.toFixed(1)}% base fee · ${feeBurnSplit.priorityPct.toFixed(1)}% priority tip`
@@ -878,14 +913,14 @@ export function ChainDetails() {
                               </p>
                             </div>
                             <div className="flex gap-1.5">
-                              {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+                              {([{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
                                 <button
                                   key={value}
                                   onClick={() => setFeeBurnTimeframe(value as 0 | 7 | 30 | 90)}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                  className={`num h-7 px-2.5 rounded text-[12px] font-medium transition-colors ${
                                     feeBurnTimeframe === value
-                                      ? 'bg-[#ef4444] text-white shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                                      ? 'bg-foreground text-background'
+                                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                                   }`}
                                 >
                                   {label}
@@ -920,7 +955,7 @@ export function ChainDetails() {
                                       ctx.moveTo(tooltip.caretX, chartArea.top);
                                       ctx.lineTo(tooltip.caretX, chartArea.bottom);
                                       ctx.lineWidth = 1;
-                                      ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+                                      ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)';
                                       ctx.stroke();
                                       ctx.restore();
                                     }
@@ -928,20 +963,8 @@ export function ChainDetails() {
                                 };
 
                                 // Line shadow plugin matching AvalancheNetworkMetrics
-                                const lineShadowPlugin = {
-                                  id: 'feeBurnLineShadow',
-                                  beforeDatasetsDraw: (chart: any) => {
-                                    const { ctx } = chart;
-                                    ctx.save();
-                                    ctx.shadowColor = 'rgba(239, 68, 68, 0.35)';
-                                    ctx.shadowBlur = 12;
-                                    ctx.shadowOffsetX = 0;
-                                    ctx.shadowOffsetY = 4;
-                                  },
-                                  afterDatasetsDraw: (chart: any) => {
-                                    chart.ctx.restore();
-                                  },
-                                };
+                                // Glow retired: instrument output has no drop shadow.
+                                const lineShadowPlugin = { id: 'feeBurnLineShadow' };
 
                                 const isDark = theme === 'dark';
 
@@ -958,25 +981,26 @@ export function ChainDetails() {
                                       datasets: [{
                                         label: 'Cumulative Burn (AVAX)',
                                         data: cumulativeData,
-                                        borderColor: 'rgb(239, 68, 68)',
+                                        borderColor: `rgb(${getInkRgb(isDark)})`,
                                         backgroundColor: (ctx: any) => {
                                           const chart = ctx.chart;
                                           const { ctx: c, chartArea } = chart;
-                                          if (!chartArea) return 'rgba(239, 68, 68, 0.1)';
+                                          const ink = getInkRgb(isDark);
+                                          if (!chartArea) return `rgba(${ink}, 0.08)`;
                                           const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                                          gradient.addColorStop(0, 'rgba(239, 68, 68, 0.35)');
-                                          gradient.addColorStop(0.4, 'rgba(239, 68, 68, 0.15)');
-                                          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.02)');
+                                          gradient.addColorStop(0, `rgba(${ink}, 0.12)`);
+                                          gradient.addColorStop(0.5, `rgba(${ink}, 0.05)`);
+                                          gradient.addColorStop(1, `rgba(${ink}, 0)`);
                                           return gradient;
                                         },
                                         fill: true,
-                                        borderWidth: isDark ? 2.5 : 2,
-                                        tension: 0.35,
+                                        borderWidth: 1.5,
+                                        tension: 0.2,
                                         pointRadius: 0,
-                                        pointHoverRadius: 7,
-                                        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-                                        pointHoverBorderColor: 'rgb(239, 68, 68)',
-                                        pointHoverBorderWidth: 2.5,
+                                        pointHoverRadius: 4,
+                                        pointHoverBackgroundColor: isDark ? '#1a1d21' : '#ffffff',
+                                        pointHoverBorderColor: `rgb(${getInkRgb(isDark)})`,
+                                        pointHoverBorderWidth: 1.5,
                                       }],
                                     }}
                                     plugins={[crosshairPlugin, lineShadowPlugin, watermarkPlugin]}
@@ -1040,6 +1064,9 @@ export function ChainDetails() {
                                             font: { size: 11 },
                                             maxTicksLimit: 8,
                                             maxRotation: 0,
+                                            // Drop labels that would collide on narrow screens.
+                                            autoSkip: true,
+                                            autoSkipPadding: 12,
                                           },
                                         },
                                         y: {
@@ -1073,9 +1100,8 @@ export function ChainDetails() {
                       </>
                     );
                   })() : (
-                    <div className="bg-card rounded-xl border border-border p-8 text-center">
-                      <TrendingUp className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-muted-foreground">No fee burn data available for this chain.</p>
+                    <div className="border-y border-border py-10 text-center text-[12px] text-muted-foreground">
+                      No fee burn data for this chain yet.
                     </div>
                   )}
                 </div>
@@ -1084,7 +1110,7 @@ export function ChainDetails() {
                 </SectionErrorBoundary>
               </section>
 
-              <section id="validators" className="order-2 scroll-mt-28">
+              <section id="validators" className="order-2 scroll-mt-24">
                 <SectionErrorBoundary label="validators">
                 <div className="space-y-4 sm:space-y-6">
                   {/* Decentralization summary — the verdict + control read that
@@ -1094,6 +1120,7 @@ export function ChainDetails() {
                       data={decentralization}
                       sybil={chain.sybilResistanceType}
                       vm={risk?.validator_manager ?? null}
+                      restaking={restaking?.l1.is_active ? restaking : null}
                     />
                   )}
 
@@ -1103,11 +1130,9 @@ export function ChainDetails() {
                   <>
                   {/* No active validators warning */}
                   {chain.validators.length > 0 && !chain.validators.some(v => v.active) && (
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                      <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                        This chain has no active validators. Showing historical validator data below.
-                      </p>
+                    <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
+                      <AlertTriangle className="w-3.5 h-3.5 text-[#d4a017] flex-shrink-0" />
+                      This chain has no active validators. Showing historical validator data below.
                     </div>
                   )}
 
@@ -1123,18 +1148,25 @@ export function ChainDetails() {
                   )}
 
                   {/* Validators Table */}
-                  <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                    {/* Validators Header & Search */}
-                    <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
-                      <div className="flex flex-col gap-3 sm:gap-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                          <h3 className="text-lg sm:text-xl font-semibold text-foreground">
+                  <div>
+                    {/* Validators toolbar */}
+                    <div className="py-2">
+                      {chain.validators.some((v) => (v.delegated ?? 0) > 0) && (
+                        <p className="mb-2 hidden sm:flex items-center gap-3 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#3987e5]" aria-hidden />Own stake</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#8b5cf6]" aria-hidden />Delegated</span>
+                          <span>Bars are scaled to the largest validator. Hover a bar for amounts.</span>
+                        </p>
+                      )}
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+                        <div className="flex items-center gap-4">
+                          <h3 className="text-[13px] font-medium text-foreground">
                             Validators
-                            <span className="ml-2 text-base font-normal text-muted-foreground">
-                              ({filteredValidators.length})
+                            <span className="num ml-1.5 text-[11px] font-normal text-muted-foreground">
+                              {filteredValidators.length}
                             </span>
                           </h3>
-                          <div className="flex items-center gap-1 p-0.5 rounded-lg bg-card border border-border self-start sm:self-auto">
+                          <div className="flex items-center gap-0.5">
                             {(['active', 'inactive', 'all'] as const).map((s) => {
                               const total = chain.validators.length;
                               const activeCount = chain.validators.filter(v => v.active === true).length;
@@ -1146,14 +1178,14 @@ export function ChainDetails() {
                                   key={s}
                                   type="button"
                                   onClick={() => setValidatorStatus(s)}
-                                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-semibold tracking-wide capitalize transition-colors ${
+                                  className={`inline-flex items-baseline gap-1.5 h-8 px-2.5 rounded text-[12.5px] font-medium capitalize transition-colors ${
                                     isActive
-                                      ? 'bg-[#ef4444]/12 text-[#ef4444]'
-                                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                                      ? 'bg-accent text-foreground'
+                                      : 'text-muted-foreground hover:text-foreground'
                                   }`}
                                 >
                                   {s}
-                                  <span className="text-[10px] font-medium text-muted-foreground/70 tabular-nums">
+                                  <span className="num text-[11px] font-normal text-muted-foreground">
                                     {count}
                                   </span>
                                 </button>
@@ -1161,16 +1193,15 @@ export function ChainDetails() {
                             })}
                           </div>
                         </div>
+                        <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
                         <div className="relative w-full sm:w-72">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <input
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <input aria-label="Search by node ID or address"
                             type="text"
-                            placeholder="Search by Node ID or Address..."
+                            placeholder="Search by node ID or address"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-2.5 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444] focus:border-transparent transition-all text-sm shadow-sm"
+                            className="w-full h-8 pl-8 pr-3 rounded bg-background border border-border text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
                           />
                         </div>
                       </div>
@@ -1178,15 +1209,16 @@ export function ChainDetails() {
 
                     {/* Own scroll context (max-height) so the header can stick
                         while the rows scroll — no pagination. */}
-                    <div ref={validatorScrollRef} className="overflow-auto max-h-[70vh]">
-                      <table className="min-w-full divide-y divide-border">
-                        <thead className="sticky top-0 z-10 bg-card">
-                          <tr className="border-b border-border">
-                            <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                              Status
+                    <div ref={validatorScrollRef} className="overflow-auto max-h-[70vh] border-t border-border">
+                      <table className="min-w-full text-[12px]">
+                        <thead className="sticky top-0 z-10 bg-background">
+                          <tr className="h-9 border-b border-border">
+                            {/* On phones the status is just the dot, so the stake column fits. */}
+                            <th className="pr-2 sm:pr-4 text-left text-[11px] font-medium text-muted-foreground w-5 sm:w-24">
+                              <span className="sr-only sm:not-sr-only">Status</span>
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'address') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1199,14 +1231,14 @@ export function ChainDetails() {
                               <div className="flex items-center gap-1">
                               Validator
                                 {sortBy === 'address' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
                               </div>
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'stake') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1228,14 +1260,14 @@ export function ChainDetails() {
                                   </span>
                                 )}
                                 {sortBy === 'stake' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
                               </div>
                             </th>
                             <th 
-                              className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                              className="pr-4 text-left text-[11px] font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                               onClick={() => {
                                 if (sortBy === 'uptime') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -1245,11 +1277,11 @@ export function ChainDetails() {
                                 }
                               }}
                             >
-                              <div className="flex items-center gap-1">
-                              <span className="hidden sm:inline">{hasUptimeData ? 'Avg Validator Uptime' : (hasRemainingBalanceData ? 'Remaining Balance' : 'Avg Validator Uptime')}</span>
+                              <div className="flex items-center justify-end gap-1">
+                              <span className="hidden sm:inline">{hasUptimeData ? 'Avg uptime' : (hasRemainingBalanceData ? 'Remaining balance' : 'Avg uptime')}</span>
                               <span className="sm:hidden">{hasUptimeData ? 'Uptime' : (hasRemainingBalanceData ? 'Balance' : 'Uptime')}</span>
                                 {sortBy === 'uptime' && (
-                                  <span className="text-[#ef4444]">
+                                  <span className="text-foreground">
                                     {sortOrder === 'asc' ? '↑' : '↓'}
                                   </span>
                                 )}
@@ -1257,9 +1289,22 @@ export function ChainDetails() {
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-card divide-y divide-border">
+                        <tbody>
                           {(() => {
                             const virtualRows = rowVirtualizer.getVirtualItems();
+                            const totalNum = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
+                            const maxSharePct = totalNum > 0
+                              ? Math.max(0, ...filteredValidators.map((v) => unitsToNumber(v.weight, stakeIsWeight ? 0 : stakeTokenDecimals))) / totalNum * 100
+                              : 0;
+                            // Primary Network rows carry delegation on top of the own stake: the bar
+                            // then splits own and delegated, both scaled to the largest total.
+                            const splitDelegation = !stakeIsWeight && stakeTokenDecimals === 9 && filteredValidators.some((v) => (v.delegated ?? 0) > 0);
+                            const ownOf = (v: typeof filteredValidators[number]) => unitsToNumber(v.weight, 9);
+                            const delegatedOf = (v: typeof filteredValidators[number]) => (v.delegated ?? 0) / 1e9;
+                            // ACP-267 applies to Primary Network validations only.
+                            const minUptimeOf = (v: typeof filteredValidators[number]) =>
+                              chain.subnetId === '11111111111111111111111111111111LpoYY' ? uptimeMinimum(v.startTime) : 80;
+                            const maxTotal = splitDelegation ? Math.max(0, ...filteredValidators.map((v) => ownOf(v) + delegatedOf(v))) : 0;
                             const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
                             const paddingBottom =
                               virtualRows.length > 0
@@ -1276,8 +1321,8 @@ export function ChainDetails() {
                             const index = virtualRow.index;
                             const validator = filteredValidators[index];
                             const percentage = (() => {
-                              const v = unitsToNumber(validator.weight, stakeIsWeight ? 0 : stakeTokenDecimals);
-                              const t = unitsToNumber(totalStakeBaseUnits, stakeIsWeight ? 0 : stakeTokenDecimals);
+                              const v = Number(getStakeBaseUnits(validator));
+                              const t = Number(totalStakeBaseUnits);
                               if (!Number.isFinite(v) || !Number.isFinite(t) || t <= 0) return '0.00';
                               return ((v / t) * 100).toFixed(2);
                             })();
@@ -1286,105 +1331,86 @@ export function ChainDetails() {
                                 key={validator.address}
                                 data-index={index}
                                 ref={rowVirtualizer.measureElement}
-                                className="hover:bg-muted/30 transition-colors cursor-pointer"
+                                className="h-10 border-b border-border/50 hover:bg-accent/40 focus-visible:bg-accent/40 transition-colors cursor-pointer"
+                                tabIndex={0}
+                                role="link"
+                                aria-label={`Validator ${validator.address}`}
                                 onClick={() => {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
+                                }}
                               >
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {validator.active ? (
-                                    <div className="flex items-center">
-                                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                      <span className="text-green-800 dark:text-green-300 text-sm font-medium">Active</span>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center">
-                                      <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                                      <span className="text-red-800 dark:text-red-300 text-sm font-medium">Inactive</span>
-                                    </div>
-                                  )}
+                                <td className="pr-2 sm:pr-4 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/40'}`} />
+                                    <span className="sr-only sm:not-sr-only">{validator.active ? 'Active' : 'Inactive'}</span>
+                                  </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ring-2 ring-card"
-                                      style={{
-                                        backgroundColor: getValidatorColor(index, theme === 'dark', 0.9)
-                                      }}
-                                    >
-                                      {validator.address.slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-medium text-foreground">
-                                        {validator.address.slice(0, 8)}...{validator.address.slice(-6)}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        Node ID
-                                      </div>
-                                    </div>
-                                  </div>
+                                <td className="pr-4 whitespace-nowrap">
+                                  <NodeId id={validator.address} className="text-[12px]" />
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-foreground font-medium">
-                                    {stakeIsWeight ? (
-                                      <>
-                                        {formatWeight(validator.weight)}{' '}
-                                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                          weight
-                                          <span
-                                            className="text-muted-foreground cursor-help inline-flex"
-                                            title="A measure of voting influence of this validator when validating for the Avalanche L1"
-                                            aria-label="Weight tooltip"
-                                          >
-                                            <Info className="w-3 h-3" />
-                                          </span>
-                                        </span>
-                                      </>
+                                <td className="pr-4 whitespace-nowrap">
+                                  <div className="num flex items-baseline gap-3 text-[12px] text-foreground">
+                                    <span className={stakeIsWeight ? 'sm:w-14' : 'sm:w-36'}>
+                                      {stakeIsWeight ? (
+                                        formatWeight(validator.weight)
+                                      ) : (
+                                        <>
+                                          {splitDelegation ? formatStakedTokens(String(ownOf(validator) + delegatedOf(validator))) : formatStakedTokens(validator.stakedAmount)}{' '}
+                                          <span className="text-[11px] text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    {splitDelegation ? (
+                                      <span
+                                        className="hidden sm:flex w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden gap-px"
+                                        title={`${formatStakedTokens(String(Math.round(ownOf(validator))))} own${(validator.delegated ?? 0) > 0 ? `, ${formatStakedTokens(String(Math.round(delegatedOf(validator))))} delegated by ${(validator.delegators ?? 0).toLocaleString()}` : ', no delegations'}`}
+                                      >
+                                        <span className="block h-full bg-[#3987e5]" style={{ width: `${maxTotal > 0 ? (ownOf(validator) / maxTotal) * 100 : 0}%` }} />
+                                        {(validator.delegated ?? 0) > 0 && (
+                                          <span className="block h-full bg-[#8b5cf6]" style={{ width: `${maxTotal > 0 ? (delegatedOf(validator) / maxTotal) * 100 : 0}%` }} />
+                                        )}
+                                      </span>
                                     ) : (
-                                      <>
-                                        {formatStakedTokens(validator.stakedAmount)}{' '}
-                                        <span className="text-xs text-muted-foreground">{validator.stakedToken || tokenSymbol}</span>
-                                      </>
+                                      <span className="hidden sm:block w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden" aria-hidden>
+                                        {/* Scaled to the largest validator, so small shares stay visible. */}
+                                        <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
+                                      </span>
                                     )}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {percentage}% of total
+                                    <span className="text-[11px] text-muted-foreground sm:w-12">{percentage}%</span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="pr-4 whitespace-nowrap">
                                   {hasUptimeData ? (
-                                  <div className="flex items-center">
-                                    <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                          (validator.uptime || 0) >= 90 ? 'bg-green-500' :
-                                          (validator.uptime || 0) >= 80 ? 'bg-yellow-500' : 'bg-red-500'
-                                        }`}
-                                        style={{ width: `${validator.uptime || 0}%` }}
+                                  <div className="flex items-center justify-end gap-2.5">
+                                    {/* 80% to 100%; red only below the reward minimum: 90% for Primary Network validations started since Helicon (ACP-267), else 80%. */}
+                                    <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-1.5 overflow-hidden" aria-hidden>
+                                      <div
+                                        className={`h-full rounded-sm ${(validator.uptime || 0) < minUptimeOf(validator) ? 'bg-down' : 'bg-foreground/45'}`}
+                                        style={{ width: `${Math.max((validator.uptime || 0) < minUptimeOf(validator) ? 4 : 2, uptimeFill(validator.uptime || 0))}%` }}
                                       ></div>
                                     </div>
-                                    <span className={`text-sm font-medium min-w-[3rem] ${
-                                      (validator.uptime || 0) >= 90 ? 'text-green-600 dark:text-green-400' :
-                                      (validator.uptime || 0) >= 80 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                                    }`}>
+                                    <span className={`num text-[12px] w-14 text-right ${(validator.uptime || 0) < minUptimeOf(validator) ? 'text-down' : 'text-foreground'}`}>
                                         {Number.isFinite(validator.uptime) ? `${(validator.uptime as number).toFixed(1)}%` : 'N/A'}
                                     </span>
                                   </div>
                                   ) : (
-                                    <div className="flex items-center">
-                                      <div className="flex-1 bg-muted rounded-full h-2 mr-3 overflow-hidden">
+                                    <div className="flex items-center justify-end gap-2.5">
+                                      <div className="hidden sm:block w-24 bg-muted/60 rounded-sm h-[3px] overflow-hidden">
                                         {(() => {
                                           const raw = Number(validator.remainingBalance ?? 0);
                                           const avax = Number.isFinite(raw) ? toAvax(raw) : 0;
                                           const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
                                           const barColor =
-                                            monthsRemaining <= 1 ? 'bg-red-500' :
-                                            monthsRemaining <= 3 ? 'bg-yellow-500' :
-                                            'bg-green-500';
+                                            monthsRemaining <= 1 ? 'bg-down' :
+                                            monthsRemaining <= 3 ? 'bg-[#d4a017]' :
+                                            'bg-up';
 
                                           return (
                                         <div
-                                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                          className={`h-full rounded-sm ${barColor}`}
                                           style={{
                                             width: `${maxRemainingBalance > 0 ? Math.min(100, ((validator.remainingBalance ?? 0) / maxRemainingBalance) * 100) : 0}%`
                                           }}
@@ -1395,18 +1421,18 @@ export function ChainDetails() {
                                       {(() => {
                                         const raw = Number(validator.remainingBalance);
                                         if (!Number.isFinite(raw)) {
-                                          return <span className="text-sm font-medium min-w-[6rem] text-muted-foreground">N/A</span>;
+                                          return <span className="num text-[12px] w-24 text-right text-muted-foreground">—</span>;
                                         }
 
                                         const avax = toAvax(raw);
                                         const monthsRemaining = MONTHLY_COST_AVAX > 0 ? avax / MONTHLY_COST_AVAX : 0;
                                         const textColor =
-                                          monthsRemaining <= 1 ? 'text-red-600 dark:text-red-400' :
-                                          monthsRemaining <= 3 ? 'text-yellow-600 dark:text-yellow-400' :
-                                          'text-green-600 dark:text-green-400';
+                                          monthsRemaining <= 1 ? 'text-down' :
+                                          monthsRemaining <= 3 ? 'text-[#d4a017]' :
+                                          'text-foreground';
 
                                         return (
-                                          <span className={`text-sm font-medium min-w-[6rem] ${textColor}`}>
+                                          <span className={`num text-[12px] w-24 text-right ${textColor}`}>
                                             {formatAvax(avax)} AVAX
                                           </span>
                                         );
@@ -1431,10 +1457,8 @@ export function ChainDetails() {
 
                     {/* No Results */}
                     {searchTerm && filteredValidators.length === 0 && (
-                      <div className="px-4 sm:px-6 py-6 sm:py-8 text-center">
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          No validators found matching "{searchTerm}"
-                        </p>
+                      <div className="border-b border-border py-8 text-center text-[12px] text-muted-foreground">
+                        No validators match "{searchTerm}".
                       </div>
                     )}
                   </div>
@@ -1462,11 +1486,11 @@ function formatTps(value: number | undefined | null): string {
 function ValidatorsSkeleton() {
   return (
     <>
-      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+      <div className="bg-card rounded-md border border-border p-4 sm:p-6">
         <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
-        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+        <div className="h-56 rounded bg-muted animate-pulse" />
       </div>
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="bg-card rounded-md border border-border overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-border bg-muted/20">
           <div className="h-5 w-32 rounded bg-muted animate-pulse" />
         </div>
@@ -1488,15 +1512,15 @@ function EconomicsSkeleton() {
     <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <div key={i} className="rounded-md border border-border bg-card p-4 sm:p-5">
             <div className="h-3 w-24 rounded bg-muted animate-pulse mb-3" />
             <div className="h-7 w-28 rounded-md bg-muted animate-pulse" />
           </div>
         ))}
       </div>
-      <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+      <div className="bg-card rounded-md border border-border p-4 sm:p-6">
         <div className="h-4 w-40 rounded bg-muted animate-pulse mb-4" />
-        <div className="h-56 rounded-lg bg-muted animate-pulse" />
+        <div className="h-56 rounded bg-muted animate-pulse" />
       </div>
     </div>
   );
@@ -1526,21 +1550,21 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
   const tick = (v: unknown) => formatAvaxAmount(Number(v));
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden shadow-md">
-      <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="bg-card rounded-md border border-border overflow-hidden">
+      <div className="px-4 sm:px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-base sm:text-lg font-bold text-foreground">Fee Burn: base vs priority</h3>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">Fee burn: base vs priority</h3>
+          <p className="text-[12px] text-muted-foreground mt-0.5">
             {isAll ? 'All time' : `Last ${tf} days`} · {basePct.toFixed(1)}% base fee · {(100 - basePct).toFixed(1)}% priority tip
           </p>
         </div>
         <div className="flex gap-1.5">
-          {([{ value: 7, label: '7D' }, { value: 30, label: '30D' }, { value: 90, label: '90D' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
+          {([{ value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: 'All' }] as const).map(({ value, label }) => (
             <button
               key={value}
               onClick={() => setTf(value as 0 | 7 | 30 | 90)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                tf === value ? 'bg-[#ef4444] text-white shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                tf === value ? 'bg-foreground text-background hover:bg-foreground/90' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               }`}
             >
               {label}
@@ -1554,7 +1578,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
             data={{
               labels,
               datasets: [
-                { label: 'Base fee', data: series.map((d) => d.base), backgroundColor: 'rgba(239, 68, 68, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
+                { label: 'Base fee', data: series.map((d) => d.base), backgroundColor: 'rgba(140, 148, 158, 0.9)', stack: 'burn', borderRadius: 2, borderSkipped: false },
                 { label: 'Priority tip', data: series.map((d) => d.priority), backgroundColor: 'rgba(245, 158, 11, 0.85)', stack: 'burn', borderRadius: 2, borderSkipped: false },
               ],
             }}
@@ -1564,7 +1588,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
               maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
               scales: {
-                x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 8, maxRotation: 0 } },
+                x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 8, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
                 y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)' }, ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 11 }, maxTicksLimit: 6, callback: tick } },
               },
               plugins: {
@@ -1600,7 +1624,7 @@ function CChainBurnBreakdownChart({ daily, monthly, isDark }: {
   );
 }
 
-// Headline/hover value — always 2 decimals so it matches the "Current TPS" KPI
+// Headline/hover value — always 2 decimals so it matches the TPS stat
 // card (which uses toFixed(2)). Axis ticks keep formatTps() for cleaner labels.
 function formatTpsExact(value: number | undefined | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -1623,49 +1647,137 @@ const ACT_W = 760;
 const ACT_H = 180;
 const ACT_M = { top: 12, right: 14, bottom: 22, left: 48 };
 
-// Daily TPS trend — uses the history already fetched for the headline number.
-function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]; loading?: boolean }) {
+const DAY_S = 86400;
+
+// Below this many transactions a day (about 0.01 TPS) the chain shows daily counts.
+const QUIET_TX_PER_DAY = 864;
+
+// Daily points are stamped at UTC midnight; format that UTC date, not the viewer's local one.
+const utcDay = (t: number, f: string) => format(parseISO(new Date(t * 1000).toISOString().slice(0, 10)), f);
+
+const ACT_RANGES = [
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+] as const;
+type ActRange = (typeof ACT_RANGES)[number]['value'];
+
+// Daily activity as bars, like the network charts on Metrics: each day is its own
+// figure. Daily TPS is the day's count over 86,400 seconds, so it's the same
+// shape: the chart counts transactions and the readout gives both. The page's
+// first 30 days are passed in; longer ranges load here.
+function ChainActivityCard({ chain, apiChainId, tps, tx, defaultUnit, loading = false, elsewhere = null }: {
+  chain: Chain;
+  apiChainId: string;
+  tps: TPSHistory[];
+  tx: { timestamp: number; value: number }[];
+  defaultUnit: 'tps' | 'tx';
+  loading?: boolean;
+  /** The chain that carries this EVM ID's activity, when it isn't this one. */
+  elsewhere?: Chain | null;
+}) {
   const [hover, setHover] = useState<number | null>(null);
+  const [range, setRange] = useState<ActRange>('30');
+  const [longer, setLonger] = useState<{ range: ActRange; tps: TPSHistory[]; tx: { timestamp: number; value: number }[] } | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [failed, setFailed] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  // Drawn at the box's own pixel width, so labels stay readable on phones.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(ACT_W);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(Math.max(el.clientWidth, 1)));
+    ro.observe(el);
+    return () => ro.disconnect();
+    // The box only exists while there is a chart; re-attach when that changes, not on every render.
+  }, [loading, elsewhere, tps.length, tx.length]);
+  useEffect(() => {
+    if (range === '30' || elsewhere) {
+      setFailed(false);
+      setFetching(false);
+      return;
+    }
+    let alive = true;
+    setFetching(true);
+    const days = Number(range);
+    setFailed(false);
+    // One extra day, as on the page, within the backend's 365-day limit.
+    const ask = Math.min(days + 1, 365);
+    Promise.all([getTPSHistory(ask, apiChainId), getChainTxCountHistory(apiChainId, ask)]).then(([t, c]) => {
+      if (!alive) return;
+      // An empty answer falls back to the 30 days already loaded, with a note, rather than blanking the chart.
+      if (t.length || c.length) setLonger({ range, tps: t.slice(-days), tx: c.slice(-days) });
+      else setFailed(true);
+      setFetching(false);
+    });
+    return () => {
+      alive = false;
+      setFetching(false);
+    };
+  }, [range, apiChainId, elsewhere]);
+
+  // Until a longer range arrives, keep drawing what is loaded (dimmed).
+  // Counts when the backend has them; chains with only a TPS series use TPS. Decided
+  // from the page's 30 days, so the units never flip between ranges.
+  const pageTx = tx.length > 0 || defaultUnit === 'tx';
+  const longerFits = longer != null && (!pageTx || longer.tx.length > 0);
+  const src = range !== '30' && longerFits && !failed ? longer! : { tps, tx };
+  const isTx = pageTx;
+  const raw = isTx ? src.tx.map((d) => ({ t: d.timestamp, v: d.value })) : src.tps.map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }));
+  const lastPoint = raw.length ? raw[raw.length - 1].t : null;
+  const missing = missingActivity(chain, lastPoint);
+  const stale = isStale(lastPoint);
+  const fmt = (v: number) =>
+    isTx ? `${Math.round(v).toLocaleString()} transactions, ${formatTpsExact(v / DAY_S)} TPS` : `${formatTpsExact(v)} TPS`;
+  const fmtTick = (v: number) => {
+    if (!isTx) return formatTps(v);
+    const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+    return v >= 1e6 ? `${trim(v / 1e6)}M` : v >= 1e3 ? `${trim(v / 1e3)}K` : String(Math.round(v));
+  };
+  const subtitle = isTx ? 'Transactions per day' : 'Average transactions per second, per day';
+  const big = (v: number) => (isTx ? Math.round(v).toLocaleString() : formatTpsExact(v));
 
   const points = useMemo(
-    () =>
-      history
-        .map((h) => ({ t: h.timestamp, v: Number(h.totalTps) || 0 }))
-        .filter((p) => Number.isFinite(p.t))
-        .sort((a, b) => a.t - b.t),
-    [history],
+    () => raw.filter((p) => Number.isFinite(p.t)).sort((a, b) => a.t - b.t),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [src, isTx],
   );
 
   const geom = useMemo(() => {
     if (points.length < 2) return null;
-    const xs = points.map((p) => p.t);
-    const ys = points.map((p) => p.v);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const maxY = Math.max(...ys, 0.0001);
-    const iw = ACT_W - ACT_M.left - ACT_M.right;
+    const minX = points[0].t;
+    const maxX = points[points.length - 1].t;
+    const peak = Math.max(...points.map((p) => p.v), 0);
+    // Round steps (100K, 250K, 0.5 TPS...); an all-zero series gets a single 0 line.
+    const raw = peak / 3;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const step = Math.max(isTx ? 1 : 0, ([1, 2, 2.5, 5, 10].find((k) => k * mag >= raw) ?? 10) * mag);
+    const maxY = peak === 0 ? 1 : Math.ceil(peak / step) * step;
+    const iw = W - ACT_M.left - ACT_M.right;
     const ih = ACT_H - ACT_M.top - ACT_M.bottom;
-    const sx = (t: number) => ACT_M.left + ((t - minX) / (maxX - minX || 1)) * iw;
+    // One slot per calendar day, so a missing day is an empty slot, not a squeezed axis.
+    const days = Math.round((maxX - minX) / DAY_S) + 1;
+    const slot = iw / days;
+    const sx = (t: number) => ACT_M.left + slot / 2 + ((t - minX) / DAY_S) * slot;
     const sy = (v: number) => ACT_M.top + ih - (v / maxY) * ih;
-    const line = smoothLinePath(points.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
-    const floor = ACT_M.top + ih;
-    const area = `${line} L${sx(maxX).toFixed(1)},${floor} L${sx(minX).toFixed(1)},${floor} Z`;
-    const yTicks = Array.from({ length: 4 }, (_, i) => (maxY * i) / 3);
-    return { sx, sy, line, area, yTicks, floor };
-  }, [points]);
+    const yTicks = peak === 0 ? [0] : Array.from({ length: Math.round(maxY / step) + 1 }, (_, i) => i * step);
+    const barW = Math.max(1, slot * (days > 120 ? 0.85 : 0.7));
+    const labelEvery = Math.ceil(points.length / (W < 600 ? 4 : 7));
+    return { sx, sy, yTicks, floor: ACT_M.top + ih, barW, days, labelEvery };
+  }, [points, isTx, W]);
 
   const latest = points.length ? points[points.length - 1] : null;
   const active = hover != null && points[hover] ? points[hover] : null;
   const shown = active ?? latest;
-  const first = points[0];
-  const delta = first && latest && first.v > 0 ? ((latest.v - first.v) / first.v) * 100 : null;
-  const positive = delta != null && delta >= 0;
+  const gaps = geom != null && geom.days > points.length;
+  const avg = points.length ? points.reduce((s, p) => s + p.v, 0) / points.length : 0;
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!geom || !svgRef.current || points.length === 0) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const vx = ((e.clientX - rect.left) / rect.width) * ACT_W;
+    const vx = e.clientX - rect.left;
     let best = 0;
     let bestD = Infinity;
     for (let i = 0; i < points.length; i++) {
@@ -1678,87 +1790,158 @@ function ChainActivityCard({ history, loading = false }: { history: TPSHistory[]
     setHover(best);
   };
 
+  const controls = !elsewhere && (
+    <SegmentedControl size="xs" value={range} options={ACT_RANGES} onChange={setRange} ariaLabel="Activity range" />
+  );
+
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="rounded-md border border-border bg-card p-4 sm:p-5">
         <header className="flex items-end justify-between gap-3 mb-3">
           <div>
             <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last 30 days</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
           </div>
           <div className="h-7 w-16 rounded-md bg-muted animate-pulse" />
         </header>
-        <div className="h-[180px] rounded-lg bg-muted animate-pulse" />
+        <div className="h-[180px] rounded bg-muted animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <header className="flex items-end justify-between gap-3 mb-3">
+    <div className="rounded-md border border-border bg-card p-4 sm:p-5">
+      <header className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[14px] font-semibold text-foreground">Activity</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Transactions per second · last {points.length} days</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
-        {shown && (
-          <div className="text-right">
-            <div className="text-2xl font-bold text-foreground tabular-nums leading-none">{formatTpsExact(shown.v)}</div>
-            <div className="text-[11px] mt-1">
-              {active ? (
-                <span className="text-muted-foreground">{format(new Date(active.t * 1000), 'MMM d')}</span>
-              ) : delta != null ? (
-                <span className={positive ? 'text-green-500' : 'text-[#ef4444]'}>
-                  {positive ? '▲' : '▼'} {Math.abs(delta).toFixed(0)}% · 30d
-                </span>
-              ) : (
-                <span className="text-muted-foreground">latest</span>
-              )}
-            </div>
-          </div>
-        )}
+        {controls}
       </header>
-      {!geom ? (
-        <div className="flex items-center justify-center h-[160px] text-sm text-muted-foreground">
-          Not enough activity data to chart.
+      {shown && geom && (
+        <div className="mb-2">
+          <div className="num text-[22px] font-medium text-foreground leading-7">
+            {big(active ? active.v : avg)}
+            {isTx ? (
+              <span className="ml-2 text-[13px] text-muted-foreground">{formatTpsExact((active ? active.v : avg) / DAY_S)} TPS</span>
+            ) : (
+              <span className="ml-1.5 text-[13px] text-muted-foreground">TPS</span>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {active
+              ? `${isTx ? 'transactions on ' : ''}${utcDay(active.t, 'EEE, MMM d, yyyy')}`
+              : `${isTx ? 'transactions ' : ''}a day on average, ${utcDay(points[0].t, 'MMM d')} to ${utcDay(latest!.t, 'MMM d')}; latest ${fmt(latest!.v)}`}
+          </div>
+        </div>
+      )}
+      {!geom && elsewhere ? (
+        <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
+          <p className="text-[13px] text-foreground">Activity is counted under another blockchain</p>
+          <p className="text-[12px] text-muted-foreground max-w-md">
+            This chain shares EVM chain ID {elsewhere.evmChainId} with{' '}
+            <Link to={`/chain/${elsewhere.chainId}`} className="text-foreground underline underline-offset-2">
+              {elsewhere.chainName}
+            </Link>
+            , which has more active validators, so its transactions are shown there.
+          </p>
+        </div>
+      ) : !geom ? (
+        <div className="flex flex-col items-center justify-center gap-1 h-[160px] px-6 text-center">
+          <p className="text-[13px] text-foreground">{missing.title}</p>
+          <p className="text-[12px] text-muted-foreground max-w-md">{missing.detail}</p>
         </div>
       ) : (
-        <div className="relative">
+        <div ref={boxRef} className={`relative transition-opacity ${fetching ? 'opacity-50' : ''}`}>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${ACT_W} ${ACT_H}`}
-          className="w-full h-auto block"
-          onMouseMove={handleMove}
-          onMouseLeave={() => setHover(null)}
+          width={W}
+          height={ACT_H}
+          className="block"
+          {...chartPointerProps({ onMove: handleMove, count: points.length, hover, setHover })}
           role="img"
-          aria-label="TPS over time"
+          aria-label={isTx ? 'Daily transactions' : 'Daily average TPS'}
         >
-          <defs>
-            <linearGradient id="chain-tps-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-            </linearGradient>
-          </defs>
           {geom.yTicks.map((tick, i) => (
             <g key={i}>
-              <line x1={ACT_M.left} x2={ACT_W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
+              <line x1={ACT_M.left} x2={W - ACT_M.right} y1={geom.sy(tick)} y2={geom.sy(tick)} stroke="currentColor" strokeOpacity={0.08} />
               <text x={ACT_M.left - 8} y={geom.sy(tick)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
-                {formatTps(tick)}
+                {fmtTick(tick)}
               </text>
             </g>
           ))}
-          <path d={geom.area} fill="url(#chain-tps-fill)" />
-          <path d={geom.line} fill="none" stroke="#ef4444" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          {latest && !active && <circle cx={geom.sx(latest.t)} cy={geom.sy(latest.v)} r={3} fill="#ef4444" />}
-          {active && (
-            <g>
-              <line x1={geom.sx(active.t)} x2={geom.sx(active.t)} y1={ACT_M.top} y2={geom.floor} stroke="#ef4444" strokeOpacity={0.4} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
-              <circle cx={geom.sx(active.t)} cy={geom.sy(active.v)} r={4} fill="#ef4444" stroke="var(--card, #fff)" strokeWidth={2} />
+          {points.map((p, i) => (
+            <g key={p.t}>
+              <rect
+                x={geom.sx(p.t) - geom.barW / 2}
+                y={geom.sy(p.v)}
+                width={geom.barW}
+                height={Math.max(0, geom.floor - geom.sy(p.v))}
+                fill="#3987e5"
+                fillOpacity={hover == null || hover === i ? 0.85 : 0.35}
+              />
+              {i % geom.labelEvery === 0 && (
+                <text x={geom.sx(p.t)} y={ACT_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
+                  {utcDay(p.t, geom.days > 120 ? 'MMM yyyy' : 'MMM d')}
+                </text>
+              )}
             </g>
-          )}
+          ))}
         </svg>
         <ChartWatermark />
         </div>
       )}
+      {geom && points.length > 1 && (() => {
+        // Busiest and quietest day, and the second half of the range against the first.
+        const peakP = points.reduce((a, b) => (b.v > a.v ? b : a));
+        const lowP = points.reduce((a, b) => (b.v < a.v ? b : a));
+        const half = Math.floor(points.length / 2);
+        const avgOf = (xs: typeof points) => xs.reduce((s, p) => s + p.v, 0) / Math.max(1, xs.length);
+        const first = avgOf(points.slice(0, half));
+        const second = avgOf(points.slice(half));
+        const change = first > 0 ? ((second - first) / first) * 100 : null;
+        const total = isTx ? points.reduce((s, p) => s + p.v, 0) : null;
+        const cells: { label: string; value: React.ReactNode; sub: string }[] = [
+          total != null
+            ? { label: 'Transactions', value: fmtTick(total), sub: `${utcDay(points[0].t, 'MMM d')} to ${utcDay(latest!.t, 'MMM d')}` }
+            : { label: 'Average', value: `${formatTpsExact(avg)} TPS`, sub: `${points.length} days` },
+          { label: 'Busiest day', value: fmtTick(peakP.v), sub: utcDay(peakP.t, geom.days > 365 ? 'MMM d, yyyy' : 'EEE, MMM d') },
+          { label: 'Quietest day', value: fmtTick(lowP.v), sub: utcDay(lowP.t, geom.days > 365 ? 'MMM d, yyyy' : 'EEE, MMM d') },
+          {
+            label: 'Second half vs first',
+            value: change == null ? '—' : (
+              <span className={Math.abs(change) < 0.05 ? 'text-muted-foreground' : change > 0 ? 'text-up' : 'text-down'}>
+                {change > 0 ? '+' : change < 0 ? '−' : ''}{Math.abs(change).toFixed(1)}%
+              </span>
+            ),
+            sub: 'average per day',
+          },
+        ];
+        return (
+          <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 border-t border-border -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 [&>div:nth-child(even)]:border-l sm:[&>div:not(:first-child)]:border-l [&>div:nth-child(n+3)]:border-t sm:[&>div:nth-child(n+3)]:border-t-0 [&>div]:border-border">
+            {cells.map((c) => (
+              <div key={c.label} className="px-4 sm:px-5 py-2.5 min-w-0">
+                <dt className="text-[11px] text-muted-foreground truncate">{c.label}</dt>
+                <dd className="num text-[15px] leading-6 text-foreground truncate">{c.value}</dd>
+                <div className="text-[11px] text-muted-foreground truncate">{c.sub}</div>
+              </div>
+            ))}
+          </dl>
+        );
+      })()}
+      {failed ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          The longer history couldn't be loaded, so this shows the last 30 days. Try again in a minute.
+        </p>
+      ) : geom && stale ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {missing.title}. {missing.detail}
+        </p>
+      ) : geom && gaps ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Empty days have no count yet. Older days are still being filled in.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1786,6 +1969,14 @@ function formatDelay(seconds: number): string {
 // worst (and most common) case; shared control and/or upgrade delays are better.
 // Churn limits only count when upgrades aren't instant (else they're bypassable).
 function controlAssessment(vm: ValidatorManager | null | undefined) {
+  if (vm?.type === 'placeholder') {
+    return {
+      chip: 'Fixed set',
+      chipTone: 'text-muted-foreground bg-muted/50',
+      headline: 'The validator manager is a placeholder address, so no validators can join and weights can\'t change.',
+      rows: [] as { label: string; value: string; tone: string; sub?: string }[],
+    };
+  }
   if (!vm || (!vm.owner && !vm.proxy)) {
     return {
       chip: 'Unresolved',
@@ -1794,8 +1985,12 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
       rows: [] as { label: string; value: string; tone: string; sub?: string }[],
     };
   }
-  const kind = vm.owner?.kind;
-  const ms = vm.owner?.multisig;
+  // On a balancer chain the manager's owner is the balancer contract; whoever
+  // owns the balancer decides how much weight each module may hold.
+  const balancer = vm.type === 'balancer' && vm.balancer_owner ? vm.balancer_owner : null;
+  const controller = balancer ?? vm.owner;
+  const kind = controller?.kind;
+  const ms = controller?.multisig;
   const isProxy = !!vm.proxy?.is_proxy;
   const delay = vm.proxy?.upgrade_delay_seconds ?? 0;
   const instant = isProxy && delay === 0;
@@ -1814,34 +2009,36 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
             ? 'Contract'
             : 'Unknown';
   const ownerTone = singleKey
-    ? 'text-[#ef4444]'
+    ? 'text-down'
     : shared
-      ? 'text-green-600 dark:text-green-400'
+      ? 'text-up'
       : 'text-foreground';
 
   const upgradeLabel = !isProxy ? 'Immutable' : instant ? 'Instant upgrade' : formatDelay(delay);
   const upgradeTone = !isProxy
-    ? 'text-green-600 dark:text-green-400'
+    ? 'text-up'
     : instant
-      ? 'text-[#ef4444]'
-      : 'text-yellow-600 dark:text-yellow-400';
+      ? 'text-down'
+      : 'text-[#d4a017]';
 
   let chip: string;
   let chipTone: string;
   let headline: string;
   if (singleKey && (instant || !isProxy)) {
     chip = 'Single-key control';
-    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
-    headline = instant
-      ? 'A single key can instantly upgrade the manager and replace the validator set.'
-      : 'A single key directly controls the validator set.';
+    chipTone = 'text-down bg-down/10';
+    headline = balancer
+      ? 'A single key owns the balancer, so it can move validator weight between restaking and the PoA module.'
+      : instant
+        ? 'A single key can instantly upgrade the manager and replace the validator set.'
+        : 'A single key directly controls the validator set.';
   } else if (instant) {
     chip = 'Instantly upgradeable';
-    chipTone = 'text-[#ef4444] bg-[#ef4444]/10';
+    chipTone = 'text-down bg-down/10';
     headline = 'The manager can be upgraded instantly by its admin, so control can be changed at any time.';
   } else if (shared && !isProxy) {
     chip = 'Shared control';
-    chipTone = 'text-green-600 dark:text-green-400 bg-green-500/10';
+    chipTone = 'text-up bg-green-500/10';
     headline = 'Control is shared and the manager is not upgradeable.';
   } else {
     chip = 'Partial safeguards';
@@ -1851,7 +2048,7 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
 
   const churnValue = vm.churn?.max_churn_percentage;
   const rows = [
-    { label: 'Validator-set control', value: ownerLabel, tone: ownerTone, sub: shortAddr(vm.owner?.address) },
+    { label: balancer ? 'Balancer control' : 'Validator-set control', value: ownerLabel, tone: ownerTone, sub: shortAddr(controller?.address) },
     { label: 'Upgradeable', value: upgradeLabel, tone: upgradeTone, sub: isProxy ? shortAddr(vm.proxy?.proxy_admin_owner) : undefined },
     {
       label: 'Churn limit',
@@ -1868,12 +2065,12 @@ function controlAssessment(vm: ValidatorManager | null | undefined) {
 function recoverability(deployedOn?: string) {
   if (deployedOn === 'self')
     return {
-      tone: 'text-yellow-600 dark:text-yellow-400',
+      tone: 'text-[#d4a017]',
       text: 'Validator manager runs on this L1, so if the chain halts its validator set can’t be changed (no recovery path).',
     };
   if (deployedOn === 'c-chain')
     return {
-      tone: 'text-green-600 dark:text-green-400',
+      tone: 'text-up',
       text: 'Validator manager runs on the C-Chain, so the validator set stays changeable even if this L1 halts.',
     };
   return null;
@@ -1881,18 +2078,41 @@ function recoverability(deployedOn?: string) {
 
 const PERMISSIONED = {
   label: 'Permissioned',
-  text: 'text-orange-500',
-  ring: 'bg-orange-500/10',
-  dot: 'bg-orange-500',
+  text: 'text-[#d95926]',
+  ring: 'bg-[#d95926]/10',
+  dot: 'bg-[#d95926]',
   note: 'The chain operator controls who can validate (PoA).',
+};
+const FIXED_SET = {
+  label: 'Fixed validator set',
+  text: 'text-muted-foreground',
+  ring: 'bg-muted/50',
+  dot: 'bg-muted-foreground',
+  note: 'The validator manager is a placeholder address that can never approve a change, so no validators can join and weights can\'t change. Existing validators can still leave.',
+};
+const RESTAKED = {
+  label: 'Restaked',
+  text: 'text-[#3987e5]',
+  ring: 'bg-[#3987e5]/10',
+  dot: 'bg-[#3987e5]',
+  note: 'Validators are admitted through Suzaku restaking, so operators post token collateral to validate. The balancer owner sets how much weight restaking can hold.',
 };
 const PERMISSIONLESS = {
   label: 'Permissionless',
-  text: 'text-green-600 dark:text-green-400',
-  ring: 'bg-green-500/10',
-  dot: 'bg-green-500',
+  text: 'text-up',
+  ring: 'bg-up/10',
+  dot: 'bg-up',
   note: 'Anyone meeting the stake requirement can validate (PoS).',
 };
+
+// Share of module weight held by Suzaku restaking on a balancer chain, or null.
+function restakedShare(vm: ValidatorManager | null | undefined): number | null {
+  const mods = vm?.type === 'balancer' ? vm.security_modules : null;
+  if (!mods?.length) return null;
+  const total = mods.reduce((t, m) => t + m.weight, 0);
+  if (total <= 0) return null;
+  return mods.filter((m) => m.kind === 'suzaku_middleware').reduce((t, m) => t + m.weight, 0) / total;
+}
 
 // The one control fact we can derive today: PoA = permissioned validator set
 // (operator picks the validators), PoS = permissionless (stake to join). Prefer
@@ -1900,8 +2120,13 @@ const PERMISSIONLESS = {
 // label while that's still "unknown". We show this instead of a fabricated
 // "decentralization grade", which would mislead — a PoA chain can have well-
 // spread stake yet be entirely operator-controlled.
-function permissionModel(managerType?: string, sybil?: string) {
-  const t = (managerType || '').toLowerCase();
+function permissionModel(vm: ValidatorManager | null | undefined, sybil?: string) {
+  const t = (vm?.type || '').toLowerCase();
+  // On-chain fact first: a placeholder manager fixes the set whatever the registry says.
+  if (t === 'placeholder') return FIXED_SET;
+  // A balancer is labelled by whichever module holds most of the weight.
+  const restaked = restakedShare(vm);
+  if (restaked != null) return restaked > 0.5 ? RESTAKED : PERMISSIONED;
   if (t === 'poa') return PERMISSIONED;
   if (t.startsWith('pos')) return PERMISSIONLESS;
   const s = (sybil || '').toLowerCase();
@@ -1914,12 +2139,14 @@ function DecentralizationCard({
   data,
   sybil,
   vm,
+  restaking,
 }: {
   data: { count: number; nak33: number | null; nak50: number | null; shares: number[]; hasData: boolean };
   sybil?: string;
   vm?: ValidatorManager | null;
+  restaking?: { l1: RestakedL1; protocol: { name: string; url: string } | null } | null;
 }) {
-  const perm = permissionModel(vm?.type, sybil);
+  const perm = permissionModel(vm, sybil);
   const control = controlAssessment(vm);
   const stats: { value: string; label: string; title?: string }[] = [
     {
@@ -1931,14 +2158,14 @@ function DecentralizationCard({
     { value: data.count.toLocaleString(), label: 'Active validators' },
   ];
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-md border border-border bg-card overflow-hidden">
       <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-[#ef4444]" />
+          <Shield className="w-4 h-4 text-muted-foreground" />
           <h2 className="text-[14px] font-semibold text-foreground">Decentralization</h2>
         </div>
         {perm && (
-          <span className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold ${perm.ring} ${perm.text}`}>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] ${perm.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${perm.dot}`} />
             {perm.label}
           </span>
@@ -1948,43 +2175,41 @@ function DecentralizationCard({
       <div className="p-4 sm:p-5">
         {data.hasData ? (
           <>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <dl className="grid grid-cols-3 divide-x divide-border border border-border rounded-md">
               {stats.map((s) => (
-                <div key={s.label} className="rounded-lg bg-muted/30 px-2.5 py-2.5 sm:px-3" title={s.title}>
-                  <div className="text-lg sm:text-2xl font-bold text-foreground tabular-nums leading-none">
-                    {s.value}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1.5 leading-tight">{s.label}</div>
+                <div key={s.label} className="px-3 py-2.5" title={s.title}>
+                  <dt className="text-[11px] text-muted-foreground leading-4">{s.label}</dt>
+                  <dd className="num text-[20px] leading-7 font-medium text-foreground">{s.value}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
 
             {/* Stake-concentration bar: the top `nak33` validators (which control
                 >33%) are highlighted; the rest are muted. Ticks mark 33% / 50%. */}
             {data.shares.length > 0 && (
               <div className="mt-4">
-                <div className="relative flex h-2.5 rounded-full overflow-hidden bg-muted/40">
+                <div className="relative flex h-2 rounded-sm overflow-hidden bg-muted/40">
                   {data.shares.map((s, i) => (
                     <div
                       key={i}
                       style={{ width: `${Math.max(s * 100, 0.4)}%` }}
-                      className={`h-full ${i < (data.nak33 ?? 0) ? 'bg-[#ef4444]' : 'bg-emerald-500/45'} ${
+                      className={`h-full ${i < (data.nak33 ?? 0) ? 'bg-[#d4a017]' : 'bg-up/45'} ${
                         i > 0 ? 'border-l border-card/70' : ''
                       }`}
                       title={`#${i + 1}: ${(s * 100).toFixed(1)}% of stake`}
                     />
                   ))}
-                  <span className="absolute inset-y-0 w-px bg-foreground/45" style={{ left: '33%' }} />
+                  <span className="absolute inset-y-0 w-px bg-foreground/45" style={{ left: '33.333%' }} />
                   <span className="absolute inset-y-0 w-px bg-foreground/25" style={{ left: '50%' }} />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm bg-[#ef4444]" />
+                    <span className="w-2 h-2 rounded-sm bg-[#d4a017]" />
                     Top {data.nak33} control &gt;33% of stake
                   </span>
                   <span className="flex items-center gap-1.5">
                     Remaining {Math.max(0, data.count - (data.nak33 ?? 0))}
-                    <span className="w-2 h-2 rounded-sm bg-emerald-500/45" />
+                    <span className="w-2 h-2 rounded-sm bg-up/45" />
                   </span>
                 </div>
               </div>
@@ -1999,10 +2224,10 @@ function DecentralizationCard({
         {/* Control & upgradeability — on-chain ValidatorManager reads. */}
         <div className="mt-5 pt-4 border-t border-border/60">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
-            <div className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground">
+            <div className="text-[11px] font-medium text-muted-foreground">
               Control &amp; upgradeability
             </div>
-            <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold ${control.chipTone}`}>
+            <span className={`inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium ${control.chipTone}`}>
               {control.chip}
             </span>
           </div>
@@ -2010,11 +2235,11 @@ function DecentralizationCard({
           {control.rows.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {control.rows.map((r) => (
-                <div key={r.label} className="rounded-lg bg-muted/30 px-3 py-2">
-                  <div className="text-[10px] text-muted-foreground">{r.label}</div>
-                  <div className={`text-[13px] font-semibold ${r.tone}`}>{r.value}</div>
+                <div key={r.label} className="border border-border rounded px-3 py-2">
+                  <div className="text-[11px] text-muted-foreground">{r.label}</div>
+                  <div className={`text-[13px] font-medium ${r.tone}`}>{r.value}</div>
                   {r.sub && (
-                    <div className="text-[10px] text-muted-foreground/70 font-mono mt-0.5 truncate">{r.sub}</div>
+                    <div className="num text-[10px] text-muted-foreground mt-0.5 truncate">{r.sub}</div>
                   )}
                 </div>
               ))}
@@ -2032,7 +2257,9 @@ function DecentralizationCard({
           })()}
         </div>
 
-        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground/70">
+        {restaking && <RestakedCollateral l1={restaking.l1} protocol={restaking.protocol} />}
+
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
           A signal, not a security audit. Distribution is from on-chain stake weights; control is read
           from the ValidatorManager contract and refreshed periodically. {perm ? `${perm.label}: ${perm.note}` : ''}
         </p>
@@ -2041,34 +2268,80 @@ function DecentralizationCard({
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  valueClassName,
-  icon: Icon,
-  loading = false,
-}: {
-  label: string;
-  value: string | number;
-  valueClassName?: string;
-  icon: typeof Activity;
-  loading?: boolean;
-}) {
+function compactAmount(v: number): string {
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+  return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+// Token collateral posted through a restaking protocol (Suzaku) by the
+// operators running this L1's validators.
+function RestakedCollateral({ l1, protocol }: { l1: RestakedL1; protocol: { name: string; url: string } | null }) {
+  const name = protocol?.name ?? 'restaking';
+  // Totals per collateral token; vaults holding different tokens can't be added up.
+  const tokens = new Map<string, { allocated: number; deposited: number }>();
+  for (const v of l1.vaults) {
+    const t = tokens.get(v.collateral.symbol) ?? { allocated: 0, deposited: 0 };
+    t.allocated += unitsToNumber(v.allocated, v.collateral.decimals) || 0;
+    t.deposited += unitsToNumber(v.deposited, v.collateral.decimals) || 0;
+    tokens.set(v.collateral.symbol, t);
+  }
+  const list = (k: 'allocated' | 'deposited') =>
+    [...tokens].map(([sym, t]) => `${compactAmount(t[k])} ${sym}`).join(' + ') || '—';
+  const idle = [...tokens]
+    .filter(([, t]) => t.deposited > t.allocated)
+    .map(([sym, t]) => `${compactAmount(t.deposited - t.allocated)}${tokens.size > 1 ? ` ${sym}` : ''}`)
+    .join(' + ');
+  const share = l1.share_of_weight_percent;
+  const shareText = share == null ? null : share >= 99.95 ? '100%' : `${share < 1 ? share.toFixed(1) : Math.round(share)}%`;
+  const rows = [
+    {
+      label: 'Allocated to validators',
+      value: list('allocated'),
+      sub: shareText ? `${shareText} of validator weight` : undefined,
+    },
+    {
+      label: 'Deposited in vaults',
+      value: list('deposited'),
+      sub: idle ? `${idle} not allocated yet` : undefined,
+    },
+    {
+      label: 'Node operators',
+      value: l1.operator_count.toLocaleString(),
+      sub: `running ${l1.restaked_validators.toLocaleString()} of ${l1.active_validators.toLocaleString()} validators`,
+    },
+  ];
   return (
-    <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-medium tracking-wide text-muted-foreground">{label}</span>
-        <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
-          <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-        </div>
+    <div className="mt-5 pt-4 border-t border-border/60">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-2">
+        <div className="text-[11px] font-medium text-muted-foreground">Restaked collateral</div>
+        {protocol && (
+          <a
+            href={protocol.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            {protocol.name}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
-      {loading ? (
-        <div className="h-7 sm:h-8 w-20 rounded-md bg-muted animate-pulse" />
-      ) : (
-        <div className={`text-xl sm:text-2xl font-bold tracking-tight truncate ${valueClassName || 'text-foreground'}`}>
-          {value}
-        </div>
-      )}
+      <p className="text-[12px] text-foreground/90 mb-3">
+        {shareText
+          ? `${list('allocated')} restaked through ${name} backs ${shareText} of this chain's validator weight.`
+          : `${list('allocated')} is restaked through ${name} for this chain's validators.`}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {rows.map((r) => (
+          <div key={r.label} className="border border-border rounded px-3 py-2">
+            <div className="text-[11px] text-muted-foreground">{r.label}</div>
+            <div className="num text-[13px] font-medium text-foreground">{r.value}</div>
+            {r.sub && <div className="text-[10px] text-muted-foreground mt-0.5 truncate">{r.sub}</div>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2079,10 +2352,10 @@ function ChainDetailsSkeleton() {
       <div className="h-4 w-24 rounded bg-muted animate-pulse" />
 
       {/* Header card */}
-      <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-7">
+      <div className="rounded-md border border-border bg-card shadow-xl p-6 sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-muted animate-pulse" />
+            <div className="w-14 h-14 rounded-md bg-muted animate-pulse" />
             <div className="space-y-2.5">
               <div className="flex items-center gap-2">
                 <div className="h-7 w-48 rounded bg-muted animate-pulse" />
@@ -2100,7 +2373,7 @@ function ChainDetailsSkeleton() {
       <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-2 border-b border-border">
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-8 w-24 rounded-lg bg-muted animate-pulse" />
+            <div key={i} className="h-8 w-24 rounded bg-muted animate-pulse" />
           ))}
         </div>
       </div>
@@ -2108,10 +2381,10 @@ function ChainDetailsSkeleton() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
+          <div key={i} className="rounded-md border border-border bg-card p-4 sm:p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div className="h-3 w-20 rounded bg-muted animate-pulse" />
-              <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
+              <div className="w-7 h-7 rounded bg-muted animate-pulse" />
             </div>
             <div className="h-7 w-24 rounded bg-muted animate-pulse" />
           </div>
@@ -2119,10 +2392,10 @@ function ChainDetailsSkeleton() {
       </div>
 
       {/* Content body — generic validator table placeholder */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="rounded-md border border-border bg-card overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="h-5 w-40 rounded bg-muted animate-pulse" />
-          <div className="h-9 w-64 rounded-lg bg-muted animate-pulse" />
+          <div className="h-9 w-64 rounded bg-muted animate-pulse" />
         </div>
         {Array.from({ length: 6 }).map((_, i) => (
           <div
@@ -2131,7 +2404,7 @@ function ChainDetailsSkeleton() {
           >
             <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
             <div className="flex items-center gap-3 flex-1">
-              <div className="w-9 h-9 rounded-lg bg-muted animate-pulse" />
+              <div className="w-9 h-9 rounded bg-muted animate-pulse" />
               <div className="space-y-1.5">
                 <div className="h-3 w-40 rounded bg-muted animate-pulse" />
                 <div className="h-2.5 w-24 rounded bg-muted animate-pulse" />

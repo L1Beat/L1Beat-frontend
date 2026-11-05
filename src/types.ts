@@ -21,6 +21,8 @@ export interface Chain {
   } | null;
   isActive?: boolean;
   validatorCount?: number;
+  /** All-time P-Chain validation fees in nAVAX. Null for legacy subnets, which don't pay them. */
+  totalFeesPaid?: number | null;
   // Compact decentralization summary from the chains list (present only for
   // chains with active L1 validators). Full detail comes from getChainRisk.
   decentralization?: ChainDecentralization;
@@ -80,6 +82,11 @@ export interface Validator {
   remainingBalance?: number;
   explorerUrl?: string;
   validationId?: string;
+  /** ISO start of this validation; on the Primary Network it decides the uptime minimum (ACP-267). */
+  startTime?: string;
+  /** Primary Network only: AVAX delegated to this validator, in nAVAX, on top of its own stake (`weight`). */
+  delegated?: number;
+  delegators?: number;
 }
 
 // Risk / decentralization data (api.l1beat.io). Additive; `null` always means
@@ -92,19 +99,25 @@ export interface ChainDecentralization {
   weights?: string[]; // sorted desc, raw — detail endpoint only
 }
 
+export interface ValidatorManagerOwner {
+  address: string;
+  kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
+  multisig: { threshold: number; owners: number } | null;
+}
+
 export interface ChainRisk {
   chain_id: string;
   validator_manager: {
     address: string;
-    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'unknown';
+    // 'placeholder': an empty, zero or precompile address that can never sign a
+    // validator-set change, so the set is fixed.
+    // 'balancer': a Suzaku BalancerValidatorManager owns the manager and splits
+    // validator weight between security modules (PoA, Suzaku restaking).
+    type: 'PoA' | 'PoS-native' | 'PoS-erc20' | 'placeholder' | 'balancer' | 'unknown';
     // Where the ValidatorManager lives — a recoverability signal independent of
     // control: 'self' means the set can't be changed if this L1 halts.
     deployed_on: 'c-chain' | 'self' | 'unknown';
-    owner: {
-      address: string;
-      kind: 'eoa' | 'multisig' | 'timelock' | 'dao' | 'contract' | 'unknown';
-      multisig: { threshold: number; owners: number } | null;
-    } | null;
+    owner: ValidatorManagerOwner | null;
     proxy: {
       is_proxy: boolean;
       implementation: string;
@@ -113,6 +126,16 @@ export interface ChainRisk {
       upgrade_delay_seconds: number;
     } | null;
     churn: { period_seconds: number; max_churn_percentage: number } | null;
+    // Balancer chains only; null elsewhere. The balancer owner is who can move
+    // weight between modules.
+    balancer_owner?: ValidatorManagerOwner | null;
+    security_modules?: {
+      address: string;
+      kind: 'suzaku_middleware' | 'poa' | 'unknown';
+      weight: number;
+      max_weight: number;
+      owner: ValidatorManagerOwner | null;
+    }[] | null;
   } | null;
   decentralization: ChainDecentralization | null;
   economic: {
@@ -187,6 +210,8 @@ export interface DailyActiveAddresses {
 export interface DailyTxCount {
   timestamp: number;
   value: number;
+  /** Network rows only: how many chains the day's value adds up. */
+  chainCount?: number;
 }
 
 export interface DailyTxCountLatest {
@@ -199,6 +224,8 @@ export interface DailyTxCountLatest {
 export interface MaxTPSHistory {
   timestamp: number;
   value: number;
+  /** Network rows only: how many chains the day's value adds up. */
+  chainCount?: number;
 }
 
 export interface MaxTPSLatest {

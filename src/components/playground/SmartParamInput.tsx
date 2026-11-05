@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ParamDef } from './endpointCatalog';
 import { Switch } from '../branding/ui/switch';
@@ -40,6 +40,7 @@ interface DropdownSelectProps {
   required: boolean;
   errorClass: string;
   placeholder?: string;
+  id?: string;
 }
 
 function DropdownSelect({
@@ -49,6 +50,7 @@ function DropdownSelect({
   required,
   errorClass,
   placeholder,
+  id,
 }: DropdownSelectProps) {
   const selectValue = toSelectValue(value);
 
@@ -58,10 +60,11 @@ function DropdownSelect({
       onValueChange={(v) => onChange(fromSelectValue(v))}
     >
       <SelectTrigger
+        id={id}
         className={[
-          'group w-full rounded-lg bg-muted border text-foreground text-sm',
+          'group w-full rounded bg-muted border text-foreground text-sm',
           'h-auto px-3 py-2',
-          'focus:outline-none focus-visible:ring-1 focus-visible:ring-[#ef4444] focus-visible:border-[#ef4444]',
+          'focus:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30',
           'data-[placeholder]:text-muted-foreground',
           '[&>svg:last-child]:hidden',
           'transition-colors duration-150',
@@ -82,7 +85,7 @@ function DropdownSelect({
 
       <SelectContent
         className={[
-          'bg-card border border-border rounded-lg shadow-lg',
+          'bg-card border border-border rounded shadow-lg',
           'z-50',
           // Fade + slide-down animation
           'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1',
@@ -98,7 +101,7 @@ function DropdownSelect({
             className={[
               'rounded-md text-sm text-muted-foreground cursor-pointer',
               'hover:bg-muted focus:bg-muted focus:text-foreground',
-              'data-[state=checked]:bg-[#ef4444]/10 data-[state=checked]:text-foreground',
+              'data-[state=checked]:bg-accent data-[state=checked]:text-foreground',
             ].join(' ')}
           >
             Any
@@ -111,7 +114,7 @@ function DropdownSelect({
             className={[
               'rounded-md text-sm text-foreground cursor-pointer',
               'hover:bg-muted focus:bg-muted focus:text-foreground',
-              'data-[state=checked]:bg-[#ef4444]/10 data-[state=checked]:text-foreground',
+              'data-[state=checked]:bg-accent data-[state=checked]:text-foreground',
             ].join(' ')}
           >
             {opt.label}
@@ -166,7 +169,7 @@ function ChainIdInput() {
   return (
     <div
       title="More chains coming soon"
-      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted border border-border text-sm cursor-default select-none"
+      className="w-full flex items-center justify-between px-3 py-2 rounded bg-muted border border-border text-sm cursor-default select-none"
     >
       <span className="text-foreground">Avalanche C-Chain</span>
       <span className="text-muted-foreground font-mono text-xs">43114</span>
@@ -176,12 +179,13 @@ function ChainIdInput() {
 
 export function SmartParamInput(props: SmartParamInputProps) {
   const { param, value, onChange, hasError } = props;
+  const inputId = useId();
 
   const errorClass = hasError
     ? 'border-red-500 ring-1 ring-red-500'
     : 'border-border';
 
-  const baseInputClass = `w-full px-3 py-2 rounded-lg bg-muted border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-[#ef4444] ${errorClass}`;
+  const baseInputClass = `w-full px-3 py-2 rounded bg-muted border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-foreground/30 ${errorClass}`;
 
   const renderInput = () => {
     switch (param.type) {
@@ -192,6 +196,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
         const opts = (param.options ?? []).map((opt) => ({ value: opt, label: opt }));
         return (
           <DropdownSelect
+            id={inputId}
             value={value}
             onChange={onChange}
             options={opts}
@@ -216,9 +221,9 @@ export function SmartParamInput(props: SmartParamInputProps) {
         return (
           <div className="flex items-center justify-between py-1">
             <span
-              className={`text-xs font-mono px-2 py-0.5 rounded-full ${
+              className={`num text-[11px] px-1.5 h-5 inline-flex items-center rounded ${
                 isOn
-                  ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                  ? 'bg-green-500/15 text-green-800 dark:text-up'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
@@ -246,6 +251,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
         return (
           <>
             <input
+            id={inputId}
               type="text"
               inputMode="numeric"
               value={value}
@@ -266,6 +272,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
       case 'date':
         return (
           <input
+            id={inputId}
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -277,6 +284,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
       default:
         return (
           <input
+            id={inputId}
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -289,10 +297,10 @@ export function SmartParamInput(props: SmartParamInputProps) {
 
   return (
     <div className="space-y-1">
-      <label className="flex items-center gap-1 text-xs font-medium text-foreground">
+      <label htmlFor={inputId} className="flex items-center gap-1 text-xs font-medium text-foreground">
         <span className="font-mono text-muted-foreground">{param.name}</span>
         {param.required && (
-          <span className="text-[#ef4444] ml-0.5">*</span>
+          <span className="text-muted-foreground ml-0.5">*</span>
         )}
         {param.kind === 'path' && (
           <span className="text-xs px-1 py-0.5 rounded bg-muted text-muted-foreground ml-1">

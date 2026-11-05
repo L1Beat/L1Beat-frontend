@@ -1,7 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Flame, Zap, Activity, Gauge, Volume2, VolumeX } from 'lucide-react';
+import { Flame, Volume2, VolumeX } from 'lucide-react';
 import { SEO } from '../components/SEO';
-import { getBurnedTotal } from '../api';
+import { PAGE_SEO } from '../utils/pageSeo';
+import { format, parseISO } from 'date-fns';
+import { SegmentedControl, Sparkline, StatStrip } from '../components/instrument';
+import type { StatItem } from '../components/instrument';
+import { getBurnedTotal, getEvmFeesBurned, getEvmFeesBurnedSpan, getStakingSummary, getTreasuries, nAvaxToAvax } from '../api';
+import type { FeeBurnPoint } from '../api';
+import { chartPointerProps } from '../utils/chartPointer';
 
 // --- websocket types -------------------------------------------------------
 interface WsBlock {
@@ -341,7 +347,8 @@ function EmberCanvas({ burst, reduced }: { burst: FeedBlock | null; reduced: boo
       // Gentle baseline embers so it always smolders.
       spawnAcc += dt;
       if (spawnAcc > 140) { spawnAcc = 0; spawn(1); }
-      ctx.globalCompositeOperation = 'lighter';
+      // Additive glow only reads on the dark stage; on light it would wash out to white.
+      ctx.globalCompositeOperation = document.documentElement.classList.contains('dark') ? 'lighter' : 'source-over';
       const arr = embers.current;
       for (let i = arr.length - 1; i >= 0; i--) {
         const e = arr[i];
@@ -392,33 +399,13 @@ function BurnCounter({ avax, reduced }: { avax: number; reduced: boolean }) {
   const intPart = Math.floor(v).toLocaleString('en-US');
   const frac = (v - Math.floor(v)).toFixed(6).slice(1); // ".520617"
   return (
-    <div className="flex items-baseline justify-center font-bold tabular-nums leading-none">
+    <div className="flex items-baseline justify-center leading-none">
       <span
-        className="text-5xl sm:text-7xl lg:text-8xl bg-gradient-to-b from-orange-300 via-[#ef4444] to-orange-600 bg-clip-text text-transparent"
-        style={{ filter: 'drop-shadow(0 0 24px rgba(239,68,68,0.45))' }}
+        className="num text-5xl sm:text-7xl lg:text-8xl font-medium bg-gradient-to-b from-orange-400 via-orange-500 to-orange-700 dark:from-orange-200 dark:via-orange-400 dark:to-orange-600 bg-clip-text text-transparent"
       >
         {intPart}
       </span>
-      <span className="text-xl sm:text-3xl lg:text-4xl text-orange-400/70 ml-0.5">{frac}</span>
-    </div>
-  );
-}
-
-// Isolated so its 60fps tween only re-renders itself, not the whole page/feed.
-function SessionStat({ navax, reduced }: { navax: bigint; reduced: boolean }) {
-  const v = useTween(navaxToAvax(navax), 700, reduced);
-  return <StatCard icon={Activity} label="Burned this session" value={v.toFixed(8)} sub="since you opened" />;
-}
-
-function StatCard({ icon: Icon, label, value, sub }: { icon: typeof Flame; label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/60 backdrop-blur px-4 py-3.5">
-      <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
-        <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-        {label}
-      </div>
-      <div className="mt-1.5 text-xl sm:text-2xl font-bold text-foreground tabular-nums">{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
+      <span className="num text-xl sm:text-3xl lg:text-4xl text-orange-600/70 dark:text-orange-400/70 ml-0.5">{frac}</span>
     </div>
   );
 }
@@ -433,168 +420,690 @@ function timeAgo(tsMs: number, now: number): string {
 
 // memo: with the clock isolated to LiveFeed, a per-second tick only re-renders
 // rows whose `now` bucket actually changed the label (props are otherwise stable).
-const BlockRow = memo(function BlockRow({ block, now, reduced, isNewest }: { block: FeedBlock; now: number; reduced: boolean; isNewest: boolean }) {
-  // Flash intensity scales (log) with burn size; newest row gets the ignite flash.
-  const heat = Math.min(1, Math.log10(block.navaxNum + 10) / 7);
+const BlockRow = memo(function BlockRow({
+  block,
+  now,
+  reduced,
+  isNewest,
+  maxAvax,
+}: {
+  block: FeedBlock;
+  now: number;
+  reduced: boolean;
+  isNewest: boolean;
+  maxAvax: number;
+}) {
+  const pct = maxAvax > 0 ? Math.max(1, (block.avax / maxAvax) * 100) : 0;
   return (
-    <div
-      className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border/50 last:border-0"
+    <tr
+      className="h-10 border-b border-border/50"
       style={!reduced && isNewest ? { animation: 'burnIgnite 900ms ease-out' } : undefined}
     >
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-foreground tabular-nums">Block {block.block_number.toLocaleString('en-US')}</div>
-        <div className="text-[11px] text-muted-foreground">
-          {timeAgo(block.tsMs, now)} · {block.tx_count} tx
-        </div>
-      </div>
-      <div
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-bold tabular-nums text-orange-300 border border-orange-500/30"
-        style={{ background: `rgba(239,68,68,${0.08 + heat * 0.22})` }}
-      >
-        <Flame className="w-3.5 h-3.5 text-[#ef4444]" />
-        {block.avax.toFixed(8)}
-      </div>
-    </div>
+      <td className="num text-[12px] text-foreground">{block.block_number.toLocaleString('en-US')}</td>
+      <td className="num text-[12px] text-muted-foreground">{timeAgo(block.tsMs, now)}</td>
+      <td className="num text-[12px] text-muted-foreground text-right">{block.tx_count}</td>
+      <td className="text-right">
+        <span className="inline-flex items-center justify-end gap-2.5">
+          <span aria-hidden className="hidden sm:block w-24 h-[3px] rounded-sm bg-muted/60 overflow-hidden">
+            <span className="block h-full rounded-sm bg-orange-400/80" style={{ width: `${pct}%` }} />
+          </span>
+          <span className="num text-[12px] text-foreground w-28 inline-block">{block.avax.toFixed(8)}</span>
+        </span>
+      </td>
+    </tr>
   );
 });
 
 // Owns the 1s clock so the "Xs ago" labels stay live without re-rendering the
 // hero, counter, ember canvas or stat cards every second.
-function LiveFeed({ blocks, reduced }: { blocks: FeedBlock[]; reduced: boolean }) {
+function LiveFeed({ blocks, reduced, connected }: { blocks: FeedBlock[]; reduced: boolean; connected: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+  const shown = blocks.slice(0, FEED_VISIBLE);
+  const maxAvax = shown.reduce((m, b) => Math.max(m, b.avax), 0);
+
+  // Oldest first, for the trend line over every block still in the buffer.
+  const trail = blocks.map((b) => b.avax).reverse();
+  return (
+    <Card
+      title="Live C-Chain block burns"
+      sub={`The last ${FEED_VISIBLE} blocks as they land; the line shows the last ${blocks.length || FEED_CAP}.`}
+      aside={
+        <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
+          <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-up' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
+          {connected ? 'Live' : 'Reconnecting'}
+        </span>
+      }
+    >
+      <div className="px-4 sm:px-5 pb-3">
+        <div className="h-10">{trail.length > 1 && <Sparkline data={trail} width={600} height={40} color={BASE} fill className="w-full h-10" />}</div>
+      </div>
+      <div className="px-4 sm:px-5 pb-2">
+      <table className="w-full text-[12px] border-t border-border">
+        <thead>
+          <tr className="h-9 border-b border-border text-[11px] font-medium text-muted-foreground">
+            <th className="text-left font-medium">Block</th>
+            <th className="text-left font-medium">Age</th>
+            <th className="text-right font-medium">Txs</th>
+            <th className="text-right font-medium">Burned, AVAX</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.length === 0
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="h-10 border-b border-border/50">
+                  <td><div className="h-3 w-24 rounded bg-muted animate-pulse" /></td>
+                  <td><div className="h-3 w-12 rounded bg-muted animate-pulse" /></td>
+                  <td className="text-right"><div className="ml-auto h-3 w-8 rounded bg-muted animate-pulse" /></td>
+                  <td className="text-right"><div className="ml-auto h-3 w-28 rounded bg-muted animate-pulse" /></td>
+                </tr>
+              ))
+            : shown.map((b, i) => (
+                <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} maxAvax={maxAvax} />
+              ))}
+        </tbody>
+      </table>
+      </div>
+    </Card>
+  );
+}
+
+// --- context: totals over days and months -----------------------------------
+function compact(v: number): string {
+  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+  const a = Math.abs(v);
+  if (a >= 1e9) return `${trim(v / 1e9)}B`;
+  if (a >= 1e6) return `${trim(v / 1e6)}M`;
+  if (a >= 1e3) return `${trim(v / 1e3)}K`;
+  return a >= 100 ? v.toFixed(0) : trim(v);
+}
+const sumBurned = (pts: FeeBurnPoint[]) => pts.reduce((s, p) => s + nAvaxToAvax(p.total_burned), 0);
+
+interface BurnFacts {
+  last24h: number | null;
+  last30d: number | null;
+  prior30d: number | null;
+  busiestMonth: { period: string; avax: number } | null;
+  /** Total AVAX supply, for the share already burned. */
+  supplyAvax: number | null;
+  price: number | null;
+  /** Oldest first: the last 24 hours, 60 days and every complete month. */
+  hours: FeeBurnPoint[];
+  days: FeeBurnPoint[];
+  months: FeeBurnPoint[];
+  /** All-time base fee and priority tip, in AVAX. */
+  cumulative: { base: number; tip: number } | null;
+}
+
+// Loaded once: the rolling totals, the busiest month, supply and price.
+function useBurnFacts(): BurnFacts {
+  const [facts, setFacts] = useState<BurnFacts>({
+    last24h: null,
+    last30d: null,
+    prior30d: null,
+    busiestMonth: null,
+    supplyAvax: null,
+    price: null,
+    hours: [],
+    days: [],
+    months: [],
+    cumulative: null,
+  });
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      getEvmFeesBurned(43114, { granularity: 'hour', limit: 24 }),
+      getEvmFeesBurned(43114, { granularity: 'day', limit: 60 }),
+      getEvmFeesBurned(43114, { granularity: 'month', limit: 100 }),
+      getStakingSummary(),
+      getTreasuries(),
+    ]).then(([hours, days, months, staking, treasuries]) => {
+      if (!alive) return;
+      const d = days?.series ?? [];
+      const busiest = (months?.series ?? []).reduce<FeeBurnPoint | null>(
+        (m, p) => (!m || nAvaxToAvax(p.total_burned) > nAvaxToAvax(m.total_burned) ? p : m),
+        null,
+      );
+      setFacts({
+        last24h: hours?.series.length ? sumBurned(hours.series) : null,
+        last30d: d.length >= 30 ? sumBurned(d.slice(-30)) : null,
+        prior30d: d.length >= 60 ? sumBurned(d.slice(-60, -30)) : null,
+        busiestMonth: busiest ? { period: busiest.period, avax: nAvaxToAvax(busiest.total_burned) } : null,
+        supplyAvax: staking ? nAvaxToAvax(staking.total_supply) : null,
+        price: treasuries?.totals.avax_price_usd ?? null,
+        hours: hours?.series ?? [],
+        days: d,
+        months: months?.series ?? [],
+        cumulative: months ? { base: nAvaxToAvax(months.cumulative.base_fee_burned), tip: nAvaxToAvax(months.cumulative.priority_fee_burned) } : null,
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return facts;
+}
+
+const BURN_RANGES = [
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+  { value: '365', label: '1y' },
+  { value: 'all', label: 'All' },
+] as const;
+type BurnRange = (typeof BURN_RANGES)[number]['value'];
+// Base fee and priority tip, the two parts of every C-Chain fee.
+const PARTS = [
+  { key: 'base_fee_burned', label: 'Base fee', color: '#d95926' },
+  { key: 'priority_fee_burned', label: 'Priority tip', color: '#d4a017' },
+] as const;
+const HM = { top: 10, right: 8, bottom: 24, left: 48 };
+
+// Burned per day, split into base fee and priority tip. All history comes as
+// weeks, where daily bars would be thinner than a pixel.
+function BurnHistory() {
+  const [range, setRange] = useState<BurnRange>('90');
+  const [data, setData] = useState<{ range: BurnRange; points: FeeBurnPoint[] } | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [hover, setHover] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(0);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    const yesterday = new Date(Date.now() - 86_400_000);
+    const load =
+      range === 'all'
+        ? getEvmFeesBurnedSpan(43114, 'week', new Date('2020-09-01T00:00:00Z'), yesterday)
+        : getEvmFeesBurnedSpan(43114, 'day', new Date(yesterday.getTime() - (Number(range) - 1) * 86_400_000), yesterday);
+    load.then((points) => {
+      if (!alive) return;
+      // On failure, drop the old range too, so the chart never shows data the control no longer describes.
+      setData(points ? { range, points } : null);
+      setState(points ? 'ready' : 'error');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [range]);
+
+  const weekly = data?.range === 'all';
+  const points = useMemo(() => data?.points ?? [], [data]);
+  const H = 240;
+  const geom = useMemo(() => {
+    if (!points.length || !W) return null;
+    const peak = Math.max(...points.map((p) => nAvaxToAvax(p.total_burned)), 1);
+    const raw = peak / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const tick = ([1, 2, 2.5, 5, 10].find((k) => k * mag >= raw) ?? 10) * mag;
+    const maxY = Math.ceil(peak / tick) * tick;
+    const ticks = Array.from({ length: Math.round(maxY / tick) + 1 }, (_, i) => i * tick);
+    const slot = (W - HM.left - HM.right) / points.length;
+    const barW = Math.max(1, slot * (points.length > 120 ? 0.85 : 0.7));
+    const x = (i: number) => HM.left + slot * i + (slot - barW) / 2;
+    const y = (v: number) => HM.top + (H - HM.top - HM.bottom) * (1 - v / maxY);
+    return { x, y, slot, barW, ticks, labelEvery: Math.ceil(points.length / (W < 600 ? 4 : 8)) };
+  }, [points, W]);
+  const active = hover != null ? points[hover] : null;
+  const total = sumBurned(points);
+  // The newest week usually isn't over; count the complete days it holds so far.
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
+  const daysIn = (p: FeeBurnPoint) => Math.min(7, Math.max(1, Math.round((today - Date.parse(p.period)) / 86_400_000)));
+  const partial = (p: FeeBurnPoint) => weekly && daysIn(p) < 7;
+  const when = (p: FeeBurnPoint) =>
+    weekly
+      ? `Week of ${format(parseISO(p.period), 'MMM d, yyyy')}${partial(p) ? ` (partial, ${daysIn(p)} ${daysIn(p) === 1 ? 'day' : 'days'})` : ''}`
+      : format(parseISO(p.period), 'EEE, MMM d, yyyy');
 
   return (
-    <section className="mt-8 rounded-2xl border border-border bg-card overflow-hidden">
-      <header className="flex items-center gap-2 px-4 sm:px-5 py-3.5 border-b border-border">
-        <Flame className="w-4 h-4 text-[#ef4444]" />
-        <h2 className="text-sm font-bold tracking-wide uppercase text-foreground">Live C-Chain Block Burns</h2>
-      </header>
-      {blocks.length === 0 ? (
-        <div className="divide-y divide-border/50">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between px-4 sm:px-5 py-3">
-              <div className="space-y-1.5">
-                <div className="h-3.5 w-28 rounded bg-muted animate-pulse" />
-                <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
-              </div>
-              <div className="h-6 w-24 rounded-full bg-muted animate-pulse" />
-            </div>
-          ))}
-        </div>
-      ) : (
+    <section className="rounded-md border border-border bg-card">
+      <header className="flex flex-wrap items-start justify-between gap-3 px-4 sm:px-5 pt-4">
         <div>
-          {blocks.slice(0, FEED_VISIBLE).map((b, i) => (
-            <BlockRow key={b.block_number} block={b} now={now} reduced={reduced} isNewest={i === 0} />
-          ))}
+          <h2 className="text-[14px] font-semibold text-foreground">Burned over time</h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            AVAX burned per {weekly ? 'week' : 'day'} on the C-Chain, split into the base fee and the priority tip.
+          </p>
+        </div>
+        <SegmentedControl size="xs" value={range} options={BURN_RANGES} onChange={setRange} ariaLabel="Burn history range" />
+      </header>
+      <div className={`px-4 sm:px-5 pb-5 pt-3 transition-opacity ${state === 'loading' && data ? 'opacity-50' : ''}`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-2">
+          <div>
+            <div className="num text-[22px] leading-7 font-medium text-foreground">
+              {points.length ? `${compact(active ? nAvaxToAvax(active.total_burned) : total)} AVAX` : '—'}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {active
+                ? when(active)
+                : points.length
+                  ? `burned ${format(parseISO(points[0].period), 'MMM d, yyyy')} to ${format(parseISO(points[points.length - 1].period), 'MMM d, yyyy')}${weekly ? '; bars are weeks' : ''}`
+                  : state === 'error'
+                    ? "Burn history couldn't be loaded. Try again in a minute."
+                    : ' '}
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+            {PARTS.map((part) => (
+              <span key={part.key} className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: part.color }} />
+                {part.label}
+                {active && <span className="num text-foreground">{compact(nAvaxToAvax(active[part.key]))}</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div ref={boxRef} className="relative" style={{ height: H }}>
+          {!geom ? (
+            <div className={`absolute inset-0 rounded ${state === 'loading' ? 'bg-muted/50 animate-pulse' : ''}`} />
+          ) : (
+            <svg
+              width={W}
+              height={H}
+              className="absolute inset-0 block"
+              {...chartPointerProps<SVGSVGElement>({
+                onMove: (e) => {
+                  const i = Math.floor((e.clientX - e.currentTarget.getBoundingClientRect().left - HM.left) / geom.slot);
+                  setHover(i >= 0 && i < points.length ? i : null);
+                },
+                count: points.length,
+                hover,
+                setHover,
+              })}
+              role="img"
+              aria-label={`AVAX burned per ${weekly ? 'week' : 'day'}, base fee and priority tip`}
+            >
+              {geom.ticks.map((t) => (
+                <g key={t}>
+                  <line x1={HM.left} x2={W - HM.right} y1={geom.y(t)} y2={geom.y(t)} stroke="currentColor" strokeOpacity={0.08} />
+                  <text x={HM.left - 8} y={geom.y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={10}>
+                    {t === 0 ? '0' : compact(t)}
+                  </text>
+                </g>
+              ))}
+              {points.map((p, i) => {
+                let run = 0;
+                return (
+                  <g key={p.period} opacity={(hover != null && hover !== i ? 0.45 : 1) * (partial(p) ? 0.5 : 1)}>
+                    {PARTS.map((part) => {
+                      const v = nAvaxToAvax(p[part.key]);
+                      if (v <= 0) return null;
+                      const y0 = geom.y(run);
+                      run += v;
+                      return <rect key={part.key} x={geom.x(i)} y={geom.y(run)} width={geom.barW} height={Math.max(0, y0 - geom.y(run))} fill={part.color} />;
+                    })}
+                    {i % geom.labelEvery === 0 && (
+                      <text x={geom.x(i) + geom.barW / 2} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={10}>
+                        {format(parseISO(p.period), points.length > 120 ? 'MMM yyyy' : 'MMM d')}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const BASE = PARTS[0].color;
+const TIP = PARTS[1].color;
+const pctOf = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
+
+function Card({ title, sub, aside, children }: { title: string; sub?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-md border border-border bg-card">
+      <header className="px-4 sm:px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+          {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        </div>
+        {aside}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+const Pending = ({ rows = 3 }: { rows?: number }) => (
+  <div className="px-4 sm:px-5 pb-5 space-y-2">{Array.from({ length: rows }, (_, i) => <div key={i} className="h-8 rounded bg-muted/50 animate-pulse" />)}</div>
+);
+
+/** One bar split into base fee and priority tip. */
+function SplitBar({ base, tip, label }: { base: number; tip: number; label: string }) {
+  const b = pctOf(base, base + tip);
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[11px] text-muted-foreground">
+        <span>{label}</span>
+        <span className="num">
+          <span className="text-foreground">{b.toFixed(0)}%</span> base, <span className="text-foreground">{(100 - b).toFixed(0)}%</span> tip
+        </span>
+      </div>
+      <div className="mt-1.5 flex h-3 rounded-sm overflow-hidden gap-px bg-muted" role="img" aria-label={`${label}: ${b.toFixed(0)}% base fee, ${(100 - b).toFixed(0)}% priority tip`}>
+        <div style={{ width: `${b}%`, background: BASE }} />
+        <div style={{ width: `${100 - b}%`, background: TIP }} />
+      </div>
+    </div>
+  );
+}
+
+/** Where the burn comes from, all time against the last 30 days. */
+function FeeSplit({ facts }: { facts: BurnFacts }) {
+  const recent = facts.days.slice(-30);
+  const base30 = recent.reduce((s, p) => s + nAvaxToAvax(p.base_fee_burned), 0);
+  const tip30 = recent.reduce((s, p) => s + nAvaxToAvax(p.priority_fee_burned), 0);
+  const tipShare30 = pctOf(tip30, base30 + tip30);
+  const all = facts.cumulative;
+  return (
+    <Card title="Base fee and priority tip" sub="Both parts of every C-Chain fee are burned">
+      {!all || !recent.length ? (
+        <Pending />
+      ) : (
+        <div className="px-4 sm:px-5 pb-4 space-y-4">
+          <p className="text-[12px] text-muted-foreground">
+            <span className="num text-[22px] leading-7 font-medium text-foreground mr-1.5">{tipShare30.toFixed(0)}%</span>
+            of the last 30 days came from tips, against {pctOf(all.tip, all.base + all.tip).toFixed(0)}% all time
+          </p>
+          <SplitBar label="All time" base={all.base} tip={all.tip} />
+          <SplitBar label="Last 30 days" base={base30} tip={tip30} />
+          <ul className="space-y-2 pt-1">
+            {PARTS.map((part) => (
+              <li key={part.key} className="flex items-center gap-3 text-[12px]">
+                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: part.color }} aria-hidden />
+                <span className="text-foreground flex-1">{part.label}</span>
+                <Sparkline data={recent.map((p) => nAvaxToAvax(p[part.key]))} width={72} height={18} color={part.color} fill />
+                <span className="num w-20 text-right text-foreground">{compact(part.key === 'base_fee_burned' ? base30 : tip30)} AVAX</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted-foreground">Lines and amounts cover the last 30 days.</p>
         </div>
       )}
-    </section>
+    </Card>
+  );
+}
+
+/** Calendar years from the monthly series, each with its months as a line. */
+function ByYear({ facts }: { facts: BurnFacts }) {
+  const years = useMemo(() => {
+    const out = new Map<string, { base: number; tip: number; months: number[] }>();
+    for (const p of facts.months) {
+      const y = p.period.slice(0, 4);
+      const e = out.get(y) ?? { base: 0, tip: 0, months: [] };
+      e.base += nAvaxToAvax(p.base_fee_burned);
+      e.tip += nAvaxToAvax(p.priority_fee_burned);
+      e.months.push(nAvaxToAvax(p.total_burned));
+      out.set(y, e);
+    }
+    return [...out].map(([year, v]) => ({ year, ...v, total: v.base + v.tip })).reverse();
+  }, [facts.months]);
+  const first = facts.months[0]?.period;
+  const last = facts.months[facts.months.length - 1]?.period;
+  const max = Math.max(1, ...years.map((y) => y.total));
+  const all = years.reduce((s, y) => s + y.total, 0);
+  const span = (year: string) => {
+    const f = first?.startsWith(year) ? format(parseISO(first), 'MMM') : 'Jan';
+    const l = last?.startsWith(year) ? format(parseISO(last), 'MMM') : 'Dec';
+    return f === 'Jan' && l === 'Dec' ? null : `${f} to ${l}`;
+  };
+  return (
+    <Card title="By year" sub="Complete months only, so the current month isn't counted yet">
+      {!years.length ? (
+        <Pending rows={5} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px] whitespace-nowrap">
+            <thead>
+              <tr className="border-y border-border text-[11px] text-muted-foreground">
+                <th className="text-left font-normal px-4 sm:px-5 py-2">Year</th>
+                <th className="text-right font-normal px-3 py-2">Burned, AVAX</th>
+                <th className="text-left font-normal px-3 py-2 w-[34%] hidden md:table-cell">Base fee and tip</th>
+                <th className="text-left font-normal px-3 py-2 hidden sm:table-cell">By month</th>
+                <th className="text-right font-normal px-4 sm:px-5 py-2">Of all burned</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {years.map((y) => (
+                <tr key={y.year}>
+                  <td className="px-4 sm:px-5 py-2.5">
+                    <span className="num text-[13px] font-medium text-foreground">{y.year}</span>
+                    {span(y.year) && <span className="ml-2 text-[11px] text-muted-foreground">{span(y.year)}</span>}
+                  </td>
+                  <td className="num text-right px-3 py-2.5 text-foreground">{compact(y.total)}</td>
+                  <td className="px-3 py-2.5 hidden md:table-cell">
+                    {/* Length is the year's total against the biggest year; the split is base fee then tip. */}
+                    <div className="h-1.5 rounded-sm bg-muted overflow-hidden">
+                      <div className="h-full flex" style={{ width: `${(y.total / max) * 100}%` }}>
+                        <div style={{ width: `${pctOf(y.base, y.total)}%`, background: BASE }} />
+                        <div style={{ width: `${pctOf(y.tip, y.total)}%`, background: TIP }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 hidden sm:table-cell">
+                    <Sparkline data={y.months} width={96} height={20} color={BASE} fill />
+                  </td>
+                  <td className="num text-right px-4 sm:px-5 py-2.5 text-muted-foreground">{pctOf(y.total, all).toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BusiestMonths({ facts }: { facts: BurnFacts }) {
+  const top = [...facts.months].sort((a, b) => nAvaxToAvax(b.total_burned) - nAvaxToAvax(a.total_burned)).slice(0, 6);
+  const max = top.length ? nAvaxToAvax(top[0].total_burned) : 1;
+  return (
+    <Card title="Busiest months" sub="Most AVAX burned in a calendar month">
+      {!top.length ? (
+        <Pending />
+      ) : (
+        <ol className="px-4 sm:px-5 pb-4 space-y-2.5">
+          {top.map((p) => {
+            const v = nAvaxToAvax(p.total_burned);
+            return (
+              <li key={p.period} className="text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground">{format(parseISO(p.period), 'MMMM yyyy')}</span>
+                  <span className="num text-foreground">{compact(v)} AVAX</span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-sm bg-muted overflow-hidden">
+                  <div className="h-full rounded-sm" style={{ width: `${(v / max) * 100}%`, background: BASE }} />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+/** The last 24 hours, hour by hour, with the busiest hour named. */
+function LastDay({ facts }: { facts: BurnFacts }) {
+  const hours = facts.hours;
+  const values = hours.map((p) => nAvaxToAvax(p.total_burned));
+  const peakIdx = values.reduce((m, v, i) => (v > values[m] ? i : m), 0);
+  const peak = hours[peakIdx];
+  return (
+    <Card title="Last 24 hours" sub="AVAX burned each hour, UTC">
+      {!hours.length ? (
+        <Pending rows={2} />
+      ) : (
+        <div className="px-4 sm:px-5 pb-4">
+          <div className="num text-[22px] leading-7 font-medium text-foreground">{facts.last24h != null ? `${compact(facts.last24h)} AVAX` : '—'}</div>
+          <div className="text-[11px] text-muted-foreground">
+            {facts.last24h != null && facts.price != null ? `about $${compact(facts.last24h * facts.price)}, ` : ''}
+            {(facts.last24h ?? 0) > 0 ? `${compact((facts.last24h ?? 0) / 24)} AVAX an hour on average` : ''}
+          </div>
+          <div className="mt-3 h-16">
+            <Sparkline data={values} width={300} height={64} color={BASE} fill className="w-full h-16" />
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground num">
+            <span>{format(parseISO(hours[0].period), 'HH:mm')}</span>
+            <span>{format(parseISO(hours[hours.length - 1].period), 'HH:mm')}</span>
+          </div>
+          {peak && (
+            <p className="mt-3 text-[12px] text-muted-foreground">
+              Busiest hour: <span className="num text-foreground">{format(parseISO(peak.period), 'HH:mm')}</span>, with{' '}
+              <span className="num text-foreground">{compact(values[peakIdx])} AVAX</span>
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
 // --- page ------------------------------------------------------------------
 export function Burn() {
   const reduced = usePrefersReducedMotion();
-  const { blocks, totalNavax, sessionNavax, connected, lastBlock } = useBurnStream();
+  const { blocks, totalNavax, connected, lastBlock } = useBurnStream();
   const sound = useFireplaceSound();
+  const facts = useBurnFacts();
 
   const totalAvax = totalNavax != null ? navaxToAvax(totalNavax) : 0;
 
-  // Burn rate over blocks in the last 60s → AVAX/min. Recomputed when blocks
-  // change (new C-Chain block every ~2s), not on a separate 1s clock.
-  const ratePerMin = useMemo(() => {
-    const cutoff = Date.now() - 60_000;
-    let sum = 0;
-    for (const b of blocks) {
-      if (b.tsMs >= cutoff) sum += b.avax;
-    }
-    return sum; // already a per-minute window
-  }, [blocks]);
-
-  // Average burn per block across the blocks shown in the feed.
-  const avgPerBlock = useMemo(() => {
-    const shown = blocks.slice(0, FEED_VISIBLE);
-    if (shown.length === 0) return 0;
-    let sum = 0;
-    for (const b of shown) sum += b.avax;
-    return sum / shown.length;
-  }, [blocks]);
+  const usdAbout = (avax: number | null) =>
+    avax != null && facts.price != null ? `about $${compact(avax * facts.price)}` : 'AVAX';
+  const change30d =
+    facts.last30d != null && facts.prior30d ? ((facts.last30d - facts.prior30d) / facts.prior30d) * 100 : null;
+  const burnedShare = facts.supplyAvax && totalAvax ? (totalAvax / facts.supplyAvax) * 100 : null;
+  const stats: StatItem[] = [
+    {
+      label: 'Burned, 24h',
+      value: facts.last24h != null ? `${compact(facts.last24h)} AVAX` : '—',
+      sub: usdAbout(facts.last24h),
+      tooltip: 'AVAX burned on the C-Chain over the last 24 full hours.',
+    },
+    {
+      label: 'Burned, 30d',
+      value: facts.last30d != null ? `${compact(facts.last30d)} AVAX` : '—',
+      delta: change30d,
+      deltaLabel: 'vs prior 30d',
+      sub: change30d == null ? usdAbout(facts.last30d) : undefined,
+      tooltip: 'AVAX burned over the last 30 complete UTC days, against the 30 days before.',
+    },
+    {
+      label: 'Share of supply',
+      value: burnedShare != null ? `${burnedShare.toFixed(2)}%` : '—',
+      sub: 'burned so far',
+      tooltip: 'All AVAX burned on the C-Chain as a share of the total AVAX supply.',
+    },
+    {
+      label: 'Busiest month',
+      value: facts.busiestMonth ? format(parseISO(facts.busiestMonth.period), 'MMM yyyy') : '—',
+      sub: facts.busiestMonth ? `${compact(facts.busiestMonth.avax)} AVAX burned` : ' ',
+      tooltip: 'The calendar month with the most AVAX burned on the C-Chain.',
+    },
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      <SEO title="AVAX Burn: Live Avalanche Fee Burn" description="Live AVAX burned on Avalanche, streamed block by block. Every C-Chain fee, base fee and priority tip, is burned." />
+    <div>
+      <SEO {...PAGE_SEO.burn} />
       <style>{`
         @keyframes burnIgnite {
-          0% { background-color: rgba(239,68,68,0.28); transform: translateY(-6px); opacity: 0; }
+          0% { background-color: rgba(249,115,22,0.22); transform: translateY(-6px); opacity: 0; }
           40% { opacity: 1; }
           100% { background-color: transparent; transform: translateY(0); opacity: 1; }
         }
         @keyframes flameFlicker { 0%,100% { transform: scale(1) rotate(-1deg); opacity: .9 } 50% { transform: scale(1.12) rotate(1deg); opacity: 1 } }
       `}</style>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-b from-[#1a1410] to-card px-6 py-12 sm:py-16 text-center">
+      {/* Hero: the running total fills the first screen, embers rise behind it. */}
+      <section className="relative overflow-hidden border-b border-border bg-stage h-[520px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[560px]">
         <div
           className="absolute inset-x-0 bottom-0 h-2/3 pointer-events-none"
-          style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(239,68,68,0.18), transparent 70%)' }}
+          style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(249,115,22,0.16), transparent 70%)' }}
           aria-hidden
         />
         <EmberCanvas burst={lastBlock} reduced={reduced} />
 
-        <button
-          type="button"
-          onClick={sound.toggle}
-          aria-pressed={sound.enabled}
-          title={sound.enabled ? 'Mute fireplace' : 'Play fireplace sound'}
-          className="absolute top-4 right-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-orange-500/30 bg-black/30 px-3 py-1.5 text-[11px] font-semibold text-orange-200/90 backdrop-blur hover:bg-black/50 transition-colors"
-        >
-          {sound.enabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-          <span className="hidden sm:inline">{sound.enabled ? 'Sound on' : 'Fireplace'}</span>
-        </button>
-
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase text-orange-300/90">
-            <Flame className="w-4 h-4 text-[#ef4444]" style={!reduced ? { animation: 'flameFlicker 1.4s ease-in-out infinite' } : undefined} />
-            Total AVAX Burned on C-Chain
+        <div className="absolute top-3 left-4 sm:left-6 right-4 sm:right-6 z-30 flex items-center justify-between gap-3 pointer-events-none [&>*]:pointer-events-auto">
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h1 className="text-[15px] leading-6 font-semibold text-foreground shrink-0">AVAX burn</h1>
+            <p className="hidden lg:block text-[12px] text-muted-foreground truncate">
+              Every C-Chain fee, base fee and priority tip, is burned and removed from circulating supply.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={sound.toggle}
+            aria-pressed={sound.enabled}
+            title={sound.enabled ? 'Mute fireplace' : 'Play fireplace sound'}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded border border-border bg-background/70 text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {sound.enabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{sound.enabled ? 'Sound on' : 'Fireplace'}</span>
+          </button>
+        </div>
 
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 pb-16 pointer-events-none">
+          <div className="inline-flex items-center gap-2 text-[13px] font-medium text-orange-700 dark:text-orange-200/90">
+            <Flame className="w-4 h-4 text-orange-500 dark:text-orange-400" style={!reduced ? { animation: 'flameFlicker 1.4s ease-in-out infinite' } : undefined} />
+            Total AVAX burned on the C-Chain
+          </div>
           <div className="mt-6 mb-3">
             {totalNavax == null ? (
-              <div className="h-16 sm:h-24 w-72 sm:w-[28rem] mx-auto rounded-xl bg-muted animate-pulse" />
+              <div className="h-16 sm:h-24 w-72 sm:w-[28rem] mx-auto rounded-md bg-muted animate-pulse" />
             ) : (
               <BurnCounter avax={totalAvax} reduced={reduced} />
             )}
           </div>
-
-          <div className="text-sm font-semibold tracking-wide text-muted-foreground">AVAX</div>
-
-          <div className="mt-7 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
-            {connected ? 'Live · streaming C-Chain blocks' : 'Reconnecting…'}
+          <div className="text-[12px] text-muted-foreground">AVAX</div>
+          {burnedShare != null && (
+            <p className="mt-4 text-[14px] sm:text-[15px] text-foreground/80 max-w-xl">
+              That is <span className="num">{burnedShare.toFixed(2)}%</span> of all AVAX, removed from circulating supply
+              {facts.price != null && (
+                <>
+                  , worth about <span className="num">${compact(totalAvax * facts.price)}</span> at today's price
+                </>
+              )}
+              .
+            </p>
+          )}
+          <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-up' : 'bg-amber-500'} ${connected && !reduced ? 'animate-pulse' : ''}`} />
+            {connected ? 'Live, streaming C-Chain blocks' : 'Reconnecting'}
           </div>
+        </div>
+
+        <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
+          <StatStrip items={stats} floating />
         </div>
       </section>
 
-      {/* Blurb */}
-      <p className="mt-6 text-center text-sm text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-        AVAX is the hard-capped native token of Avalanche. On the C-Chain the{' '}
-        <span className="text-foreground font-medium">entire transaction fee</span> (base fee and priority tip) is{' '}
-        <span className="text-[#ef4444] font-medium">burned</span>, removed from circulating supply.
-      </p>
-
-      {/* Stats */}
-      <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <StatCard icon={Zap} label="Burn rate" value={`${ratePerMin.toFixed(6)}`} sub="AVAX / min" />
-        <SessionStat navax={sessionNavax} reduced={reduced} />
-        <StatCard icon={Gauge} label="Avg burn / block" value={avgPerBlock > 0 ? avgPerBlock.toFixed(8) : '—'} sub={blocks.length ? `last ${Math.min(blocks.length, FEED_VISIBLE)} blocks` : 'AVAX'} />
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-5">
+        <div className="md:hidden">
+          <StatStrip items={stats} />
+        </div>
+        <BurnHistory />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="lg:col-span-2 space-y-5 min-w-0">
+            <ByYear facts={facts} />
+            <LiveFeed blocks={blocks} reduced={reduced} connected={connected} />
+          </div>
+          <div className="space-y-5 min-w-0">
+            <FeeSplit facts={facts} />
+            <LastDay facts={facts} />
+            <BusiestMonths facts={facts} />
+          </div>
+        </div>
       </div>
-
-      {/* Live feed */}
-      <LiveFeed blocks={blocks} reduced={reduced} />
     </div>
   );
 }

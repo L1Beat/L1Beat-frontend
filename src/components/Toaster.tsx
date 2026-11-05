@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
@@ -22,6 +22,11 @@ let nextId = 1;
 
 export function ToasterProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // The portal waits for mount: the pre-rendered HTML has no toast container,
+  // and rendering one during hydration made React discard the whole page.
+  const [mounted, setMounted] = useState(false);
+  // A transition, so parts of the page still hydrating aren't thrown away (React error 421).
+  useEffect(() => startTransition(() => setMounted(true)), []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -32,11 +37,13 @@ export function ToasterProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => [...prev, { id, message, variant }].slice(-MAX_TOASTS));
     setTimeout(() => dismiss(id), TOAST_DURATION);
   }, [dismiss]);
+  // Stable, so re-rendering the provider doesn't count as a context change.
+  const value = useMemo(() => ({ toast }), [toast]);
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={value}>
       {children}
-      {typeof document !== 'undefined' &&
+      {mounted &&
         createPortal(
           <div
             aria-live="polite"
@@ -56,14 +63,14 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   const Icon = toast.variant === 'success' ? CheckCircle2 : toast.variant === 'error' ? AlertTriangle : Info;
   const iconColor =
     toast.variant === 'success'
-      ? 'text-green-500'
+      ? 'text-up'
       : toast.variant === 'error'
-        ? 'text-[#ef4444]'
+        ? 'text-brand'
         : 'text-foreground';
   return (
     <div
       role="status"
-      className="pointer-events-auto inline-flex items-start gap-2.5 min-h-9 px-3.5 py-2 rounded-xl bg-popover border border-border shadow-xl text-[12px] font-medium text-foreground"
+      className="pointer-events-auto inline-flex items-start gap-2.5 min-h-9 px-3.5 py-2 rounded-md bg-popover border border-border shadow-xl text-[12px] font-medium text-foreground"
     >
       <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${iconColor}`} />
       <span className="flex-1">{toast.message}</span>

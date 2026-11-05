@@ -1,46 +1,68 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
-import {
-  Activity,
-  ChevronRight,
-  GitCompareArrows,
-  Info,
-  LayoutGrid,
-  Search,
-  Star,
-  TrendingUp,
-  Users,
-  X,
-} from 'lucide-react';
+import { ChevronRight, GitCompareArrows, Info, Search, Star, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/branding/ui/tooltip';
+import { SegmentedControl, StatStrip, UpdatedAgo } from '../components/instrument';
+import { NetworkTopologyGraph } from '../components/NetworkTopologyGraph';
+import type { SankeySelection } from '../components/TeleporterSankeyDiagram';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+
+// Flows is the second hero view; loading it on demand keeps d3 off the Overview's first load.
+const TeleporterSankeyDiagram = lazy(() =>
+  import('../components/TeleporterSankeyDiagram').then((m) => ({ default: m.TeleporterSankeyDiagram })),
+);
+import { summarizeFlows, flowChainLabel } from '../utils/flowStats';
+import type { TeleporterMessageData } from '../types';
+import { PLACEHOLDER_CHAIN_LOGO } from '../api';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import type { StatItem } from '../components/instrument';
 import {
   getAllChainsTPSLatest,
+  getAllChainsTxCountLatest,
   getCategories,
   getChains,
   getNetworkTxCountHistory,
   getNetworkValidatorTotal,
   getTPSHistory,
+  getAllChainsTpsHistory,
+  getTeleporterMessages,
+  getDexSummary,
+  getLending,
+  getStakingSummary,
+  getTreasuries,
+  getBridgeSummary,
+  getPerpsSummary,
 } from '../api';
 import type { Chain } from '../types';
-import { FilterModal } from '../components/FilterModal';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { activityOwners, activityOwnerOf } from '../utils/activityOwner';
+import { coverageChanged, missingActivity } from '../utils/activityCoverage';
+import type { DailyTxLatest } from '../api';
 
-type Range = '24H' | '7D' | '30D' | 'ALL';
+// No all-time range until the backend's network history reaches back to 2020.
+type Range = '24H' | '7D' | '30D';
+type HeroView = 'map' | 'flows';
+const HERO_VIEWS: { value: HeroView; label: string }[] = [
+  { value: 'map', label: 'Map' },
+  { value: 'flows', label: 'ICM' },
+];
+const FLOW_WINDOWS: { value: 'daily' | 'weekly'; label: string }[] = [
+  { value: 'daily', label: '1D' },
+  { value: 'weekly', label: '7D' },
+];
 type ScreenerTab = 'active' | 'all' | 'inactive' | 'watchlist';
 type SortKey = 'name' | 'tps' | 'validators';
 type SortDir = 'asc' | 'desc';
 
-const RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
-const TREND_FETCH_DAYS = 30;
+const RANGES: Range[] = ['24H', '7D', '30D'];
+// The Δ 24h column compares the last two complete days.
+const TREND_FETCH_DAYS = 7;
 const RANGE_DAYS: Record<Range, number> = {
   '24H': 2,
   '7D': 7,
   '30D': 30,
-  ALL: 30,
 };
-const VALID_RANGES: Range[] = ['24H', '7D', '30D', 'ALL'];
+const VALID_RANGES: Range[] = ['24H', '7D', '30D'];
 const CHAINS_PER_PAGE = 25;
 const MAX_COMPARE = 4;
 const WATCHLIST_STORAGE_KEY = 'dashboardWatchlist';
@@ -52,6 +74,16 @@ const VALID_DIRS: SortDir[] = ['asc', 'desc'];
 function pickEnum<T extends string>(value: string | null, allowed: T[], fallback: T): T {
   if (!value) return fallback;
   return (allowed as string[]).includes(value) ? (value as T) : fallback;
+}
+
+// sessionStorage is missing during the SSG pre-render and can throw in private
+// windows; either way the screener starts from its defaults.
+function readSession(key: string): string | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
 function loadWatchlist(): Set<string> {
@@ -73,21 +105,33 @@ function saveWatchlist(set: Set<string>) {
   }
 }
 
+// Category is text with a small color key, not a pill. The key colors are
+// categorical (no red) and shared with the comparison charts.
 const CATEGORY_STYLE: Record<string, string> = {
-  gaming: 'bg-purple-500/15 text-purple-400',
-  defi: 'bg-blue-500/15 text-blue-400',
-  rwa: 'bg-green-500/15 text-green-400',
-  ai: 'bg-cyan-500/15 text-cyan-400',
-  depin: 'bg-orange-500/15 text-orange-400',
+  gaming: '[&>span]:text-violet-500',
+  defi: '[&>span]:text-blue-500',
+  rwa: '[&>span]:text-emerald-500',
+  ai: '[&>span]:text-cyan-500',
+  depin: '[&>span]:text-orange-500',
 };
 
 function categoryClass(name: string): string {
-  return CATEGORY_STYLE[name.toLowerCase()] || 'bg-muted text-muted-foreground';
+  return CATEGORY_STYLE[name.toLowerCase()] || '[&>span]:text-muted-foreground';
 }
 
 interface HistoryPoint {
   timestamp: number;
   value: number;
+  /** Network rows: how many chains the day's total adds up. */
+  chainCount?: number;
+}
+
+/** Yesterday vs the day before, summed over only the chains counted on both. */
+interface SameChainsChange {
+  current: number;
+  prior: number;
+  chains: number;
+  timestamp: number;
 }
 
 interface NetworkMetrics {
@@ -102,29 +146,34 @@ function pctDelta(curr: number | null, prev: number | null): number | null {
 }
 
 function rangeWindow(history: HistoryPoint[], range: Range, mode: 'avg' | 'sum') {
-  if (history.length === 0) return { current: null as number | null, prior: null as number | null };
+  const none: HistoryPoint[] = [];
+  if (history.length === 0) {
+    return { current: null as number | null, prior: null as number | null, currentPoints: none, priorPoints: none };
+  }
   if (range === '24H') {
+    const last = history.slice(-1);
+    const prior = history.slice(-2, -1);
     return {
-      current: history[history.length - 1]?.value ?? null,
-      prior: history[history.length - 2]?.value ?? null,
+      current: last[0]?.value ?? null,
+      prior: prior[0]?.value ?? null,
+      currentPoints: last,
+      priorPoints: prior,
     };
   }
-  const w = range === 'ALL' ? history.length : RANGE_DAYS[range];
+  const w = RANGE_DAYS[range];
   const last = history.slice(-w);
-  const prior = range === 'ALL' ? [] : history.slice(-(w * 2), -w);
+  const prior = history.slice(-(w * 2), -w);
   const aggregate = (arr: HistoryPoint[]) => {
     if (arr.length === 0) return null;
     const sum = arr.reduce((s, p) => s + p.value, 0);
     return mode === 'sum' ? sum : sum / arr.length;
   };
-  return { current: aggregate(last), prior: aggregate(prior) };
+  return { current: aggregate(last), prior: aggregate(prior), currentPoints: last, priorPoints: prior };
 }
-
 function rangeWindowLabel(r: Range): string {
   if (r === '24H') return '24h';
   if (r === '7D') return '7d';
-  if (r === '30D') return '30d';
-  return 'all-time';
+  return '30d';
 }
 
 function formatCount(n: number): string {
@@ -134,12 +183,24 @@ function formatCount(n: number): string {
   return n.toLocaleString();
 }
 
+function dayLabel(daily: Record<string, DailyTxLatest>): string {
+  const ts = Object.values(daily).reduce((m, d) => Math.max(m, d.timestamp), 0);
+  return ts ? new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+}
+
 function formatTps(value: number | undefined | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
+  if (value <= 0) return '0';
   if (value < 0.01) return '<0.01';
   if (value < 1) return value.toFixed(2);
   if (value < 10) return value.toFixed(1);
   return Math.round(value).toLocaleString();
+}
+
+function txColor(value: number | undefined | null): string {
+  if (value == null || !Number.isFinite(value) || value < 10) return 'text-muted-foreground';
+  if (value < 1000) return 'text-foreground/70';
+  return 'text-foreground';
 }
 
 function tpsColor(value: number | undefined | null): string {
@@ -151,30 +212,66 @@ function tpsColor(value: number | undefined | null): string {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  // The floating stat bar only overlays the hero from md up.
+  const isDesktop = useMediaQuery('(min-width: 768px)', true);
+
   const [searchParams, setSearchParams] = useSearchParams();
+  // Hero shows either the network map or the interchain message flows.
+  const [heroView, setHeroView] = useState<HeroView>(() =>
+    searchParams.get('view') === 'flows' ? 'flows' : 'map',
+  );
+  const [flowWindow, setFlowWindow] = useState<'daily' | 'weekly'>('daily');
+  // Interchain message data for the Flows view's stat bar. Fetched only while
+  // that view is showing; the Sankey fetches its own copy through the same cache.
+  const [flowData, setFlowData] = useState<TeleporterMessageData | null>(null);
+  useEffect(() => {
+    if (heroView !== 'flows') return;
+    let active = true;
+    getTeleporterMessages(flowWindow)
+      .then((d) => {
+        if (active) setFlowData(d);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [heroView, flowWindow]);
+  // A chain picked in the Sankey narrows the stat bar to that chain's flows.
+  const [flowSelection, setFlowSelection] = useState<SankeySelection | null>(null);
+  const flowStats = useMemo(() => {
+    if (!flowData || !flowSelection) return summarizeFlows(flowData);
+    const key = flowSelection.direction === 'outgoing' ? 'source' : 'target';
+    return summarizeFlows({
+      ...flowData,
+      messages: flowData.messages.filter((m) => m[key] === flowSelection.chain),
+    });
+  }, [flowData, flowSelection]);
+  useEffect(() => {
+    setFlowSelection(null);
+  }, [heroView, flowWindow]);
   const [chains, setChains] = useState<Chain[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefetching, setIsRefetching] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState(
-    () => searchParams.get('q') || sessionStorage.getItem('dashboardSearch') || '',
+    () => searchParams.get('q') || readSession('dashboardSearch') || '',
   );
   const [currentPage, setCurrentPage] = useState(
-    () => Number(searchParams.get('page')) || Number(sessionStorage.getItem('dashboardPage')) || 1,
+    () => Number(searchParams.get('page')) || Number(readSession('dashboardPage')) || 1,
   );
   const [selectedCategory, setSelectedCategory] = useState<string>(
-    () => searchParams.get('category') || sessionStorage.getItem('dashboardCategory') || '',
+    () => searchParams.get('category') || readSession('dashboardCategory') || '',
   );
   const [categories, setCategories] = useState<string[]>([]);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [validatorFilter, setValidatorFilter] = useState<ScreenerTab>(
     () =>
       pickEnum<ScreenerTab>(
         searchParams.get('tab'),
         VALID_TABS,
-        (sessionStorage.getItem('dashboardValidatorFilter') as ScreenerTab) || 'active',
+        (readSession('dashboardValidatorFilter') as ScreenerTab) || 'active',
       ),
   );
   const [range, setRange] = useState<Range>(() =>
@@ -237,6 +334,9 @@ export function Dashboard() {
     validators: null,
   });
   const [tpsHistoryByChain, setTpsHistoryByChain] = useState<Record<string, number[]>>({});
+  // Daily transactions per chain, keyed by chain slug. Null until the backend
+  // serves them; the table falls back to TPS meanwhile.
+  const [dailyTx, setDailyTx] = useState<Record<string, DailyTxLatest> | null>(null);
 
   async function fetchData() {
     try {
@@ -250,13 +350,31 @@ export function Dashboard() {
       const filters: { category?: string; includeInactive?: boolean } = { includeInactive: true };
       if (selectedCategory) filters.category = selectedCategory;
 
-      const [chainsData, categoriesData, tpsMap] = await Promise.all([
+      const [chainsData, categoriesData, tpsMap, txMap] = await Promise.all([
         getChains(filters),
         getCategories(),
         getAllChainsTPSLatest(),
+        getAllChainsTxCountLatest(),
       ]);
 
+      // Chains sharing an EVM ID get its activity once, not twice.
+      const owners = activityOwners(chainsData);
+      const ownsActivity = (chain: Chain) => activityOwnerOf(owners, chain) === chain;
+
+      const daily: Record<string, DailyTxLatest> = {};
+      for (const chain of chainsData) {
+        if (!ownsActivity(chain)) continue;
+        const hit = [chain.evmChainId, chain.originalChainId, chain.subnetId]
+          .map((k) => (k == null ? '' : String(k)))
+          .find((k) => k && txMap[k]);
+        if (hit) daily[chain.chainId] = txMap[hit];
+      }
+      const dailyOrNull = Object.keys(daily).length > 0 ? daily : null;
+      setDailyTx(dailyOrNull);
+      const rank = (c: Chain) => (dailyOrNull ? dailyOrNull[c.chainId]?.value : c.tps?.value) ?? -1;
+
       const chainsWithLatestTps = chainsData.map((chain) => {
+        if (!ownsActivity(chain)) return chain;
         const lookupId =
           (chain.evmChainId ? String(chain.evmChainId) : undefined) ||
           chain.originalChainId ||
@@ -279,14 +397,15 @@ export function Dashboard() {
         const isCb = b.chainName.toLowerCase().includes('c-chain');
         if (isCa && !isCb) return -1;
         if (!isCa && isCb) return 1;
-        const aTps = a.tps?.value ?? -1;
-        const bTps = b.tps?.value ?? -1;
+        const aTps = rank(a);
+        const bTps = rank(b);
         if (aTps !== bTps) return bTps - aTps;
         return a.chainName.localeCompare(b.chainName);
       });
 
       setChains(sorted);
       setCategories(categoriesData);
+      setUpdatedAt(Date.now());
     } catch {
       setError('Unable to connect to the server. Please try again later.');
     } finally {
@@ -309,10 +428,10 @@ export function Dashboard() {
           getNetworkValidatorTotal(),
         ]);
         const tpsHistory: HistoryPoint[] = (tpsRaw || [])
-          .map((p) => ({ timestamp: p.timestamp, value: Number(p.totalTps) || 0 }))
+          .map((p) => ({ timestamp: p.timestamp, value: Number(p.totalTps) || 0, chainCount: p.chainCount }))
           .sort((a, b) => a.timestamp - b.timestamp);
         const txHistory: HistoryPoint[] = (txRaw || [])
-          .map((p) => ({ timestamp: p.timestamp, value: Number(p.value) || 0 }))
+          .map((p) => ({ timestamp: p.timestamp, value: Number(p.value) || 0, chainCount: p.chainCount }))
           .sort((a, b) => a.timestamp - b.timestamp);
         const validators = validatorTotal?.totalValidators ?? null;
         setMetrics((prev) => {
@@ -322,7 +441,7 @@ export function Dashboard() {
             if (a.length !== b.length) return false;
             const la = a[a.length - 1];
             const lb = b[b.length - 1];
-            return !la || !lb || (la.timestamp === lb.timestamp && la.value === lb.value);
+            return !la || !lb || (la.timestamp === lb.timestamp && la.value === lb.value && la.chainCount === lb.chainCount);
           };
           if (
             prev.validators === validators &&
@@ -351,17 +470,24 @@ export function Dashboard() {
     if (sortDir !== 'desc') next.set('dir', sortDir);
     if (currentPage !== 1) next.set('page', String(currentPage));
     if (range !== '24H') next.set('range', range);
+    if (heroView === 'flows') next.set('view', 'flows');
     setSearchParams(next, { replace: true });
     sessionStorage.setItem('dashboardSearch', searchTerm);
     sessionStorage.setItem('dashboardCategory', selectedCategory);
     sessionStorage.setItem('dashboardValidatorFilter', validatorFilter);
     sessionStorage.setItem('dashboardPage', String(currentPage));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, validatorFilter, selectedCategory, sortBy, sortDir, currentPage, range]);
+  }, [searchTerm, validatorFilter, selectedCategory, sortBy, sortDir, currentPage, range, heroView]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, validatorFilter]);
+
+  // Deep link: /#screener lands on the table once it exists.
+  useEffect(() => {
+    if (loading || window.location.hash !== '#screener') return;
+    document.getElementById('screener')?.scrollIntoView({ block: 'start' });
+  }, [loading]);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('dashboardScrollPosition');
@@ -379,9 +505,41 @@ export function Dashboard() {
     () => chains.filter((c) => watchlist.has(c.chainId)).length,
     [chains, watchlist],
   );
+  // What the table ranks by: yesterday's transactions when available, else live TPS.
+  const activityOf = useCallback(
+    (c: Chain) => (dailyTx ? dailyTx[c.chainId]?.value : c.tps?.value),
+    [dailyTx],
+  );
+  // Active chains with any activity figure; network totals only add these up.
+  const coveredChains = useMemo(
+    () => chains.filter((c) => c.isActive && activityOf(c) != null).length,
+    [chains, activityOf],
+  );
+  // Uncovered chains with a public RPC are ones the backend can count from
+  // it but hasn't yet (a busy chain's backfill takes days, or the RPC is down).
+  const uncoveredWithRpc = useMemo(
+    () => chains.filter((c) => c.isActive && activityOf(c) == null && c.rpcUrl).length,
+    [chains, activityOf],
+  );
+  const sameChainsTx = useMemo<SameChainsChange | null>(() => {
+    if (!dailyTx) return null;
+    let current = 0;
+    let prior = 0;
+    let count = 0;
+    let timestamp = 0;
+    for (const c of chains) {
+      const day = c.isActive ? dailyTx[c.chainId] : undefined;
+      if (!day || day.previous == null) continue;
+      current += day.value;
+      prior += day.previous;
+      count += 1;
+      timestamp = Math.max(timestamp, day.timestamp);
+    }
+    return count > 0 ? { current, prior, chains: count, timestamp } : null;
+  }, [chains, dailyTx]);
   const totalNetworkTps = useMemo(
-    () => chains.reduce((sum, c) => sum + (c.tps?.value ?? 0), 0),
-    [chains],
+    () => chains.reduce((sum, c) => sum + (activityOf(c) ?? 0), 0),
+    [chains, activityOf],
   );
   const tabCounts: Record<ScreenerTab, number> = useMemo(
     () => ({
@@ -414,11 +572,21 @@ export function Dashboard() {
           if (isCa && !isCb) return -1;
           if (!isCa && isCb) return 1;
           if (sortBy === 'name') return a.chainName.localeCompare(b.chainName) * dir;
-          if (sortBy === 'tps') return ((a.tps?.value ?? -1) - (b.tps?.value ?? -1)) * dir;
+          if (sortBy === 'tps') return ((activityOf(a) ?? -1) - (activityOf(b) ?? -1)) * dir;
           if (sortBy === 'validators') return ((a.validatorCount ?? 0) - (b.validatorCount ?? 0)) * dir;
           return 0;
         }),
-    [chains, validatorFilter, watchlist, searchTerm, sortBy, sortDir],
+    [chains, validatorFilter, watchlist, searchTerm, sortBy, sortDir, activityOf],
+  );
+  // Bars in the table are relative to the busiest chain in the current list,
+  // not the page, so paging doesn't rescale them.
+  const maxTps = useMemo(
+    () => filteredChains.reduce((m, c) => Math.max(m, activityOf(c) ?? 0), 0),
+    [filteredChains, activityOf],
+  );
+  const maxValidators = useMemo(
+    () => filteredChains.reduce((m, c) => Math.max(m, c.validatorCount ?? 0), 0),
+    [filteredChains],
   );
   const totalPages = Math.ceil(filteredChains.length / CHAINS_PER_PAGE);
   const paginatedChains = useMemo(
@@ -426,8 +594,28 @@ export function Dashboard() {
     [filteredChains, currentPage],
   );
 
+  // Every chain's trend in one request. Null means the backend can't serve
+  // it, and the table falls back to one request per visible chain.
+  const [bulkTrends, setBulkTrends] = useState<Record<string, number[]> | null | undefined>(undefined);
   useEffect(() => {
-    if (paginatedChains.length === 0) return;
+    let active = true;
+    getAllChainsTpsHistory(TREND_FETCH_DAYS).then((map) => { if (active) setBulkTrends(map); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!bulkTrends) return;
+    const updates: Record<string, number[]> = {};
+    for (const c of chains) {
+      const hit = [c.evmChainId, c.originalChainId, c.subnetId]
+        .map((k) => (k == null ? '' : String(k)))
+        .find((k) => k && bulkTrends[k]);
+      updates[c.chainId] = hit ? bulkTrends[hit] : [];
+    }
+    setTpsHistoryByChain(updates);
+  }, [bulkTrends, chains]);
+
+  useEffect(() => {
+    if (bulkTrends !== null || paginatedChains.length === 0) return;
     const missing = paginatedChains.filter((c) => !tpsHistoryByChain[c.chainId]);
     if (missing.length === 0) return;
     let active = true;
@@ -458,24 +646,33 @@ export function Dashboard() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paginatedChains]);
+  }, [paginatedChains, bulkTrends]);
 
-  if (loading) return <DashboardSkeleton />;
+  // Rendered in the loading state too: the SSG build only sees that state.
+  const seo = (
+    <SEO
+      title="Overview"
+      description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
+      url="/"
+      image="/og/overview.png"
+    />
+  );
+
+  if (loading) return <>{seo}<DashboardSkeleton /></>;
 
   if (error) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-4">
-        <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full text-center">
-          <Activity className="h-12 w-12 text-[#ef4444] mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-foreground mb-2">Connection Error</h2>
-          <p className="text-muted-foreground mb-6">{error}</p>
+        <div className="bg-card border border-border rounded-md p-5 max-w-md w-full">
+          <h2 className="text-[15px] font-semibold text-foreground mb-1">Can't reach the L1Beat API</h2>
+          <p className="text-[12px] text-muted-foreground mb-4">{error}</p>
           <button
             onClick={() => {
               setRetrying(true);
               fetchData();
             }}
             disabled={retrying}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-[#ef4444] hover:bg-[#dc2626] disabled:opacity-50"
+            className="inline-flex items-center h-7 px-3 text-[12px] font-medium rounded bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50"
           >
             {retrying ? 'Retrying…' : 'Retry'}
           </button>
@@ -485,53 +682,122 @@ export function Dashboard() {
   }
 
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <SEO
-        title="Overview"
-        description="Live screener for every Avalanche L1: current TPS, validators, network share, 7-day trend, and a watchlist you can compare."
-        url="/"
-      />
-      <Hero range={range} onRangeChange={setRange} />
-      <KpiCards metrics={metrics} activeChains={activeCount} range={range} />
+    <div>
+      {seo}
 
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <ScreenerHeader
+      {/* Hero: the network map fills the first screen. Title and range float
+          top-left, headline numbers float along the bottom. */}
+      <section
+        className="relative border-b border-border bg-stage h-[420px] md:h-[min(calc(100vh-48px),1200px)] md:min-h-[520px]"
+        aria-label="Network map"
+      >
+        {heroView === 'map' ? (
+          <NetworkTopologyGraph chains={chains} fill padTop={44} padBottom={isDesktop ? 124 : 0} />
+        ) : (
+          <div className="absolute inset-x-0 top-12 bottom-0 md:bottom-[124px]">
+            <Suspense
+              fallback={
+                <div className="h-full flex items-center justify-center">
+                  <LoadingSpinner size="lg" />
+                </div>
+              }
+            >
+              <TeleporterSankeyDiagram
+                timeframe={flowWindow}
+                onTimeframeChange={setFlowWindow}
+                fill
+                selection={flowSelection}
+                onSelectionChange={setFlowSelection}
+              />
+            </Suspense>
+          </div>
+        )}
+        <div
+          className={`absolute top-3 left-4 sm:left-6 z-30 flex items-center justify-between gap-3 pointer-events-none [&>*]:pointer-events-auto ${
+            heroView === 'map' ? 'right-14' : 'right-4 sm:right-6'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {/* The nav already says Overview; on phones the title would push the controls off screen. */}
+            <h1 className="hidden sm:block text-[15px] leading-6 font-semibold text-foreground whitespace-nowrap">Avalanche L1s</h1>
+            <SegmentedControl value={heroView} options={HERO_VIEWS} onChange={setHeroView} ariaLabel="Hero view" />
+            {heroView === 'flows' && flowSelection && (
+              <span className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded border border-border bg-card/85 text-[12px] text-foreground">
+                {flowSelection.displayName}
+                <span className="text-muted-foreground">{flowSelection.direction}</span>
+                <button
+                  type="button"
+                  onClick={() => setFlowSelection(null)}
+                  aria-label="Clear selection"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+          </div>
+          {heroView === 'map' ? (
+            <SegmentedControl value={range} options={RANGES} onChange={setRange} ariaLabel="Time range" />
+          ) : (
+            <div className="flex items-center gap-3">
+              <Link to="/interchain" className="hidden sm:inline text-[12px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                Interchain page
+              </Link>
+              <SegmentedControl value={flowWindow} options={FLOW_WINDOWS} onChange={setFlowWindow} ariaLabel="Flow window" />
+            </div>
+          )}
+        </div>
+        <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(960px,calc(100%-3rem))]">
+          {heroView === 'map' ? (
+            <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} sameChainsTx={sameChainsTx} range={range} floating />
+          ) : (
+            <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} floating />
+          )}
+        </div>
+      </section>
+
+      <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+      <div className="md:hidden">
+        {heroView === 'map' ? (
+          <KpiCards metrics={metrics} activeChains={activeCount} coveredChains={coveredChains} sameChainsTx={sameChainsTx} range={range} />
+        ) : (
+          <FlowCards stats={flowStats} window={flowWindow} selection={flowSelection} />
+        )}
+      </div>
+
+      <MarketsStrip />
+
+      <section id="screener" className="scroll-mt-12">
+        <ScreenerToolbar
           activeTab={validatorFilter}
           onTabChange={setValidatorFilter}
           counts={tabCounts}
           isRefetching={isRefetching}
-        />
-        <ScreenerToolbar
+          updatedAt={updatedAt}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
           categories={categories}
         />
-        <AnimatePresence mode="wait">
-          {filteredChains.length === 0 ? (
-            <motion.div
+        {/* A CSS fade on each new page or filter; framer-motion here cost every Overview visit 38 KB. */}
+        {filteredChains.length === 0 ? (
+            <div
               key="no-results"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="px-6 py-16 text-center text-muted-foreground"
+              className="animate-fade-in px-6 py-12 text-center text-[12px] text-muted-foreground border-y border-border"
             >
-              No L1s match "{searchTerm}"
-            </motion.div>
+              No L1s match "{searchTerm}". Clear the search or pick another category.
+            </div>
           ) : (
-            <motion.div
-              key={`${selectedCategory}-${searchTerm}-${currentPage}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            <div key={`${selectedCategory}-${searchTerm}-${currentPage}`} className="animate-fade">
               <ScreenerTable
                 chains={paginatedChains}
+                startRank={(currentPage - 1) * CHAINS_PER_PAGE}
                 historyByChain={tpsHistoryByChain}
-                range={range}
                 totalTps={totalNetworkTps}
+                maxTps={maxTps}
+                dailyTx={dailyTx}
+                maxValidators={maxValidators}
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={toggleSort}
@@ -541,9 +807,18 @@ export function Dashboard() {
                 onToggleSelect={toggleSelection}
                 selectionFull={selected.size >= MAX_COMPARE}
               />
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+
+        {coveredChains > 0 && coveredChains < activeCount && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Activity data covers {coveredChains} of {activeCount} active L1s; the others show "—".{' '}
+            {uncoveredWithRpc > 0 &&
+              `${uncoveredWithRpc} of them aren't in Avalanche's metrics API and have no count from their public RPC yet. `}
+            {activeCount - coveredChains - uncoveredWithRpc > 0 &&
+              `${activeCount - coveredChains - uncoveredWithRpc} have neither a public RPC nor metrics API data.`}
+          </p>
+        )}
 
         {totalPages > 1 && (
           <ScreenerPagination
@@ -555,27 +830,14 @@ export function Dashboard() {
           />
         )}
       </section>
-
-      <FilterModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-        categories={categories}
-        // The modal only offers active/all/inactive; when the tab is 'watchlist'
-        // it simply renders with nothing selected. Narrow cast preserves that.
-        validatorFilter={validatorFilter as 'active' | 'all' | 'inactive'}
-        onValidatorFilterChange={setValidatorFilter}
-      />
+      </div>
 
       {selected.size > 0 && (
-        <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 items-center gap-2 px-2.5 py-2 rounded-xl border border-border bg-card shadow-2xl">
+        <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-popover shadow-lg">
           <span className="text-[12px] text-muted-foreground pl-1.5">
-            <span className="text-foreground font-semibold">{selected.size}</span> selected
+            <span className="num text-foreground font-medium">{selected.size}</span> selected
             {selected.size >= MAX_COMPARE && (
-              <span className="ml-1 text-[10px] uppercase tracking-wider text-[#ef4444]">
-                max
-              </span>
+              <span className="ml-1 text-[11px] text-muted-foreground">(max {MAX_COMPARE})</span>
             )}
           </span>
           <button
@@ -587,7 +849,7 @@ export function Dashboard() {
           </button>
           <button
             onClick={goCompare}
-            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-semibold transition-colors"
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded bg-foreground hover:bg-foreground/90 text-background text-[12px] font-medium transition-colors"
           >
             <GitCompareArrows className="w-3.5 h-3.5" />
             Compare
@@ -601,220 +863,283 @@ export function Dashboard() {
 // Memoized so a parent re-render (e.g. each search keystroke) only re-renders
 // the components whose props actually changed. The per-row Sparkline/DeltaCell
 // matter most: they skip path/percentage recompute for unchanged rows.
-const Hero = memo(HeroImpl);
 const KpiCards = memo(KpiCardsImpl);
-const ScreenerHeader = memo(ScreenerHeaderImpl);
+const ScreenerToolbar = memo(ScreenerToolbarImpl);
 const ScreenerTable = memo(ScreenerTableImpl);
 const DeltaCell = memo(DeltaCellImpl);
-const Sparkline = memo(SparklineImpl);
 const ChainAvatar = memo(ChainAvatarImpl);
-const StatusPill = memo(StatusPillImpl);
 
-function HeroImpl({ range, onRangeChange }: { range: Range; onRangeChange: (r: Range) => void }) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <div className="text-[11px] font-bold tracking-[0.15em] text-[#ef4444] mb-1.5">
-          AVALANCHE L1 NETWORK
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-          What's moving across the L1s today?
-        </h1>
-      </div>
-      <div className="flex items-center gap-1.5">
-        {RANGES.map((r) => {
-          const active = r === range;
-          return (
-            <button
-              key={r}
-              onClick={() => onRangeChange(r)}
-              className={`h-8 px-3 rounded-lg text-xs font-medium transition-colors border ${
-                active
-                  ? 'bg-[#ef4444]/15 border-[#ef4444]/30 text-[#ef4444]'
-                  : 'bg-card border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {r}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function KpiCardsImpl({
   metrics,
   activeChains,
+  coveredChains,
+  sameChainsTx,
   range,
+  floating = false,
 }: {
   metrics: NetworkMetrics;
   activeChains: number;
+  coveredChains: number;
+  sameChainsTx: SameChainsChange | null;
   range: Range;
+  floating?: boolean;
 }) {
   const tps = rangeWindow(metrics.tpsHistory, range, 'avg');
   const tx = rangeWindow(metrics.txHistory, range, 'sum');
-  const tpsDelta = pctDelta(tps.current, tps.prior);
-  const txDelta = pctDelta(tx.current, tx.prior);
+  // A change is only shown between periods that count the same chains.
+  const tpsGap = coverageChanged(tps.currentPoints, tps.priorPoints);
+  const tpsDelta = tpsGap ? null : pctDelta(tps.current, tps.prior);
+  // For a single day, the per-chain counts allow a like-for-like change even
+  // when the network total's coverage moved.
+  const latestTx = metrics.txHistory[metrics.txHistory.length - 1];
+  const sameChains = range === '24H' && sameChainsTx && latestTx?.timestamp === sameChainsTx.timestamp ? sameChainsTx : null;
+  const txGap = sameChains ? null : coverageChanged(tx.currentPoints, tx.priorPoints);
+  const txDelta = sameChains
+    ? pctDelta(sameChains.current, sameChains.prior)
+    : txGap ? null : pctDelta(tx.current, tx.prior);
   const windowLabel = rangeWindowLabel(range);
-  const priorLabel = range === 'ALL' ? '' : `vs prior ${windowLabel}`;
+  const priorLabel = `vs prior ${windowLabel}`;
+  const pending = 'Not available right now';
+  const coverage = coveredChains > 0
+    ? ` Covers the ${coveredChains} chains with activity data; chains with no public RPC or metrics source aren't counted.`
+    : '';
 
-  const cards: Array<{
-    label: string;
-    value: string;
-    icon: typeof LayoutGrid;
-    delta?: number | null;
-    deltaLabel?: string;
-  }> = [
+  const items: StatItem[] = [
     {
       label: 'Active L1s',
-      value: activeChains > 0 ? String(activeChains) : '—',
-      icon: LayoutGrid,
+      value: activeChains > 0 ? activeChains.toLocaleString() : '—',
+      sub: activeChains > 0 ? 'with validators online' : pending,
+      tooltip: 'L1s with at least one validator currently online.',
     },
     {
-      label: range === '24H' ? 'Network TPS' : `Avg TPS · ${windowLabel}`,
+      label: range === '24H' ? 'Network TPS' : `Avg TPS, ${windowLabel}`,
       value: tps.current != null ? Math.round(tps.current).toLocaleString() : '—',
-      icon: Activity,
       delta: tpsDelta,
       deltaLabel: priorLabel,
+      sub: tps.current == null ? pending : tpsGap ? 'Not compared: coverage changed' : 'transactions per second',
+      tooltip: `Transactions per second summed across L1s and the C-Chain.${coverage}${tpsGap ? ` ${tpsGap}` : ''}`,
     },
     {
       label: 'Validators',
       value: metrics.validators != null ? metrics.validators.toLocaleString() : '—',
-      icon: Users,
+      sub: metrics.validators != null ? 'across all L1s' : pending,
     },
     {
-      label: range === '24H' ? 'Tx Count · 24h' : `Tx Count · ${windowLabel}`,
+      label: range === '24H' ? 'Transactions, 24h' : `Transactions, ${windowLabel}`,
       value: tx.current != null ? formatCount(tx.current) : '—',
-      icon: TrendingUp,
       delta: txDelta,
       deltaLabel: priorLabel,
+      sub: tx.current == null ? pending : txGap ? 'Not compared: coverage changed' : undefined,
+      tooltip: `Daily transactions summed across chains.${coverage}${
+        sameChains ? ` The change compares only the ${sameChains.chains} chains counted on both days.` : txGap ? ` ${txGap}` : ''
+      }`,
+    },
+  ];
+  return <StatStrip items={items} floating={floating} />;
+}
+
+// A doorway to the Markets and Staking pages: one live figure each, each cell
+// linking through. Its requests go to other endpoints, so they don't hold up the screener.
+function MarketsStrip() {
+  const [figures, setFigures] = useState<{
+    staking: Awaited<ReturnType<typeof getStakingSummary>>;
+    dex: Awaited<ReturnType<typeof getDexSummary>>;
+    lending: Awaited<ReturnType<typeof getLending>>;
+    treasuries: Awaited<ReturnType<typeof getTreasuries>>;
+    bridges: Awaited<ReturnType<typeof getBridgeSummary>>;
+    perps: Awaited<ReturnType<typeof getPerpsSummary>>;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getStakingSummary(), getDexSummary(1), getLending(), getTreasuries(), getBridgeSummary(30), getPerpsSummary(30)]).then(
+      ([staking, dex, lending, treasuries, bridges, perps]) => {
+        if (alive) setFigures({ staking, dex, lending, treasuries, bridges, perps });
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Short forms (205M, $683.2M): two cells share a phone's width.
+  const short = (v: number) => {
+    const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+    if (v >= 1e9) return `${trim(v / 1e9)}B`;
+    if (v >= 1e6) return `${trim(v / 1e6)}M`;
+    if (v >= 1e3) return `${trim(v / 1e3)}K`;
+    return v.toFixed(0);
+  };
+  const usd = (v: number | null | undefined) => (v == null ? '—' : `$${short(v)}`);
+  const staked = figures?.staking ? Number(figures.staking.total_stake) / 1e9 : null;
+  const dexDay = figures?.dex?.as_of
+    ? new Date(`${figures.dex.as_of}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    : null;
+  const lend = figures?.lending?.summary.totals;
+  const held = figures?.treasuries?.totals;
+  const bridged = figures?.bridges?.as_of ? figures.bridges.totals : null;
+  const perps = figures?.perps?.as_of ? figures.perps.totals : null;
+  const items: StatItem[] = [
+    {
+      label: 'AVAX staked',
+      value: staked != null ? short(staked) : '—',
+      sub: figures?.staking ? `${figures.staking.staked_supply_percent.toFixed(1)}% of supply` : figures ? 'Not available right now' : ' ',
+      href: '/staking',
+    },
+    {
+      label: 'DEX volume, 1d',
+      value: usd(figures?.dex?.totals.volume_usd),
+      sub: dexDay ? `on ${dexDay}` : figures ? 'Not available right now' : ' ',
+      href: '/trading',
+    },
+    {
+      label: 'Lending supplied',
+      value: usd(lend?.supplied_usd),
+      sub: lend ? `${usd(lend.borrowed_usd)} borrowed` : figures ? 'Not available right now' : ' ',
+      href: '/lending',
+    },
+    {
+      label: 'Treasuries & ETFs',
+      value: held ? short(held.combined_avax) : '—',
+      sub: held ? 'AVAX held' : figures ? 'Not available right now' : ' ',
+      href: '/treasuries',
+    },
+    {
+      label: 'Bridged in, 30d',
+      value: bridged ? usd(bridged.inflow_usd) : '—',
+      sub: bridged ? `${bridged.net_usd >= 0 ? '+' : '−'}$${short(Math.abs(bridged.net_usd))} net` : figures ? 'Not available right now' : ' ',
+      href: '/bridges',
+    },
+    {
+      label: 'Perps volume, 30d',
+      value: perps ? usd(perps.volume_usd) : '—',
+      sub: perps ? `${short(perps.traders)} traders` : figures ? 'Not available right now' : ' ',
+      href: '/perps',
     },
   ];
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-      {cards.map(({ label, value, icon: Icon, delta, deltaLabel }) => {
-        const positive = delta != null && delta >= 0;
-        return (
-          <div key={label} className="rounded-xl border border-border bg-card p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
-                {label}
-              </span>
-              <div className="w-7 h-7 rounded-lg bg-[#ef4444]/10 flex items-center justify-center">
-                <Icon className="w-3.5 h-3.5 text-[#ef4444]" />
-              </div>
-            </div>
-            <div className="text-2xl font-bold text-foreground tracking-tight">{value}</div>
-            {delta != null && (
-              <div className="text-[11px] font-medium mt-1 flex items-center gap-1">
-                <span className={positive ? 'text-green-500' : 'text-[#ef4444]'}>
-                  {positive ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
-                </span>
-                {deltaLabel && <span className="text-muted-foreground">{deltaLabel}</span>}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <section aria-label="Markets and staking">
+      <StatStrip items={items} />
+    </section>
   );
 }
 
-function ScreenerHeaderImpl({
+function FlowCards({
+  stats,
+  window,
+  selection = null,
+  floating = false,
+}: {
+  stats: ReturnType<typeof summarizeFlows>;
+  window: 'daily' | 'weekly';
+  selection?: SankeySelection | null;
+  floating?: boolean;
+}) {
+  const label = window === 'weekly' ? '7d' : 'last day';
+  const loaded = stats.total > 0;
+  const who = selection ? flowChainLabel(selection.chain) : null;
+  const incoming = selection?.direction === 'incoming';
+  const items: StatItem[] = [
+    {
+      label: who ? `Messages ${incoming ? 'into' : 'out of'} ${who}, ${label}` : `Messages, ${label}`,
+      value: loaded ? formatCount(stats.total) : '—',
+      sub: loaded ? 'to and from the C-Chain' : 'Loading message data',
+      tooltip: 'Interchain messages between Avalanche L1s and the C-Chain in complete UTC days, counted from the C-Chain TeleporterMessenger. Direct L1-to-L1 messages (about 0.02%) are left out.',
+      href: '/interchain',
+    },
+    {
+      label: who ? 'Corridors' : 'Active corridors',
+      value: loaded ? stats.corridors.toLocaleString() : '—',
+      sub: loaded ? (who ? `${incoming ? 'into' : 'out of'} ${who}` : 'source to destination pairs') : undefined,
+    },
+    {
+      label: who ? (incoming ? 'Chains sending' : 'Chains receiving') : 'Chains talking',
+      value: loaded ? (who ? (incoming ? stats.sources : stats.targets) : stats.chains).toLocaleString() : '—',
+      sub: loaded ? (who ? `counterparties of ${who}` : `${stats.sources} sending, ${stats.targets} receiving`) : undefined,
+    },
+    {
+      label: 'Busiest corridor',
+      value: stats.top ? `${stats.top.share.toFixed(0)}%` : '—',
+      sub: stats.top ? `${flowChainLabel(stats.top.source)} to ${flowChainLabel(stats.top.target)}` : undefined,
+      tooltip: 'Share of all messages in the window carried by the single busiest source to destination pair.',
+    },
+  ];
+  return <StatStrip items={items} floating={floating} />;
+}
+
+function ScreenerToolbarImpl({
   activeTab,
   onTabChange,
   counts,
   isRefetching,
-}: {
-  activeTab: ScreenerTab;
-  onTabChange: (t: ScreenerTab) => void;
-  counts: Record<ScreenerTab, number>;
-  isRefetching: boolean;
-}) {
-  const tabs: Array<{ id: ScreenerTab; label: string; hide?: boolean }> = [
-    { id: 'active', label: 'Active L1s' },
-    { id: 'all', label: 'All' },
-    { id: 'watchlist', label: 'Watchlist', hide: counts.watchlist === 0 },
-    { id: 'inactive', label: 'Inactive', hide: counts.inactive === 0 },
-  ];
-  const visibleTabs = tabs.filter((t) => !t.hide);
-  return (
-    <div className="border-b border-border">
-      <div className="flex items-center justify-between gap-4 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-[15px] font-semibold text-foreground">L1 Screener</h2>
-          <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-green-500/10">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="text-[10px] font-bold tracking-wider text-green-500">LIVE</span>
-          </div>
-          {isRefetching && <LoadingSpinner size="sm" />}
-        </div>
-      </div>
-      <nav className="flex items-center gap-1 px-4 sm:px-5">
-        {visibleTabs.map((t) => {
-          const active = t.id === activeTab;
-          return (
-            <button
-              key={t.id}
-              onClick={() => onTabChange(t.id)}
-              className={`flex items-center gap-2 h-9 px-3 -mb-px border-b-2 transition-colors ${
-                active
-                  ? 'border-[#ef4444] text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className={`text-xs ${active ? 'font-semibold' : 'font-medium'}`}>{t.label}</span>
-              <span
-                className={`text-[10px] font-bold px-1.5 h-4 inline-flex items-center rounded-full ${
-                  active ? 'bg-[#ef4444]/15 text-[#ef4444]' : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {counts[t.id]}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
-    </div>
-  );
-}
-
-function ScreenerToolbar({
+  updatedAt,
   searchTerm,
   onSearchChange,
   selectedCategory,
   onCategoryChange,
   categories,
 }: {
+  activeTab: ScreenerTab;
+  onTabChange: (t: ScreenerTab) => void;
+  counts: Record<ScreenerTab, number>;
+  isRefetching: boolean;
+  updatedAt: number | null;
   searchTerm: string;
   onSearchChange: (s: string) => void;
   selectedCategory: string;
   onCategoryChange: (c: string) => void;
   categories: string[];
 }) {
+  const tabs: Array<{ id: ScreenerTab; label: string; hide?: boolean }> = [
+    { id: 'active', label: 'Active' },
+    { id: 'all', label: 'All' },
+    { id: 'watchlist', label: 'Watchlist', hide: counts.watchlist === 0 },
+    { id: 'inactive', label: 'Inactive', hide: counts.inactive === 0 },
+  ];
+  const visibleTabs = tabs.filter((t) => !t.hide);
   const quickCats = ['Gaming', 'DeFi', 'RWA', 'AI', 'DePIN'];
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <input
+    <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 py-2">
+      <nav className="flex items-center gap-0.5 -ml-2.5" aria-label="Screener tabs">
+        {visibleTabs.map((t) => {
+          const active = t.id === activeTab;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onTabChange(t.id)}
+              className={`flex items-baseline gap-1.5 h-8 px-2.5 rounded transition-colors ${
+                active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="text-[12.5px] font-medium">{t.label}</span>
+              <span className="num text-[11px] text-muted-foreground">{counts[t.id]}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="hidden lg:block w-px h-5 bg-border" aria-hidden />
+
+      <div className="relative w-full sm:w-64">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <input aria-label="Search by name or chain ID"
           type="text"
-          placeholder="Search L1s by name or ID…"
+          placeholder="Search by name or chain ID"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full h-9 pl-9 pr-9 rounded-lg bg-muted border border-border text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#ef4444]/30 focus:border-[#ef4444]/40"
+          className="w-full h-8 pl-8 pr-8 rounded bg-background border border-border text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
         />
         {searchTerm && (
           <button
             onClick={() => onSearchChange('')}
+            aria-label="Clear search"
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+
+      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
         {quickCats.map((cat) => {
           const matched = categories.find((c) => c.toLowerCase() === cat.toLowerCase());
           if (!matched) return null;
@@ -823,10 +1148,11 @@ function ScreenerToolbar({
             <button
               key={matched}
               onClick={() => onCategoryChange(active ? '' : matched)}
-              className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium border whitespace-nowrap transition-colors ${
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1 h-8 px-2.5 rounded text-[12px] whitespace-nowrap transition-colors ${
                 active
-                  ? 'bg-[#ef4444] border-[#ef4444] text-white'
-                  : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  ? 'bg-foreground text-background'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               }`}
             >
               {cat}
@@ -834,25 +1160,35 @@ function ScreenerToolbar({
             </button>
           );
         })}
-        {selectedCategory && (
-          <button
-            onClick={() => onCategoryChange('')}
-            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear
-            <X className="w-3 h-3" />
-          </button>
-        )}
       </div>
+
+      <div className="flex-1" />
+      <UpdatedAgo at={updatedAt} refreshing={isRefetching} className="hidden sm:inline-flex" />
     </div>
+  );
+}
+
+/** A short bar behind a number: the number stays exact, the bar gives the rank at a glance. */
+function CellBar({ value, max, children }: { value: number; max: number; children: React.ReactNode }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <span className="inline-flex items-center justify-end gap-2.5">
+      <span aria-hidden className="hidden xl:block w-14 h-[3px] rounded-sm bg-muted/60 overflow-hidden">
+        <span className="block h-full bg-foreground/55 rounded-sm" style={{ width: `${pct}%` }} />
+      </span>
+      {children}
+    </span>
   );
 }
 
 function ScreenerTableImpl({
   chains,
+  startRank,
   historyByChain,
-  range,
   totalTps,
+  maxTps,
+  dailyTx,
+  maxValidators,
   sortBy,
   sortDir,
   onSort,
@@ -863,9 +1199,12 @@ function ScreenerTableImpl({
   selectionFull,
 }: {
   chains: Chain[];
+  startRank: number;
   historyByChain: Record<string, number[]>;
-  range: Range;
   totalTps: number;
+  maxTps: number;
+  dailyTx: Record<string, DailyTxLatest> | null;
+  maxValidators: number;
   sortBy: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
@@ -878,12 +1217,11 @@ function ScreenerTableImpl({
   const navigate = useNavigate();
   return (
     <TooltipProvider delayDuration={150}>
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-muted/40 border-b border-border">
-            <th className="py-2.5 pl-5 pr-2 w-10" aria-label="Compare" />
-            <th className="py-2.5 pr-3 w-10" aria-label="Watchlist" />
+    <div className="overflow-x-auto md:overflow-visible border-t border-border">
+      <table className="w-full text-[12px]">
+        <thead className="md:sticky md:top-12 z-10 bg-background">
+          <tr className="border-b border-border">
+            <Th align="right" className="w-9 pr-2 num">#</Th>
             <SortableTh
               align="left"
               label="L1"
@@ -894,15 +1232,15 @@ function ScreenerTableImpl({
             />
             <SortableTh
               align="right"
-              label="TPS"
+              // The column names the UTC day it counts, e.g. "Txs Oct 27".
+              label={dailyTx ? `Txs ${dayLabel(dailyTx) || '1d'}` : 'TPS'}
               sortKey="tps"
               active={sortBy === 'tps'}
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="right" className="hidden md:table-cell" info="Change in TPS (transactions per second), not token price.">Δ 24h</Th>
-            <Th align="right" className="hidden lg:table-cell" info="This L1's share of total network TPS.">Share</Th>
-            <Th align="right" className="hidden sm:table-cell" info="TPS over time, not a price chart.">{rangeTrendLabel(range)}</Th>
+            <Th align="right" className="hidden md:table-cell" info={dailyTx ? 'Change in daily transactions versus the day before, not token price.' : 'Change in TPS (transactions per second) versus the prior day, not token price.'}>Δ 24h</Th>
+            <Th align="right" className="hidden lg:table-cell" info={dailyTx ? "This L1's share of the network's daily transactions." : "This L1's share of total network TPS."}>Share</Th>
             <SortableTh
               align="right"
               label="Validators"
@@ -911,12 +1249,8 @@ function ScreenerTableImpl({
               dir={sortDir}
               onSort={onSort}
             />
-            <Th align="left" className="pl-8 hidden lg:table-cell">
-              Category
-            </Th>
-            <Th align="right" className="pr-5">
-              Status
-            </Th>
+            <Th align="left" className="pl-8 hidden lg:table-cell">Category</Th>
+            <th className="w-20" aria-label="Watch and compare" />
           </tr>
         </thead>
         <tbody>
@@ -926,6 +1260,10 @@ function ScreenerTableImpl({
             const starred = watchlist.has(chain.chainId);
             const isSelected = selected.has(chain.chainId);
             const disabled = !isSelected && selectionFull;
+            const active = chain.isActive ?? false;
+            const day = dailyTx?.[chain.chainId];
+            const tps = dailyTx ? day?.value : chain.tps?.value;
+            const share = totalTps > 0 ? ((tps ?? 0) / totalTps) * 100 : 0;
             return (
               <tr
                 key={chain.chainId}
@@ -933,124 +1271,115 @@ function ScreenerTableImpl({
                   sessionStorage.setItem('dashboardScrollPosition', String(window.scrollY));
                   navigate(`/chain/${chain.chainId}`);
                 }}
-                className={`group cursor-pointer transition-colors ${
-                  isSelected ? 'bg-[#ef4444]/[0.06]' : 'hover:bg-[#ef4444]/[0.04]'
-                } ${idx !== chains.length - 1 ? 'border-b border-border/60' : ''}`}
+                className={`group h-10 cursor-pointer border-b border-border/50 transition-colors ${
+                  isSelected ? 'bg-accent/60' : 'hover:bg-accent/40'
+                }`}
               >
-                <td className="py-3 pl-5 pr-2 w-10">
-                  <label
-                    onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center justify-center w-4 h-4 rounded border transition-colors ${
-                      disabled
-                        ? 'border-border/40 cursor-not-allowed'
-                        : isSelected
-                          ? 'bg-[#ef4444] border-[#ef4444] cursor-pointer'
-                          : 'border-border hover:border-foreground cursor-pointer'
-                    }`}
-                    title={disabled ? 'Maximum 4 chains' : 'Select to compare'}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={disabled}
-                      onChange={() => onToggleSelect(chain.chainId)}
-                      className="sr-only"
-                    />
-                    {isSelected && (
-                      <svg
-                        className="w-3 h-3 text-white"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M3 8.5L6.5 12L13 4.5"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </label>
-                </td>
-                <td className="py-3 pr-3 w-10">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleWatch(chain.chainId);
-                    }}
-                    className={`p-1 -m-1 rounded transition-colors ${
-                      starred
-                        ? 'text-[#ef4444]'
-                        : 'text-muted-foreground/40 hover:text-muted-foreground'
-                    }`}
-                    title={starred ? 'Remove from watchlist' : 'Add to watchlist'}
-                    aria-label={starred ? 'Remove from watchlist' : 'Add to watchlist'}
-                  >
-                    <Star
-                      className="w-3.5 h-3.5"
-                      fill={starred ? 'currentColor' : 'none'}
-                    />
-                  </button>
-                </td>
-                <td className="py-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                <td className="num pr-2 text-right text-[11px] text-muted-foreground">{startRank + idx + 1}</td>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <ChainAvatar chain={chain} />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-semibold text-foreground truncate">
-                        {chain.chainName}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground font-medium truncate">
-                        {chain.networkToken?.symbol || chain.subnetId?.slice(0, 8) || chain.chainId.slice(0, 12)}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td
-                  className={`py-3 text-right tabular-nums text-[13px] font-medium ${tpsColor(
-                    chain.tps?.value,
-                  )}`}
-                >
-                  {formatTps(chain.tps?.value)}
-                </td>
-                <td className="py-3 text-right hidden md:table-cell">
-                  <DeltaCell history={history} loaded={chain.chainId in historyByChain} />
-                </td>
-                <td className="py-3 text-right tabular-nums text-[12px] text-muted-foreground hidden lg:table-cell">
-                  {(() => {
-                    const share = totalTps > 0 ? ((chain.tps?.value ?? 0) / totalTps) * 100 : 0;
-                    if (share < 0.05) return '<0.05%';
-                    if (share < 1) return `${share.toFixed(2)}%`;
-                    return `${share.toFixed(1)}%`;
-                  })()}
-                </td>
-                <td className="py-3 hidden sm:table-cell">
-                  <div className="flex justify-end pr-1">
-                    <Sparkline values={history} range={range} loaded={chain.chainId in historyByChain} />
-                  </div>
-                </td>
-                <td className="py-3 text-right tabular-nums text-[13px] font-medium text-foreground">
-                  {chain.validatorCount?.toLocaleString() ?? '—'}
-                </td>
-                <td className="py-3 pl-8 hidden lg:table-cell">
-                  {category ? (
-                    <span
-                      className={`inline-flex items-center px-2 h-5 rounded-full text-[10px] font-semibold tracking-wide ${categoryClass(
-                        category,
-                      )}`}
-                    >
-                      {category}
+                    <span className="text-[12.5px] font-medium text-foreground truncate">{chain.chainName}</span>
+                    <span className="num text-[11px] text-muted-foreground truncate hidden xl:inline">
+                      {chain.networkToken?.symbol && chain.networkToken.symbol !== 'N/A'
+                        ? chain.networkToken.symbol
+                        : ''}
                     </span>
+                    {!active && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                        inactive
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="text-right">
+                  <CellBar value={tps ?? 0} max={maxTps}>
+                    {dailyTx ? (
+                      <span
+                        className={`num text-[12px] w-14 inline-block ${txColor(tps)}`}
+                        title={tps == null ? missingActivity(chain).detail : undefined}
+                      >
+                        {tps == null ? '—' : formatCount(tps)}
+                      </span>
+                    ) : (
+                      <span className={`num text-[12px] w-12 inline-block ${tpsColor(tps)}`}>{formatTps(tps)}</span>
+                    )}
+                  </CellBar>
+                </td>
+                <td className="text-right hidden md:table-cell">
+                  {dailyTx ? (
+                    <DeltaCell history={day && day.previous != null ? [day.previous, day.value] : undefined} loaded={!!day} />
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">—</span>
+                    <DeltaCell history={history} loaded={chain.chainId in historyByChain} />
                   )}
                 </td>
-                <td className="py-3 pr-5">
-                  <div className="flex items-center justify-end gap-2">
-                    <StatusPill active={chain.isActive ?? false} />
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground hidden group-hover:inline-block" />
+                <td className="num text-right text-[12px] text-muted-foreground hidden lg:table-cell">
+                  {!tps ? '—' : share < 0.05 ? '<0.05%' : share < 1 ? `${share.toFixed(2)}%` : `${share.toFixed(1)}%`}
+                </td>
+                <td className="text-right">
+                  <CellBar value={chain.validatorCount ?? 0} max={maxValidators}>
+                    <span className="num text-[12px] text-foreground w-10 inline-block">
+                      {chain.validatorCount?.toLocaleString() ?? '—'}
+                    </span>
+                  </CellBar>
+                </td>
+                <td className="pl-8 hidden lg:table-cell">
+                  {category ? (
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] text-muted-foreground capitalize ${categoryClass(category)}`}>
+                      <span aria-hidden className="w-1.5 h-1.5 rounded-sm bg-current opacity-70" />
+                      {category.toLowerCase()}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground/40">—</span>
+                  )}
+                </td>
+                <td className="pr-1">
+                  <div
+                    className={`flex items-center justify-end gap-1 transition-opacity ${
+                      starred || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleWatch(chain.chainId);
+                      }}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-accent ${
+                        starred ? 'text-foreground' : 'text-muted-foreground'
+                      }`}
+                      title={starred ? 'Remove from watchlist' : 'Add to watchlist'}
+                      aria-label={starred ? 'Remove from watchlist' : 'Add to watchlist'}
+                    >
+                      <Star className="w-3.5 h-3.5" fill={starred ? 'currentColor' : 'none'} />
+                    </button>
+                    <label
+                      onClick={(e) => e.stopPropagation()}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded hover:bg-accent ${
+                        disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+                      }`}
+                      title={disabled ? `Compare up to ${MAX_COMPARE} chains` : 'Select to compare'}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={disabled}
+                        onChange={() => onToggleSelect(chain.chainId)}
+                        className="sr-only"
+                      />
+                      <span
+                        className={`flex items-center justify-center w-3.5 h-3.5 rounded-[3px] border ${
+                          isSelected ? 'bg-foreground border-foreground' : 'border-muted-foreground/60'
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg className="w-2.5 h-2.5 text-background" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                    </label>
                   </div>
                 </td>
               </tr>
@@ -1082,119 +1411,42 @@ function SortableTh({
 }) {
   return (
     <th
-      className={`py-2.5 text-[10px] font-bold tracking-wider uppercase ${
-        align === 'right' ? 'text-right' : 'text-left'
-      } ${className}`}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`h-9 text-[11px] font-medium ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}
     >
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 transition-colors ${
-          active ? 'text-[#ef4444]' : 'text-muted-foreground hover:text-foreground'
+        className={`inline-flex items-center gap-1 whitespace-nowrap transition-colors ${
+          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         {label}
-        {active && <span className="text-[9px]">{dir === 'asc' ? '▲' : '▼'}</span>}
+        <span aria-hidden className={`text-[9px] ${active ? '' : 'opacity-0'}`}>{dir === 'asc' ? '▲' : '▼'}</span>
       </button>
     </th>
   );
 }
 
 function DeltaCellImpl({ history, loaded }: { history?: number[]; loaded?: boolean }) {
-  if (!loaded) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
-  }
-  if (!history || history.length < 2) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
-  }
+  const dash = <span className="text-[11px] text-muted-foreground/40">—</span>;
+  if (!loaded || !history || history.length < 2) return dash;
   const last = history[history.length - 1];
   const prior = history[history.length - 2];
-  if (!Number.isFinite(prior) || prior === 0) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
-  }
+  if (!Number.isFinite(prior) || prior === 0) return dash;
   const delta = ((last - prior) / prior) * 100;
   if (!Number.isFinite(delta) || Math.abs(delta) < 0.05) {
-    return <span className="text-[11px] text-muted-foreground tabular-nums">0%</span>;
+    return <span className="num text-[12px] text-muted-foreground">0.0%</span>;
   }
   const positive = delta >= 0;
   return (
-    <span
-      className={`text-[12px] font-medium tabular-nums ${
-        positive ? 'text-green-500' : 'text-[#ef4444]'
-      }`}
-    >
-      {positive ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
+    <span className={`num text-[12px] ${positive ? 'text-up' : 'text-down'}`}>
+      {positive ? '+' : '−'}{Math.abs(delta).toFixed(1)}%
     </span>
   );
 }
 
-function rangeTrendLabel(r: Range): string {
-  if (r === '24H') return '24h trend';
-  if (r === '7D') return '7-day trend';
-  if (r === '30D') return '30-day trend';
-  return 'Trend';
-}
 
-function SparklineImpl({
-  values,
-  range,
-  loaded,
-}: {
-  values?: number[];
-  range: Range;
-  loaded?: boolean;
-}) {
-  if (!loaded) {
-    return (
-      <div className="h-[22px] w-[72px] rounded bg-muted/40 animate-pulse" aria-hidden="true" />
-    );
-  }
-  if (!values || values.length === 0) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
-  }
-  const window = RANGE_DAYS[range];
-  const sliced = values.slice(-window);
-  if (sliced.length < 2) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
-  }
-  const W = 72;
-  const H = 22;
-  const max = Math.max(...sliced);
-  const min = Math.min(...sliced);
-  const span = max - min || 1;
-  const dx = W / (sliced.length - 1);
-  const points = sliced
-    .map((v, i) => `${(i * dx).toFixed(1)},${(H - ((v - min) / span) * H).toFixed(1)}`)
-    .join(' ');
-  const last = sliced[sliced.length - 1];
-  const first = sliced[0];
-  const positive = last >= first;
-  const color = positive ? '#22c55e' : '#ef4444';
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      className="overflow-visible"
-      aria-hidden="true"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.25"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <circle
-        cx={(sliced.length - 1) * dx}
-        cy={H - ((last - min) / span) * H}
-        r="1.5"
-        fill={color}
-      />
-    </svg>
-  );
-}
 
 function Th({
   children,
@@ -1209,7 +1461,7 @@ function Th({
 }) {
   return (
     <th
-      className={`py-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground ${
+      className={`h-9 text-[11px] font-medium text-muted-foreground ${
         align === 'right' ? 'text-right' : 'text-left'
       } ${className}`}
     >
@@ -1221,7 +1473,7 @@ function Th({
               <button
                 type="button"
                 aria-label={typeof children === 'string' ? `About ${children}` : 'More info'}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                className="shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
               >
                 <Info className="w-3 h-3" />
               </button>
@@ -1229,7 +1481,7 @@ function Th({
             <TooltipContent
               side="top"
               align={align === 'right' ? 'end' : 'start'}
-              className="max-w-[240px] bg-popover border border-border text-foreground text-[11px] normal-case font-normal tracking-normal leading-relaxed px-3 py-2 shadow-xl [&>span]:hidden"
+              className="max-w-[240px] bg-popover border border-border text-foreground text-[11px] font-normal leading-relaxed px-3 py-2 shadow-lg [&>span]:hidden"
             >
               {info}
             </TooltipContent>
@@ -1243,40 +1495,22 @@ function Th({
 }
 
 function ChainAvatarImpl({ chain }: { chain: Chain }) {
-  if (chain.chainLogoUri) {
+  const uri = chain.chainLogoUri;
+  const real = uri && !uri.endsWith(PLACEHOLDER_CHAIN_LOGO);
+  if (real) {
     return (
       <img
-        src={chain.chainLogoUri}
+        src={uri}
         alt=""
-        className="w-7 h-7 rounded-full bg-muted shrink-0 object-cover"
+        className="w-[22px] h-[22px] rounded-full bg-muted shrink-0 object-cover"
         loading="lazy"
       />
     );
   }
-  const initial = chain.chainName.charAt(0).toUpperCase();
   return (
-    <div className="w-7 h-7 rounded-full bg-[#ef4444]/15 text-[#ef4444] flex items-center justify-center text-[11px] font-bold shrink-0">
-      {initial}
-    </div>
-  );
-}
-
-function StatusPillImpl({ active }: { active: boolean }) {
-  return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-2 h-5 rounded-full ${
-        active ? 'bg-green-500/10' : 'bg-muted'
-      }`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-500' : 'bg-muted-foreground/60'}`} />
-      <span
-        className={`text-[10px] font-bold tracking-wider ${
-          active ? 'text-green-500' : 'text-muted-foreground'
-        }`}
-      >
-        {active ? 'ACTIVE' : 'INACTIVE'}
-      </span>
-    </div>
+    <span className="num w-[22px] h-[22px] rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[10px] shrink-0">
+      {chain.chainName.charAt(0).toUpperCase()}
+    </span>
   );
 }
 
@@ -1302,32 +1536,31 @@ function ScreenerPagination({
       acc.push(p);
       return acc;
     }, []);
+  const btn = 'num inline-flex items-center justify-center min-w-7 h-7 px-1.5 rounded text-[11px] transition-colors';
   return (
-    <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-t border-border">
-      <span className="text-xs text-muted-foreground">
-        {start}–{end} of {totalRows} L1s
+    <div className="flex items-center justify-between py-2">
+      <span className="num text-[11px] text-muted-foreground">
+        {start}–{end} of {totalRows}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         <button
           onClick={() => onChange(Math.max(1, currentPage - 1))}
           disabled={currentPage === 1}
-          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Previous page"
+          className={`${btn} text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed`}
         >
-          Prev
+          <ChevronRight className="w-3.5 h-3.5 rotate-180" />
         </button>
         {pages.map((item, idx) =>
           item === 'ellipsis' ? (
-            <span key={`e-${idx}`} className="px-1 text-muted-foreground text-xs">
-              …
-            </span>
+            <span key={`e-${idx}`} className="px-1 text-muted-foreground text-[11px]">…</span>
           ) : (
             <button
               key={item}
               onClick={() => onChange(item as number)}
-              className={`px-2.5 h-7 text-xs border rounded-md transition-colors ${
-                currentPage === item
-                  ? 'bg-[#ef4444] border-[#ef4444] text-white'
-                  : 'border-border bg-card hover:bg-muted'
+              aria-current={currentPage === item ? 'page' : undefined}
+              className={`${btn} ${
+                currentPage === item ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               }`}
             >
               {item}
@@ -1337,9 +1570,10 @@ function ScreenerPagination({
         <button
           onClick={() => onChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
-          className="px-2.5 h-7 text-xs border border-border rounded-md bg-card hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Next page"
+          className={`${btn} text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed`}
         >
-          Next
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
@@ -1348,66 +1582,56 @@ function ScreenerPagination({
 
 function DashboardSkeleton() {
   return (
-    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      {/* Hero */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2.5">
-          <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-          <div className="h-8 w-64 rounded bg-muted animate-pulse" />
-          <div className="h-4 w-80 rounded bg-muted animate-pulse" />
+    <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 sm:py-6 space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <div className="h-5 w-40 rounded bg-muted animate-pulse" />
+          <div className="h-3 w-72 rounded bg-muted animate-pulse" />
         </div>
-        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-card border border-border h-9 w-44 animate-pulse" />
+        <div className="h-7 w-44 rounded border border-border animate-pulse" />
       </div>
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 border border-border rounded-md divide-x divide-border">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="h-3 w-20 rounded bg-muted animate-pulse" />
-              <div className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
-            </div>
-            <div className="h-8 w-24 rounded bg-muted animate-pulse" />
-            <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+          <div key={i} className="px-4 py-3 space-y-2">
+            <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+            <div className="h-6 w-24 rounded bg-muted animate-pulse" />
+            <div className="h-3 w-28 rounded bg-muted animate-pulse" />
           </div>
         ))}
       </div>
 
-      {/* Screener */}
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
+      <section className="border border-border rounded-md">
+        <div className="flex items-center gap-4 px-4 h-10 border-b border-border">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-7 w-24 rounded-md bg-muted animate-pulse" />
+            <div key={i} className="h-3 w-16 rounded bg-muted animate-pulse" />
           ))}
         </div>
-        <div className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-border">
-          <div className="flex-1 h-9 rounded-lg bg-muted animate-pulse" />
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border">
+          <div className="h-7 w-72 rounded bg-muted animate-pulse" />
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-7 w-16 rounded-full bg-muted animate-pulse" />
+            <div key={i} className="h-7 w-14 rounded bg-muted animate-pulse" />
           ))}
         </div>
-        <div className="px-2 sm:px-0">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div>
+          {Array.from({ length: 12 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 px-3 sm:px-5 py-3 border-b border-border/60 last:border-b-0"
+              className="flex items-center gap-4 px-4 h-[38px] border-b border-border/60 last:border-b-0"
             >
-              <div className="w-4 h-4 rounded bg-muted animate-pulse" />
-              <div className="w-4 h-4 rounded bg-muted animate-pulse" />
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
-                <div className="space-y-1.5">
-                  <div className="h-3 w-24 rounded bg-muted animate-pulse" />
-                  <div className="h-2.5 w-16 rounded bg-muted animate-pulse" />
-                </div>
+              <div className="w-3.5 h-3.5 rounded bg-muted animate-pulse" />
+              <div className="w-3 h-3 rounded bg-muted animate-pulse" />
+              <div className="flex items-center gap-2.5 flex-1">
+                <div className="w-5 h-5 rounded-full bg-muted animate-pulse" />
+                <div className="h-3 w-28 rounded bg-muted animate-pulse" />
               </div>
               <div className="h-3 w-12 rounded bg-muted animate-pulse" />
               <div className="hidden md:block h-3 w-12 rounded bg-muted animate-pulse" />
               <div className="hidden lg:block h-3 w-12 rounded bg-muted animate-pulse" />
-              <div className="hidden sm:block h-6 w-20 rounded bg-muted animate-pulse" />
-              <div className="h-3 w-12 rounded bg-muted animate-pulse" />
-              <div className="hidden lg:block h-5 w-16 rounded-full bg-muted animate-pulse" />
-              <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+              <div className="hidden sm:block h-4 w-[72px] rounded bg-muted animate-pulse" />
+              <div className="h-3 w-10 rounded bg-muted animate-pulse" />
+              <div className="hidden lg:block h-3 w-14 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-14 rounded bg-muted animate-pulse" />
             </div>
           ))}
         </div>

@@ -21,11 +21,15 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => {
       rollupOptions: {
         output: {
           manualChunks: process.env.SSR_BUILD ? undefined : {
-            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            // jsx-runtime is listed so it isn't assigned to chart-vendor (react-chartjs-2
+            // imports it), which made every page download Chart.js.
+            'react-vendor': ['react', 'react/jsx-runtime', 'react-dom', 'react-router-dom'],
             'chart-vendor': ['chart.js', 'react-chartjs-2'],
             'd3-vendor': ['d3', 'd3-sankey'],
             'motion-vendor': ['framer-motion'],
-            'markdown-vendor': ['react-markdown', 'remark-gfm', 'remark-math', 'rehype-katex', 'katex'],
+            'markdown-vendor': ['react-markdown', 'remark-gfm'],
+            // Separate from markdown: the ACP list renders markdown but never math.
+            'math-vendor': ['remark-math', 'rehype-katex', 'katex'],
           },
         },
       },

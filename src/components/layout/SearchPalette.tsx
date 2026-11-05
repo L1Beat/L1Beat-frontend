@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, Clock, Command, Copy, FileText, Flame, Layers, LayoutGrid, Moon, Search, Server, Sun, Trash2, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, Command, Copy, FileText, Flame, Layers, LayoutGrid, Moon, Search, Server, Sun, Trash2, Wallet, X } from 'lucide-react';
 import { getChains, getL1BeatValidator } from '../../api';
 import type { Chain } from '../../types';
 import { acpService } from '../../services/acpService';
@@ -10,11 +10,14 @@ import { getBlogPosts, BlogPost } from '../../api/blogApi';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../Toaster';
 
-type ResultType = 'page' | 'chain' | 'acp' | 'post' | 'command' | 'validator';
+type ResultType = 'page' | 'chain' | 'acp' | 'post' | 'command' | 'validator' | 'delegator';
 
 // Avalanche node IDs look like "NodeID-" + base58. Only resolve a validator
 // when the query is a full node ID — the API has no partial/prefix search.
 const NODE_ID_RE = /^NodeID-[A-Za-z0-9]{10,}$/i;
+// A mainnet P-Chain address (bech32), with or without the "P-" prefix. The
+// delegator page handles addresses with no delegations, so no lookup first.
+const P_ADDRESS_RE = /^(P-)?avax1[02-9ac-hj-np-z]{38}$/;
 
 interface Result {
   id: string;
@@ -80,8 +83,15 @@ interface SearchPaletteProps {
 const PAGES: Result[] = [
   { id: 'page-overview', type: 'page', title: 'Overview', subtitle: 'Live L1 screener', to: '/' },
   { id: 'page-metrics', type: 'page', title: 'Network Metrics', subtitle: 'Aggregate L1 metrics', to: '/metrics' },
-  { id: 'page-flows', type: 'page', title: 'Cross-chain Flows', subtitle: 'ICM & Teleporter activity', to: '/flows' },
+  { id: 'page-flows', type: 'page', title: 'Cross-chain flows', subtitle: 'ICM and Teleporter activity, on the Overview', to: '/?view=flows' },
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
+  { id: 'page-staking', type: 'page', title: 'Staking', subtitle: 'AVAX staked, validators, delegations, staking end dates', to: '/staking' },
+  { id: 'page-lending', type: 'page', title: 'Lending', subtitle: 'Rates, usage and caps on Aave and BENQI', to: '/lending' },
+  { id: 'page-trading', type: 'page', title: 'Trading', subtitle: 'DEX volume, swaps and top pools on the C-Chain', to: '/trading' },
+  { id: 'page-perps', type: 'page', title: 'Perpetuals', subtitle: 'Leveraged trading on GMX', to: '/perps' },
+  { id: 'page-interchain', type: 'page', title: 'Interchain', subtitle: 'ICM messages between L1s and the C-Chain', to: '/interchain' },
+  { id: 'page-bridges', type: 'page', title: 'Bridges', subtitle: 'Money bridged in and out of Avalanche', to: '/bridges' },
+  { id: 'page-treasuries', type: 'page', title: 'Treasuries & ETFs', subtitle: 'AVAX held by public companies and spot ETFs', to: '/treasuries' },
   { id: 'page-acps', type: 'page', title: 'ACPs', subtitle: 'Avalanche Community Proposals', to: '/acps' },
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
   { id: 'page-api', type: 'page', title: 'API Playground', subtitle: 'Test the REST & WebSocket APIs', to: '/api' },
@@ -95,6 +105,7 @@ const TYPE_ICON: Record<ResultType, typeof LayoutGrid> = {
   post: BookOpen,
   command: Command,
   validator: Server,
+  delegator: Wallet,
 };
 
 const TYPE_LABEL: Record<ResultType, string> = {
@@ -104,6 +115,7 @@ const TYPE_LABEL: Record<ResultType, string> = {
   post: 'Article',
   command: 'Cmd',
   validator: 'Validator',
+  delegator: 'Delegator',
 };
 
 export function SearchPalette({ open, onClose }: SearchPaletteProps) {
@@ -229,15 +241,24 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
 
   const chainResults = useMemo<Result[]>(
     () =>
-      chains.map((c) => ({
-        id: `chain-${c.chainId}`,
-        type: 'chain',
-        title: c.chainName,
-        subtitle: [c.networkToken?.symbol, c.originalChainId && `EVM ${c.originalChainId}`]
-          .filter(Boolean)
-          .join(' · '),
-        to: `/chain/${c.chainId}`,
-      })),
+      // Retired deployments keep their old names, so live chains come first and
+      // inactive ones say so; otherwise two "Datagram Chain" rows look identical.
+      [...chains]
+        .sort((a, b) => Number(b.isActive ?? false) - Number(a.isActive ?? false))
+        .map((c) => ({
+          id: `chain-${c.chainId}`,
+          type: 'chain',
+          title: c.chainName,
+          subtitle: [
+            c.isActive ? null : 'Inactive',
+            c.networkToken?.symbol && c.networkToken.symbol !== 'N/A' ? c.networkToken.symbol : null,
+            // originalChainId falls back to the P-Chain id when there is no EVM chain id.
+            c.evmChainId ? `EVM ${c.evmChainId}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          to: `/chain/${c.chainId}`,
+        })),
     [chains],
   );
   const acpResults = useMemo<Result[]>(
@@ -288,8 +309,23 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
           `${r.title} ${r.subtitle ?? ''} ${r.keywords ?? ''}`.toLowerCase().includes(q),
         )
         .slice(0, 30);
-      // A matched validator (full node-ID lookup) leads the results.
-      const items = validatorResult ? [validatorResult, ...filtered] : filtered;
+      // A matched validator (full node-ID lookup) or a P-Chain address leads the results.
+      const raw = query.trim();
+      const bare = raw.replace(/^p-/i, '').toLowerCase();
+      const address = P_ADDRESS_RE.test(bare) ? `P-${bare}` : null;
+      const lead: Result[] = [
+        ...(validatorResult ? [validatorResult] : []),
+        ...(address
+          ? [{
+              id: `delegator-${address}`,
+              type: 'delegator' as const,
+              title: `${address.slice(0, 14)}…${address.slice(-6)}`,
+              subtitle: 'Open delegator page',
+              to: `/delegator/${address}`,
+            }]
+          : []),
+      ];
+      const items = [...lead, ...filtered];
       return [{ label: 'Results', icon: Search, items }];
     }
     const out: { label: string; icon: typeof Clock; items: Result[] }[] = [];
@@ -351,7 +387,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
         className="absolute inset-0 bg-black/60 dark:bg-black/60 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-xl rounded-2xl border border-border bg-popover shadow-2xl shadow-black/40 dark:shadow-black/60 overflow-hidden">
+      <div className="relative w-full max-w-2xl rounded-md border border-border bg-popover shadow-2xl shadow-black/40 dark:shadow-black/60 overflow-hidden">
         <div className="flex items-center gap-3 px-4 h-12 border-b border-border">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
@@ -359,7 +395,8 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chains, ACPs, articles, validator node ID…"
+            aria-label="Search chains, ACPs, articles, validators and P-Chain addresses"
+            placeholder="Search chains, ACPs, articles, node ID or P-Chain address…"
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder-muted-foreground"
           />
           <kbd className="hidden sm:inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
@@ -385,7 +422,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                 const SectionIcon = section.icon;
                 return (
                   <div key={section.label} className="mb-1 last:mb-0">
-                    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold text-muted-foreground">
                       <SectionIcon className="w-3 h-3" />
                       <span>{section.label}</span>
                       <span className="text-muted-foreground/60 font-medium normal-case tracking-normal">
@@ -404,12 +441,12 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                               onMouseEnter={() => setActive(idx)}
                               onClick={() => handleSelect(r)}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                                isActive ? 'bg-[#ef4444]/10' : 'hover:bg-accent'
+                                isActive ? 'bg-accent' : 'hover:bg-accent/50'
                               }`}
                             >
                               <div
                                 className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
-                                  isActive ? 'bg-[#ef4444]/15 text-[#ef4444]' : 'bg-muted text-muted-foreground'
+                                  isActive ? 'bg-foreground/10 text-foreground' : 'bg-muted text-muted-foreground'
                                 }`}
                               >
                                 <Icon className="w-3.5 h-3.5" />
@@ -426,7 +463,7 @@ export function SearchPalette({ open, onClose }: SearchPaletteProps) {
                                 {TYPE_LABEL[r.type].toUpperCase()}
                               </span>
                               {isActive && (
-                                <ArrowRight className="w-3.5 h-3.5 text-[#ef4444] shrink-0" />
+                                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                               )}
                             </button>
                           </li>

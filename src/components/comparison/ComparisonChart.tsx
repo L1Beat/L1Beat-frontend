@@ -4,10 +4,9 @@ import type { ChartOptions, Plugin } from 'chart.js';
 import { format } from 'date-fns';
 import { DailyTxCount, DailyActiveAddresses, MaxTPSHistory, GasUsedHistory, AvgGasPriceHistory, FeesPaidHistory } from '../../types';
 import { useTheme } from '../../hooks/useTheme';
-import { watermarkPlugin, crosshairPlugin, chartTooltipStyle, CHART_STYLE } from '../../utils/chartConfig';
-import { AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { crosshairPlugin, chartTooltipStyle, CHART_STYLE } from '../../utils/chartConfig';
 import { LoadingSpinner } from '../LoadingSpinner';
+import { seriesColor } from './colors';
 
 export type ComparisonMetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid';
 
@@ -29,19 +28,13 @@ interface ChainComparisonData {
 interface ComparisonChartProps {
   comparisonChains: ChainComparisonData[];
   metricType: ComparisonMetricType;
-  title: string;
   valueLabel: string;
   hoveredChainId?: string | null;
   onHoverChain?: (chainId: string | null) => void;
   viewMode?: 'absolute' | 'normalized';
+  /** Replaces the default "no data" text, e.g. when requests are being rate limited. */
+  emptyMessage?: string;
 }
-
-const CHAIN_COLORS = [
-  { line: 'rgb(99, 102, 241)', fill: 'rgba(99, 102, 241, 0.1)' },   // Indigo
-  { line: 'rgb(16, 185, 129)', fill: 'rgba(16, 185, 129, 0.1)' },   // Emerald
-  { line: 'rgb(245, 158, 11)', fill: 'rgba(245, 158, 11, 0.1)' },   // Amber
-  { line: 'rgb(239, 68, 68)', fill: 'rgba(239, 68, 68, 0.1)' },     // Red
-];
 
 function getDataPoints(data: ChainComparisonData, metricType: ComparisonMetricType): { timestamp: number }[] {
   return data[metricType] as { timestamp: number }[];
@@ -54,7 +47,7 @@ function getValue(item: any, metricType: ComparisonMetricType): number {
   return item.value;
 }
 
-function formatValue(value: number, metricType: ComparisonMetricType): string {
+export function formatValue(value: number, metricType: ComparisonMetricType): string {
   switch (metricType) {
     case 'maxTPS':
       return value.toFixed(2);
@@ -73,21 +66,19 @@ function formatValue(value: number, metricType: ComparisonMetricType): string {
   }
 }
 
-function fadeRgb(rgb: string, alpha: number): string {
-  const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!match) return rgb;
-  const [, r, g, b] = match;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+function fade(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 export const ComparisonChart = memo(function ComparisonChart({
   comparisonChains,
   metricType,
-  title,
   valueLabel,
   hoveredChainId = null,
   onHoverChain,
   viewMode = 'absolute',
+  emptyMessage,
 }: ComparisonChartProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -105,7 +96,7 @@ export const ComparisonChart = memo(function ComparisonChart({
     const labels = sortedTimestamps.map(ts => format(new Date(ts * 1000), 'MMM d'));
 
     const datasets = comparisonChains.map((data, index) => {
-      const color = CHAIN_COLORS[index % CHAIN_COLORS.length];
+      const color = seriesColor(index);
       const dataPoints = getDataPoints(data, metricType);
 
       const dataMap = new Map(
@@ -124,30 +115,22 @@ export const ComparisonChart = memo(function ComparisonChart({
       const isHovered = hoveredChainId === data.chain.chainId;
       const isDimmed = hoveredChainId != null && !isHovered;
 
-      const fillTopAlpha = isDimmed ? 0.04 : isHovered ? 0.32 : 0.18;
       return {
         label: data.chain.chainName,
         chainId: data.chain.chainId,
         data: chartValues,
         rawValues,
-        data_raw_label: valueLabel,
-        borderColor: isDimmed ? fadeRgb(color.line, 0.18) : color.line,
-        backgroundColor: (context: { chart: { ctx: CanvasRenderingContext2D; chartArea?: { top: number; bottom: number } } }) => {
-          const { ctx, chartArea } = context.chart;
-          if (!chartArea) return fadeRgb(color.line, fillTopAlpha);
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, fadeRgb(color.line, fillTopAlpha));
-          gradient.addColorStop(1, fadeRgb(color.line, 0));
-          return gradient;
-        },
-        borderWidth: isHovered ? (isDark ? 3.5 : 3) : isDark ? 2.5 : 2,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: 7,
-        pointHoverBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-        pointHoverBorderColor: color.line,
-        pointHoverBorderWidth: 2.5,
-        fill: 'origin',
+        borderColor: isDimmed ? fade(color, 0.2) : color,
+        backgroundColor: color,
+        borderWidth: isHovered ? 2.25 : CHART_STYLE.line.width,
+        tension: CHART_STYLE.line.tension,
+        // A chain with a single day of data has no line to draw; show the day as a dot.
+        pointRadius: rawValues.filter(v => v != null).length === 1 ? CHART_STYLE.hover.radius : 0,
+        pointHoverRadius: CHART_STYLE.hover.radius,
+        pointHoverBackgroundColor: color,
+        pointHoverBorderColor: isDark ? '#1a1d21' : '#ffffff',
+        pointHoverBorderWidth: CHART_STYLE.hover.strokeWidth,
+        fill: false,
         spanGaps: true,
         order: isHovered ? 0 : 1,
       };
@@ -175,29 +158,14 @@ export const ComparisonChart = memo(function ComparisonChart({
       onHoverChain(chain?.chain.chainId ?? null);
     },
     plugins: {
-      legend: {
-        display: true,
-        position: 'top' as const,
-        labels: {
-          color: isDark ? '#e2e8f0' : '#334155',
-          padding: 16,
-          font: {
-            size: 13,
-            weight: '500' as const
-          },
-          usePointStyle: true,
-          pointStyle: 'circle'
-        }
-      },
+      // The chain table above and the key below name the lines.
+      legend: { display: false },
       tooltip: {
         ...chartTooltipStyle(isDark),
-        boxPadding: 8,
-        bodySpacing: 6,
-        titleMarginBottom: 10,
+        boxPadding: 6,
+        bodySpacing: 4,
         displayColors: true,
         usePointStyle: true,
-        caretSize: 8,
-        caretPadding: 12,
         callbacks: {
           label: (context: { dataset: { label?: string; rawValues?: (number | null)[] }; parsed: { y: number | null }; dataIndex: number }) => {
             const label = context.dataset.label || '';
@@ -205,7 +173,7 @@ export const ComparisonChart = memo(function ComparisonChart({
             if (raw == null) return `${label}: No data`;
             const formattedRaw = `${formatValue(raw, metricType)} ${valueLabel}`;
             if (viewMode === 'normalized' && context.parsed.y != null) {
-              return `${label}: ${context.parsed.y.toFixed(0)}% · ${formattedRaw}`;
+              return `${label}: ${context.parsed.y.toFixed(0)}%, ${formattedRaw}`;
             }
             return `${label}: ${formattedRaw}`;
           }
@@ -221,11 +189,9 @@ export const ComparisonChart = memo(function ComparisonChart({
           display: false,
         },
         ticks: {
-          color: isDark ? '#94a3b8' : '#64748b',
-          font: {
-            size: 11,
-          },
+          color: isDark ? CHART_STYLE.tick.dark : CHART_STYLE.tick.light,
           maxRotation: 0,
+          autoSkipPadding: 16,
         },
       },
       y: {
@@ -234,14 +200,11 @@ export const ComparisonChart = memo(function ComparisonChart({
           display: false,
         },
         grid: {
-          color: isDark ? 'rgba(148, 163, 184, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+          color: isDark ? CHART_STYLE.grid.dark : CHART_STYLE.grid.light,
           drawBorder: false,
         },
         ticks: {
-          color: isDark ? '#94a3b8' : '#64748b',
-          font: {
-            size: 11,
-          },
+          color: isDark ? CHART_STYLE.tick.dark : CHART_STYLE.tick.light,
           callback: (value: string | number) => {
             const num = Number(value);
             if (viewMode === 'normalized') return `${num.toFixed(0)}%`;
@@ -269,7 +232,7 @@ export const ComparisonChart = memo(function ComparisonChart({
     }) {
       const { ctx, data, chartArea } = chart;
       ctx.save();
-      ctx.font = '600 11px ui-sans-serif, system-ui, -apple-system';
+      ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'left';
 
@@ -319,72 +282,24 @@ export const ComparisonChart = memo(function ComparisonChart({
 
   if (isLoading) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
-      >
-        <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
-        <div className="h-[400px] flex flex-col items-center justify-center">
-          <LoadingSpinner size="lg" />
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="mt-4 text-muted-foreground"
-          >
-            Loading chart data...
-          </motion.p>
-        </div>
-      </motion.div>
+      <div className="h-[320px] flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
     );
   }
 
-  const hasData = comparisonChains.some(c => {
-    const dataPoints = getDataPoints(c, metricType);
-    return dataPoints.length > 0;
-  });
-
+  const hasData = comparisonChains.some(c => getDataPoints(c, metricType).length > 0);
   if (!hasData) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
-      >
-        <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
-        <div className="h-[400px] flex flex-col items-center justify-center">
-          <motion.div
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 20 }}
-          >
-            <AlertTriangle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          </motion.div>
-          <p className="text-muted-foreground text-center">
-            No data available for comparison
-          </p>
-        </div>
-      </motion.div>
+      <div className="h-[320px] flex items-center justify-center text-center px-6">
+        <p className="text-[13px] text-muted-foreground max-w-sm">{emptyMessage ?? 'None of these chains have data for this metric yet.'}</p>
+      </div>
     );
   }
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={metricType}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -12 }}
-        transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
-        className="bg-card border border-border rounded-xl shadow-md p-6"
-      >
-        <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
-        <div className="h-[400px]" onMouseLeave={() => onHoverChain?.(null)}>
-          <Line data={chartData} options={options as unknown as ChartOptions<'line'>} plugins={[endLabelPlugin as unknown as Plugin<'line'>, crosshairPlugin, watermarkPlugin]} />
-        </div>
-      </motion.div>
-    </AnimatePresence>
+    <div className="h-[320px]" onMouseLeave={() => onHoverChain?.(null)}>
+      <Line data={chartData} options={options as unknown as ChartOptions<'line'>} plugins={[endLabelPlugin as unknown as Plugin<'line'>, crosshairPlugin]} />
+    </div>
   );
 });

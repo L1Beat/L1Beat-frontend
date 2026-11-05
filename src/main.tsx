@@ -15,9 +15,15 @@ const hasElementContent = Array.from(container.childNodes).some(
   (node) => node.nodeType === Node.ELEMENT_NODE
 );
 
+// Hydrate only HTML pre-rendered for this route. Client-only routes (chain
+// pages, metrics...) are served the Overview's HTML as a fallback, which can
+// never match, so they render fresh instead.
+const here = window.location.pathname.replace(/\/+$/, '') || '/';
+const canHydrate = hasElementContent && container.dataset.prerendered === here;
+
 const AppWrapper = () => (
     <StrictMode>
-      <ThemeProvider>
+      <ThemeProvider hydrating={canHydrate}>
         <HelmetProvider>
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <ToasterProvider>
@@ -29,8 +35,9 @@ const AppWrapper = () => (
     </StrictMode>
   );
 
-if (hasElementContent) {
+if (canHydrate) {
   hydrateRoot(container, <AppWrapper />);
 } else {
+  container.replaceChildren();
   createRoot(container).render(<AppWrapper />);
 }
