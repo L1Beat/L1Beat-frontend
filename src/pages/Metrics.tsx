@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { GitCompareArrows } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
@@ -8,7 +8,6 @@ import type { StatItem } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { AvalancheNetworkMetrics } from '../components/AvalancheNetworkMetrics';
 import { ChainSpecificMetrics } from '../components/ChainSpecificMetrics';
-import { ComparisonView } from '../components/comparison';
 import {
   getChains,
   getNetworkMaxTPSHistory,
@@ -73,20 +72,9 @@ function chartTimeframeToRange(value: string | null): Range {
 }
 
 
-const NAV_SCROLL_OFFSET = 48 + 12;
-
-function scrollToSection(id: string) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  window.scrollTo({ top: window.scrollY + rect.top - NAV_SCROLL_OFFSET, behavior: 'smooth' });
-}
-
 export function Metrics() {
   const [activeChains, setActiveChains] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
-  const comparisonRef = useRef<HTMLDivElement>(null);
-  const hasScrolled = useRef(false);
   const [history, setHistory] = useState<HistoryStore | null>(null);
 
   // The headline numbers follow the chart's window so there is one range
@@ -207,42 +195,6 @@ export function Metrics() {
     ];
   }, [history, range]);
 
-  useEffect(() => {
-    if (hasScrolled.current || !searchParams.has('compare')) return;
-    hasScrolled.current = true;
-    let attempts = 0;
-    const tryScroll = () => {
-      if (comparisonRef.current && attempts < 10) {
-        comparisonRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        attempts++;
-        setTimeout(tryScroll, 500);
-      }
-    };
-    setTimeout(tryScroll, 500);
-  }, [searchParams]);
-
-  const [showFloating, setShowFloating] = useState(false);
-
-  useEffect(() => {
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const scrolledPast = window.scrollY > 400;
-        const compareEl = document.getElementById('compare');
-        const compareInView =
-          !!compareEl && compareEl.getBoundingClientRect().top < window.innerHeight - 120;
-        setShowFloating(scrolledPast && !compareInView);
-
-        ticking = false;
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
   const coveredChains = history?.chainCount ?? null;
   // The headline sentence follows the chart's range, like the KPIs under it.
   const headline = useMemo(() => {
@@ -261,17 +213,25 @@ export function Metrics() {
   }, [history, range]);
   const peakChains = history?.maxTps[0]?.chainCount ?? null;
 
-  const scrollToCompare = () => scrollToSection('compare');
-
   const compareButton = (
-    <button
-      onClick={scrollToCompare}
+    <Link
+      to="/compare"
       className="hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded border border-border bg-background text-[12px] font-medium text-foreground hover:bg-accent transition-colors"
     >
       <GitCompareArrows className="w-3.5 h-3.5" />
       Compare chains
-    </button>
+    </Link>
   );
+
+  // The comparison used to live on this page; old shared links carry its params.
+  if (searchParams.has('compare')) {
+    const keep = new URLSearchParams();
+    for (const k of ['compare', 'timeframe', 'metric']) {
+      const v = searchParams.get(k);
+      if (v) keep.set(k, v);
+    }
+    return <Navigate to={`/compare?${keep.toString()}`} replace />;
+  }
 
   return (
     <div>
@@ -339,26 +299,8 @@ export function Metrics() {
             <ChainSpecificMetrics />
           </SectionErrorBoundary>
         </section>
-        <section id="compare" ref={comparisonRef} className="scroll-mt-16">
-          <SectionErrorBoundary label="chain comparison">
-            <ComparisonView />
-          </SectionErrorBoundary>
-        </section>
       </div>
 
-      <button
-        type="button"
-        onClick={scrollToCompare}
-        aria-label="Compare chains"
-        className={`fixed right-4 sm:right-6 bottom-20 md:bottom-6 z-40 inline-flex items-center gap-2 h-8 px-3 rounded border border-border bg-popover text-foreground text-[12px] font-medium shadow-lg hover:bg-accent transition-all duration-200 ${
-          showFloating
-            ? 'opacity-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 translate-y-2 pointer-events-none'
-        }`}
-      >
-        <GitCompareArrows className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Compare chains</span>
-      </button>
     </div>
   );
 }

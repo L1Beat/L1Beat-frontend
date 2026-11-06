@@ -83,6 +83,7 @@ interface SearchPaletteProps {
 const PAGES: Result[] = [
   { id: 'page-overview', type: 'page', title: 'Overview', subtitle: 'Live L1 screener', to: '/' },
   { id: 'page-metrics', type: 'page', title: 'Network Metrics', subtitle: 'Aggregate L1 metrics', to: '/metrics' },
+  { id: 'page-compare', type: 'page', title: 'Compare chains', subtitle: 'Up to four L1s side by side', to: '/compare' },
   { id: 'page-flows', type: 'page', title: 'Cross-chain flows', subtitle: 'ICM and Teleporter activity, on the Overview', to: '/?view=flows' },
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
   { id: 'page-staking', type: 'page', title: 'Staking', subtitle: 'AVAX staked, validators, delegations, staking end dates', to: '/staking' },

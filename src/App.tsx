@@ -28,6 +28,7 @@ const lazyPrerendered: PrerenderedPages = {
 const ChainDetails = lazy(() => import('./pages/ChainDetails').then(m => ({ default: m.ChainDetails })));
 const ACPDetails = lazy(() => import('./pages/ACPDetails'));
 const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
+const Compare = lazy(() => import('./pages/Compare').then(m => ({ default: m.Compare })));
 const ValidatorDetails = lazy(() => import('./pages/ValidatorDetails').then(m => ({ default: m.ValidatorDetails })));
 const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => ({ default: m.BrandGuidelines })));
 const Services = lazy(() => import('./pages/Services').then(m => ({ default: m.Services })));
@@ -124,6 +125,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/" element={<Dashboard />} />
         <Route path="/chain/:chainId" element={<ChainDetails />} />
         <Route path="/metrics" element={<Metrics />} />
+        <Route path="/compare" element={<Compare />} />
         {/* The Flows page folded into the Overview hero; keep old links alive. */}
         <Route path="/flows" element={<Navigate to="/interchain" replace />} />
         <Route path="/stablecoins" element={<Stablecoins />} />

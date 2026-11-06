@@ -8,7 +8,7 @@ import { crosshairPlugin, chartTooltipStyle, CHART_STYLE } from '../../utils/cha
 import { LoadingSpinner } from '../LoadingSpinner';
 import { seriesColor } from './colors';
 
-export type ComparisonMetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid';
+export type ComparisonMetricType = 'dailyActiveAddresses' | 'dailyTxCount' | 'maxTPS' | 'gasUsed' | 'avgGasPrice' | 'feesPaid' | 'icmMessages';
 
 interface ChainComparisonData {
   chain: {
@@ -22,6 +22,8 @@ interface ChainComparisonData {
   gasUsed: GasUsedHistory[];
   avgGasPrice: AvgGasPriceHistory[];
   feesPaid: FeesPaidHistory[];
+  /** ICM messages to and from the C-Chain per day. */
+  icmMessages: { timestamp: number; value: number }[];
   loading: boolean;
 }
 
@@ -34,6 +36,8 @@ interface ComparisonChartProps {
   viewMode?: 'absolute' | 'normalized';
   /** Replaces the default "no data" text, e.g. when requests are being rate limited. */
   emptyMessage?: string;
+  /** Fill the parent's height (the page hero) instead of a fixed 320px. */
+  fill?: boolean;
 }
 
 function getDataPoints(data: ChainComparisonData, metricType: ComparisonMetricType): { timestamp: number }[] {
@@ -58,13 +62,18 @@ export function formatValue(value: number, metricType: ComparisonMetricType): st
       if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
       if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
       return value.toFixed(2);
-    default:
-      if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
-      if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-      if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    default: {
+      // 500K, not 500.0K; 1.25M keeps its digits.
+      const trim = (s: string) => s.replace(/\.0+$/, '');
+      if (value >= 1_000_000_000) return `${trim((value / 1_000_000_000).toFixed(2))}B`;
+      if (value >= 1_000_000) return `${trim((value / 1_000_000).toFixed(2))}M`;
+      if (value >= 1_000) return `${trim((value / 1_000).toFixed(1))}K`;
       return value.toLocaleString();
+    }
   }
 }
+
+const NARROW = 500;
 
 function fade(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -79,7 +88,9 @@ export const ComparisonChart = memo(function ComparisonChart({
   onHoverChain,
   viewMode = 'absolute',
   emptyMessage,
+  fill = false,
 }: ComparisonChartProps) {
+  const box = fill ? 'h-full min-h-[280px]' : 'h-[320px]';
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -123,7 +134,9 @@ export const ComparisonChart = memo(function ComparisonChart({
         borderColor: isDimmed ? fade(color, 0.2) : color,
         backgroundColor: color,
         borderWidth: isHovered ? 2.25 : CHART_STYLE.line.width,
-        tension: CHART_STYLE.line.tension,
+        // Straight segments: a curve through daily points draws highs and lows
+        // between days that never happened, and with 7 points that shows.
+        tension: 0,
         // A chain with a single day of data has no line to draw; show the day as a dot.
         pointRadius: rawValues.filter(v => v != null).length === 1 ? CHART_STYLE.hover.radius : 0,
         pointHoverRadius: CHART_STYLE.hover.radius,
@@ -216,9 +229,8 @@ export const ComparisonChart = memo(function ComparisonChart({
       },
     },
     layout: {
-      padding: {
-        right: 64,
-      },
+      // Room for the end labels; narrow charts drop the date from them.
+      padding: (ctx: { chart: { width: number } }) => ({ right: ctx.chart.width < NARROW ? 60 : 104 }),
     },
   }), [isDark, metricType, valueLabel, onHoverChain, comparisonChains, viewMode]);
 
@@ -226,9 +238,10 @@ export const ComparisonChart = memo(function ComparisonChart({
     id: 'endLineLabels',
     afterDatasetsDraw(chart: {
       ctx: CanvasRenderingContext2D;
-      data: { datasets: Array<{ data: Array<number | null>; rawValues?: Array<number | null>; borderColor?: string; label?: string }> };
+      data: { labels?: unknown[]; datasets: Array<{ data: Array<number | null>; rawValues?: Array<number | null>; borderColor?: string; label?: string }> };
       getDatasetMeta: (idx: number) => { data: Array<{ x: number; y: number }>; hidden?: boolean };
       chartArea: { right: number; top: number; bottom: number };
+      width: number;
     }) {
       const { ctx, data, chartArea } = chart;
       ctx.save();
@@ -260,10 +273,12 @@ export const ComparisonChart = memo(function ComparisonChart({
           if (yPct == null) return;
           text = `${Math.round(yPct as number)}%`;
         } else {
-          text = formatValue(raw as number, metricType);
+          // The line ends on one day; the strip below gives the window's figure.
+          const day = data.labels?.[lastIdx];
+          text = `${day && chart.width >= NARROW ? `${day}: ` : ''}${formatValue(raw as number, metricType)}`;
         }
 
-        const x = Math.min(point.x + 8, chartArea.right + 60);
+        const x = Math.min(point.x + 8, chartArea.right + 8);
         let y = point.y;
         const MIN_GAP = 14;
         while (placedYs.some(py => Math.abs(py - y) < MIN_GAP)) {
@@ -282,7 +297,7 @@ export const ComparisonChart = memo(function ComparisonChart({
 
   if (isLoading) {
     return (
-      <div className="h-[320px] flex items-center justify-center">
+      <div className={`${box} flex items-center justify-center`}>
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -291,14 +306,14 @@ export const ComparisonChart = memo(function ComparisonChart({
   const hasData = comparisonChains.some(c => getDataPoints(c, metricType).length > 0);
   if (!hasData) {
     return (
-      <div className="h-[320px] flex items-center justify-center text-center px-6">
+      <div className={`${box} flex items-center justify-center text-center px-6`}>
         <p className="text-[13px] text-muted-foreground max-w-sm">{emptyMessage ?? 'None of these chains have data for this metric yet.'}</p>
       </div>
     );
   }
 
   return (
-    <div className="h-[320px]" onMouseLeave={() => onHoverChain?.(null)}>
+    <div className={box} onMouseLeave={() => onHoverChain?.(null)}>
       <Line data={chartData} options={options as unknown as ChartOptions<'line'>} plugins={[endLabelPlugin as unknown as Plugin<'line'>, crosshairPlugin]} />
     </div>
   );
