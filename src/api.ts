@@ -1145,6 +1145,46 @@ export async function getNetworkTxCountLatest(): Promise<DailyTxCountLatest | nu
   });
 }
 
+/** Every transaction L1Beat has counted, summed over each chain's latest cumulative total. */
+export async function getTotalTxTracked(): Promise<{ value: number; chainCount: number } | null> {
+  return fetchWithCache('total-tx-tracked', async () => {
+    try {
+      const response = await fetchWithRetry<{
+        success: boolean;
+        data: { evmChainId: number; cumulativeTxCount: { value: number } | null }[];
+      }>(`${API_URL}/cumulativeTxCount/all/latest`);
+      const rows = (response?.data ?? []).filter((r) => Number(r.cumulativeTxCount?.value) > 0);
+      if (!response?.success || rows.length === 0) return null;
+      return {
+        value: rows.reduce((sum, r) => sum + Number(r.cumulativeTxCount!.value), 0),
+        chainCount: rows.length,
+      };
+    } catch (error) {
+      console.error('Total tx tracked fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkActiveAddressesLatest(): Promise<DailyTxCountLatest | null> {
+  return fetchWithCache('network-active-addresses-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: DailyTxCountLatest }>(
+        `${API_URL}/active-addresses/network/latest`
+      );
+      if (!response.success || !response.data) return null;
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount),
+      };
+    } catch (error) {
+      console.error('Network active addresses latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
 export async function getNetworkTxCountHistory(days: number = 30): Promise<DailyTxCount[]> {
   return fetchWithCache(`network-tx-count-history-${days}`, async () => {
     try {

@@ -216,6 +216,7 @@ const CARDS = [
   { file: 'acps', path: '/acps', title: 'Avalanche Community Proposals', sub: 'Every ACP from draft to activation.', art: rows() },
   { file: 'api', path: '/api', title: 'API playground', sub: 'Query the L1Beat REST and WebSocket API from the browser. No key needed.', art: code() },
   { file: 'blog', path: '/blog', title: 'Research and notes', sub: 'Validator economics, cross-chain messaging and L1 adoption.', art: pulseArt() },
+  { file: 'services', path: '/services', title: 'Services', sub: 'Nodes, archive RPC, indexing and APIs for Avalanche L1 teams.', art: network() },
   { file: 'brand', path: '/brand', title: 'Brand guidelines', sub: 'The L1Beat logo, colours, type and downloadable assets.', art: pulseArt() },
   // The fallback for any page without a card of its own.
   { file: 'default', path: '/', title: 'L1Beat', sub: 'Analytics for Avalanche and its L1s: activity, staking, markets and more.', art: pulseArt() },

@@ -96,6 +96,7 @@ const PAGES: Result[] = [
   { id: 'page-blog', type: 'page', title: 'Blog', subtitle: 'Insights & research', to: '/blog' },
   { id: 'page-api', type: 'page', title: 'API Playground', subtitle: 'Test the REST & WebSocket APIs', to: '/api' },
   { id: 'page-brand', type: 'page', title: 'Brand', subtitle: 'Brand guidelines', to: '/brand' },
+  { id: 'page-services', type: 'page', title: 'Services', subtitle: 'Nodes, archive RPC, indexing, enterprise API and dashboards', to: '/services' },
 ];
 
 const TYPE_ICON: Record<ResultType, typeof LayoutGrid> = {

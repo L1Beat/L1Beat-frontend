@@ -30,6 +30,7 @@ const ACPDetails = lazy(() => import('./pages/ACPDetails'));
 const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
 const ValidatorDetails = lazy(() => import('./pages/ValidatorDetails').then(m => ({ default: m.ValidatorDetails })));
 const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => ({ default: m.BrandGuidelines })));
+const Services = lazy(() => import('./pages/Services').then(m => ({ default: m.Services })));
 const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ default: m.APIPlayground })));
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
@@ -143,6 +144,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         <Route path="/delegator/:address" element={<DelegatorDetails />} />
         <Route path="/api" element={<APIPlayground />} />
         <Route path="/brand" element={<BrandGuidelines />} />
+        <Route path="/services" element={<Services />} />
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Route>

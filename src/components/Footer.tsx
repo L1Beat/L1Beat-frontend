@@ -41,6 +41,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
       { label: 'ACPs', to: '/acps' },
       { label: 'Blog', to: '/blog' },
       { label: 'API', to: '/api' },
+      { label: 'Services', to: '/services' },
       { label: 'Brand', to: '/brand' },
     ],
   },
