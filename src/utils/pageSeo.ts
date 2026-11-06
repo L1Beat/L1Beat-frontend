@@ -76,4 +76,10 @@ export const PAGE_SEO = {
     url: '/brand',
     image: '/og/brand.png',
   },
+  services: {
+    title: 'Services',
+    description: 'Nodes and archive RPC, indexing as a service, enterprise APIs, custom dashboards and research for Avalanche L1 teams and partners.',
+    url: '/services',
+    image: '/og/services.png',
+  },
 };

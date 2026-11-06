@@ -1145,6 +1145,56 @@ export async function getNetworkTxCountLatest(): Promise<DailyTxCountLatest | nu
   });
 }
 
+/** Every transaction L1Beat has counted, summed over each chain's latest cumulative total. */
+export async function getTotalTxTracked(): Promise<{ value: number; chainCount: number } | null> {
+  return fetchWithCache('total-tx-tracked', async () => {
+    try {
+      // Same endpoint and response shapes as getAllChainsCumulativeTxCountLatest:
+      // { data: [...] }, { data: { [chainId]: {...} } } or a bare array. Summed here
+      // rather than reusing that map, which lists each chain under several ids.
+      const response = await fetchWithRetry<unknown>(`${API_URL}/cumulativeTxCount/all/latest`);
+      if (response && typeof response === 'object' && (response as { success?: unknown }).success === false) return null;
+      const payload =
+        response && typeof response === 'object' && 'data' in response ? (response as { data: unknown }).data : response;
+      const items: unknown[] = Array.isArray(payload)
+        ? payload
+        : payload && typeof payload === 'object'
+          ? Object.values(payload)
+          : [];
+      const values = items
+        .map((item) => {
+          const i = (item ?? {}) as { cumulativeTxCount?: { value?: unknown } | null; value?: unknown; count?: unknown };
+          return Number(i.cumulativeTxCount?.value ?? i.value ?? i.count);
+        })
+        .filter((v) => Number.isFinite(v) && v > 0);
+      if (values.length === 0) return null;
+      return { value: values.reduce((sum, v) => sum + v, 0), chainCount: values.length };
+    } catch (error) {
+      console.error('Total tx tracked fetch error:', error);
+      return null;
+    }
+  });
+}
+
+export async function getNetworkActiveAddressesLatest(): Promise<DailyTxCountLatest | null> {
+  return fetchWithCache('network-active-addresses-latest', async () => {
+    try {
+      const response = await fetchWithRetry<{ success: boolean; data: DailyTxCountLatest }>(
+        `${API_URL}/active-addresses/network/latest`
+      );
+      if (!response.success || !response.data) return null;
+      return {
+        timestamp: Number(response.data.timestamp),
+        value: Number(response.data.value),
+        chainCount: Number(response.data.chainCount),
+      };
+    } catch (error) {
+      console.error('Network active addresses latest fetch error:', error);
+      return null;
+    }
+  });
+}
+
 export async function getNetworkTxCountHistory(days: number = 30): Promise<DailyTxCount[]> {
   return fetchWithCache(`network-tx-count-history-${days}`, async () => {
     try {

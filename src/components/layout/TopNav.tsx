@@ -57,6 +57,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     items: [
       { id: 'blog', label: 'Blog', path: '/blog', hint: 'Research and updates' },
       { id: 'api', label: 'API', path: '/api', hint: 'Query L1Beat data' },
+      { id: 'services', label: 'Services', path: '/services', hint: 'Nodes, RPC, indexing and APIs for L1 teams' },
     ],
   },
 ];
