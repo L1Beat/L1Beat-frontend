@@ -1149,16 +1149,26 @@ export async function getNetworkTxCountLatest(): Promise<DailyTxCountLatest | nu
 export async function getTotalTxTracked(): Promise<{ value: number; chainCount: number } | null> {
   return fetchWithCache('total-tx-tracked', async () => {
     try {
-      const response = await fetchWithRetry<{
-        success: boolean;
-        data: { evmChainId: number; cumulativeTxCount: { value: number } | null }[];
-      }>(`${API_URL}/cumulativeTxCount/all/latest`);
-      const rows = (response?.data ?? []).filter((r) => Number(r.cumulativeTxCount?.value) > 0);
-      if (!response?.success || rows.length === 0) return null;
-      return {
-        value: rows.reduce((sum, r) => sum + Number(r.cumulativeTxCount!.value), 0),
-        chainCount: rows.length,
-      };
+      // Same endpoint and response shapes as getAllChainsCumulativeTxCountLatest:
+      // { data: [...] }, { data: { [chainId]: {...} } } or a bare array. Summed here
+      // rather than reusing that map, which lists each chain under several ids.
+      const response = await fetchWithRetry<unknown>(`${API_URL}/cumulativeTxCount/all/latest`);
+      if (response && typeof response === 'object' && (response as { success?: unknown }).success === false) return null;
+      const payload =
+        response && typeof response === 'object' && 'data' in response ? (response as { data: unknown }).data : response;
+      const items: unknown[] = Array.isArray(payload)
+        ? payload
+        : payload && typeof payload === 'object'
+          ? Object.values(payload)
+          : [];
+      const values = items
+        .map((item) => {
+          const i = (item ?? {}) as { cumulativeTxCount?: { value?: unknown } | null; value?: unknown; count?: unknown };
+          return Number(i.cumulativeTxCount?.value ?? i.value ?? i.count);
+        })
+        .filter((v) => Number.isFinite(v) && v > 0);
+      if (values.length === 0) return null;
+      return { value: values.reduce((sum, v) => sum + v, 0), chainCount: values.length };
     } catch (error) {
       console.error('Total tx tracked fetch error:', error);
       return null;
