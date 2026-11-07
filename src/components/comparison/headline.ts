@@ -96,7 +96,7 @@ export function windowText(s: Pick<CompareSummary, 'since' | 'days'>): string {
 /** The hero's sentence and the line under it. Null when no chain has a figure. */
 export function headline(s: CompareSummary): { lead: string; detail: string | null } | null {
   const rows = s.rows
-    .filter((r): r is { chainId: string; name: string; value: number } => r.value != null && r.value > 0)
+    .filter((r): r is CompareSummary['rows'][number] & { value: number } => r.value != null && r.value > 0)
     .sort((a, b) => b.value - a.value);
   const window = windowText(s);
   // ICM is counted from an index of every message, so zero means no traffic, not no data.
@@ -113,9 +113,18 @@ export function headline(s: CompareSummary): { lead: string; detail: string | nu
     : '';
   if (quiet.length > 0) missingNote += ` ${listNames(quiet)} sent and received none.`;
   if (rows.length === 1) {
-    return { lead: `${p.one(rows[0].name, compact(rows[0].value))} ${window}.`, detail: missingNote.trim() || null };
+    const only = rows[0];
+    return { lead: `${p.one(only.name, `${only.lowerBound ? 'at least ' : ''}${compact(only.value)}`)} ${window}.`, detail: missingNote.trim() || null };
   }
   const [a, b] = rows;
+  // An undercount can't carry a ratio: say the top figure, and which ones read low.
+  const low = rows.filter((row) => row.lowerBound).map((row) => row.name);
+  if (low.length > 0) {
+    const fig = (row: typeof a) => `${row.lowerBound ? 'at least ' : ''}${compact(row.value)}`;
+    let detail = `${listNames(low)} ${low.length === 1 ? 'is' : 'are'} counted by L1Beat from ${low.length === 1 ? 'its' : 'their'} blocks, which misses some addresses, so ${low.length === 1 ? 'its figure is a lower bound' : 'their figures are lower bounds'}.`;
+    if (s.since != null) detail += ' Counted from the first day all of them have data.';
+    return { lead: `${p.one(a.name, fig(a))} ${window}, the most of the ${rows.length === 2 ? 'two' : rows.length}.`, detail: detail + missingNote };
+  }
   const r = a.value / b.value;
   const lead = r < 1.05
     ? `${p.same(a.name, b.name)} ${window}.`

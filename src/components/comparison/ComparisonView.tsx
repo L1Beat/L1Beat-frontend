@@ -20,7 +20,8 @@ const TIMEFRAMES: CompareTimeframe[] = [7, 30, 90, 365];
 export interface CompareSummary {
   metric: ComparisonMetricType;
   days: CompareTimeframe;
-  rows: { chainId: string; name: string; value: number | null }[];
+  /** lowerBound: the figure is an undercount (active addresses read over RPC). */
+  rows: { chainId: string; name: string; value: number | null; lowerBound: boolean }[];
   /** A request failed, so missing values may not mean "no data". */
   failed: boolean;
   /**
@@ -562,7 +563,9 @@ export const ComparisonView = memo(function ComparisonView({
             ? series.reduce((a, b) => a + b, 0) / series.length
             : series.reduce((a, b) => a + b, 0);
       }
-      return { chainId: c.chain.chainId, name: c.chain.chainName, value };
+      const lowerBound = heroMetric === 'dailyActiveAddresses'
+        && c.dailyActiveAddresses.some(p => p.lowerBound && p.timestamp >= start);
+      return { chainId: c.chain.chainId, name: c.chain.chainName, value, lowerBound };
     });
     return {
       metric: heroMetric,
@@ -684,7 +687,9 @@ export const ComparisonView = memo(function ComparisonView({
               {!summary ? '…' : hasFigure ? compact(row!.value!) : '—'}
             </div>
             <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground truncate">
-              {summary && !hasFigure ? (data.failed ? "Didn't load" : 'No data for this chain yet') : stripSub}
+              {summary && !hasFigure
+                ? (data.failed ? "Didn't load" : 'No data for this chain yet')
+                : row?.lowerBound ? <span title="Counted by L1Beat from the chain's blocks, which misses addresses reached only by internal calls.">At least, a lower bound</span> : stripSub}
             </div>
           </div>
         );

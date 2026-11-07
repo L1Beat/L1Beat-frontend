@@ -1717,14 +1717,15 @@ export async function getChainMetricsHistory(chainId: string, days: number, metr
       for (const metric of wanted) {
         const points = (Array.isArray(response.data[metric]) ? response.data[metric] : [])
           .filter(item => item && typeof item.timestamp === 'number' && typeof item.value === 'number')
-          .map(item => ({ timestamp: Number(item.timestamp), value: Number(item.value) }))
+          .map(item => ({ timestamp: Number(item.timestamp), value: Number(item.value), rpc: item.source === 'rpc' }))
           .sort((a, b) => a.timestamp - b.timestamp).filter(isNotToday);
         result[metric] = metric === 'activeAddresses'
-          ? points.map(p => ({ timestamp: p.timestamp, activeAddresses: p.value, transactions: 0 }))
+          // Only active addresses undercount over RPC; transaction and gas counts are exact.
+          ? points.map(p => ({ timestamp: p.timestamp, activeAddresses: p.value, transactions: 0, ...(p.rpc ? { lowerBound: true } : {}) }))
           // Same C-Chain scaling as getChainAvgGasPriceHistory.
           : metric === 'avgGasPrice' && chainId === '43114'
-            ? points.map(p => ({ ...p, value: p.value / 10 }))
-            : points;
+            ? points.map(p => ({ timestamp: p.timestamp, value: p.value / 10 }))
+            : points.map(p => ({ timestamp: p.timestamp, value: p.value }));
       }
       return result as ChainMetricsHistory;
     } catch (error) {

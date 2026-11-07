@@ -204,6 +204,11 @@ export interface DailyActiveAddresses {
   timestamp: number;
   activeAddresses: number;
   transactions: number;
+  /**
+   * Counted by L1Beat from the chain's blocks over RPC, without traces, so
+   * addresses reached only by internal calls are missed: a lower bound.
+   */
+  lowerBound?: boolean;
 }
 
 // Daily Transaction Count types
