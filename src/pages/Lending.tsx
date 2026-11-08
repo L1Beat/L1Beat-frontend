@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { SEO } from '../components/SEO';
@@ -118,6 +119,19 @@ export function Lending() {
   const [data, setData] = useState<LendingData | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  // The protocol picked in the chart legend lives in the URL (?protocol=aave-v4),
+  // so a link opens on that protocol's numbers.
+  const [params, setParams] = useSearchParams();
+  const setFocus = (id: string | null) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set('protocol', id);
+        else next.delete('protocol');
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
 
   useEffect(() => {
     let alive = true;
@@ -157,7 +171,21 @@ export function Lending() {
     .map((p) => ({ ...p, name: data?.protocols.find((x) => x.id === p.protocol_id)?.name ?? p.protocol_id }))
     .sort((a, b) => b.supplied_usd - a.supplied_usd);
 
-  const stats: StatItem[] = totals
+  // Only a protocol the data knows; an unknown id in the URL falls back to all.
+  const focusId = params.get('protocol');
+  const focus = byProtocol.find((p) => p.protocol_id === focusId) ?? null;
+  const focusLive = focus ? live.filter((r) => r.protocol_id === focus.protocol_id) : live;
+  const focusUtil = focus && focus.supplied_usd > 0 ? (focus.borrowed_usd / focus.supplied_usd) * 100 : null;
+  const focusShare = focus && totals && totals.supplied_usd > 0 ? (focus.supplied_usd / totals.supplied_usd) * 100 : null;
+
+  const stats: StatItem[] = focus
+    ? [
+        { label: 'Supplied', value: usd(focus.supplied_usd), sub: focusShare != null ? `${pct(focusShare)} of all Avalanche lending` : focus.name },
+        { label: 'Borrowed', value: usd(focus.borrowed_usd), sub: focusUtil != null ? `${pct(focusUtil)} of what's supplied` : ' ' },
+        { label: 'Not borrowed', value: usd(focus.supplied_usd - focus.borrowed_usd), sub: 'supplied minus borrowed' },
+        { label: 'Markets', value: String(focusLive.length), sub: `with deposits on ${focus.name}` },
+      ]
+    : totals
     ? [
         { label: 'Supplied', value: usd(totals.supplied_usd), sub: `${data?.protocols.length ?? 0} protocols` },
         { label: 'Borrowed', value: usd(totals.borrowed_usd), sub: utilization != null ? `${pct(utilization)} of what's supplied` : ' ' },
@@ -185,7 +213,25 @@ export function Lending() {
           <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h1 className="text-[18px] leading-6 font-semibold text-foreground">Lending</h1>
-              {totals ? (
+              {totals && focus ? (
+                <>
+                  <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+                    {focus.name} holds <span className="tabular-nums">{usd(focus.supplied_usd)}</span> on Avalanche, and{' '}
+                    <span className="tabular-nums">{usd(focus.borrowed_usd)}</span> of it is borrowed.
+                  </p>
+                  <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+                    {focusShare != null && (
+                      <>
+                        That's <span className="num">{pct(focusShare)}</span> of the <span className="num">{usd(totals.supplied_usd)}</span> in Avalanche lending,{' '}
+                      </>
+                    )}
+                    across <span className="num">{focusLive.length}</span> active {focusLive.length === 1 ? 'market' : 'markets'}.{' '}
+                    <button type="button" onClick={() => setFocus(null)} className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                      Show all protocols
+                    </button>
+                  </p>
+                </>
+              ) : totals ? (
                 <>
                   <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
                     Avalanche lending markets hold <span className="tabular-nums">{usd(totals.supplied_usd)}</span>, and{' '}
@@ -217,7 +263,12 @@ export function Lending() {
 
           <div className="relative md:flex-1 md:min-h-0 mx-4 sm:mx-6 lg:mx-10 mt-5 mb-6 md:mt-4 md:mb-[128px]">
             <SectionErrorBoundary label="the lending history chart">
-              <HistoryChart days={Number(histRange)} names={Object.fromEntries((data?.protocols ?? []).map((p) => [p.id, p.name]))} />
+              <HistoryChart
+                days={Number(histRange)}
+                names={Object.fromEntries((data?.protocols ?? []).map((p) => [p.id, p.name]))}
+                focus={focus?.protocol_id ?? (data ? null : focusId)}
+                onFocus={setFocus}
+              />
             </SectionErrorBoundary>
           </div>
         </div>
@@ -819,8 +870,11 @@ interface StackDay {
 
 const STACK_M = { top: 10, right: 8, bottom: 22, left: 52 };
 
-function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel, fmt = usd, area = false }: {
+function DailyStack({ days, names, fill = false, height = 200, renderHover, lineLabel, fmt = usd, area = false, focus: focusProp, onFocus }: {
   days: StackDay[];
+  /** The protocol picked in the legend, when the parent owns it. */
+  focus?: string | null;
+  onFocus?: (id: string | null) => void;
   /** Stacked areas, for levels like money supplied. Bars are for amounts per day. */
   area?: boolean;
   /** Formats values on the axis and in the legend; dollars unless given. */
@@ -836,7 +890,10 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   // A protocol picked in the legend; its part of every bar is highlighted.
-  const [focus, setFocus] = useState<string | null>(null);
+  // The parent can own it, so the page around the chart follows the pick.
+  const [ownFocus, setOwnFocus] = useState<string | null>(null);
+  const focus = focusProp !== undefined ? focusProp : ownFocus;
+  const setFocus = (id: string | null) => (onFocus ? onFocus(id) : setOwnFocus(id));
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
@@ -856,6 +913,8 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   const ids = idsMemo;
   // A focus on a protocol this range doesn't have would dim every bar with no way to clear it.
   const activeFocus = focus && ids.includes(focus) ? focus : null;
+  // The picked protocol is drawn at the bottom of the stack, so its own shape reads from zero.
+  const stackIds = useMemo(() => (activeFocus ? [activeFocus, ...ids.filter((id) => id !== activeFocus)] : ids), [activeFocus, ids]);
 
   const geom = useMemo(() => {
     if (!days.length) return null;
@@ -894,14 +953,14 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
   const bands = useMemo(() => {
     if (!area || !geom) return [];
     const base = days.map(() => 0);
-    return ids.map((id) => {
+    return stackIds.map((id) => {
       const lower = [...base];
       days.forEach((d, i) => (base[i] += d.parts.find((p) => p.id === id)?.value ?? 0));
       const top = days.map((_, i) => `${geom.cx(i).toFixed(1)},${geom.y(base[i]).toFixed(1)}`);
       const bottom = days.map((_, i) => `${geom.cx(i).toFixed(1)},${geom.y(lower[i]).toFixed(1)}`).reverse();
       return { id, d: `M${top.join('L')}L${bottom.join('L')}Z` };
     });
-  }, [area, geom, days, ids]);
+  }, [area, geom, days, stackIds]);
 
   return (
     <div className={fill ? 'h-full flex flex-col' : ''}>
@@ -916,7 +975,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
               <button
                 key={id}
                 type="button"
-                onClick={() => setFocus((f) => (f === id ? null : id))}
+                onClick={() => setFocus(focus === id ? null : id)}
                 aria-pressed={on}
                 title={on ? 'Show all protocols' : `Highlight ${names[id] ?? id}`}
                 className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
@@ -961,7 +1020,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
               let run = 0;
               return (
                 <g key={d.date} opacity={(!area && hover != null && hover !== i ? 0.45 : 1) * (!area && d.daysIn != null && d.daysIn < 7 ? 0.5 : 1)}>
-                  {!area && ids.map((id) => {
+                  {!area && stackIds.map((id) => {
                     const v = d.parts.find((p) => p.id === id)?.value ?? 0;
                     if (v <= 0) return null;
                     const y0 = geom.y(run);
@@ -1046,7 +1105,13 @@ function fillDays(series: StackDay[], from: string, to: string): StackDay[] {
 }
 
 // Supplied per protocol, stacked by day, with total borrowed as a line.
-function HistoryChart({ days, names }: { days: number; names: Record<string, string> }) {
+function HistoryChart({ days, names, focus, onFocus }: {
+  days: number;
+  names: Record<string, string>;
+  /** A protocol picked in the legend: the headline number and borrowed line become its own. */
+  focus: string | null;
+  onFocus: (id: string | null) => void;
+}) {
   const { data, state, loadedKey } = useLoadOnce<LendingTotalsDay[], number>(() => getLendingTotals(days), days);
   const loadedDays = loadedKey ?? days;
   const series: StackDay[] = useMemo(
@@ -1054,18 +1119,25 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
       (data ?? []).map((d) => ({
         date: d.date,
         total: d.supplied_usd,
-        line: d.borrowed_usd,
+        line: focus ? (d.by_protocol.find((p) => p.protocol_id === focus)?.borrowed_usd ?? 0) : d.borrowed_usd,
         parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.supplied_usd })),
       })),
-    [data],
+    [data, focus],
   );
   // Markets with deposits but no oracle price that day sit outside the USD sum,
   // so a dip there is a gap in pricing, not money leaving.
   const unpriced = useMemo(() => new Map((data ?? []).filter((d) => d.unpriced_markets).map((d) => [d.date, d.unpriced_markets ?? 0])), [data]);
   if (state === 'loading' && !data) return <div className="h-full min-h-[240px] rounded bg-muted/50 animate-pulse" />;
   if (!series.length) return <div className="h-full min-h-[160px] flex items-center justify-center text-[12px] text-muted-foreground">Lending history couldn't be loaded. Try again in a minute.</div>;
-  const first = series[0];
-  const peak = series.reduce((m, d) => (d.total > m.total ? d : m), first);
+  // With a protocol picked, every number here is that protocol's own.
+  const shown = focus && series.some((d) => d.parts.some((p) => p.id === focus)) ? focus : null;
+  const value = (d: StackDay) => (shown ? (d.parts.find((p) => p.id === shown)?.value ?? 0) : d.total);
+  // A protocol that launched inside the range starts from its first day with deposits.
+  const first = (shown && series.find((d) => value(d) > 0)) || series[0];
+  const last = series[series.length - 1];
+  const peak = series.reduce((m, d) => (value(d) > value(m) ? d : m), first);
+  const growth = value(first) > 0 ? ((value(last) - value(first)) / value(first)) * 100 : null;
+  const label = shown ? `${names[shown] ?? shown} supplied` : 'supplied';
   return (
     <div className={`h-[300px] md:h-full transition-opacity ${state === 'loading' ? 'opacity-50' : ''}`}>
       <DailyStack
@@ -1073,17 +1145,21 @@ function HistoryChart({ days, names }: { days: number; names: Record<string, str
         names={names}
         fill
         area
-        lineLabel="Borrowed"
+        lineLabel={shown ? `${names[shown] ?? shown} borrowed` : 'Borrowed'}
+        focus={shown}
+        onFocus={onFocus}
         renderHover={(d) => (
           <>
-            <div className="num text-[22px] leading-7 font-medium text-foreground">{usd((d ?? series[series.length - 1]).total)}</div>
+            <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(value(d ?? last))}</div>
             <div className="text-[11px] text-muted-foreground">
               {d
-                ? `supplied on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
+                ? `${label} on ${format(parseISO(d.date), 'EEE, MMM d, yyyy')}, ${usd(d.line)} borrowed`
                 : loadedDays === 3650
                   ? // On All the first day is launch day, near zero, so the peak says more.
-                    `supplied now; peak ${usd(peak.total)} on ${format(parseISO(peak.date), 'MMM d, yyyy')}, history from ${format(parseISO(first.date), 'MMM yyyy')}`
-                  : `supplied now; ${usd(first.total)} on ${format(parseISO(first.date), 'MMM d, yyyy')}`}
+                    `${label} now; peak ${usd(value(peak))} on ${format(parseISO(peak.date), 'MMM d, yyyy')}, history from ${format(parseISO(first.date), 'MMM yyyy')}`
+                  : `${label} now; ${usd(value(first))} on ${format(parseISO(first.date), 'MMM d, yyyy')}${
+                      growth != null && Math.abs(growth) >= 1 ? `, ${growth >= 0 ? 'up' : 'down'} ${Math.abs(growth).toFixed(0)}%` : ''
+                    }`}
               {d && unpriced.get(d.date) ? `. ${unpriced.get(d.date)} ${unpriced.get(d.date) === 1 ? 'market' : 'markets'} had no price that day and aren't counted` : ''}
               {series.length < loadedDays && loadedDays !== 3650 && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
             </div>
