@@ -64,7 +64,7 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
     return (
       <button
         onClick={handleClick}
-        className="inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        className="relative tap inline-flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         title={isDark ? 'Light mode' : 'Dark mode'}
       >

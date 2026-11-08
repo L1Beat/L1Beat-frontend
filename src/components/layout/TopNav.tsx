@@ -134,7 +134,7 @@ export function TopNav() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Search"
-          className="sm:hidden md:inline-flex lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-muted/40 text-muted-foreground"
+          className="relative tap sm:hidden md:inline-flex lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-muted/40 text-muted-foreground"
         >
           <Search className="w-4 h-4" />
         </button>

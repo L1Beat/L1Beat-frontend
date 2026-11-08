@@ -978,7 +978,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                 onClick={() => setFocus(focus === id ? null : id)}
                 aria-pressed={on}
                 title={on ? 'Show all protocols' : `Highlight ${names[id] ?? id}`}
-                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
+                className={`relative tap-y inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
                   on ? 'bg-accent text-foreground' : activeFocus ? 'opacity-50 hover:opacity-100' : ''
                 }`}
               >

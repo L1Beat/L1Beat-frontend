@@ -82,7 +82,7 @@ export function StatStrip({
                       <button
                         type="button"
                         aria-label={`About ${it.label}`}
-                        className="relative shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
+                        className="relative tap shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
                       >
                         <Info className="w-3 h-3" />
                       </button>
