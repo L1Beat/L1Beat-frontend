@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme';
 import 'katex/dist/katex.min.css';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
+import { NotFoundMeta } from '../components/NotFoundMeta';
 import {
   ArrowLeft,
   ArrowUpCircle,
@@ -442,6 +443,7 @@ export default function ACPDetails() {
   if (error || !acp) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
+        {error === `ACP-${acpNumber} not found` && <NotFoundMeta title={`ACP-${acpNumber} not found`} />}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />

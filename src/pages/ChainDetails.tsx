@@ -32,6 +32,7 @@ import { StakeDistributionChart } from '../components/StakeDistributionChart';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { SEO } from '../components/SEO';
+import { NotFoundMeta } from '../components/NotFoundMeta';
 import { SegmentedControl, StatStrip } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
@@ -121,6 +122,8 @@ export function ChainDetails() {
       try {
         const chains = await getChains({ includeInactive: true });
         if (cancelled) return;
+        // An empty list means the request failed, not that the chain is gone.
+        if (!chains.length) throw new Error('No chains loaded');
         foundChain = chains.find(c => c.chainId === chainId);
         if (foundChain) owner = activityOwnerOf(activityOwners(chains), foundChain);
         if (!foundChain && chainId) {
@@ -491,6 +494,7 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        {error === 'Chain not found' && <NotFoundMeta title="Chain not found" />}
         <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
           <AlertTriangle className="w-7 h-7 text-muted-foreground" />
         </div>

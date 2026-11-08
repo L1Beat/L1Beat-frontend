@@ -23,6 +23,7 @@ import { AuthorCard, AuthorProfile } from '../components/AuthorCard';
 import ContentRenderer from '../components/ContentRenderer';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
+import { NotFoundMeta } from '../components/NotFoundMeta';
 
 interface TocItem {
   id: string;
@@ -222,6 +223,7 @@ export function BlogPost() {
   if (error) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        {error === 'Post not found' && <NotFoundMeta title="Article not found" />}
         <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
           <AlertCircle className="w-7 h-7 text-muted-foreground" />
         </div>

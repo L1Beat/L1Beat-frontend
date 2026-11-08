@@ -90,8 +90,10 @@ export const acpService = {
       
       return acp;
     } catch (error) {
+      // Rethrow: a failed load is not "no such ACP", and the page only marks
+      // a confirmed miss as not found.
       console.error(`Error loading ACP-${number}:`, error);
-      return null;
+      throw error;
     }
   },
 
