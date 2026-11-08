@@ -239,7 +239,7 @@ async function generate() {
     // the app's index.html.
     try {
       const siteUrl = 'https://l1beat.io';
-      const entries = ['/', '/metrics', '/stablecoins', '/staking', '/treasuries', '/trading', '/perps', '/lending', '/bridges', '/interchain', '/burn', '/acps', '/blog', '/api', '/brand', '/services']
+      const entries = ['/', '/metrics', '/compare', '/stablecoins', '/staking', '/treasuries', '/trading', '/perps', '/lending', '/bridges', '/interchain', '/burn', '/acps', '/blog', '/api', '/brand', '/services']
         .map((url) => ({ url }));
       try {
         const { acps } = JSON.parse(await fs.readFile(path.resolve(root, 'dist/acps/processed-acps.json'), 'utf-8'));

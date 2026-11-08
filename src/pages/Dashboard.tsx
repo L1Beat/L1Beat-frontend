@@ -313,7 +313,7 @@ export function Dashboard() {
 
   const goCompare = () => {
     if (selected.size === 0) return;
-    navigate(`/metrics?compare=${[...selected].join(',')}`);
+    navigate(`/compare?compare=${[...selected].join(',')}`);
   };
 
   const toggleSort = useCallback(

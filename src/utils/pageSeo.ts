@@ -6,9 +6,15 @@
 export const PAGE_SEO = {
   metrics: {
     title: 'Network Metrics',
-    description: 'Aggregate Avalanche L1 metrics: cross-chain TPS, transactions, validators, gas, fees, and a side-by-side compare tool.',
+    description: 'Aggregate Avalanche L1 metrics: cross-chain TPS, transactions, validators, gas, fees, and per-chain activity.',
     url: '/metrics',
     image: '/og/metrics.png',
+  },
+  compare: {
+    title: 'Compare Avalanche L1s',
+    description: 'Put up to four Avalanche L1s side by side: transactions, active addresses, max TPS, gas and fees over 7 days to a year.',
+    url: '/compare',
+    image: '/og/compare.png',
   },
   stablecoins: {
     title: 'Stablecoins on Avalanche',

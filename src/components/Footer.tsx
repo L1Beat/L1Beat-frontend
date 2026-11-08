@@ -14,6 +14,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: 'Overview', to: '/' },
       { label: 'Metrics', to: '/metrics' },
+      { label: 'Compare', to: '/compare' },
       { label: 'Interchain', to: '/interchain' },
       { label: 'Bridges', to: '/bridges' },
     ],

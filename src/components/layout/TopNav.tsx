@@ -26,6 +26,7 @@ export const PRIMARY_NAV: NavEntry[] = [
     label: 'Network',
     items: [
       { id: 'metrics', label: 'Metrics', path: '/metrics', hint: 'Activity and fees across every L1' },
+      { id: 'compare', label: 'Compare', path: '/compare', hint: 'Up to four L1s side by side' },
       { id: 'interchain', label: 'Interchain', path: '/interchain', hint: 'Messages between L1s and the C-Chain' },
       { id: 'bridges', label: 'Bridges', path: '/bridges', hint: 'Money bridged in and out of Avalanche' },
     ],

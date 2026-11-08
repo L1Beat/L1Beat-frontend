@@ -71,6 +71,16 @@ function lineChart(color, seed) {
   return `${grid()}<path d="M${pts}L${CX + CW},${CY + CH}L${CX},${CY + CH}Z" fill="${color}" fill-opacity="0.12"/><path d="M${pts}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linejoin="round"/>`;
 }
 
+function multiLine(colors, seed) {
+  // One line per compared chain, each on its own level.
+  const n = 60;
+  const x = (i) => CX + (CW * i) / (n - 1);
+  return grid() + colors.map((c, k) => {
+    const d = series(n, seed + k * 17, 0.78 - k * 0.2, 0.1);
+    return `<path d="M${d.map((v, i) => `${x(i)},${CY + CH - v * CH}`).join('L')}" fill="none" stroke="${c}" stroke-width="3.5" stroke-linejoin="round"/>`;
+  }).join('');
+}
+
 function sankey() {
   const mid = { x: CX + CW / 2 - 10, y: CY + 20, h: CH - 40 };
   const left = [['#627eea', 0.42], ['#2f6bff', 0.16], ['#9945ff', 0.1], ['#836ef9', 0.08], ['#28a0f0', 0.07], ['#6b7280', 0.1]];
@@ -204,6 +214,7 @@ const PULSE = `<path d="M 4 24 L 10 24 L 14 16 L 18 32 L 22 20 L 26 28 L 30 24 L
 const CARDS = [
   { file: 'overview', path: '/', title: 'Avalanche L1s', sub: 'Live activity, validators and flows for every Avalanche L1.', art: network() },
   { file: 'metrics', path: '/metrics', title: 'Network metrics', sub: 'Transactions, TPS, fees and validators across the Avalanche L1s.', art: bars(['#22b8cf'], 3) },
+  { file: 'compare', path: '/compare', title: 'Compare chains', sub: 'Up to four Avalanche L1s side by side, from 7 days to a year.', art: multiLine(['#3987e5', '#d95926', '#8b5cf6', '#d4a017'], 11) },
   { file: 'stablecoins', path: '/stablecoins', title: 'Stablecoins', sub: 'Supply, volume and holders of every stablecoin on the C-Chain.', art: lineChart('#e5e7eb', 5) },
   { file: 'staking', path: '/staking', title: 'Staking', sub: 'AVAX staked on the Primary Network, validator by validator.', art: treemap() },
   { file: 'treasuries', path: '/treasuries', title: 'Treasuries & ETFs', sub: 'AVAX held by public companies and U.S. spot ETFs.', art: hbars() },
