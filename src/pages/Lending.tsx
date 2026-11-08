@@ -1119,7 +1119,8 @@ function HistoryChart({ days, names, focus, onFocus }: {
       (data ?? []).map((d) => ({
         date: d.date,
         total: d.supplied_usd,
-        line: focus ? (d.by_protocol.find((p) => p.protocol_id === focus)?.borrowed_usd ?? 0) : d.borrowed_usd,
+        // A day the protocol has no entry (before it launched) leaves a gap, not a zero.
+        line: focus ? d.by_protocol.find((p) => p.protocol_id === focus)?.borrowed_usd : d.borrowed_usd,
         parts: d.by_protocol.map((p) => ({ id: p.protocol_id, value: p.supplied_usd })),
       })),
     [data, focus],
@@ -1137,6 +1138,15 @@ function HistoryChart({ days, names, focus, onFocus }: {
   const last = series[series.length - 1];
   const peak = series.reduce((m, d) => (value(d) > value(m) ? d : m), first);
   const growth = value(first) > 0 ? ((value(last) - value(first)) / value(first)) * 100 : null;
+  // Launch-day deposits are seed money, so growth from them is a meaningless number.
+  const launchedInRange = shown != null && first !== series[0];
+  // Past 10x a percentage stops reading as a size; "21x" does.
+  const change =
+    growth == null || Math.abs(growth) < 1
+      ? ''
+      : growth >= 900
+        ? `, up ${Math.floor(growth / 100 + 1)}x`
+        : `, ${growth >= 0 ? 'up' : 'down'} ${Math.abs(growth).toFixed(0)}%`;
   const label = shown ? `${names[shown] ?? shown} supplied` : 'supplied';
   return (
     <div className={`h-[300px] md:h-full transition-opacity ${state === 'loading' ? 'opacity-50' : ''}`}>
@@ -1157,9 +1167,9 @@ function HistoryChart({ days, names, focus, onFocus }: {
                 : loadedDays === 3650
                   ? // On All the first day is launch day, near zero, so the peak says more.
                     `${label} now; peak ${usd(value(peak))} on ${format(parseISO(peak.date), 'MMM d, yyyy')}, history from ${format(parseISO(first.date), 'MMM yyyy')}`
-                  : `${label} now; ${usd(value(first))} on ${format(parseISO(first.date), 'MMM d, yyyy')}${
-                      growth != null && Math.abs(growth) >= 1 ? `, ${growth >= 0 ? 'up' : 'down'} ${Math.abs(growth).toFixed(0)}%` : ''
-                    }`}
+                  : launchedInRange
+                    ? `${label} now; launched ${format(parseISO(first.date), 'MMM d, yyyy')}`
+                    : `${label} now; ${usd(value(first))} on ${format(parseISO(first.date), 'MMM d, yyyy')}${change}`}
               {d && unpriced.get(d.date) ? `. ${unpriced.get(d.date)} ${unpriced.get(d.date) === 1 ? 'market' : 'markets'} had no price that day and aren't counted` : ''}
               {series.length < loadedDays && loadedDays !== 3650 && !d ? `. History so far starts ${format(parseISO(first.date), 'MMM d')}` : ''}
             </div>
