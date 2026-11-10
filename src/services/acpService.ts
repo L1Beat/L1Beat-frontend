@@ -3,10 +3,10 @@ import { EnhancedACP, ACPStats } from '../types';
 
 export const acpService = {
   /**
-   * Load all ACPs from the processed JSON file
+   * Load all ACPs from the processed JSON file. Throws when the file can't be
+   * loaded or read, so callers can tell a failure from a missing ACP.
    */
-  async loadACPs(): Promise<EnhancedACP[]> {
-    try {
+  async fetchACPs(): Promise<EnhancedACP[]> {
       const response = await fetch('/acps/processed-acps.json');
       if (!response.ok) {
         throw new Error(`Failed to load ACPs: ${response.statusText}`);
@@ -16,8 +16,7 @@ export const acpService = {
       
       // Validate the data structure
       if (!data.acps || !Array.isArray(data.acps)) {
-        console.warn('Invalid ACP data structure, returning empty array');
-        return [];
+        throw new Error('Invalid ACP data structure');
       }
       
       // Process each ACP to ensure all required fields exist
@@ -44,6 +43,14 @@ export const acpService = {
       
       console.log(`Loaded ${processedAcps.length} ACPs successfully`);
       return processedAcps;
+  },
+
+  /**
+   * Load all ACPs, or an empty list when they can't be loaded.
+   */
+  async loadACPs(): Promise<EnhancedACP[]> {
+    try {
+      return await this.fetchACPs();
     } catch (error) {
       console.error('Error loading ACPs:', error);
       // Return empty array instead of throwing to prevent app crash
@@ -80,7 +87,10 @@ export const acpService = {
    */
   async loadACPByNumber(number: string): Promise<EnhancedACP | null> {
     try {
-      const acps = await this.loadACPs();
+      // fetchACPs, not loadACPs: an empty list from a failed load would look
+      // like "no such ACP", and the page marks a confirmed miss as noindex.
+      const acps = await this.fetchACPs();
+      if (!acps.length) throw new Error('No ACPs loaded');
       const acp = acps.find(a => a.number === number);
       
       if (!acp) {
