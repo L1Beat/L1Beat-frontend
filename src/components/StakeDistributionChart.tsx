@@ -60,7 +60,8 @@ const BLUE = '#3987e5';
 const TIER_OPACITY = [1, 0.68, 0.42];
 
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 11)}…${a.slice(-4)}` : a);
-const pct = (v: number) => (v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2));
+// Two decimals, the same as the validator table under the chart.
+const pct = (v: number) => v.toFixed(2);
 const amount = (v: number) => {
   const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
   if (v >= 1e9) return `${trim(v / 1e9)}B`;
