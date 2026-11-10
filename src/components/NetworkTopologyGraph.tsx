@@ -521,7 +521,7 @@ export function NetworkTopologyGraph({
               bulletsRef.current = newBullets;
               setRenderTrigger(n => n + 1);
             }}
-            className={`absolute right-3 z-30 inline-flex items-center justify-center w-7 h-7 rounded border border-border/60 bg-stage/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${fill ? 'top-3' : 'top-2'}`}
+            className={`absolute tap right-3 z-30 inline-flex items-center justify-center w-7 h-7 rounded border border-border/60 bg-stage/70 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${fill ? 'top-3' : 'top-2'}`}
             title="Pulse the network"
             aria-label="Pulse the network"
           >

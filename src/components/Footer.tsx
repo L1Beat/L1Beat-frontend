@@ -106,7 +106,7 @@ export function Footer() {
             <p className="mt-3 text-[13px] leading-5 text-muted-foreground">
               Analytics for Avalanche and its L1s.
             </p>
-            <div className="mt-4 -ml-1.5 flex items-center gap-1">
+            <div className="mt-4 -ml-1.5 flex items-center gap-3">
               {SOCIALS.map(({ label, href, Icon }) => (
                 <a
                   key={label}
@@ -115,7 +115,7 @@ export function Footer() {
                   rel="noopener noreferrer"
                   title={label}
                   aria-label={label}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="relative tap inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <Icon className="h-4 w-4" />
                 </a>

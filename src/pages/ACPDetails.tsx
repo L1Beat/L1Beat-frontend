@@ -9,6 +9,8 @@ import { useTheme } from '../hooks/useTheme';
 import 'katex/dist/katex.min.css';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { SEO } from '../components/SEO';
+import { NotFoundMeta } from '../components/NotFoundMeta';
+import { Helmet } from 'react-helmet-async';
 import {
   ArrowLeft,
   ArrowUpCircle,
@@ -440,13 +442,20 @@ export default function ACPDetails() {
   }
 
   if (error || !acp) {
+    // Only a confirmed miss is "not found"; a failed load says so and keeps the page indexable.
+    const missing = error === `ACP-${acpNumber} not found`;
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col">
+        {missing ? (
+          <NotFoundMeta title={`ACP-${acpNumber} not found`} />
+        ) : (
+          <Helmet><title>{`ACP-${acpNumber} | L1Beat`}</title></Helmet>
+        )}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              ACP Not Found
+              {missing ? 'ACP Not Found' : 'Could not load this ACP'}
             </h2>
             <p className="text-muted-foreground mb-4">
               {error || `ACP-${acpNumber} could not be found.`}

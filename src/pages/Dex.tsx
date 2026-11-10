@@ -72,6 +72,9 @@ function compact(v: number): string {
 const usd = (v: number | null | undefined) => (v == null ? '—' : `$${compact(v)}`);
 const pct = (v: number, digits = 0) => `${v.toFixed(digits)}%`;
 const day = (d: string | null | undefined, f = 'MMM d') => (d ? format(parseISO(d), f) : '—');
+// "Aug 12 to Nov 9", with years once the range crosses into a new year.
+const span = (from: string, to: string) =>
+  from.slice(0, 4) === to.slice(0, 4) ? `${day(from)} to ${day(to)}` : `${day(from, 'MMM d, yyyy')} to ${day(to, 'MMM d, yyyy')}`;
 
 function useLoad<T>(load: () => Promise<T | null>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
@@ -349,20 +352,20 @@ function VolumeChart({ days: dailyDays, state, names, focus, onFocus }: {
           {fx ? (
             <>
               <div className="num text-[22px] leading-7 font-medium text-foreground">
-                {usd(active ? vol(active, fx) : days.reduce((sum, d) => sum + vol(d, fx), 0) / dayCount)}
+                {usd(active ? vol(active, fx) : days.reduce((sum, d) => sum + vol(d, fx), 0))}
               </div>
               <div className="text-[11px] text-muted-foreground">
                 {names[fx] ?? fx}
                 {active
                   ? `, ${when(active)}, ${pct(active.volume_usd > 0 ? (vol(active, fx) / active.volume_usd) * 100 : 0)} of the ${weekly ? 'week' : 'day'}`
-                  : `, a day on average, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, fx), 0) / total) * 100 : 0)} of all volume`}
+                  : `, in total, ${pct(total > 0 ? (days.reduce((sum, d) => sum + vol(d, fx), 0) / total) * 100 : 0)} of all volume; ${usd(days.reduce((sum, d) => sum + vol(d, fx), 0) / dayCount)} a day on average`}
               </div>
             </>
           ) : (
             <>
-              <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total / dayCount)}</div>
+              <div className="num text-[22px] leading-7 font-medium text-foreground">{usd(active ? active.volume_usd : total)}</div>
               <div className="text-[11px] text-muted-foreground">
-                {active ? `${when(active)}, ${active.swaps.toLocaleString()} swaps` : `a day on average, ${day(dailyDays![0].date)} to ${day(dailyDays![dailyDays!.length - 1].date)}${weekly ? '; bars are weeks' : ''}`}
+                {active ? `${when(active)}, ${active.swaps.toLocaleString()} swaps` : `in total, ${span(dailyDays![0].date, dailyDays![dailyDays!.length - 1].date)}; ${usd(total / dayCount)} a day on average${weekly ? '; bars are weeks' : ''}`}
               </div>
             </>
           )}

@@ -84,6 +84,8 @@ export interface Validator {
   validationId?: string;
   /** ISO start of this validation; on the Primary Network it decides the uptime minimum (ACP-267). */
   startTime?: string;
+  /** ISO end of this validation: when it ended, or when it is set to end. */
+  endTime?: string;
   /** Primary Network only: AVAX delegated to this validator, in nAVAX, on top of its own stake (`weight`). */
   delegated?: number;
   delegators?: number;

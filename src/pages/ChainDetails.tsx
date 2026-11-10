@@ -7,7 +7,7 @@ import { chainSeo } from '../utils/chainSeo';
 import { format, parseISO } from 'date-fns';
 import { getChains, getTPSHistory, getChainTxCountHistory, getChainRisk, getL1BeatValidators, getL1BeatSubnetType, getL1BeatDailyFeeBurn, getL1BeatFeeMetrics, getEvmFeesBurned, getChainRestaking, DailyFeeBurn } from '../api';
 import type { RestakedL1 } from '../api';
-import { Chain, TPSHistory, ChainRisk } from '../types';
+import { Chain, TPSHistory, ChainRisk, Validator } from '../types';
 import {
   ArrowLeft,
   Search,
@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Send,
   Github,
+  ChevronRight,
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import { watermarkPlugin, getInkRgb } from '../utils/chartConfig';
@@ -32,6 +33,7 @@ import { StakeDistributionChart } from '../components/StakeDistributionChart';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, ChartTooltip, ChartLegend);
 import { AddToMetaMask } from '../components/AddToMetaMask';
 import { SEO } from '../components/SEO';
+import { NotFoundMeta } from '../components/NotFoundMeta';
 import { SegmentedControl, StatStrip } from '../components/instrument';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { ChartWatermark } from '../components/ChartWatermark';
@@ -72,6 +74,8 @@ export function ChainDetails() {
   const [validatorStatus, setValidatorStatus] = useState<'all' | 'active' | 'inactive'>('active');
   const [sortBy, setSortBy] = useState<'stake' | 'uptime' | 'address'>('stake');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Nodes whose ended validation periods are open under their row.
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => new Set());
   const { theme } = useTheme();
   const [copied, setCopied] = useState<'chainId' | 'subnetId' | 'platformChainId' | null>(null);
   const [activeSection, setActiveSection] = useState<string>('activity');
@@ -121,6 +125,8 @@ export function ChainDetails() {
       try {
         const chains = await getChains({ includeInactive: true });
         if (cancelled) return;
+        // An empty list means the request failed, not that the chain is gone.
+        if (!chains.length) throw new Error('No chains loaded');
         foundChain = chains.find(c => c.chainId === chainId);
         if (foundChain) owner = activityOwnerOf(activityOwners(chains), foundChain);
         if (!foundChain && chainId) {
@@ -290,7 +296,24 @@ export function ChainDetails() {
   const getStakeBaseUnits = (v: { weight: string; delegated?: number }) =>
     (parseBaseUnits(v.weight) ?? 0n) + BigInt(Math.round(v.delegated ?? 0));
 
-  const filteredValidators = chain?.validators.filter(validator => {
+  // One row per node. Each validation ID is one registration period, and a node
+  // that registered again after a period ended has several. The row shows the
+  // period validating now (else the latest one); the others open under it.
+  const nodeRows = useMemo(() => {
+    const byNode = new Map<string, Validator[]>();
+    for (const v of chain?.validators ?? []) {
+      const list = byNode.get(v.address);
+      if (list) list.push(v);
+      else byNode.set(v.address, [v]);
+    }
+    return [...byNode.values()].map((periods) => {
+      const sorted = [...periods].sort((a, b) =>
+        Number(b.active) - Number(a.active) || (b.startTime ?? '').localeCompare(a.startTime ?? ''));
+      return { ...sorted[0], periods: sorted };
+    });
+  }, [chain?.validators]);
+
+  const filteredValidators = nodeRows.filter(validator => {
     if (validatorStatus === 'active' && validator.active !== true) return false;
     if (validatorStatus === 'inactive' && validator.active === true) return false;
     return validator.address.toLowerCase().includes(searchTerm.toLowerCase());
@@ -318,12 +341,26 @@ export function ChainDetails() {
     }
     
     return sortOrder === 'desc' ? -comparison : comparison;
-  }) || [];
+  });
+
+  // The rows on screen: each node, then its other periods when it is expanded.
+  const tableRows = filteredValidators.flatMap((node) => [
+    { v: node as Validator, node, period: false },
+    ...(expandedNodes.has(node.address) ? node.periods.slice(1).map((p) => ({ v: p, node, period: true })) : []),
+  ]);
+  const toggleNode = (nodeId: string) =>
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  const periodDay = (iso?: string) => (iso ? format(parseISO(iso), 'MMM d, yyyy') : '?');
 
   // Only the rows in (and near) the viewport are mounted. measureElement keeps
   // the total height accurate so the scrollbar is correct even for 3000+ rows.
   const rowVirtualizer = useVirtualizer({
-    count: filteredValidators.length,
+    count: tableRows.length,
     getScrollElement: () => validatorScrollRef.current,
     estimateSize: () => 69,
     overscan: 12,
@@ -491,6 +528,7 @@ export function ChainDetails() {
   if (error || !chain) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+        {error === 'Chain not found' && <NotFoundMeta title="Chain not found" />}
         <div className="w-14 h-14 mx-auto mb-5 rounded-md bg-muted flex items-center justify-center">
           <AlertTriangle className="w-7 h-7 text-muted-foreground" />
         </div>
@@ -1168,8 +1206,8 @@ export function ChainDetails() {
                           </h3>
                           <div className="flex items-center gap-0.5">
                             {(['active', 'inactive', 'all'] as const).map((s) => {
-                              const total = chain.validators.length;
-                              const activeCount = chain.validators.filter(v => v.active === true).length;
+                              const total = nodeRows.length;
+                              const activeCount = nodeRows.filter(v => v.active === true).length;
                               const count =
                                 s === 'all' ? total : s === 'active' ? activeCount : total - activeCount;
                               const isActive = validatorStatus === s;
@@ -1299,10 +1337,10 @@ export function ChainDetails() {
                             // Primary Network rows carry delegation on top of the own stake: the bar
                             // then splits own and delegated, both scaled to the largest total.
                             const splitDelegation = !stakeIsWeight && stakeTokenDecimals === 9 && filteredValidators.some((v) => (v.delegated ?? 0) > 0);
-                            const ownOf = (v: typeof filteredValidators[number]) => unitsToNumber(v.weight, 9);
-                            const delegatedOf = (v: typeof filteredValidators[number]) => (v.delegated ?? 0) / 1e9;
+                            const ownOf = (v: Validator) => unitsToNumber(v.weight, 9);
+                            const delegatedOf = (v: Validator) => (v.delegated ?? 0) / 1e9;
                             // ACP-267 applies to Primary Network validations only.
-                            const minUptimeOf = (v: typeof filteredValidators[number]) =>
+                            const minUptimeOf = (v: Validator) =>
                               chain.subnetId === '11111111111111111111111111111111LpoYY' ? uptimeMinimum(v.startTime) : 80;
                             const maxTotal = splitDelegation ? Math.max(0, ...filteredValidators.map((v) => ownOf(v) + delegatedOf(v))) : 0;
                             const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
@@ -1319,8 +1357,10 @@ export function ChainDetails() {
                                 )}
                                 {virtualRows.map((virtualRow) => {
                             const index = virtualRow.index;
-                            const validator = filteredValidators[index];
-                            const percentage = (() => {
+                            const { v: validator, node, period } = tableRows[index];
+                            const periodsOpen = expandedNodes.has(node.address);
+                            // A share is of the weight validating now, so ended periods have none.
+                            const percentage = !validator.active ? null : (() => {
                               const v = Number(getStakeBaseUnits(validator));
                               const t = Number(totalStakeBaseUnits);
                               if (!Number.isFinite(v) || !Number.isFinite(t) || t <= 0) return '0.00';
@@ -1328,13 +1368,13 @@ export function ChainDetails() {
                             })();
                             return (
                               <tr
-                                key={validator.address}
+                                key={validator.validationId || `${validator.address}-${index}`}
                                 data-index={index}
                                 ref={rowVirtualizer.measureElement}
-                                className="h-10 border-b border-border/50 hover:bg-accent/40 focus-visible:bg-accent/40 transition-colors cursor-pointer"
+                                className={`h-10 border-b border-border/50 ${period ? 'bg-muted/20' : ''} hover:bg-accent/40 focus-visible:bg-accent/40 transition-colors cursor-pointer`}
                                 tabIndex={0}
                                 role="link"
-                                aria-label={`Validator ${validator.address}`}
+                                aria-label={period ? `Validation period of ${validator.address}, ${periodDay(validator.startTime)} to ${periodDay(validator.endTime)}` : `Validator ${validator.address}`}
                                 onClick={() => {
                                   navigate(`/validator/${validator.validationId || validator.address}${chain.subnetId ? `?subnet=${chain.subnetId}` : ''}`);
                                 }}
@@ -1345,14 +1385,36 @@ export function ChainDetails() {
                                 <td className="pr-2 sm:pr-4 whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                                     <span aria-hidden className={`w-1.5 h-1.5 rounded-full ${validator.active ? 'bg-up' : 'bg-muted-foreground/40'}`} />
-                                    <span className="sr-only sm:not-sr-only">{validator.active ? 'Active' : 'Inactive'}</span>
+                                    <span className="sr-only sm:not-sr-only">{validator.active ? 'Active' : period ? 'Ended' : 'Inactive'}</span>
                                   </span>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
-                                  <NodeId id={validator.address} className="text-[12px]" />
+                                  {period ? (
+                                    <span className="num pl-5 text-[11px] text-muted-foreground">
+                                      {periodDay(validator.startTime)} to {periodDay(validator.endTime)}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-2">
+                                      <NodeId id={validator.address} className="text-[12px]" />
+                                      {node.periods.length > 1 && (
+                                        <button
+                                          type="button"
+                                          aria-expanded={periodsOpen}
+                                          aria-label={`${periodsOpen ? 'Hide' : 'Show'} the other validation periods of ${validator.address}`}
+                                          title="This node registered more than once. Each registration is a separate validation period."
+                                          onClick={(e) => { e.stopPropagation(); toggleNode(node.address); }}
+                                          onKeyDown={(e) => e.stopPropagation()}
+                                          className="relative tap-y inline-flex items-center gap-0.5 h-6 pl-1 pr-1.5 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                        >
+                                          <ChevronRight aria-hidden className={`w-3 h-3 transition-transform ${periodsOpen ? 'rotate-90' : ''}`} />
+                                          <span className="num">{node.periods.length}</span> periods
+                                        </button>
+                                      )}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">
-                                  <div className="num flex items-baseline gap-3 text-[12px] text-foreground">
+                                  <div className={`num flex items-baseline gap-3 text-[12px] ${validator.active ? 'text-foreground' : 'text-muted-foreground'}`}>
                                     <span className={stakeIsWeight ? 'sm:w-14' : 'sm:w-36'}>
                                       {stakeIsWeight ? (
                                         formatWeight(validator.weight)
@@ -1376,10 +1438,10 @@ export function ChainDetails() {
                                     ) : (
                                       <span className="hidden sm:block w-24 h-1.5 self-center rounded-sm bg-muted/60 overflow-hidden" aria-hidden>
                                         {/* Scaled to the largest validator, so small shares stay visible. */}
-                                        <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
+                                        <span className="block h-full rounded-sm bg-[#3987e5]" style={{ width: `${percentage != null && maxSharePct > 0 ? Math.min(100, (Number(percentage) / maxSharePct) * 100) : 0}%` }} />
                                       </span>
                                     )}
-                                    <span className="text-[11px] text-muted-foreground sm:w-12">{percentage}%</span>
+                                    <span className="text-[11px] text-muted-foreground sm:w-12" title={percentage == null ? 'Not validating now, so it has no share of the current weight' : undefined}>{percentage == null ? '—' : `${percentage}%`}</span>
                                   </div>
                                 </td>
                                 <td className="pr-4 whitespace-nowrap">

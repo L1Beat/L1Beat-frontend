@@ -662,10 +662,55 @@ function RatesCard({ rows }: { rows: Row[] }) {
   );
 }
 
+// How long a cut to LTV 0 counts as news for the notice. Older ones are listing
+// facts, and the table's "Paused" cells already show them.
+const RECENT_CUT_DAYS = 30;
+
+/**
+ * When new borrowing against this market was switched off: the market's own
+ * LTV change, or for V4 the latest spoke that dropped it to 0. Null when not
+ * dated; undefined when the API predates the field.
+ */
+function cutAt(m: LendingMarket): string | null | undefined {
+  if (m.protocol_id === 'aave-v4') {
+    const spokes = m.emode ?? [];
+    if (!spokes.some((e) => 'ltv_changed_at' in e)) return undefined;
+    const dates = spokes
+      .filter((e) => !(e.ltv_percent ?? 0) && (e.previous_ltv_percent ?? 0) > 0 && e.ltv_changed_at)
+      .map((e) => e.ltv_changed_at as string)
+      .sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  }
+  if (!('ltv_changed_at' in m)) return undefined;
+  return m.ltv_changed_at ?? null;
+}
+
+// "Oct 29", "Oct 29–30" or "Oct 29 – Nov 2", in UTC so it matches the chain.
+function dayRange(isoDates: string[]): string {
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const sorted = [...isoDates].sort();
+  const a = day(sorted[0]);
+  const b = day(sorted[sorted.length - 1]);
+  if (a === b) return a;
+  const [am] = a.split(' ');
+  const [bm, bd] = b.split(' ');
+  return am === bm ? `${a}–${bd}` : `${a} – ${b}`;
+}
+
 // Lenders sometimes switch off new borrowing against an asset (LTV to 0) as a risk
-// measure. Said once, up top, so the table's "Paused" cells make sense.
+// measure. Said once, up top, while it's recent.
 function PausedNotice({ rows }: { rows: Row[] }) {
-  const paused = rows.filter((r) => !r.closed && (r.supplied_usd ?? 0) >= MIN_COMPARE_USD && collateralState(r).kind === 'paused');
+  const cutoff = Date.now() - RECENT_CUT_DAYS * 864e5;
+  const dates: string[] = [];
+  const paused = rows.filter((r) => {
+    if (r.closed || (r.supplied_usd ?? 0) < MIN_COMPARE_USD || collateralState(r).kind !== 'paused') return false;
+    const at = cutAt(r);
+    // Before the API dated changes, every pause is listed, as it used to be.
+    if (at === undefined) return true;
+    if (!at || Date.parse(at) < cutoff) return false;
+    dates.push(at);
+    return true;
+  });
   if (!paused.length) return null;
   const list = (xs: string[]) => (xs.length <= 1 ? xs[0] : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
   // Group by protocol set, so no asset is implied paused somewhere it isn't.
@@ -681,8 +726,8 @@ function PausedNotice({ rows }: { rows: Row[] }) {
     <div className="flex items-start gap-3 rounded-md border border-[#d4a017]/40 bg-[#d4a017]/[0.07] px-4 py-3">
       <span className="mt-1.5 w-2 h-2 rounded-full bg-[#d4a017] shrink-0" aria-hidden />
       <p className="text-[13px] leading-5 text-foreground">
-        New borrowing is switched off against <span className="font-medium">{phrases.join('; ')}</span>: their loan-to-value
-        is set to 0. Existing positions keep their liquidation thresholds, so the change doesn't liquidate anyone.
+        {dates.length ? `Since ${dayRange(dates)}, new` : 'New'} borrowing is switched off against{' '}
+        <span className="font-medium">{phrases.join('; ')}</span>: their loan-to-value is set to 0. Existing positions keep their liquidation thresholds, so the change doesn't liquidate anyone.
       </p>
     </div>
   );
@@ -978,7 +1023,7 @@ function DailyStack({ days, names, fill = false, height = 200, renderHover, line
                 onClick={() => setFocus(focus === id ? null : id)}
                 aria-pressed={on}
                 title={on ? 'Show all protocols' : `Highlight ${names[id] ?? id}`}
-                className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
+                className={`relative tap-y inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
                   on ? 'bg-accent text-foreground' : activeFocus ? 'opacity-50 hover:opacity-100' : ''
                 }`}
               >

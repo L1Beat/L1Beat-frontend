@@ -674,6 +674,35 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* Touch hit areas. On touch screens, grow a small control's tappable area to
+     44px (Apple HIG) with an invisible overlay, so the dense look stays the
+     same. The element must be positioned (relative or absolute). `tap` grows
+     both ways; `tap-y` only vertically, for controls that sit side by side. */
+  @media (pointer: coarse) {
+    .tap::after,
+    .tap-y::after {
+      content: '';
+      position: absolute;
+      top: min(0px, calc((100% - 44px) / 2));
+      bottom: min(0px, calc((100% - 44px) / 2));
+      left: 0;
+      right: 0;
+    }
+    .tap::after {
+      left: min(0px, calc((100% - 44px) / 2));
+      right: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+}
+
+/* iOS Safari zooms the page when a focused field's text is under 16px. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
 }
 
 

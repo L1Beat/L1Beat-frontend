@@ -2062,6 +2062,7 @@ export async function getL1BeatValidators(subnetId: string, activeOnly: boolean 
           explorerUrl: `https://subnets.avax.network/validators/${v.node_id}`,
           validationId: v.validation_id,
           startTime: v.start_time,
+          endTime: v.end_time,
           delegated: v.total_delegated ?? undefined,
           delegators: v.delegator_count ?? undefined,
         };
@@ -2542,6 +2543,13 @@ export interface LendingMarket {
    * BENQI. Missing on responses from before the field existed.
    */
   emode?: LendingEmodeEntry[];
+  /**
+   * When ltv_percent took its current value (RFC3339), and the tx. Null when
+   * unchanged since listing, not dated yet, or (V4) set per spoke instead.
+   * Missing on responses from before the field existed.
+   */
+  ltv_changed_at?: string | null;
+  ltv_changed_tx?: string | null;
   sampled_at: string;
 }
 
@@ -2559,6 +2567,9 @@ export interface LendingEmodeEntry {
   borrowable: boolean;
   /** V4: the factor older positions keep from the previous config. */
   previous_ltv_percent?: number | null;
+  /** V4 spokes: when this spoke's current factor took effect, and the tx. */
+  ltv_changed_at?: string | null;
+  ltv_changed_tx?: string | null;
 }
 
 interface LendingAssetSummary {
