@@ -343,15 +343,16 @@ export function APIPlayground() {
       const endpoint = REST_ENDPOINTS.find((e) => e.id === selectedId);
       if (!endpoint) return;
       // Strip cursor and reset offset so a fresh execute always starts from page 1
+      const cursorKey = endpoint.cursorParam ?? 'cursor';
       const cleanParams = { ...overrideParams };
-      delete cleanParams['cursor'];
+      delete cleanParams[cursorKey];
       if (cleanParams['offset']) cleanParams['offset'] = '0';
       if (Object.keys(getValidationErrors(endpoint, cleanParams)).length > 0) return;
 
       const url = buildUrl(endpoint.path, cleanParams);
       setParams((prev) => {
         const p = { ...prev };
-        delete p['cursor'];
+        delete p[cursorKey];
         if (p['offset']) p['offset'] = '0';
         return p;
       });
@@ -507,7 +508,7 @@ export function APIPlayground() {
     // Determine pagination mode: cursor or offset
     let newParams: Record<string, string>;
     if (meta?.next_cursor) {
-      newParams = { ...params, cursor: String(meta.next_cursor) };
+      newParams = { ...params, [endpoint.cursorParam ?? 'cursor']: String(meta.next_cursor) };
     } else {
       // Offset pagination: increment offset by limit
       const currentOffset = parseInt(params.offset || '0', 10);
@@ -556,7 +557,7 @@ export function APIPlayground() {
   }, [selectedId, params]);
 
   // Bookmark handlers — strip ephemeral pagination keys before comparing
-  const EPHEMERAL_PARAMS = ['cursor', 'offset'];
+  const EPHEMERAL_PARAMS = ['cursor', 'before', 'offset'];
   const stableParams = (p: Record<string, string>) => {
     const copy = { ...p };
     for (const k of EPHEMERAL_PARAMS) delete copy[k];

@@ -24,6 +24,8 @@ export interface EndpointDef {
   params: ParamDef[];
   notes?: string[];
   suggestedNext?: string[];
+  /** Query param that takes meta.next_cursor for the next page, when it isn't named cursor. */
+  cursorParam?: string;
 }
 
 export interface WsEndpointDef {
@@ -1162,6 +1164,7 @@ export const REST_ENDPOINTS: EndpointDef[] = [
     title: 'ICM Messages',
     description: 'Individual interchain messages, newest first, with filters',
     category: 'Interchain (ICM)',
+    cursorParam: 'before',
     params: [
       sizedLimitParam('20', 200),
       {
