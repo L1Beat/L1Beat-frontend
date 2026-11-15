@@ -63,6 +63,9 @@ export function LandingState({ onSelect }: LandingStateProps) {
         <p className="text-[12px] text-muted-foreground max-w-xl">
           Call the L1Beat REST and WebSocket API from the browser. No key needed.
         </p>
+        <p className="text-[12px] text-muted-foreground max-w-xl">
+          EVM, DeFi and ICM data cover the Avalanche C-Chain (chain ID 43114).
+        </p>
 
         {/* Base URL chip */}
         <div className="flex items-center gap-2 pt-1">
