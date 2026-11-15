@@ -29,8 +29,8 @@ const LOGOS: Record<string, { src: string; dark?: string; tone: 'light' | 'dark'
 
 // Context a single figure needs that the API doesn't carry.
 const NOTES: Record<string, string> = {
-  avat: "AVAT's figure is its June 30 holdings minus the AVAX it sold on September 23.",
-  deft: 'DeFi Technologies has reported only the total value of its treasury since August 2025, so its AVAX count is older.',
+  avat: "AVAT's figure is from its latest quarterly report and includes AVAX that is still locked.",
+  deft: "DeFi Technologies' figure is our estimate from its latest quarterly report: AVAX it holds directly plus its Fund A stake, minus the AVAX backing its Valour ETPs.",
 };
 
 const SEGMENT = 1_000_000;
