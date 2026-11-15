@@ -892,6 +892,23 @@ export const REST_ENDPOINTS: EndpointDef[] = [
     ],
     suggestedNext: ['metrics-timeseries-list', 'metrics-chain-stats'],
   },
+  // AVAX Holdings
+  {
+    id: 'treasuries',
+    method: 'GET',
+    path: '/api/v1/treasuries',
+    title: 'Treasuries & ETFs',
+    description: 'AVAX held by public company treasuries and U.S. spot ETFs, with totals',
+    category: 'AVAX Holdings',
+    params: [],
+    notes: [
+      'Each holder has avax_held, as_of (the date the figure is valid for, YYYY-MM-DD) and source: "live" figures are read from the fund or CoinGecko every 6 hours, "manual" ones come from the holder\'s latest report.',
+      'ETFs also carry aum_usd, nav_per_share, staking_pct, staking_max_pct and sponsor_fee_pct. Unknown values are null, never 0.',
+      'totals sums treasury_avax, etf_avax and combined_avax, with the AVAX price and circulating supply from CoinGecko and the combined share of supply.',
+      'DeFi Technologies\' avax_held is an estimate from its latest quarterly report: AVAX held directly plus its Fund A stake, minus the AVAX backing its Valour ETPs.',
+      'Cached for 60 seconds. Rate limit: 1,000 requests per 15 minutes per IP.',
+    ],
+  },
 ];
 
 export const WS_ENDPOINTS: WsEndpointDef[] = [
@@ -997,6 +1014,7 @@ export const ENDPOINT_CATEGORIES: string[] = [
   'Validators',
   'Metrics - Fees',
   'Metrics - Chain Stats',
+  'AVAX Holdings',
 ];
 
 export function getEndpointById(id: string): EndpointDef | WsEndpointDef | undefined {
