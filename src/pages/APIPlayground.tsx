@@ -190,7 +190,7 @@ print(r.json())`;
 }
 
 function getValidationErrors(
-  endpoint: EndpointDef,
+  endpoint: Pick<EndpointDef, 'params'>,
   params: Record<string, string>
 ): Record<string, boolean> {
   const errors: Record<string, boolean> = {};
