@@ -325,7 +325,9 @@ export function APIPlayground() {
         if (params[key] && params[key] !== '') {
           const from = previous?.params.find((p) => p.name === key);
           const to = endpoint.params.find((p) => p.name === key);
-          if (from && to && from.type === to.type) {
+          // ...and only when the value is valid for the new endpoint (a limit of 365 is
+          // fine on a timeseries but over the max of 100 on a list).
+          if (from && to && from.type === to.type && !getValidationErrors(endpoint, { [key]: params[key] })[key]) {
             newParams[key] = params[key];
           }
         }
