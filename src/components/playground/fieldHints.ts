@@ -8,7 +8,7 @@ export const FIELD_HINTS: Record<string, string> = {
   limit: 'Max number of results in this page',
   offset: 'Pagination offset',
   has_more: 'Whether more results exist beyond this page',
-  next_cursor: 'Pass as ?cursor= to fetch the next page',
+  next_cursor: 'Pass back as ?cursor= (?before= on ICM Messages) to fetch the next page',
   total: 'Total matching records (only when ?count=true)',
   cursor: 'Keyset pagination cursor',
 

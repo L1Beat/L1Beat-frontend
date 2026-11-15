@@ -267,7 +267,7 @@ function RateLimitCard({
             {autoRetry
               ? 'Auto-retry cancelled.'
               : 'Auto-retry paused after several attempts.'}{' '}
-            You are being rate limited (60 req/min, burst 10). Wait a moment, then retry.
+            You are being rate limited (180 req/min, burst 30). Wait a moment, then retry.
           </p>
           <button
             onClick={() => onRetryRef.current()}

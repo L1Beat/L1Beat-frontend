@@ -2427,11 +2427,14 @@ export interface RestakedL1 {
   protocol_id: string;
   is_active: boolean;
   active_validators: number;
-  /** P-Chain weight of active validators registered through the restaking middleware. */
-  restaked_weight: number;
+  /** P-Chain weight of active validators registered through the restaking middleware, as a decimal string in the L1's own weight units (not AVAX). */
+  restaked_weight: string;
   restaked_validators: number;
-  total_pchain_weight: number;
+  /** Weight of all the L1's active validators, decimal string, same units. */
+  total_pchain_weight: string;
   share_of_weight_percent: number | null;
+  /** Weight the restaking module holds on a balancer, decimal string, same units. */
+  module_weight: string;
   operator_count: number;
   vaults: RestakingVault[];
   sampled_at: string;
