@@ -318,9 +318,14 @@ export function APIPlayground() {
       if (!endpoint) return;
       const defaults = buildDefaults(endpoint);
       const newParams = { ...defaults };
+      // Carry a value over only when both endpoints mean the same thing by it:
+      // chainId is an EVM chain ID on some endpoints and a CB58 blockchain ID on others.
+      const previous = selectedId ? getEndpointById(selectedId) : undefined;
       for (const key of CARRY_OVER_PARAMS) {
         if (params[key] && params[key] !== '') {
-          if (endpoint.params.some((p) => p.name === key)) {
+          const from = previous?.params.find((p) => p.name === key);
+          const to = endpoint.params.find((p) => p.name === key);
+          if (from && to && from.type === to.type) {
             newParams[key] = params[key];
           }
         }
@@ -334,7 +339,7 @@ export function APIPlayground() {
       setNetworkError(null);
       setMobileTab('request');
     },
-    [params]
+    [params, selectedId]
   );
 
   const handleExecuteWithParams = useCallback(
