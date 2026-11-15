@@ -89,7 +89,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
           <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">{REST_ENDPOINTS.length}</dd><dt>REST endpoints</dt></div>
           <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">{WS_ENDPOINTS.length}</dd><dt>WebSocket</dt></div>
           <div className="flex items-baseline gap-1.5"><dt>Open CORS</dt></div>
-          <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">60</dd><dt>req/min, burst 10</dt></div>
+          <div className="flex items-baseline gap-1.5"><dd className="num text-foreground">180</dd><dt>req/min, burst 30</dt></div>
         </dl>
       </div>
 
