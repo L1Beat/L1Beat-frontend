@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '../branding/ui/select';
 import { getChains } from '../../api';
+import { PLAYGROUND_API_BASE } from './constants';
 
 interface SmartParamInputProps {
   param: ParamDef;
@@ -52,7 +53,8 @@ function DropdownSelect({
   placeholder,
   id,
 }: DropdownSelectProps) {
-  const selectValue = toSelectValue(value);
+  // A required select has no "Any" item, so an empty value shows the placeholder instead.
+  const selectValue = required && value === '' ? '' : toSelectValue(value);
 
   return (
     <Select
@@ -165,6 +167,54 @@ function SubnetIdInput({ value, onChange, required, errorClass }: SubnetIdInputP
   );
 }
 
+// Active chains from the API itself, fetched once per page load and shared by every picker.
+let activeChains: Promise<{ value: string; label: string }[]> | null = null;
+function loadActiveChains() {
+  activeChains ??= fetch(`${PLAYGROUND_API_BASE}/api/v1/data/chains?active=true&limit=100`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((b: { data?: { chain_id: string; chain_name?: string }[] } | null) =>
+      (b?.data ?? [])
+        .map((c) => ({ value: c.chain_id, label: c.chain_name || c.chain_id }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
+    )
+    .catch(() => {
+      activeChains = null; // try again next time
+      return [];
+    });
+  return activeChains;
+}
+
+function BlockchainIdInput({ value, onChange, required, errorClass, placeholder, id }: {
+  value: string;
+  onChange: (v: string) => void;
+  required: boolean;
+  errorClass: string;
+  placeholder?: string;
+  id?: string;
+}) {
+  const [options, setOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => {
+    let live = true;
+    loadActiveChains().then((o) => live && setOptions(o));
+    return () => {
+      live = false;
+    };
+  }, []);
+  // A chain from a shared link that isn't active any more still shows as selected.
+  const shown = value && !options.some((o) => o.value === value) ? [{ value, label: value }, ...options] : options;
+  return (
+    <DropdownSelect
+      id={id}
+      value={value}
+      onChange={onChange}
+      options={shown}
+      required={required}
+      errorClass={errorClass}
+      placeholder={options.length ? placeholder : 'Loading chains…'}
+    />
+  );
+}
+
 function ChainIdInput() {
   return (
     <div
@@ -205,6 +255,18 @@ export function SmartParamInput(props: SmartParamInputProps) {
           />
         );
       }
+
+      case 'blockchainId':
+        return (
+          <BlockchainIdInput
+            id={inputId}
+            value={value}
+            onChange={onChange}
+            required={param.required}
+            errorClass={errorClass}
+            placeholder={param.placeholder}
+          />
+        );
 
       case 'subnetId':
         return (

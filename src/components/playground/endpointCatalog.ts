@@ -1,5 +1,5 @@
 export type ParamKind = 'path' | 'query';
-export type ParamType = 'string' | 'int' | 'boolean' | 'enum' | 'date' | 'chainId' | 'subnetId';
+export type ParamType = 'string' | 'int' | 'boolean' | 'enum' | 'date' | 'chainId' | 'subnetId' | 'blockchainId';
 
 export interface ParamDef {
   name: string;
@@ -607,11 +607,11 @@ export const REST_ENDPOINTS: EndpointDef[] = [
       {
         name: 'chainId',
         kind: 'path',
-        type: 'string',
+        type: 'blockchainId',
         required: true,
         default: '',
-        placeholder: '2q9e4r6Mu...',
-        description: 'Blockchain ID (CB58) — the same chain_id returned by /chains, not the EVM chain id',
+        placeholder: 'Choose an active chain',
+        description: 'Blockchain ID (CB58), the chain_id returned by /chains, not the EVM chain ID',
       },
     ],
     notes: ['decentralization is present only when the chain has active L1 validators.'],
