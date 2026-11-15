@@ -168,31 +168,39 @@ function SubnetIdInput({ value, onChange, required, errorClass }: SubnetIdInputP
 }
 
 // Active chains from the API itself, fetched once per page load and shared by every picker.
-let activeChains: Promise<{ value: string; label: string }[]> | null = null;
-function loadActiveChains() {
+// Only a successful, non-empty list is kept; a failed load is retried by the next picker.
+type ChainOption = { value: string; label: string };
+let activeChains: Promise<ChainOption[]> | null = null;
+function loadActiveChains(): Promise<ChainOption[] | null> {
   activeChains ??= fetch(`${PLAYGROUND_API_BASE}/api/v1/data/chains?active=true&limit=100`)
-    .then((r) => (r.ok ? r.json() : null))
-    .then((b: { data?: { chain_id: string; chain_name?: string }[] } | null) =>
-      (b?.data ?? [])
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((b: { data?: { chain_id: string; chain_name?: string }[] }) => {
+      const list = (b?.data ?? [])
         .map((c) => ({ value: c.chain_id, label: c.chain_name || c.chain_id }))
-        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
-    )
-    .catch(() => {
-      activeChains = null; // try again next time
-      return [];
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+      if (!list.length) throw new Error('no chains');
+      return list;
     });
-  return activeChains;
+  return activeChains.catch(() => {
+    activeChains = null;
+    return null;
+  });
 }
 
-function BlockchainIdInput({ value, onChange, required, errorClass, placeholder, id }: {
+function BlockchainIdInput({ value, onChange, required, errorClass, placeholder, id, inputClass }: {
   value: string;
   onChange: (v: string) => void;
   required: boolean;
   errorClass: string;
   placeholder?: string;
   id?: string;
+  inputClass: string;
 }) {
-  const [options, setOptions] = useState<{ value: string; label: string }[]>([]);
+  // undefined while loading, null if the list couldn't be loaded.
+  const [options, setOptions] = useState<ChainOption[] | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
     loadActiveChains().then((o) => live && setOptions(o));
@@ -200,8 +208,24 @@ function BlockchainIdInput({ value, onChange, required, errorClass, placeholder,
       live = false;
     };
   }, []);
+
+  // Without the list, the ID can still be typed in.
+  if (options === null) {
+    return (
+      <input
+        id={id}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value.trim())}
+        placeholder="Chain list unavailable: paste a CB58 blockchain ID"
+        className={inputClass}
+      />
+    );
+  }
+
+  const list = options ?? [];
   // A chain from a shared link that isn't active any more still shows as selected.
-  const shown = value && !options.some((o) => o.value === value) ? [{ value, label: value }, ...options] : options;
+  const shown = value && !list.some((o) => o.value === value) ? [{ value, label: value }, ...list] : list;
   return (
     <DropdownSelect
       id={id}
@@ -210,7 +234,7 @@ function BlockchainIdInput({ value, onChange, required, errorClass, placeholder,
       options={shown}
       required={required}
       errorClass={errorClass}
-      placeholder={options.length ? placeholder : 'Loading chains…'}
+      placeholder={options ? placeholder : 'Loading chains…'}
     />
   );
 }
@@ -265,6 +289,7 @@ export function SmartParamInput(props: SmartParamInputProps) {
             required={param.required}
             errorClass={errorClass}
             placeholder={param.placeholder}
+            inputClass={baseInputClass}
           />
         );
 
