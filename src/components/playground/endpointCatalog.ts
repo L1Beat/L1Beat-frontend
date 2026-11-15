@@ -976,6 +976,40 @@ export const REST_ENDPOINTS: EndpointDef[] = [
     suggestedNext: ['staking'],
   },
 
+  {
+    id: 'restaking',
+    method: 'GET',
+    path: '/api/v1/metrics/restaking',
+    title: 'Restaking',
+    description: 'L1s secured by restaked collateral: validators, weight, operators and vaults',
+    category: 'Staking',
+    params: [
+      {
+        name: 'subnet_id',
+        kind: 'query',
+        type: 'subnetId',
+        required: false,
+        default: '',
+        description: 'Only this L1 (exact subnet ID)',
+      },
+      {
+        name: 'chain_id',
+        kind: 'query',
+        type: 'string',
+        required: false,
+        default: '',
+        placeholder: '21Ths5Afqi5r4PaoV8r8cruGZWhN11y5rxvy89K8px7pKy3P8E',
+        description: 'Only this L1 (exact blockchain ID, CB58)',
+      },
+    ],
+    notes: [
+      'Covers Suzaku restaking only.',
+      'restaked_weight, total_pchain_weight and module_weight are decimal strings in the L1\'s own validator weight units, not AVAX. share_of_weight_percent is the restaked share of total weight.',
+      'Vault amounts (deposited, allocated, idle, limit) are in the collateral token\'s base units; divide by 10^decimals.',
+      'An unknown subnet_id or chain_id returns an empty l1s list.',
+    ],
+    suggestedNext: ['staking', 'chain-risk'],
+  },
   // DeFi
   {
     id: 'lending',
