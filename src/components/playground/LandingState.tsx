@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import {
   Blocks,
   Network,
@@ -41,6 +41,105 @@ function MethodBadge({ method }: { method: 'GET' | 'WS' }) {
   );
 }
 
+// What a developer needs to know before building on the API, shown under the featured queries.
+const C = ({ children }: { children: ReactNode }) => (
+  <code className="num text-[11.5px] text-foreground bg-muted/60 rounded px-1">{children}</code>
+);
+
+const USAGE: { title: string; body: ReactNode }[] = [
+  {
+    title: 'Versions',
+    body: (
+      <>
+        Every REST endpoint is under <C>/api/v1</C>. Within v1 we only add fields and endpoints. Renames or
+        removals ship as <C>/api/v2</C>, announced ahead of time on <a className="underline underline-offset-2 hover:text-foreground" href="https://x.com/l1beat_io" target="_blank" rel="noopener noreferrer">X</a>.
+      </>
+    ),
+  },
+  {
+    title: 'Responses and errors',
+    body: (
+      <>
+        JSON. Results come in <C>data</C>, with <C>meta</C> on paginated lists. Errors look like{' '}
+        <C>{'{"error":{"code","message"}}'}</C>: <C>INVALID_PARAMETER</C> (400), <C>NOT_FOUND</C> (404),{' '}
+        <C>RATE_LIMITED</C> (429), <C>INTERNAL_ERROR</C> (500). Unknown query parameters are ignored.
+      </>
+    ),
+  },
+  {
+    title: 'Rate limits',
+    body: (
+      <>
+        180 requests a minute per IP, with bursts of 30. <C>X-RateLimit-Remaining</C> shows what is left and a 429
+        carries <C>Retry-After</C>. Treasuries & ETFs has its own limit of 1,000 requests per 15 minutes.
+      </>
+    ),
+  },
+  {
+    title: 'Pagination',
+    body: (
+      <>
+        Pass <C>meta.next_cursor</C> back as <C>cursor</C> (as <C>before</C> on ICM Messages), or step{' '}
+        <C>offset</C> while <C>has_more</C> is true. Treat cursors as opaque.
+      </>
+    ),
+  },
+  {
+    title: 'Units and dates',
+    body: (
+      <>
+        P-Chain AVAX amounts are nAVAX strings (1 AVAX = 10<sup>9</sup> nAVAX) and token amounts are strings in
+        base units. USD values are numbers. Times are UTC; <C>days</C> windows are complete UTC days ending
+        yesterday.
+      </>
+    ),
+  },
+  {
+    title: 'Coverage and freshness',
+    body: (
+      <>
+        EVM, DeFi and ICM data cover the C-Chain (43114); P-Chain data covers every L1. Data runs about a block
+        behind the chain (see Sync Status), and responses can be cached for 60 seconds.
+      </>
+    ),
+  },
+  {
+    title: 'Use and credit',
+    body: (
+      <>
+        Free to use, with no key. Please credit <span className="text-foreground">Data: L1Beat</span> with a link
+        to l1beat.io. Provided as is, without an uptime guarantee.
+      </>
+    ),
+  },
+  {
+    title: 'Contact',
+    body: (
+      <>
+        Questions, bugs or higher limits:{' '}
+        <a className="underline underline-offset-2 hover:text-foreground" href="mailto:hello@l1beat.io">hello@l1beat.io</a> or{' '}
+        <a className="underline underline-offset-2 hover:text-foreground" href="https://x.com/l1beat_io" target="_blank" rel="noopener noreferrer">@l1beat_io</a>.
+      </>
+    ),
+  },
+];
+
+function UsingTheApi() {
+  return (
+    <section aria-labelledby="using-the-api">
+      <h2 id="using-the-api" className="text-[13px] font-medium text-foreground py-2">Using the API</h2>
+      <dl className="border-t border-border grid grid-cols-1 lg:grid-cols-2 lg:gap-x-8">
+        {USAGE.map((item) => (
+          <div key={item.title} className="py-3 border-b border-border/50">
+            <dt className="text-[12.5px] font-medium text-foreground">{item.title}</dt>
+            <dd className="mt-1 text-[12px] leading-5 text-muted-foreground">{item.body}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 interface LandingStateProps {
   onSelect: (endpointId: string, params: Record<string, string>) => void;
 }
@@ -56,7 +155,7 @@ export function LandingState({ onSelect }: LandingStateProps) {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-6 pt-6 pb-36 md:pb-6 space-y-6">
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-[18px] leading-6 font-semibold text-foreground">API playground</h1>
@@ -118,6 +217,8 @@ export function LandingState({ onSelect }: LandingStateProps) {
           })}
         </div>
       </div>
+
+      <UsingTheApi />
     </div>
   );
 }

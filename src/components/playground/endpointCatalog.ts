@@ -176,7 +176,10 @@ export const REST_ENDPOINTS: EndpointDef[] = [
         description: 'Block number to look up',
       },
     ],
-    suggestedNext: ['evm-txs', 'evm-blocks'],
+    notes: [
+      'Block 0 is the C-Chain genesis block: no transactions, block_time is null (its header time is 0), and genesis links to the network genesis data. Block 0 of other chains is not served.',
+    ],
+    suggestedNext: ['evm-txs', 'evm-blocks', 'genesis'],
   },
   {
     id: 'evm-txs',
@@ -532,6 +535,51 @@ export const REST_ENDPOINTS: EndpointDef[] = [
         description: 'Block number to look up',
       },
     ],
+    notes: ['Block 0 is the P-Chain genesis block, dated 2020-09-10.'],
+    suggestedNext: ['genesis'],
+  },
+
+  // Genesis
+  {
+    id: 'genesis',
+    method: 'GET',
+    path: '/api/v1/data/genesis',
+    title: 'Network Genesis',
+    description: 'Avalanche mainnet at launch: supply, unlock schedule, initial validators and chain IDs',
+    category: 'Genesis',
+    params: [],
+    notes: [
+      'From avalanchego\'s mainnet genesis config. Amounts are nAVAX strings (1 AVAX = 1,000,000,000 nAVAX).',
+      'Includes the genesis message, start_time, the P-Chain genesis block ID, the X-, C-Chain and AVAX asset IDs, supply totals, the unlock schedule, the 75 initial validators and the initially staked addresses, plus the raw C-Chain genesis.',
+      'About 74 KB. Individual balances are in Genesis Allocations.',
+    ],
+    suggestedNext: ['genesis-allocations', 'pchain-block-by-number'],
+  },
+  {
+    id: 'genesis-allocations',
+    method: 'GET',
+    path: '/api/v1/data/genesis/allocations',
+    title: 'Genesis Allocations',
+    description: 'The 5,390 AVAX allocations at launch, with their unlock schedules',
+    category: 'Genesis',
+    params: [
+      {
+        name: 'address',
+        kind: 'query',
+        type: 'string',
+        required: false,
+        default: '',
+        placeholder: 'avax1... or 0x...',
+        description: 'Only this address: avax1, X-avax1, P-avax1 or a 0x address',
+      },
+      sizedLimitParam('20', 1000),
+      offsetParam,
+    ],
+    notes: [
+      'In genesis order. x_chain_amount, total and the unlock amounts are nAVAX strings; address is shown without a chain prefix.',
+      'Page with offset while meta.has_more is true; meta.total is the number of allocations.',
+    ],
+    suggestedNext: ['genesis'],
   },
 
   // Subnets & Chains
@@ -861,6 +909,8 @@ export const REST_ENDPOINTS: EndpointDef[] = [
           'active_addresses',
           'active_senders',
           'fees_paid',
+          'fees_burned_base',
+          'fees_burned_total',
           'gas_used',
           'contracts',
           'deployers',
@@ -1366,6 +1416,7 @@ export const ENDPOINT_CATEGORIES: string[] = [
   'Health & System',
   'EVM Data',
   'P-Chain Data',
+  'Genesis',
   'Subnets & Chains',
   'Validators',
   'Metrics - Fees',
