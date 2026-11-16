@@ -10,10 +10,11 @@ import {
   Activity,
   Copy,
   Check,
+  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
 import { FEATURED_QUERIES, REST_ENDPOINTS, WS_ENDPOINTS, isWsEndpoint } from './endpointCatalog';
-import { PLAYGROUND_API_BASE } from './constants';
+import { PLAYGROUND_API_BASE, PLAYGROUND_OPENAPI_URL } from './constants';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Blocks,
@@ -57,12 +58,23 @@ const USAGE: { title: string; body: ReactNode }[] = [
     ),
   },
   {
+    title: 'OpenAPI spec',
+    body: (
+      <>
+        Every endpoint with its parameters and response schema, in OpenAPI 3:{' '}
+        <a className="underline underline-offset-2 hover:text-foreground" href={PLAYGROUND_OPENAPI_URL} target="_blank" rel="noopener noreferrer">openapi.json</a>.
+        Import it into Postman or Insomnia, or generate a typed client.
+      </>
+    ),
+  },
+  {
     title: 'Responses and errors',
     body: (
       <>
         JSON. Results come in <C>data</C>, with <C>meta</C> on paginated lists. Errors look like{' '}
         <C>{'{"error":{"code","message"}}'}</C>: <C>INVALID_PARAMETER</C> (400), <C>NOT_FOUND</C> (404),{' '}
-        <C>RATE_LIMITED</C> (429), <C>INTERNAL_ERROR</C> (500). Unknown query parameters are ignored.
+        <C>RATE_LIMITED</C> (429), <C>INTERNAL_ERROR</C> (500). Treasuries & ETFs returns{' '}
+        <C>{'{"error":"message"}'}</C> instead. Unknown query parameters are ignored.
       </>
     ),
   },
@@ -184,6 +196,15 @@ export function LandingState({ onSelect }: LandingStateProps) {
               )}
             </button>
           </div>
+          <a
+            href={PLAYGROUND_OPENAPI_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded border border-border text-[12px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            OpenAPI spec
+            <ExternalLink className="w-3 h-3" aria-hidden />
+          </a>
         </div>
 
         {/* Stats row */}
