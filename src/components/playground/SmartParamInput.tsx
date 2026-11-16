@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '../branding/ui/select';
 import { getChains } from '../../api';
+import { PLAYGROUND_API_BASE } from './constants';
 
 interface SmartParamInputProps {
   param: ParamDef;
@@ -52,7 +53,8 @@ function DropdownSelect({
   placeholder,
   id,
 }: DropdownSelectProps) {
-  const selectValue = toSelectValue(value);
+  // A required select has no "Any" item, so an empty value shows the placeholder instead.
+  const selectValue = required && value === '' ? '' : toSelectValue(value);
 
   return (
     <Select
@@ -165,6 +167,78 @@ function SubnetIdInput({ value, onChange, required, errorClass }: SubnetIdInputP
   );
 }
 
+// Active chains from the API itself, fetched once per page load and shared by every picker.
+// Only a successful, non-empty list is kept; a failed load is retried by the next picker.
+type ChainOption = { value: string; label: string };
+let activeChains: Promise<ChainOption[]> | null = null;
+function loadActiveChains(): Promise<ChainOption[] | null> {
+  activeChains ??= fetch(`${PLAYGROUND_API_BASE}/api/v1/data/chains?active=true&limit=100`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((b: { data?: { chain_id: string; chain_name?: string }[] }) => {
+      const list = (b?.data ?? [])
+        .map((c) => ({ value: c.chain_id, label: c.chain_name || c.chain_id }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+      if (!list.length) throw new Error('no chains');
+      return list;
+    });
+  return activeChains.catch(() => {
+    activeChains = null;
+    return null;
+  });
+}
+
+function BlockchainIdInput({ value, onChange, required, errorClass, placeholder, id, inputClass }: {
+  value: string;
+  onChange: (v: string) => void;
+  required: boolean;
+  errorClass: string;
+  placeholder?: string;
+  id?: string;
+  inputClass: string;
+}) {
+  // undefined while loading, null if the list couldn't be loaded.
+  const [options, setOptions] = useState<ChainOption[] | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    loadActiveChains().then((o) => live && setOptions(o));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Without the list, the ID can still be typed in.
+  if (options === null) {
+    return (
+      <input
+        id={id}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value.trim())}
+        placeholder="Chain list unavailable: paste a CB58 blockchain ID"
+        className={inputClass}
+      />
+    );
+  }
+
+  const list = options ?? [];
+  // A chain from a shared link that isn't active any more still shows as selected.
+  const shown = value && !list.some((o) => o.value === value) ? [{ value, label: value }, ...list] : list;
+  return (
+    <DropdownSelect
+      id={id}
+      value={value}
+      onChange={onChange}
+      options={shown}
+      required={required}
+      errorClass={errorClass}
+      placeholder={options ? placeholder : 'Loading chains…'}
+    />
+  );
+}
+
 function ChainIdInput() {
   return (
     <div
@@ -205,6 +279,19 @@ export function SmartParamInput(props: SmartParamInputProps) {
           />
         );
       }
+
+      case 'blockchainId':
+        return (
+          <BlockchainIdInput
+            id={inputId}
+            value={value}
+            onChange={onChange}
+            required={param.required}
+            errorClass={errorClass}
+            placeholder={param.placeholder}
+            inputClass={baseInputClass}
+          />
+        );
 
       case 'subnetId':
         return (
