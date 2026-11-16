@@ -861,6 +861,8 @@ export const REST_ENDPOINTS: EndpointDef[] = [
           'active_addresses',
           'active_senders',
           'fees_paid',
+          'fees_burned_base',
+          'fees_burned_total',
           'gas_used',
           'contracts',
           'deployers',
