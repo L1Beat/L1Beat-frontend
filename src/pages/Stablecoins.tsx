@@ -17,7 +17,7 @@ import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { StatStrip } from '../components/instrument';
+import { StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import {
   Tooltip,
@@ -43,7 +43,7 @@ import type {
 import { chartPointerProps } from '../utils/chartPointer';
 import { OTHERS, STACK_OTHERS, STACK_STYLES, stackGroups } from '../utils/stackGroups';
 import { isTokenizedFund } from '../utils/tokenizedFunds';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 type SortKey =
   | 'supplyUsd'
@@ -189,6 +189,7 @@ export function Stablecoins() {
   // it and trends fill in once it arrives.
   const [supplyHist, setSupplyHist] = useState<Map<string, StablecoinSeriesPoint[]>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The last few days of daily volume, so the headline quotes the same number
   // as the chart's latest bar.
@@ -196,7 +197,6 @@ export function Stablecoins() {
 
   const [peg, setPeg] = useState<string>('All');
   const [origin, setOrigin] = useState<OriginFilter>('All');
-  const [issuerFilter, setIssuerFilter] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('supplyUsd');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -210,6 +210,7 @@ export function Stablecoins() {
         list = list.filter(notFund);
         setCoins(list);
         setFx(rates);
+        setLoadedAt(Date.now());
         // Logos resolve on a separate, slower call — render the page first,
         // then swap in real logos when GeckoTerminal answers.
         if (list.length) {
@@ -286,8 +287,40 @@ export function Stablecoins() {
     }));
   }, [coins, fx, supplyHist]);
 
+  // The issuer picked in the chart legend or the issuer card lives in the URL
+  // (?issuer=Circle), as Lending keeps ?protocol=, so a link opens on that
+  // issuer's numbers. Bands follow the chart's split: big issuers alone, the
+  // rest as Others; any issuer can still be picked by name.
+  const [params, setParams] = useSearchParams();
+  const setFocus = (name: string | null) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (name) next.set('issuer', name);
+        else next.delete('issuer');
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  const groups = useMemo(() => stackGroups(issuerSupplyNow(coins, fx)), [coins, fx]);
+  const focusId = params.get('issuer');
+  const focusMembers = useMemo(() => {
+    if (!focusId) return [];
+    if (focusId === OTHERS) return groups.others;
+    // Only an issuer with net supply: one whose coins are all double-counted
+    // (like avUSD) has nothing to show, so the link falls back to everything.
+    return [...groups.own, ...groups.others].includes(focusId) ? [focusId] : [];
+  }, [focusId, groups]);
+  const focus = focusMembers.length ? focusId : null;
+  // With an issuer picked, every number on the page is that issuer's own.
+  const scoped = useMemo(
+    () => (focus ? enriched.filter((c) => focusMembers.includes(c.issuer || c.symbol)) : enriched),
+    [enriched, focus, focusMembers],
+  );
+  const allSupply = useMemo(() => enriched.reduce((s, c) => s + (c.doublecounted ? 0 : c.supplyUsd), 0), [enriched]);
+
   const totals = useMemo(() => {
-    if (!enriched.length) {
+    if (!scoped.length) {
       return {
         supply: 0, volume: 0, holders: 0, count: 0, nativeUsd: 0, bridgedUsd: 0,
         change7d: 0, hasTrend: false, prev30d: 0, majorsUsd: 0,
@@ -302,7 +335,7 @@ export function Stablecoins() {
     let prev30d = 0;
     let majorsUsd = 0;
     let hasTrend = false;
-    for (const c of enriched) {
+    for (const c of scoped) {
       volume += c.volumeUsd;
       holders += c.holders || 0;
       if (c.trend) hasTrend = true;
@@ -323,16 +356,17 @@ export function Stablecoins() {
     }
     const change7d = prev7d > 0 ? (supply - prev7d) / prev7d : 0;
     return {
-      supply, volume, holders, count: enriched.length, nativeUsd, bridgedUsd,
+      supply, volume, holders, count: scoped.length, nativeUsd, bridgedUsd,
       change7d, hasTrend, prev30d, majorsUsd,
     };
-  }, [enriched]);
+  }, [scoped]);
 
   const latestVolume = useMemo(() => {
-    const meta = new Map(coins.map((c) => [c.token.toLowerCase(), { decimals: c.decimals, peg: c.peg }]));
+    const inScope = new Set(scoped.map((c) => c.token.toLowerCase()));
+    const meta = new Map(coins.filter((c) => inScope.has(c.token.toLowerCase())).map((c) => [c.token.toLowerCase(), { decimals: c.decimals, peg: c.peg }]));
     const pts = aggregateSeries(volumeDays, meta, 'volume', fx);
     return pts.length ? pts[pts.length - 1] : null;
-  }, [volumeDays, coins, fx]);
+  }, [volumeDays, coins, fx, scoped]);
 
   const issuerSlices = useMemo(() => {
     if (!enriched.length) return [];
@@ -354,6 +388,15 @@ export function Stablecoins() {
     if (rest > 0) top.push({ name: 'Others', value: rest });
     return top;
   }, [enriched]);
+
+  // The issuer split in words, as Lending lists each protocol with its amount.
+  const split = useMemo(() => {
+    const vals = new Map(issuerSupplyNow(coins, fx));
+    const parts = groups.own.map((n) => ({ name: n, value: vals.get(n) ?? 0 }));
+    const rest = groups.others.reduce((s, n) => s + (vals.get(n) ?? 0), 0);
+    if (rest > 0) parts.push({ name: 'others', value: rest });
+    return parts;
+  }, [coins, fx, groups]);
 
   // Biggest 7d supply gainers/losers. Floor at $1M supply so dust coins with
   // jumpy percentages don't dominate the highlight strip.
@@ -380,10 +423,7 @@ export function Stablecoins() {
     if (origin !== 'All') {
       rows = rows.filter((r) => (origin === 'Bridged' ? r.bridged : !r.bridged));
     }
-    if (issuerFilter) {
-      const target = issuerFilter.toLowerCase();
-      rows = rows.filter((r) => (r.issuer || r.symbol).toLowerCase() === target);
-    }
+    if (focus) rows = rows.filter((r) => focusMembers.includes(r.issuer || r.symbol));
     const q = query.trim().toLowerCase();
     if (q) {
       rows = rows.filter(
@@ -404,7 +444,7 @@ export function Stablecoins() {
       return (a.supplyUsd - b.supplyUsd) * dir;
     });
     return rows;
-  }, [enriched, peg, origin, issuerFilter, query, sortKey, sortDir]);
+  }, [enriched, peg, origin, focus, focusMembers, query, sortKey, sortDir]);
 
   // Available peg filters, ordered by aggregate supply (USD first, then the
   // larger currencies). 'All' always leads.
@@ -439,43 +479,67 @@ export function Stablecoins() {
           aria-label="Stablecoin supply history"
         >
           <div className="md:absolute md:inset-0 flex flex-col">
-            <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5">
-              <h1 className="text-[18px] leading-6 font-semibold text-foreground">Stablecoins</h1>
-              {totals.supply > 0 ? (
-                <>
-                  <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
-                    Stablecoins on Avalanche C‑Chain total <span className="tabular-nums">{fmtUsd(totals.supply)}</span>.
-                  </p>
-                  <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
-                    {issuerSlices[0] && (
-                      <>
-                        {issuerSlices[0].name} issues <span className="num">{Math.round((issuerSlices[0].value / totals.supply) * 100)}%</span> of it
-                        {latestVolume ? ', and ' : '.'}
-                      </>
-                    )}
-                    {latestVolume && (
-                      <>
-                        <span className="num">{fmtUsd(latestVolume.v)}</span> moved on{' '}
-                        {new Date(latestVolume.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}.
-                      </>
-                    )}
-                  </p>
-                  <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
-                    Counts fiat-pegged stablecoins on the C&#8209;Chain, with non-dollar coins at current exchange rates. Tokenized
-                    money-market funds like BUIDL and BENJI are funds, not stablecoins, so they are left out and listed
-                    on <Link to="/rwa" className="text-foreground hover:underline underline-offset-2">Real-world assets</Link>. So are coins
-                    backed by other stablecoins, like avUSD, so the same dollars aren't counted twice.
-                  </p>
-                </>
-              ) : error ? (
-                <p className="mt-3 text-[13px] text-muted-foreground">Stablecoin data couldn't be loaded. Try again in a minute.</p>
-              ) : (
-                <div className="mt-3 h-9 w-[min(560px,80vw)] rounded bg-muted animate-pulse" />
-              )}
+            <div className="max-w-7xl 2xl:max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pt-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-[18px] leading-6 font-semibold text-foreground">Stablecoins</h1>
+                {totals.supply > 0 && focus ? (
+                  <>
+                    <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+                      {focus === OTHERS ? `${focusMembers.length} smaller issuers issue` : `${focus} issues`}{' '}
+                      <span className="tabular-nums">{fmtUsd(totals.supply)}</span> of stablecoins on Avalanche C&#8209;Chain.
+                    </p>
+                    <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+                      That&apos;s <span className="num">{allSupply > 0 ? Math.round((totals.supply / allSupply) * 100) : 0}%</span> of the{' '}
+                      <span className="num">{fmtUsd(allSupply)}</span> total, across <span className="num">{scoped.length}</span>{' '}
+                      {scoped.length === 1 ? 'coin' : 'coins'}
+                      {latestVolume ? (
+                        <>
+                          , and <span className="num">{fmtUsd(latestVolume.v)}</span> of it moved on{' '}
+                          {new Date(latestVolume.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}.{' '}
+                        </>
+                      ) : (
+                        '. '
+                      )}
+                      <button type="button" onClick={() => setFocus(null)} className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                        Show all issuers
+                      </button>
+                    </p>
+                  </>
+                ) : totals.supply > 0 ? (
+                  <>
+                    <p className="mt-2 text-[26px] sm:text-[34px] leading-tight font-medium text-foreground max-w-4xl">
+                      Stablecoins on Avalanche C&#8209;Chain total <span className="tabular-nums">{fmtUsd(totals.supply)}</span>.
+                    </p>
+                    <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
+                      {split.map((p, i) => (
+                        <span key={p.name}>
+                          {i > 0 && (i === split.length - 1 ? ' and ' : ', ')}
+                          {p.name} <span className="num">{fmtUsd(p.value)}</span>
+                        </span>
+                      ))}
+                      .
+                      {latestVolume && (
+                        <>
+                          {' '}
+                          <span className="num">{fmtUsd(latestVolume.v)}</span> moved on{' '}
+                          {new Date(latestVolume.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}.
+                        </>
+                      )}
+                    </p>
+                  </>
+                ) : error ? (
+                  <p className="mt-3 text-[13px] text-muted-foreground">Stablecoin data couldn't be loaded. Try again in a minute.</p>
+                ) : (
+                  <div className="mt-3 h-9 w-[min(560px,80vw)] rounded bg-muted animate-pulse" />
+                )}
+              </div>
+              <div className="shrink-0">
+                <UpdatedAgo at={loadedAt} />
+              </div>
             </div>
             <div className="relative h-[520px] md:h-auto md:flex-1 md:min-h-0 mt-3">
               <SectionErrorBoundary label="the supply history chart">
-                <SupplyHistoryCard coins={coins} fx={fx} hero />
+                <SupplyHistoryCard coins={coins} fx={fx} hero stackedOnly focus={focus} onFocus={setFocus} />
               </SectionErrorBoundary>
             </div>
           </div>
@@ -497,10 +561,8 @@ export function Stablecoins() {
               slices={issuerSlices}
               coins={enriched}
               total={totals.supply}
-              selected={issuerFilter}
-              onSelect={(name) =>
-                setIssuerFilter((current) => (current === name ? null : name))
-              }
+              selected={focus}
+              onSelect={(name) => setFocus(focus === name ? null : name)}
             />
           </SectionErrorBoundary>
           <SectionErrorBoundary label="native vs bridged">
@@ -545,15 +607,15 @@ export function Stablecoins() {
                     {o}
                   </button>
                 ))}
-                {issuerFilter && (
+                {focus && (
                   <>
                     <span className="w-px h-4 bg-border mx-1" />
                     <button
-                      onClick={() => setIssuerFilter(null)}
+                      onClick={() => setFocus(null)}
                       className="inline-flex items-center gap-1 h-7 px-2 rounded border border-border text-[11px] font-medium text-foreground hover:bg-accent transition-colors"
                       title="Clear issuer filter"
                     >
-                      <span>Issuer: {issuerFilter}</span>
+                      <span>Issuer: {focus === OTHERS ? 'smaller issuers' : focus}</span>
                       <X className="w-3 h-3" />
                     </button>
                   </>
@@ -715,6 +777,13 @@ export function Stablecoins() {
             )}
           </div>
         </SectionErrorBoundary>
+        <p className="text-[11px] leading-relaxed text-muted-foreground max-w-4xl">
+          Counts fiat-pegged stablecoins on the C&#8209;Chain, read from each token&apos;s contract, with non-dollar coins at current
+          exchange rates. Tokenized money-market funds like BUIDL and BENJI are funds, not stablecoins, so they are left out and
+          listed on <Link to="/rwa" className="text-foreground hover:underline underline-offset-2">Real-world assets</Link>. Coins
+          backed by other stablecoins, like avUSD, are listed but left out of the total, so the same dollars aren&apos;t counted
+          twice. Volume is the dollar value of transfers on each UTC day. Holders are addresses.
+        </p>
         </div>
       </div>
     </TooltipProvider>
@@ -768,6 +837,17 @@ const CHART_M = { top: 16, right: 20, bottom: 28, left: 60 };
 //     bucket means no activity, i.e. 0.
 // Monetary metrics (supply, volume) are scaled by 10^decimals and converted to
 // USD via the token's peg; counts are taken as plain integers.
+/** Each issuer's supply today in dollars, leaving out double-counted coins. */
+function issuerSupplyNow(coins: Stablecoin[], fx: FxRates): [string, number][] {
+  const m = new Map<string, number>();
+  for (const c of coins) {
+    if (c.doublecounted) continue;
+    const v = pegToUsd(toUnits(c.supply, c.decimals), c.peg, fx);
+    if (v > 0) m.set(c.issuer || c.symbol, (m.get(c.issuer || c.symbol) ?? 0) + v);
+  }
+  return [...m.entries()];
+}
+
 function aggregateSeries(
   series: StablecoinSeries[],
   meta: Map<string, { decimals: number; peg: string; doublecounted?: boolean }>,
@@ -900,7 +980,8 @@ export function SupplyHistoryCard({
   const chartH = hero ? heroSize.h : CHART_H;
 
   const monetary = view.metric === 'supply' || view.metric === 'volume';
-  const stackedView = stacked && view.metric === 'supply';
+  // Every metric stacks by issuer: supply as areas, volume and transfers as bars.
+  const stackedView = stacked;
 
   const meta = useMemo(() => {
     const m = new Map<string, { decimals: number; peg: string; issuer: string; doublecounted: boolean }>();
@@ -914,6 +995,17 @@ export function SupplyHistoryCard({
     }
     return m;
   }, [coins]);
+
+  // Which issuers get their own band, from today's supply, so the bands are
+  // the same issuers on every metric and range. The page splits the same way.
+  const issuerGroups = useMemo(() => stackGroups(issuerSupplyNow(coins, fx)), [coins, fx]);
+
+  // An issuer picked in the legend, as on Lending: its band moves to the
+  // bottom of the stack so its own shape reads from zero, and the rest fade.
+  // The page can own it (?issuer=). Click it again to clear.
+  const [ownFocus, setOwnFocus] = useState<string | null>(null);
+  const focus = focusProp !== undefined ? focusProp : ownFocus;
+  const setFocus = (name: string | null) => (onFocus ? onFocus(name) : setOwnFocus(name));
 
   useEffect(() => {
     let alive = true;
@@ -1014,53 +1106,69 @@ export function SupplyHistoryCard({
   const stackKeys = useMemo(() => {
     if (!stackedView || points.length < 2) return null;
     const periods = points.map((p) => p.t);
+    const at = new Map(periods.map((t, i) => [t, i]));
+    // Supply is a level, carried forward between snapshots; volume and
+    // transfers are amounts per period, counted only where they happened.
+    const level = view.metric === 'supply' || view.metric === 'holders';
+    const dollars = view.metric === 'supply' || view.metric === 'volume';
     const byIssuer = new Map<string, number[]>();
     for (const s of series) {
       const info = meta.get(s.token.toLowerCase());
       if (!info) continue;
-      // Stacked view is supply-only — exclude double-counted coins so the bands
-      // sum to the same net total as the single line.
-      if (info.doublecounted) continue;
+      // Supply bands leave out double-counted coins so they sum to the same
+      // net total as the headline.
+      if (level && info.doublecounted) continue;
       const pts = s.data
-        .map((p) => ({ t: Date.parse(p.period), v: pegToUsd(toUnits(p.value, info.decimals), info.peg, fx) }))
-        .filter((p) => !Number.isNaN(p.t))
+        .map((p) => {
+          const raw = dollars ? toUnits(p.value, info.decimals) : Number(p.value);
+          return { t: Date.parse(p.period), v: dollars ? pegToUsd(raw, info.peg, fx) : raw };
+        })
+        .filter((p) => !Number.isNaN(p.t) && Number.isFinite(p.v))
         .sort((a, b) => a.t - b.t);
       if (!pts.length) continue;
       const arr = byIssuer.get(info.issuer) ?? new Array(periods.length).fill(0);
-      let pi = 0;
-      let last = 0;
-      let started = false;
-      for (let i = 0; i < periods.length; i++) {
-        while (pi < pts.length && pts[pi].t <= periods[i]) {
-          last = pts[pi].v;
-          started = true;
-          pi++;
+      if (level) {
+        let pi = 0;
+        let last = 0;
+        let started = false;
+        for (let i = 0; i < periods.length; i++) {
+          while (pi < pts.length && pts[pi].t <= periods[i]) {
+            last = pts[pi].v;
+            started = true;
+            pi++;
+          }
+          if (started) arr[i] += last;
         }
-        if (started) arr[i] += last;
+      } else {
+        for (const p of pts) {
+          const i = at.get(p.t);
+          if (i != null) arr[i] += p.v;
+        }
       }
       byIssuer.set(info.issuer, arr);
     }
     if (byIssuer.size === 0) return null;
-    const lastIdx = periods.length - 1;
-    const groups = stackGroups([...byIssuer.entries()].map(([name, v]) => [name, v[lastIdx]]));
-    const keys = groups.own.map((name, i) => ({ name, ...STACK_STYLES[i], values: byIssuer.get(name)! }));
-    if (groups.others.length) {
+    // Bands follow today's supply; a picked issuer too small for its own band
+    // gets one, so the pick always shows.
+    const own = issuerGroups.own.filter((n) => byIssuer.has(n));
+    if (focus && focus !== OTHERS && byIssuer.has(focus) && !own.includes(focus)) own.push(focus);
+    const keys = own.map((name, i) => ({
+      name,
+      ...(STACK_STYLES[i] ?? STACK_STYLES[STACK_STYLES.length - 1]),
+      values: byIssuer.get(name)!,
+    }));
+    const rest = [...byIssuer.keys()].filter((n) => !own.includes(n));
+    if (rest.length) {
       const others = new Array(periods.length).fill(0);
-      for (const name of groups.others) {
+      for (const name of rest) {
         const v = byIssuer.get(name)!;
         for (let i = 0; i < periods.length; i++) others[i] += v[i];
       }
       keys.push({ name: OTHERS, ...STACK_OTHERS, values: others });
     }
     return { periods, keys };
-  }, [stackedView, points, series, meta, fx]);
+  }, [stackedView, points, series, meta, fx, view.metric, issuerGroups, focus]);
 
-  // An issuer picked in the legend, as on Lending: its band moves to the
-  // bottom of the stack so its own shape reads from zero, and the rest fade.
-  // Click it again to clear.
-  const [ownFocus, setOwnFocus] = useState<string | null>(null);
-  const focus = focusProp !== undefined ? focusProp : ownFocus;
-  const setFocus = (name: string | null) => (onFocus ? onFocus(name) : setOwnFocus(name));
   const activeFocus = focus && stackKeys?.keys.some((k) => k.name === focus) ? focus : null;
   const stack = useMemo(() => {
     if (!stackKeys || !geom) return null;
@@ -1081,10 +1189,14 @@ export function SupplyHistoryCard({
         // smoothed curve draws ramps that never happened.
         .curve(d3.curveLinear);
       const dim = activeFocus != null && activeFocus !== k.name;
-      return { name: k.name, color: k.color, opacity: dim ? k.opacity * 0.15 : k.opacity, path: gen(idxArr) || '' };
+      // Volume and transfers are drawn as stacked bars, one per period.
+      const rects = flow
+        ? periods.map((t, i) => ({ i, x: geom.x(t) - geom.barW / 2, y: geom.y(upper[i]), h: Math.max(0, geom.y(lower[i]) - geom.y(upper[i])) }))
+        : null;
+      return { name: k.name, color: k.color, opacity: dim ? k.opacity * 0.15 : k.opacity, path: flow ? '' : gen(idxArr) || '', rects };
     });
     return { bands };
-  }, [stackKeys, geom, activeFocus]);
+  }, [stackKeys, geom, activeFocus, flow]);
 
   // Axis labels: compact when the axis spans from zero, full-precision when
   // zoomed (compact "3.18M" can't tell 3,176,235 from 3,176,824 apart).
@@ -1092,7 +1204,7 @@ export function SupplyHistoryCard({
     if (n <= 0) return monetary ? '$0' : '0';
     if (geom?.zoom) return (monetary ? '$' : '') + Math.round(n).toLocaleString();
     // Axis labels drop trailing zeros: $800M and $1.5B, not $800.00M.
-    return monetary ? fmtUsd(n).replace(/\.?0+([KMB])$/, '$1') : fmtCount(n);
+    return (monetary ? fmtUsd(n) : fmtCount(n)).replace(/\.?0+([KMB])$/, '$1');
   };
   // Tooltip always shows the exact value.
   const fmtValue = (n: number): string =>
@@ -1144,6 +1256,12 @@ export function SupplyHistoryCard({
     if (!stackKeys || !points.length) return null;
     const label = focusKey ? focusKey.name : 'Total';
     const lastI = points.length - 1;
+    // Volume and transfers are per period: the readout is a day (or week), not a level.
+    if (flow) {
+      const i = hover != null && points[hover] ? hover : lastI;
+      const when = fmtDate(new Date(points[i].t));
+      return { value: stackValue(i), sub: hover != null ? `${label}, ${when}` : `${label}, latest: ${when}${view.granularity === 'week' ? '; bars are weeks' : ''}` };
+    }
     if (hover != null && points[hover]) {
       return { value: stackValue(hover), sub: `${label} on ${d3.utcFormat('%a, %b %d, %Y')(new Date(points[hover].t))}` };
     }
@@ -1214,7 +1332,7 @@ export function SupplyHistoryCard({
       active ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
     }`;
   const group = 'inline-flex items-center gap-px p-px rounded border border-border bg-background';
-  const stackedToggle = metric === 'supply' && !stackedOnly && (
+  const stackedToggle = !stackedOnly && (
     <div className={group} role="tablist" aria-label="Composition">
       {([['total', 'Total'], ['stacked', 'By issuer']] as const).map(([key, label]) => (
         <button key={key} role="tab" aria-selected={(key === 'stacked') === stacked} onClick={() => setStacked(key === 'stacked')} className={seg((key === 'stacked') === stacked)}>
@@ -1354,9 +1472,17 @@ export function SupplyHistoryCard({
                 ))}
 
                 {stack ? (
-                  stack.bands.map((b) => (
-                    <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
-                  ))
+                  stack.bands.map((b) =>
+                    b.rects ? (
+                      <g key={b.name}>
+                        {b.rects.map((r) => (
+                          <rect key={r.i} x={r.x} y={r.y} width={geom.barW} height={r.h} fill={b.color} fillOpacity={b.opacity * (hover != null && hover !== r.i ? 0.45 : 1)} />
+                        ))}
+                      </g>
+                    ) : (
+                      <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
+                    ),
+                  )
                 ) : flow ? (
                   points.map((p, i) => (
                     <rect
@@ -1528,9 +1654,17 @@ export function SupplyHistoryCard({
             ))}
 
             {stack ? (
-              stack.bands.map((b) => (
-                <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
-              ))
+              stack.bands.map((b) =>
+                b.rects ? (
+                  <g key={b.name}>
+                    {b.rects.map((r) => (
+                      <rect key={r.i} x={r.x} y={r.y} width={geom.barW} height={r.h} fill={b.color} fillOpacity={b.opacity * (hover != null && hover !== r.i ? 0.45 : 1)} />
+                    ))}
+                  </g>
+                ) : (
+                  <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
+                ),
+              )
             ) : flow ? (
               points.map((p, i) => (
                 <rect
