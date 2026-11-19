@@ -554,11 +554,12 @@ export interface Stablecoin {
   category?: string;
   // Tokenized-funds feed only. USD per whole share and the row's USD value,
   // null when no fresh on-chain price exists. price_source is 'peg' for $1
-  // funds or 'erc4626' for a vault's share price read on-chain; price_at is
-  // that read's time (null for peg prices).
+  // funds, 'erc4626' or 'erc7540' for a vault's share price read on-chain;
+  // price_at is the read's time, or the vault's NAV time for erc7540 (null
+  // for peg prices).
   price_usd?: number | null;
   value_usd?: number | null;
-  price_source?: 'peg' | 'erc4626' | null;
+  price_source?: string | null;
   price_at?: string | null;
 }
 

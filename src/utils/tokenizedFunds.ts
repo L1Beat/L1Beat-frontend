@@ -34,15 +34,30 @@ const FUND_ADDRESSES = new Set<string>(TOKENIZED_FUNDS.map((f) => f.token));
 export const isTokenizedFund = (token: string) => FUND_ADDRESSES.has(token.toLowerCase());
 
 // USD per share, from the feed's on-chain pricing: 'peg' for the $1 funds,
-// 'erc4626' for a vault's share price. null when there is no fresh price
+// 'erc4626' or 'erc7540' for a vault's share price. null when there is no fresh price
 // (floating-NAV funds without an on-chain price, or a read older than 24h).
 // Never fall back to $1 for those. A row from a feed without price fields
 // (the old stablecoins fallback) is priced only when its peg is USD.
-export function fundPrice(c: Pick<Stablecoin, 'peg' | 'price_usd'>): number | null {
-  if (c.price_usd !== undefined) return c.price_usd != null && c.price_usd > 0 ? c.price_usd : null;
+//
+// One basis for every dollar figure: when the feed sends value_usd, the price
+// is value_usd / shares, so today's value, the 30-day value and the chart all
+// multiply shares by the same number and can't drift apart.
+export function fundPrice(c: Pick<Stablecoin, 'peg' | 'price_usd' | 'value_usd' | 'supply' | 'decimals'>): number | null {
+  if (c.price_usd !== undefined) {
+    if (c.price_usd == null || !(c.price_usd > 0)) return null;
+    const shares = Number(c.supply) / 10 ** c.decimals;
+    return c.value_usd != null && shares > 0 ? c.value_usd / shares : c.price_usd;
+  }
   return c.peg?.toUpperCase() === 'USD' ? 1 : null;
 }
-export const isPricedFund = (c: Pick<Stablecoin, 'peg' | 'price_usd'>) => fundPrice(c) != null;
+export const isPricedFund = (c: Parameters<typeof fundPrice>[0]) => fundPrice(c) != null;
+
+// Where a price comes from. 'peg' only when the feed says so, or for a peg USD
+// row from a feed without price fields; anything else priced is on-chain.
+function priceSourceOf(c: Pick<Stablecoin, 'peg' | 'price_source' | 'price_usd'>): string {
+  if (c.price_source) return c.price_source;
+  return c.price_usd === undefined && c.peg?.toUpperCase() === 'USD' ? 'peg' : 'onchain';
+}
 
 // What kind of fund each token is. The feed has no type field, so this is
 // kept here by symbol; an unknown symbol shows no type.
@@ -72,7 +87,8 @@ export interface FundRow {
   priced: boolean;
   /** USD per share, or null. */
   price: number | null;
-  priceSource: 'peg' | 'erc4626' | null;
+  /** 'peg' for $1 funds; any other value is an on-chain vault price. */
+  priceSource: string | null;
   /** Epoch ms of the on-chain price read; null for peg prices. */
   priceAt: number | null;
   /** Shares outstanding. */
@@ -136,11 +152,11 @@ export async function loadTokenizedFunds(evmChainId = 43114): Promise<FundRow[]>
       type: FUND_TYPES[coin.symbol.toUpperCase()] ?? null,
       priced: price != null,
       price,
-      priceSource: price == null ? null : (coin.price_source ?? 'peg'),
+      priceSource: price == null ? null : priceSourceOf(coin),
       priceAt: Number.isFinite(at) ? at : null,
       shares,
-      // The feed's own value when it sends one; shares at the price otherwise.
-      value: price == null ? null : (coin.value_usd ?? shares * price),
+      // Equals the feed's value_usd when it sends one (see fundPrice).
+      value: price == null ? null : shares * price,
       value30d: price != null && shares30d != null ? shares30d * price : null,
       holders: coin.holders,
       sharesSeries: sharesSeries.length > 1 ? sharesSeries : [],

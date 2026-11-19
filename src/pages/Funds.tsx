@@ -255,12 +255,14 @@ function ago(ms: number): string {
 /** Share price, with where it comes from: a $1 peg or an on-chain vault read. */
 function Price({ row, align = 'right' }: { row: FundRow; align?: 'left' | 'right' }) {
   if (row.price == null) return <span className="text-[11px] text-muted-foreground">n/a</span>;
-  const digits = row.priceSource === 'erc4626' ? 4 : 2;
+  // Anything other than a $1 peg is an on-chain vault price (ERC-4626 or ERC-7540).
+  const vault = row.priceSource !== 'peg';
+  const digits = vault ? 4 : 2;
   return (
     <span className={`inline-flex flex-col ${align === 'right' ? 'items-end' : 'items-start'}`}>
       <span className="num text-[13px] text-foreground">${row.price.toFixed(digits)}</span>
       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-        {row.priceSource === 'erc4626' ? (row.priceAt != null ? `vault, read ${ago(row.priceAt)}` : 'vault') : '$1 a share'}
+        {vault ? (row.priceAt != null ? `vault price, ${ago(row.priceAt)}` : 'vault price') : '$1 a share'}
       </span>
     </span>
   );
