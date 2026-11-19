@@ -101,8 +101,8 @@ const RWA_CONFIG: AssetPageConfig = {
   method: (
     <>
       Supply and holders are read from each token&apos;s contract on the C&#8209;Chain. Prices are on-chain only: $1 a share for
-      funds pegged to the dollar, the vault&apos;s own share price for ERC-4626 and ERC-7540 vaults, and RedStone feeds for fund
-      NAVs and Securitize&apos;s daily closing price. An asset without an on-chain price is listed in tokens and left out of every
+      funds pegged to the dollar, the vault&apos;s own share price for ERC-4626 and ERC-7540 vaults, RedStone feeds for fund
+      NAVs and Securitize&apos;s daily closing price, and Chainlink&apos;s XAU/USD for gold. An asset without an on-chain price is listed in tokens and left out of every
       dollar figure. The chart values past holdings at today&apos;s prices. Holders are addresses, and one address can hold for
       many clients. Platforms are the companies that put each asset on-chain, such as Securitize for BlackRock&apos;s BUIDL.
     </>
@@ -414,6 +414,7 @@ const SOURCE_LABEL: Record<string, string> = {
   erc4626: 'vault price',
   erc7540: 'vault price',
   redstone: 'RedStone NAV feed',
+  chainlink: 'Chainlink price feed',
 };
 
 /** Share price, with where it comes from: a $1 peg, a vault read or a NAV feed. */
@@ -426,7 +427,11 @@ function Price({ row, align = 'right' }: { row: FundRow; align?: 'left' | 'right
     ? '$1 a share'
     : equity && row.priceSource === 'redstone'
       ? 'RedStone daily close'
-      : (SOURCE_LABEL[row.priceSource ?? ''] ?? 'on-chain price');
+      : row.category === 'commodity' && row.priceSource === 'chainlink'
+        ? // Gold is priced per troy ounce off Chainlink's XAU/USD; it doesn't
+          // trade on weekends, so the read can be a few days old.
+          'Chainlink XAU/USD'
+        : (SOURCE_LABEL[row.priceSource ?? ''] ?? 'on-chain price');
   // Four decimals show a vault's drift from $1; big NAVs like $977.30 and
   // share prices need two.
   const digits = peg || equity || row.price >= 100 ? 2 : 4;
