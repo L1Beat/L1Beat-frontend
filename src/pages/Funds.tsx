@@ -56,16 +56,29 @@ export function Funds() {
   const [fx, setFx] = useState<FxRates | null>(null);
   const [state, setState] = useState<Load>('loading');
 
+  // The chart needs only the fund list and FX rates, so it mounts (and shows
+  // its own spinner) without waiting on the per-fund history the table uses.
+  // The list request is cached, so both effects share one call.
   useEffect(() => {
     let alive = true;
-    // The list request is cached, so the chart's coin metadata and the rows
-    // share one call.
-    Promise.all([loadTokenizedFunds(), getStablecoins(43114, FUNDS_FEED), getFxRates()])
-      .then(([r, c, rates]) => {
+    Promise.all([getStablecoins(43114, FUNDS_FEED), getFxRates()])
+      .then(([c, rates]) => {
         if (!alive) return;
-        setRows(r);
         setCoins(c);
         setFx(rates);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    loadTokenizedFunds()
+      .then((r) => {
+        if (!alive) return;
+        setRows(r);
         setState(r.length ? 'ready' : 'error');
       })
       .catch(() => alive && setState('error'));
@@ -233,6 +246,17 @@ function FundTable({ rows, state }: { rows: FundRow[]; state: Load }) {
                 <dd className="num text-[13px] text-foreground">{r.holders.toLocaleString('en-US')}</dd>
               </div>
             </dl>
+            <div className="mt-3 pl-8">
+              <a
+                href={`https://snowtrace.io/token/${r.token}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded border border-border text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Snowtrace
+              </a>
+            </div>
           </li>
         ))}
       </ul>
