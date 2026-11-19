@@ -9,7 +9,7 @@ import type { StatItem } from '../components/instrument';
 import { getFxRates, getStablecoins } from '../api';
 import type { FxRates } from '../api';
 import type { Stablecoin } from '../types';
-import { FUNDS_FEED, loadTokenizedFunds } from '../utils/tokenizedFunds';
+import { FUNDS_FEED, isPricedFund, loadTokenizedFunds } from '../utils/tokenizedFunds';
 import type { FundRow } from '../utils/tokenizedFunds';
 import { SupplyHistoryCard } from './Stablecoins';
 
@@ -25,6 +25,13 @@ function fmtUsd(n: number): string {
 }
 const fmtPct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%`;
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+const fmtShares = (n: number) =>
+  n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(2);
+/** "A", "A and B", "A, B and C". */
+function listNames(xs: string[]): string {
+  if (xs.length <= 1) return xs[0] ?? '';
+  return `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+}
 
 function FundLogo({ row }: { row: FundRow }) {
   const [failed, setFailed] = useState(false);
@@ -64,7 +71,8 @@ export function Funds() {
     Promise.all([getStablecoins(43114, FUNDS_FEED), getFxRates()])
       .then(([c, rates]) => {
         if (!alive) return;
-        setCoins(c);
+        // Floating-NAV funds have no price yet, so the dollar chart leaves them out.
+        setCoins(c.filter(isPricedFund));
         setFx(rates);
       })
       .catch(() => {});
@@ -87,10 +95,14 @@ export function Funds() {
     };
   }, []);
 
+  const priced = useMemo(() => rows.filter((r) => r.priced), [rows]);
+  const unpriced = useMemo(() => rows.filter((r) => !r.priced), [rows]);
+
+  // Dollar figures cover priced funds only. A priced fund newer than 30 days
+  // counts from zero, so its arrival shows as growth.
   const totals = useMemo(() => {
-    const supply = sum(rows.map((r) => r.supply));
-    const has30 = rows.length > 0 && rows.every((r) => r.supply30d != null);
-    const prev30 = has30 ? sum(rows.map((r) => r.supply30d as number)) : 0;
+    const supply = sum(priced.map((r) => r.value ?? 0));
+    const prev30 = sum(priced.map((r) => r.value30d ?? 0));
     return {
       supply,
       prev30,
@@ -98,18 +110,19 @@ export function Funds() {
       holders: sum(rows.map((r) => r.holders)),
       issuers: [...new Set(rows.map((r) => r.issuer))],
     };
-  }, [rows]);
+  }, [rows, priced]);
 
   const ready = state === 'ready' && totals.supply > 0;
-  const top = rows[0];
-  const topShare = top && totals.supply > 0 ? Math.round((top.supply / totals.supply) * 100) : null;
+  const top = priced[0];
+  const topShare = top?.value != null && totals.supply > 0 ? Math.round((top.value / totals.supply) * 100) : null;
+  const unpricedNames = listNames(unpriced.map((r) => r.symbol));
 
   const stats: StatItem[] = [
     {
-      label: 'Supply change, 30d',
+      label: 'Value change, 30d',
       value: totals.change30 == null ? '—' : fmtPct(totals.change30),
       sub: totals.change30 == null ? 'Not available right now' : `from ${fmtUsd(totals.prev30)} 30 days ago`,
-      tooltip: 'Change in fund supply on the C-Chain against the daily close 30 days ago.',
+      tooltip: 'Change in the value of priced funds on the C-Chain against the daily close 30 days ago. Funds without a published share price are left out.',
     },
     {
       label: 'Holders',
@@ -120,12 +133,16 @@ export function Funds() {
     {
       label: 'Largest fund',
       value: topShare != null ? `${topShare}%` : '—',
-      sub: top ? `${top.symbol}, ${fmtUsd(top.supply)}` : ' ',
+      sub: top?.value != null ? `${top.symbol}, ${fmtUsd(top.value)}` : ' ',
     },
     {
       label: 'Issuers',
       value: ready ? String(totals.issuers.length) : '—',
-      sub: ready ? totals.issuers.join(', ') : ' ',
+      sub: ready
+        ? totals.issuers.length > 2
+          ? `${totals.issuers.slice(0, 2).join(', ')} and ${totals.issuers.length - 2} more`
+          : totals.issuers.join(' and ')
+        : ' ',
     },
   ];
 
@@ -161,8 +178,15 @@ export function Funds() {
                   )}
                 </p>
                 <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
-                  Money-market fund shares issued as tokens on the C&#8209;Chain. They are funds, not stablecoins, so they are counted here and
+                  Fund shares issued as tokens on the C&#8209;Chain. They are funds, not stablecoins, so they are counted here and
                   not on <Link to="/stablecoins" className="text-foreground hover:underline underline-offset-2">Stablecoins</Link>.
+                  {unpricedNames && (
+                    <>
+                      {' '}
+                      {unpricedNames} {unpriced.length === 1 ? 'has a floating share price that isn\'t' : 'have floating share prices that aren\'t'} published
+                      yet, so {unpriced.length === 1 ? 'it is' : 'they are'} listed in shares and left out of the total.
+                    </>
+                  )}
                 </p>
               </>
             ) : state === 'error' ? (
@@ -197,6 +221,18 @@ export function Funds() {
   );
 }
 
+/** Dollar value, or "price n/a" for a floating-NAV fund the feed can't price. Never $1 a share. */
+function Value({ row }: { row: FundRow }) {
+  if (row.value == null) {
+    return (
+      <span className="text-[11px] text-muted-foreground" title="This fund's share price floats and isn't published in the data yet.">
+        price n/a
+      </span>
+    );
+  }
+  return <span className="num font-semibold text-foreground">{fmtUsd(row.value)}</span>;
+}
+
 const TH = 'font-bold tracking-wider text-[10px] px-3 py-2.5';
 
 /** Same table styling as the coin list on Stablecoins. */
@@ -227,19 +263,23 @@ function FundTable({ rows, state }: { rows: FundRow[]; state: Load }) {
                 <div className="text-[11px] text-muted-foreground truncate">
                   {r.fund} · {r.issuer}
                 </div>
-                {r.supplySeries.length > 1 && (
+                {r.sharesSeries.length > 1 && (
                   <div className="flex items-center gap-2 mt-1.5">
-                    <Sparkline data={r.supplySeries} width={64} height={16} />
-                    <Change v={r.supplyChange} className="text-[10px]" />
-                    <span className="text-[9px] text-muted-foreground">30d</span>
+                    <Sparkline data={r.sharesSeries} width={64} height={16} />
+                    <Change v={r.sharesChange} className="text-[10px]" />
+                    <span className="text-[9px] text-muted-foreground">shares, 30d</span>
                   </div>
                 )}
               </div>
             </div>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] pl-8">
+            <dl className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-[12px] pl-8">
               <div>
-                <dt className="text-[10px] text-muted-foreground">Supply</dt>
-                <dd className="num text-[13px] font-semibold text-foreground">{fmtUsd(r.supply)}</dd>
+                <dt className="text-[10px] text-muted-foreground">Value</dt>
+                <dd className="text-[13px]"><Value row={r} /></dd>
+              </div>
+              <div>
+                <dt className="text-[10px] text-muted-foreground">Shares</dt>
+                <dd className="num text-[13px] text-foreground">{fmtShares(r.shares)}</dd>
               </div>
               <div>
                 <dt className="text-[10px] text-muted-foreground">Holders</dt>
@@ -268,10 +308,10 @@ function FundTable({ rows, state }: { rows: FundRow[]; state: Load }) {
               <th className={`${TH} text-left px-4 w-10`}>#</th>
               <th className={`${TH} text-left min-w-[220px]`}>Fund</th>
               <th className={`${TH} text-left`}>Issuer</th>
-              <th className={`${TH} text-right`}>Supply</th>
-              <th className={`${TH} text-right`}>Supply 30d</th>
+              <th className={`${TH} text-right`}>Value</th>
+              <th className={`${TH} text-right`}>Shares</th>
+              <th className={`${TH} text-right`}>Shares 30d</th>
               <th className={`${TH} text-right`}>Holders</th>
-              <th className={`${TH} text-right`}>Holders 30d</th>
               <th className="px-3 py-2.5 w-10" aria-hidden />
             </tr>
           </thead>
@@ -289,21 +329,21 @@ function FundTable({ rows, state }: { rows: FundRow[]; state: Load }) {
                   </div>
                 </td>
                 <td className="px-3 py-3 text-foreground align-middle">{r.issuer}</td>
+                <td className="px-3 py-3 text-right align-middle text-[13px]">
+                  <Value row={r} />
+                </td>
                 <td className="px-3 py-3 text-right align-middle">
-                  <div className="num text-[13px] font-semibold text-foreground">{fmtUsd(r.supply)}</div>
-                  {r.supplySeries.length > 1 && (
+                  <div className="num text-[13px] text-foreground">{fmtShares(r.shares)}</div>
+                  {r.sharesSeries.length > 1 && (
                     <div className="mt-1 flex justify-end">
-                      <Sparkline data={r.supplySeries} width={72} height={18} />
+                      <Sparkline data={r.sharesSeries} width={72} height={18} />
                     </div>
                   )}
                 </td>
                 <td className="px-3 py-3 text-right align-middle">
-                  <Change v={r.supplyChange} />
+                  <Change v={r.sharesChange} />
                 </td>
                 <td className="num px-3 py-3 text-right text-foreground align-middle">{r.holders.toLocaleString('en-US')}</td>
-                <td className="px-3 py-3 text-right align-middle">
-                  <Change v={r.holdersChange} />
-                </td>
                 <td className="px-3 py-3 align-middle text-right">
                   <a
                     href={`https://snowtrace.io/token/${r.token}`}
