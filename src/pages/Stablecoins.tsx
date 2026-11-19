@@ -31,6 +31,7 @@ import {
   getTokenLogos,
   getStablecoinsTimeseries,
   type FxRates,
+  type TokenFeed,
 } from '../api';
 import type {
   Stablecoin,
@@ -838,7 +839,21 @@ function aggregateSeries(
   return periods.map((t) => ({ t, v: totals.get(t) || 0 }));
 }
 
-function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; fx: FxRates; hero?: boolean }) {
+// Shared with the Funds page, which points it at the tokenized-funds feed and
+// shows the supply metric only.
+export function SupplyHistoryCard({
+  coins,
+  fx,
+  hero = false,
+  feed = 'stablecoins',
+  metrics = METRIC_OPTIONS.map((m) => m.key),
+}: {
+  coins: Stablecoin[];
+  fx: FxRates;
+  hero?: boolean;
+  feed?: TokenFeed;
+  metrics?: StablecoinMetric[];
+}) {
   const [metric, setMetric] = useState<StablecoinMetric>('supply');
   const [range, setRange] = useState<StablecoinRange>('365');
   const granularity: 'day' | 'week' = (metric === 'volume' || metric === 'transfers') && range === 'all' ? 'week' : 'day';
@@ -894,10 +909,10 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: FETCH_LIMIT[granularity] })
+    getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: FETCH_LIMIT[granularity], feed })
       .then((s) => {
         if (!alive) return;
-        setSeries(s.filter(notFund));
+        setSeries(feed === 'stablecoins' ? s.filter(notFund) : s);
         setView({ metric, granularity });
       })
       .finally(() => {
@@ -906,7 +921,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
     return () => {
       alive = false;
     };
-  }, [metric, granularity]);
+  }, [metric, granularity, feed]);
 
   // Volume and transfers are amounts per period, drawn as bars; supply is a level, drawn as a line.
   const flow = view.metric === 'volume' || view.metric === 'transfers';
@@ -1130,9 +1145,10 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
       ))}
     </div>
   );
-  const metricToggle = (
+  const metricOptions = METRIC_OPTIONS.filter((m) => metrics.includes(m.key));
+  const metricToggle = metricOptions.length > 1 && (
     <div className={group} role="tablist" aria-label="Metric">
-      {METRIC_OPTIONS.map((m) => (
+      {metricOptions.map((m) => (
         <button key={m.key} role="tab" aria-selected={metric === m.key} onClick={() => setMetric(m.key)} className={seg(metric === m.key)}>
           {m.label}
         </button>

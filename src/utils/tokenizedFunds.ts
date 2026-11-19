@@ -3,14 +3,15 @@ import { getStablecoins, getStablecoinsTimeseries } from '../api';
 import type { TokenFeed } from '../api';
 import type { Stablecoin, StablecoinSeriesPoint } from '../types';
 
-// Tokenized money-market funds on the C-Chain, keyed by lowercase contract.
-// The stablecoins feed currently returns them as peg-USD coins, so the
-// Stablecoins page drops these addresses and the Funds page shows them.
+// Tokenized money-market funds on the C-Chain. Supply is read in the feed's
+// peg units, which is dollars for BUIDL and BENJI (both hold $1 a share). A
+// fund with a floating share price will need per-fund pricing from the backend
+// before its supply can be shown as dollars.
 //
 // Where the Funds page reads from. /tokenized-funds lists only funds and is
 // live in production; /stablecoins no longer returns BUIDL or BENJI, even with
 // token=. 'stablecoins' remains as a one-line fallback if that ever reverts.
-const FUNDS_FEED: TokenFeed = 'tokenized-funds';
+export const FUNDS_FEED: TokenFeed = 'tokenized-funds';
 
 // Known funds, keyed by lowercase contract: display names and logos. On the
 // 'stablecoins' feed this list also picks the fund rows out of the coins.
