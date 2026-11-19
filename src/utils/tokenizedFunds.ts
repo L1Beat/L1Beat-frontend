@@ -34,7 +34,8 @@ const FUND_ADDRESSES = new Set<string>(TOKENIZED_FUNDS.map((f) => f.token));
 export const isTokenizedFund = (token: string) => FUND_ADDRESSES.has(token.toLowerCase());
 
 // USD per share, from the feed's on-chain pricing: 'peg' for the $1 funds,
-// 'erc4626' or 'erc7540' for a vault's share price. null when there is no fresh price
+// 'erc4626' or 'erc7540' for a vault's share price, 'redstone' for a NAV feed.
+// null when there is no fresh price
 // (floating-NAV funds without an on-chain price, or a read older than 24h).
 // Never fall back to $1 for those. A row from a feed without price fields
 // (the old stablecoins fallback) is priced only when its peg is USD.

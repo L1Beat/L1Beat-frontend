@@ -252,17 +252,26 @@ function ago(ms: number): string {
   return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 }
 
-/** Share price, with where it comes from: a $1 peg or an on-chain vault read. */
+// Caption per price source. Anything not listed is still an on-chain price.
+const SOURCE_LABEL: Record<string, string> = {
+  erc4626: 'vault price',
+  erc7540: 'vault price',
+  redstone: 'RedStone NAV feed',
+};
+
+/** Share price, with where it comes from: a $1 peg, a vault read or a NAV feed. */
 function Price({ row, align = 'right' }: { row: FundRow; align?: 'left' | 'right' }) {
   if (row.price == null) return <span className="text-[11px] text-muted-foreground">n/a</span>;
-  // Anything other than a $1 peg is an on-chain vault price (ERC-4626 or ERC-7540).
-  const vault = row.priceSource !== 'peg';
-  const digits = vault ? 4 : 2;
+  const peg = row.priceSource === 'peg';
+  const label = peg ? '$1 a share' : (SOURCE_LABEL[row.priceSource ?? ''] ?? 'on-chain price');
+  // Four decimals show a vault's drift from $1; big NAVs like $977.30 need two.
+  const digits = peg || row.price >= 100 ? 2 : 4;
+  const price = row.price.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   return (
     <span className={`inline-flex flex-col ${align === 'right' ? 'items-end' : 'items-start'}`}>
-      <span className="num text-[13px] text-foreground">${row.price.toFixed(digits)}</span>
+      <span className="num text-[13px] text-foreground">${price}</span>
       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-        {vault ? (row.priceAt != null ? `vault price, ${ago(row.priceAt)}` : 'vault price') : '$1 a share'}
+        {!peg && row.priceAt != null ? `${label}, ${ago(row.priceAt)}` : label}
       </span>
     </span>
   );
