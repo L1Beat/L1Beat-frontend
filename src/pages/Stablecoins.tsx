@@ -40,6 +40,8 @@ import type {
   StablecoinGranularity,
 } from '../types';
 import { chartPointerProps } from '../utils/chartPointer';
+import { isTokenizedFund } from '../utils/tokenizedFunds';
+import { Link } from 'react-router-dom';
 
 type SortKey =
   | 'supplyUsd'
@@ -111,6 +113,12 @@ function toUnits(raw: string | undefined, decimals: number): number {
     return 0;
   }
 }
+
+// Tokenized money-market funds (BUIDL, BENJI) come back from the stablecoins
+// feed with peg USD. They are funds, not stablecoins (DefiLlama files them
+// under RWA too), so they stay off this page: out of the headline, the issuer
+// split, every chart and the table. The /funds page shows them instead.
+const notFund = (c: { token: string }) => !isTokenizedFund(c.token);
 
 function pegToUsd(value: number, peg: string, fx: FxRates): number {
   const code = peg?.toUpperCase();
@@ -197,6 +205,7 @@ export function Stablecoins() {
     Promise.all([getStablecoins(43114), getFxRates()])
       .then(async ([list, rates]) => {
         if (!alive) return;
+        list = list.filter(notFund);
         setCoins(list);
         setFx(rates);
         // Logos resolve on a separate, slower call — render the page first,
@@ -225,7 +234,7 @@ export function Stablecoins() {
     let alive = true;
     getStablecoinsTimeseries({ evmChainId: 43114, metric: 'volume', granularity: 'day', limit: 3 })
       .then((series) => {
-        if (alive) setVolumeDays(series);
+        if (alive) setVolumeDays(series.filter(notFund));
       })
       .catch(() => {});
     return () => {
@@ -240,7 +249,7 @@ export function Stablecoins() {
       .then((series) => {
         if (!alive) return;
         const m = new Map<string, StablecoinSeriesPoint[]>();
-        for (const s of series) m.set(s.token.toLowerCase(), s.data);
+        for (const s of series.filter(notFund)) m.set(s.token.toLowerCase(), s.data);
         setSupplyHist(m);
       })
       .catch(() => {});
@@ -451,8 +460,9 @@ export function Stablecoins() {
                   </p>
                   <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
                     Counts fiat-pegged stablecoins on the C&#8209;Chain, with non-dollar coins at current exchange rates. Tokenized
-                    money-market funds like BUIDL and BENJI are included. Coins backed by other stablecoins, like avUSD, are left out
-                    so the same dollars aren't counted twice.
+                    money-market funds like BUIDL and BENJI are funds, not stablecoins, so they are left out and listed
+                    on <Link to="/funds" className="text-foreground hover:underline underline-offset-2">Tokenized funds</Link>. So are coins
+                    backed by other stablecoins, like avUSD, so the same dollars aren't counted twice.
                   </p>
                 </>
               ) : error ? (
@@ -887,7 +897,7 @@ function SupplyHistoryCard({ coins, fx, hero = false }: { coins: Stablecoin[]; f
     getStablecoinsTimeseries({ evmChainId: 43114, metric, granularity, limit: FETCH_LIMIT[granularity] })
       .then((s) => {
         if (!alive) return;
-        setSeries(s);
+        setSeries(s.filter(notFund));
         setView({ metric, granularity });
       })
       .finally(() => {

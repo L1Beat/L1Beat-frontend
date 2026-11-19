@@ -2991,11 +2991,16 @@ export async function getChainBySubnetId(subnetId: string): Promise<Chain | null
   }
 }
 
-export async function getStablecoins(evmChainId: number | string = 43114): Promise<Stablecoin[]> {
-  return fetchExternalWithCache(`stablecoins-${evmChainId}`, async () => {
+// Token feeds that share the stablecoins row and timeseries shape.
+// 'tokenized-funds' lists tokenized money-market funds (BUIDL, BENJI) once the
+// backend serves it; until then those funds come back from 'stablecoins'.
+export type TokenFeed = 'stablecoins' | 'tokenized-funds';
+
+export async function getStablecoins(evmChainId: number | string = 43114, feed: TokenFeed = 'stablecoins'): Promise<Stablecoin[]> {
+  return fetchExternalWithCache(`${feed}-${evmChainId}`, async () => {
     try {
       const response = await fetchExternalWithRetry<StablecoinsResponse>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins`
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/${feed}`
       );
       return Array.isArray(response?.data) ? response.data : [];
     } catch (error) {
@@ -3017,8 +3022,10 @@ export async function getStablecoinsTimeseries(opts: {
   limit?: number;
   from?: string;
   to?: string;
+  feed?: TokenFeed;
 }): Promise<StablecoinSeries[]> {
   const {
+    feed = 'stablecoins',
     evmChainId = 43114,
     metric,
     granularity = 'day',
@@ -3033,12 +3040,12 @@ export async function getStablecoinsTimeseries(opts: {
   if (from) params.set('from', from);
   if (to) params.set('to', to);
 
-  const key = `stablecoins-ts-${evmChainId}-${metric}-${granularity}-${token ?? 'all'}-${limit}-${from ?? ''}-${to ?? ''}`;
+  const key = `${feed}-ts-${evmChainId}-${metric}-${granularity}-${token ?? 'all'}-${limit}-${from ?? ''}-${to ?? ''}`;
 
   return fetchExternalWithCache(key, async () => {
     try {
       const response = await fetchExternalWithRetry<StablecoinTimeseriesResponse>(
-        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/stablecoins/timeseries?${params.toString()}`,
+        `${L1BEAT_EXTERNAL_API}/api/v1/data/evm/${evmChainId}/${feed}/timeseries?${params.toString()}`,
       );
       return Array.isArray(response?.data) ? response.data : [];
     } catch (error) {

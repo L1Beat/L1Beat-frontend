@@ -39,6 +39,7 @@ export const PRIMARY_NAV: NavEntry[] = [
       { id: 'perps', label: 'Perpetuals', path: '/perps', hint: 'Leveraged trading on GMX' },
       { id: 'lending', label: 'Lending', path: '/lending', hint: 'Rates, usage and caps on Aave and BENQI' },
       { id: 'stablecoins', label: 'Stablecoins', path: '/stablecoins', hint: 'Supply, volume and holders' },
+      { id: 'funds', label: 'Tokenized funds', path: '/funds', hint: 'BUIDL, BENJI and other fund shares' },
     ],
   },
   // The token itself: staked, burned and held.
