@@ -41,6 +41,7 @@ import type {
   StablecoinGranularity,
 } from '../types';
 import { chartPointerProps } from '../utils/chartPointer';
+import { OTHERS, STACK_OTHERS, STACK_STYLES, stackGroups } from '../utils/stackGroups';
 import { isTokenizedFund } from '../utils/tokenizedFunds';
 import { Link } from 'react-router-dom';
 
@@ -118,7 +119,7 @@ function toUnits(raw: string | undefined, decimals: number): number {
 // Tokenized money-market funds (BUIDL, BENJI) come back from the stablecoins
 // feed with peg USD. They are funds, not stablecoins (DefiLlama files them
 // under RWA too), so they stay off this page: out of the headline, the issuer
-// split, every chart and the table. The /funds page shows them instead.
+// split, every chart and the table. The /rwa page shows them instead.
 const notFund = (c: { token: string }) => !isTokenizedFund(c.token);
 
 function pegToUsd(value: number, peg: string, fx: FxRates): number {
@@ -462,7 +463,7 @@ export function Stablecoins() {
                   <p className="mt-1.5 text-[12px] text-muted-foreground max-w-2xl">
                     Counts fiat-pegged stablecoins on the C&#8209;Chain, with non-dollar coins at current exchange rates. Tokenized
                     money-market funds like BUIDL and BENJI are funds, not stablecoins, so they are left out and listed
-                    on <Link to="/funds" className="text-foreground hover:underline underline-offset-2">Tokenized funds</Link>. So are coins
+                    on <Link to="/rwa" className="text-foreground hover:underline underline-offset-2">Real-world assets</Link>. So are coins
                     backed by other stablecoins, like avUSD, so the same dollars aren't counted twice.
                   </p>
                 </>
@@ -839,7 +840,7 @@ function aggregateSeries(
   return periods.map((t) => ({ t, v: totals.get(t) || 0 }));
 }
 
-// Shared with the Funds page, which points it at the tokenized-funds feed and
+// Shared with the RWA page, which points it at the rwa feed and
 // shows the supply metric only.
 export function SupplyHistoryCard({
   coins,
@@ -847,12 +848,20 @@ export function SupplyHistoryCard({
   hero = false,
   feed = 'stablecoins',
   metrics = METRIC_OPTIONS.map((m) => m.key),
+  stackedOnly = false,
+  focus: focusProp,
+  onFocus,
 }: {
   coins: Stablecoin[];
   fx: FxRates;
   hero?: boolean;
   feed?: TokenFeed;
   metrics?: StablecoinMetric[];
+  /** Always show the stacked-by-issuer view, as on Lending, with no Total toggle. */
+  stackedOnly?: boolean;
+  /** The issuer picked in the legend, when the page owns it (as Lending does with ?protocol=). */
+  focus?: string | null;
+  onFocus?: (name: string | null) => void;
 }) {
   const [metric, setMetric] = useState<StablecoinMetric>('supply');
   const [range, setRange] = useState<StablecoinRange>('365');
@@ -866,7 +875,7 @@ export function SupplyHistoryCard({
   const [hover, setHover] = useState<number | null>(null);
   // Stacked-by-issuer composition view. Only meaningful for the supply metric;
   // the toggle is hidden otherwise.
-  const [stacked, setStacked] = useState(false);
+  const [stacked, setStacked] = useState(stackedOnly);
   const svgRef = useRef<SVGSVGElement>(null);
   // In hero mode the SVG fills its box, so the viewBox height follows the
   // box's aspect ratio and the drawing keeps a 1:1 unit-to-pixel feel.
@@ -1002,8 +1011,8 @@ export function SupplyHistoryCard({
   // token's supply is forward-filled (snapshot) and summed into its issuer; the
   // running cumulative top equals the total line, so it reuses geom's 0-based
   // y-scale. Top issuers keep their own band; the long tail folds into "Others".
-  const stack = useMemo(() => {
-    if (!stackedView || !geom || points.length < 2) return null;
+  const stackKeys = useMemo(() => {
+    if (!stackedView || points.length < 2) return null;
     const periods = points.map((p) => p.t);
     const byIssuer = new Map<string, number[]>();
     for (const s of series) {
@@ -1033,22 +1042,33 @@ export function SupplyHistoryCard({
     }
     if (byIssuer.size === 0) return null;
     const lastIdx = periods.length - 1;
-    const ranked = [...byIssuer.entries()].sort((a, b) => b[1][lastIdx] - a[1][lastIdx]);
-    const TOP = 5;
-    const keys = ranked.slice(0, TOP).map(([name, values], i) => ({
-      name,
-      color: ISSUER_PALETTE[i] || ISSUER_PALETTE[ISSUER_PALETTE.length - 1],
-      values,
-    }));
-    const rest = ranked.slice(TOP);
-    if (rest.length) {
+    const groups = stackGroups([...byIssuer.entries()].map(([name, v]) => [name, v[lastIdx]]));
+    const keys = groups.own.map((name, i) => ({ name, ...STACK_STYLES[i], values: byIssuer.get(name)! }));
+    if (groups.others.length) {
       const others = new Array(periods.length).fill(0);
-      for (const [, v] of rest) for (let i = 0; i < periods.length; i++) others[i] += v[i];
-      keys.push({ name: 'Others', color: ISSUER_PALETTE[ISSUER_PALETTE.length - 1], values: others });
+      for (const name of groups.others) {
+        const v = byIssuer.get(name)!;
+        for (let i = 0; i < periods.length; i++) others[i] += v[i];
+      }
+      keys.push({ name: OTHERS, ...STACK_OTHERS, values: others });
     }
+    return { periods, keys };
+  }, [stackedView, points, series, meta, fx]);
+
+  // An issuer picked in the legend, as on Lending: its band moves to the
+  // bottom of the stack so its own shape reads from zero, and the rest fade.
+  // Click it again to clear.
+  const [ownFocus, setOwnFocus] = useState<string | null>(null);
+  const focus = focusProp !== undefined ? focusProp : ownFocus;
+  const setFocus = (name: string | null) => (onFocus ? onFocus(name) : setOwnFocus(name));
+  const activeFocus = focus && stackKeys?.keys.some((k) => k.name === focus) ? focus : null;
+  const stack = useMemo(() => {
+    if (!stackKeys || !geom) return null;
+    const { periods, keys } = stackKeys;
+    const ordered = activeFocus ? [...keys.filter((k) => k.name === activeFocus), ...keys.filter((k) => k.name !== activeFocus)] : keys;
     const baseline = new Array(periods.length).fill(0);
     const idxArr = periods.map((_, i) => ({ i }));
-    const bands = keys.map((k) => {
+    const bands = ordered.map((k) => {
       const lower = baseline.slice();
       const upper = baseline.map((b, i) => b + k.values[i]);
       for (let i = 0; i < periods.length; i++) baseline[i] = upper[i];
@@ -1057,18 +1077,22 @@ export function SupplyHistoryCard({
         .x((d) => geom.x(periods[d.i]))
         .y0((d) => geom.y(lower[d.i]))
         .y1((d) => geom.y(upper[d.i]))
-        .curve(d3.curveMonotoneX);
-      return { name: k.name, color: k.color, path: gen(idxArr) || '' };
+        // Straight between days, as on Lending: supply moves in steps, and a
+        // smoothed curve draws ramps that never happened.
+        .curve(d3.curveLinear);
+      const dim = activeFocus != null && activeFocus !== k.name;
+      return { name: k.name, color: k.color, opacity: dim ? k.opacity * 0.15 : k.opacity, path: gen(idxArr) || '' };
     });
     return { bands };
-  }, [stackedView, geom, points, series, meta, fx]);
+  }, [stackKeys, geom, activeFocus]);
 
   // Axis labels: compact when the axis spans from zero, full-precision when
   // zoomed (compact "3.18M" can't tell 3,176,235 from 3,176,824 apart).
   const fmtY = (n: number): string => {
     if (n <= 0) return monetary ? '$0' : '0';
     if (geom?.zoom) return (monetary ? '$' : '') + Math.round(n).toLocaleString();
-    return monetary ? fmtUsd(n) : fmtCount(n);
+    // Axis labels drop trailing zeros: $800M and $1.5B, not $800.00M.
+    return monetary ? fmtUsd(n).replace(/\.?0+([KMB])$/, '$1') : fmtCount(n);
   };
   // Tooltip always shows the exact value.
   const fmtValue = (n: number): string =>
@@ -1112,6 +1136,60 @@ export function SupplyHistoryCard({
     ? points.reduce((a, b) => (b.v > a.v ? b : a), points[0])
     : null;
 
+  // Readout for the stacked view, as on Lending: the picked issuer's own
+  // number, and with nothing hovered, how it moved across the range.
+  const focusKey = stackKeys && activeFocus ? (stackKeys.keys.find((k) => k.name === activeFocus) ?? null) : null;
+  const stackValue = (i: number) => (focusKey ? focusKey.values[i] : (points[i]?.v ?? 0));
+  const stackReadout = (() => {
+    if (!stackKeys || !points.length) return null;
+    const label = focusKey ? focusKey.name : 'Total';
+    const lastI = points.length - 1;
+    if (hover != null && points[hover]) {
+      return { value: stackValue(hover), sub: `${label} on ${d3.utcFormat('%a, %b %d, %Y')(new Date(points[hover].t))}` };
+    }
+    // An issuer that arrived inside the range starts from its first day with value.
+    let firstI = 0;
+    while (firstI < lastI && stackValue(firstI) <= 0) firstI++;
+    const from = stackValue(firstI);
+    const growth = from > 0 ? ((stackValue(lastI) - from) / from) * 100 : null;
+    const fromDate = d3.utcFormat('%b %d, %Y')(new Date(points[firstI].t));
+    if (firstI > 0) return { value: stackValue(lastI), sub: `${label} now; arrived ${fromDate}` };
+    const change =
+      growth == null || Math.abs(growth) < 1
+        ? ''
+        : growth >= 900
+          ? `, up ${Math.floor(growth / 100 + 1)}x`
+          : `, ${growth >= 0 ? 'up' : 'down'} ${Math.abs(growth).toFixed(0)}%`;
+    return { value: stackValue(lastI), sub: `${label} now; ${fmtValue(from)} on ${fromDate}${change}` };
+  })();
+
+  // Legend for the stacked view, as on Lending: each issuer's value on the
+  // hovered day, and a click picks that issuer out of the stack.
+  const stackLegend = stackKeys && stack && (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground pointer-events-auto">
+      {stackKeys.keys.map((k) => {
+        const on = activeFocus === k.name;
+        const v = hover != null ? k.values[hover] : null;
+        return (
+          <button
+            key={k.name}
+            type="button"
+            onClick={() => setFocus(focus === k.name ? null : k.name)}
+            aria-pressed={on}
+            title={on ? 'Show every issuer' : `Show ${k.name}`}
+            className={`relative tap-y inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 -mx-1.5 transition-colors hover:bg-accent ${
+              on ? 'bg-accent text-foreground' : activeFocus ? 'opacity-50 hover:opacity-100' : ''
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ background: k.color, opacity: k.opacity }} />
+            {k.name}
+            {v != null && <span className="num text-foreground">{fmtValue(v)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const COPY: Record<StablecoinMetric, { title: string; subtitle: string }> = {
     supply: {
       title: 'Supply history',
@@ -1136,7 +1214,7 @@ export function SupplyHistoryCard({
       active ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-accent'
     }`;
   const group = 'inline-flex items-center gap-px p-px rounded border border-border bg-background';
-  const stackedToggle = metric === 'supply' && (
+  const stackedToggle = metric === 'supply' && !stackedOnly && (
     <div className={group} role="tablist" aria-label="Composition">
       {([['total', 'Total'], ['stacked', 'By issuer']] as const).map(([key, label]) => (
         <button key={key} role="tab" aria-selected={(key === 'stacked') === stacked} onClick={() => setStacked(key === 'stacked')} className={seg((key === 'stacked') === stacked)}>
@@ -1182,17 +1260,21 @@ export function SupplyHistoryCard({
             <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
               <div>
                 <div className="num text-[22px] leading-none font-medium text-foreground">
-                  {fmtValue(shown.v)}
+                  {fmtValue(stackReadout ? stackReadout.value : shown.v)}
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-1.5">
-                  {active
-                    ? fmtDate(new Date(active.t))
-                    : latest
-                      ? `Latest, ${fmtDate(new Date(latest.t))}${flow && view.granularity === 'week' ? '; bars are weeks' : ''}`
-                      : null}
+                  {stackReadout
+                    ? stackReadout.sub
+                    : active
+                      ? fmtDate(new Date(active.t))
+                      : latest
+                        ? `Latest, ${fmtDate(new Date(latest.t))}${flow && view.granularity === 'week' ? '; bars are weeks' : ''}`
+                        : null}
                 </div>
               </div>
-              {peak && peak !== latest && (
+              {stackLegend ? (
+                <div className="pt-1">{stackLegend}</div>
+              ) : peak && peak !== latest && (
                 <div className="text-right">
                   <div className="text-[11px] font-medium text-muted-foreground">
                     Peak
@@ -1273,7 +1355,7 @@ export function SupplyHistoryCard({
 
                 {stack ? (
                   stack.bands.map((b) => (
-                    <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
+                    <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
                   ))
                 ) : flow ? (
                   points.map((p, i) => (
@@ -1332,16 +1414,6 @@ export function SupplyHistoryCard({
               </svg>
           
               </div>
-              {stack && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
-                  {stack.bands.map((b) => (
-                    <div key={b.name} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
-                      <span className="text-[11px] text-muted-foreground">{b.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1457,7 +1529,7 @@ export function SupplyHistoryCard({
 
             {stack ? (
               stack.bands.map((b) => (
-                <path key={b.name} d={b.path} fill={b.color} fillOpacity={0.78} stroke={b.color} strokeOpacity={0.9} strokeWidth={0.5} />
+                <path key={b.name} d={b.path} fill={b.color} fillOpacity={b.opacity} />
               ))
             ) : flow ? (
               points.map((p, i) => (
@@ -1516,16 +1588,7 @@ export function SupplyHistoryCard({
           </svg>
           
           </div>
-          {stack && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 px-1">
-              {stack.bands.map((b) => (
-                <div key={b.name} className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: b.color }} />
-                  <span className="text-[11px] text-muted-foreground">{b.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {stackLegend && <div className="mt-2 px-1">{stackLegend}</div>}
         </div>
       )}
     </div>
@@ -1636,6 +1699,8 @@ function TopMovers({
 }
 
 // Categorical, no red: red on this page means supply went down.
+
+
 const ISSUER_PALETTE = [
   '#3987e5', // blue
   '#d95926', // orange
