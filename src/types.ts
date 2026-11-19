@@ -549,6 +549,9 @@ export interface Stablecoin {
   // total would count the same dollars twice, so the net total excludes it.
   // The exclusion list is curated backend-side; never hardcode coins here.
   doublecounted?: boolean;
+  // 'stablecoin' or 'tokenized_fund', set by the backend per feed. Absent on
+  // older responses.
+  category?: string;
 }
 
 export interface StablecoinsResponse {

@@ -18,9 +18,15 @@ export const PAGE_SEO = {
   },
   stablecoins: {
     title: 'Stablecoins on Avalanche',
-    description: 'Supply, volume and holders for every stablecoin on the Avalanche C-Chain: USDC, USDT, BUIDL, EURC and more.',
+    description: 'Supply, volume and holders for every stablecoin on the Avalanche C-Chain: USDC, USDT, EURC and more.',
     url: '/stablecoins',
     image: '/og/stablecoins.png',
+  },
+  funds: {
+    title: 'Tokenized Funds on Avalanche',
+    description: 'Supply, holders and 30-day change for tokenized money-market funds on the Avalanche C-Chain: BlackRock BUIDL and Franklin Templeton BENJI.',
+    url: '/funds',
+    image: '/og/default.png',
   },
   staking: {
     title: 'Avalanche Staking',
