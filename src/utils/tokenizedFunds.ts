@@ -3,9 +3,9 @@ import { getStablecoins, getStablecoinsTimeseries } from '../api';
 import type { TokenFeed } from '../api';
 import type { Stablecoin, StablecoinSeriesPoint } from '../types';
 
-// Tokenized funds on the C-Chain. peg "USD" funds hold $1 a share, so shares
-// read as dollars. peg "NAV" funds float and the feed has no price for them
-// yet: see isPricedFund below.
+// Tokenized funds on the C-Chain. The feed prices them on-chain only: $1 for
+// peg "USD" funds, the ERC-4626 share price for vaults, null otherwise. See
+// fundPrice below.
 //
 // Where the Funds page reads from. /tokenized-funds lists only funds and is
 // live in production; /stablecoins no longer returns BUIDL or BENJI, even with
@@ -33,10 +33,32 @@ const FUND_ADDRESSES = new Set<string>(TOKENIZED_FUNDS.map((f) => f.token));
 
 export const isTokenizedFund = (token: string) => FUND_ADDRESSES.has(token.toLowerCase());
 
-// A fund is priced when its peg says one share is one dollar. peg "NAV" means
-// the share price floats and the feed carries no price yet, so those funds
-// show shares only and stay out of every dollar figure. Never value them at $1.
-export const isPricedFund = (c: { peg?: string }) => c.peg?.toUpperCase() === 'USD';
+// USD per share, from the feed's on-chain pricing: 'peg' for the $1 funds,
+// 'erc4626' for a vault's share price. null when there is no fresh price
+// (floating-NAV funds without an on-chain price, or a read older than 24h).
+// Never fall back to $1 for those. A row from a feed without price fields
+// (the old stablecoins fallback) is priced only when its peg is USD.
+export function fundPrice(c: Pick<Stablecoin, 'peg' | 'price_usd'>): number | null {
+  if (c.price_usd !== undefined) return c.price_usd != null && c.price_usd > 0 ? c.price_usd : null;
+  return c.peg?.toUpperCase() === 'USD' ? 1 : null;
+}
+export const isPricedFund = (c: Pick<Stablecoin, 'peg' | 'price_usd'>) => fundPrice(c) != null;
+
+// What kind of fund each token is. The feed has no type field, so this is
+// kept here by symbol; an unknown symbol shows no type.
+const FUND_TYPES: Record<string, string> = {
+  BUIDL: 'Money-market fund',
+  BENJI: 'Money-market fund',
+  WTGXX: 'Money-market fund',
+  VBILL: 'Money-market fund',
+  HYTB: 'T-bill vault',
+  JAAA: 'CLO fund',
+  HINC: 'Bond fund',
+  'XDFIS-DEFI-2': 'Fixed-income vault',
+  ACRED: 'Private credit',
+  NOPAL: 'Private credit',
+  AOABTD: 'Crypto fund',
+};
 
 export interface FundRow {
   token: string;
@@ -44,13 +66,20 @@ export interface FundRow {
   issuer: string;
   fund: string;
   logo: string;
-  /** False for floating-NAV funds the feed has no price for. */
+  /** From FUND_TYPES; null for a fund not mapped yet. */
+  type: string | null;
+  /** True when the feed has a fresh price for the fund. */
   priced: boolean;
+  /** USD per share, or null. */
+  price: number | null;
+  priceSource: 'peg' | 'erc4626' | null;
+  /** Epoch ms of the on-chain price read; null for peg prices. */
+  priceAt: number | null;
   /** Shares outstanding. */
   shares: number;
   /** USD value; null when the fund isn't priced. */
   value: number | null;
-  /** USD value 30 days ago; null when unpriced or newer than 30 days. */
+  /** Shares 30 days ago at today's price; null when unpriced or newer than 30 days. */
   value30d: number | null;
   holders: number;
   /** Shares over the last 30 days, oldest first, the last known value carried in. */
@@ -89,7 +118,7 @@ export async function loadTokenizedFunds(evmChainId = 43114): Promise<FundRow[]>
     const token = coin.token.toLowerCase();
     const known = TOKENIZED_FUNDS.find((f) => f.token === token);
     const scale = 10 ** coin.decimals;
-    const priced = isPricedFund(coin);
+    const price = fundPrice(coin);
     const pts = byToken.get(token) ?? [];
     const shares = Number(coin.supply) / scale;
     // No point inside the window means no transfers, so no change: the last
@@ -97,21 +126,28 @@ export async function loadTokenizedFunds(evmChainId = 43114): Promise<FundRow[]>
     const shares30d = valueAt(pts, ago, scale);
     const inWindow = pts.filter((p) => parseISO(p.period) > ago).map((p) => Number(p.value) / scale);
     const sharesSeries = shares30d != null ? [shares30d, ...inWindow, shares] : inWindow.length ? [...inWindow, shares] : [];
+    const at = coin.price_at ? Date.parse(coin.price_at) : NaN;
     return {
       token,
       symbol: coin.symbol,
       issuer: known?.issuer ?? coin.issuer ?? coin.symbol,
       fund: known?.fund ?? coin.name,
       logo: known?.logo ?? `https://token-icons.llamao.fi/icons/tokens/${evmChainId}/${token}?h=48&w=48`,
-      priced,
+      type: FUND_TYPES[coin.symbol.toUpperCase()] ?? null,
+      priced: price != null,
+      price,
+      priceSource: price == null ? null : (coin.price_source ?? 'peg'),
+      priceAt: Number.isFinite(at) ? at : null,
       shares,
-      value: priced ? shares : null,
-      value30d: priced ? shares30d : null,
+      // The feed's own value when it sends one; shares at the price otherwise.
+      value: price == null ? null : (coin.value_usd ?? shares * price),
+      value30d: price != null && shares30d != null ? shares30d * price : null,
       holders: coin.holders,
       sharesSeries: sharesSeries.length > 1 ? sharesSeries : [],
       sharesChange: pct(shares, shares30d),
     };
   });
-  // Priced funds by value, then the unpriced ones by shares.
+  // The feed orders rows by raw base units; sort by value, then the unpriced
+  // funds by shares.
   return rows.sort((a, b) => Number(b.priced) - Number(a.priced) || (b.value ?? b.shares) - (a.value ?? a.shares));
 }

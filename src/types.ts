@@ -552,6 +552,14 @@ export interface Stablecoin {
   // 'stablecoin' or 'tokenized_fund', set by the backend per feed. Absent on
   // older responses.
   category?: string;
+  // Tokenized-funds feed only. USD per whole share and the row's USD value,
+  // null when no fresh on-chain price exists. price_source is 'peg' for $1
+  // funds or 'erc4626' for a vault's share price read on-chain; price_at is
+  // that read's time (null for peg prices).
+  price_usd?: number | null;
+  value_usd?: number | null;
+  price_source?: 'peg' | 'erc4626' | null;
+  price_at?: string | null;
 }
 
 export interface StablecoinsResponse {
