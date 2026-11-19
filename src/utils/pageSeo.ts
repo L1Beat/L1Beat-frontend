@@ -22,10 +22,10 @@ export const PAGE_SEO = {
     url: '/stablecoins',
     image: '/og/stablecoins.png',
   },
-  funds: {
-    title: 'Tokenized Funds on Avalanche',
-    description: 'Supply, holders and 30-day change for tokenized money-market funds on the Avalanche C-Chain: BlackRock BUIDL and Franklin Templeton BENJI.',
-    url: '/funds',
+  rwa: {
+    title: 'Real-World Assets on Avalanche',
+    description: 'Every tokenized real-world asset on the Avalanche C-Chain: funds like BlackRock BUIDL and Janus Henderson JAAA, company shares and gold, with on-chain prices, supply and holders.',
+    url: '/rwa',
     image: '/og/default.png',
   },
   staking: {

@@ -2992,9 +2992,9 @@ export async function getChainBySubnetId(subnetId: string): Promise<Chain | null
 }
 
 // Token feeds that share the stablecoins row and timeseries shape.
-// 'tokenized-funds' lists tokenized money-market funds (BUIDL, BENJI) once the
-// backend serves it; until then those funds come back from 'stablecoins'.
-export type TokenFeed = 'stablecoins' | 'tokenized-funds';
+// 'tokenized-funds' lists tokenized funds only; 'rwa' is every non-stablecoin
+// real-world asset (funds, equity, commodities) with a category per row.
+export type TokenFeed = 'stablecoins' | 'tokenized-funds' | 'rwa';
 
 export async function getStablecoins(evmChainId: number | string = 43114, feed: TokenFeed = 'stablecoins'): Promise<Stablecoin[]> {
   return fetchExternalWithCache(`${feed}-${evmChainId}`, async () => {

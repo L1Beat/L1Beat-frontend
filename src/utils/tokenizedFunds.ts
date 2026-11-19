@@ -7,7 +7,7 @@ import type { Stablecoin, StablecoinSeriesPoint } from '../types';
 // peg "USD" funds, the ERC-4626 share price for vaults, null otherwise. See
 // fundPrice below.
 //
-// Where the Funds page reads from. /tokenized-funds lists only funds and is
+// Default feed for loadTokenizedFunds (the RWA page passes rwa). /tokenized-funds lists only funds and is
 // live in production; /stablecoins no longer returns BUIDL or BENJI, even with
 // token=. 'stablecoins' remains as a one-line fallback if that ever reverts.
 export const FUNDS_FEED: TokenFeed = 'tokenized-funds';
@@ -69,11 +69,42 @@ const FUND_TYPES: Record<string, string> = {
   VBILL: 'Money-market fund',
   HYTB: 'T-bill vault',
   JAAA: 'CLO fund',
+  JTRSY: 'T-bill fund',
   HINC: 'Bond fund',
   'XDFIS-DEFI-2': 'Fixed-income vault',
   ACRED: 'Private credit',
   NOPAL: 'Private credit',
   AOABTD: 'Crypto fund',
+  SECZ: 'Company shares',
+  XAUT0: 'Gold',
+};
+
+// Which platform put each asset on-chain, as DefiLlama groups them: the
+// tokenization or transfer-agent platform, not the fund manager (BUIDL is
+// BlackRock's fund on Securitize). The feed has no such field, so it lives
+// here by symbol; an unknown symbol falls back to its issuer.
+const PLATFORMS: Record<string, string> = {
+  BUIDL: 'Securitize',
+  ACRED: 'Securitize',
+  HINC: 'Securitize',
+  VBILL: 'Securitize',
+  SECZ: 'Securitize',
+  JAAA: 'Centrifuge',
+  JTRSY: 'Centrifuge',
+  BENJI: 'Franklin Templeton',
+  WTGXX: 'WisdomTree',
+  'XDFIS-DEFI-2': 'OpenTrade',
+  NOPAL: 'Nest',
+  HYTB: 'HiYield',
+  AOABTD: 'Asseto',
+  XAUT0: 'Tether',
+};
+
+// Category labels for the rwa feed's category field.
+export const CATEGORY_LABEL: Record<string, string> = {
+  tokenized_fund: 'Funds',
+  equity: 'Equity',
+  commodity: 'Commodities',
 };
 
 export interface FundRow {
@@ -84,6 +115,10 @@ export interface FundRow {
   logo: string;
   /** From FUND_TYPES; null for a fund not mapped yet. */
   type: string | null;
+  /** The feed's category: 'tokenized_fund', 'equity' or 'commodity'. */
+  category: string;
+  /** Platform that tokenized it (Securitize, Centrifuge...), from PLATFORMS. */
+  platform: string;
   /** True when the feed has a fresh price for the fund. */
   priced: boolean;
   /** USD per share, or null. */
@@ -117,17 +152,17 @@ function valueAt(points: StablecoinSeriesPoint[], at: Date, scale: number): numb
 
 const pct = (now: number, then: number | null) => (then != null && then > 0 ? ((now - then) / then) * 100 : null);
 
-export async function loadTokenizedFunds(evmChainId = 43114): Promise<FundRow[]> {
-  // The same request the supply chart makes (every fund, full daily history),
+export async function loadTokenizedFunds(evmChainId = 43114, feed: TokenFeed = FUNDS_FEED): Promise<FundRow[]> {
+  // The same request the supply chart makes (every row, full daily history),
   // so the two share one cached call. Full history matters: supply only has
   // points on days with transfers, and a quiet fund's last point can be
   // months old.
   const [all, history] = await Promise.all([
-    getStablecoins(evmChainId, FUNDS_FEED),
-    getStablecoinsTimeseries({ evmChainId, feed: FUNDS_FEED, metric: 'supply', granularity: 'day', limit: 5000 }).catch(() => []),
+    getStablecoins(evmChainId, feed),
+    getStablecoinsTimeseries({ evmChainId, feed, metric: 'supply', granularity: 'day', limit: 5000 }).catch(() => []),
   ]);
-  // The funds feed lists only funds; the stablecoins feed needs picking.
-  const coins: Stablecoin[] = FUNDS_FEED === 'stablecoins' ? all.filter((c) => isTokenizedFund(c.token)) : all;
+  // The funds and rwa feeds need no picking; the stablecoins feed does.
+  const coins: Stablecoin[] = feed === 'stablecoins' ? all.filter((c) => isTokenizedFund(c.token)) : all;
   const byToken = new Map(history.map((h) => [h.token.toLowerCase(), h.data]));
   const ago = subDays(new Date(), 30);
 
@@ -151,6 +186,8 @@ export async function loadTokenizedFunds(evmChainId = 43114): Promise<FundRow[]>
       fund: known?.fund ?? coin.name,
       logo: known?.logo ?? `https://token-icons.llamao.fi/icons/tokens/${evmChainId}/${token}?h=48&w=48`,
       type: FUND_TYPES[coin.symbol.toUpperCase()] ?? null,
+      category: coin.category ?? 'tokenized_fund',
+      platform: PLATFORMS[coin.symbol.toUpperCase()] ?? known?.issuer ?? coin.issuer ?? coin.symbol,
       priced: price != null,
       price,
       priceSource: price == null ? null : priceSourceOf(coin),

@@ -26,7 +26,7 @@ const GROUPS: { title: string; links: FooterLink[] }[] = [
       { label: 'Perpetuals', to: '/perps' },
       { label: 'Lending', to: '/lending' },
       { label: 'Stablecoins', to: '/stablecoins' },
-      { label: 'Tokenized funds', to: '/funds' },
+      { label: 'Real-world assets', to: '/rwa' },
     ],
   },
   {
