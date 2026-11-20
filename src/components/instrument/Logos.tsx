@@ -40,10 +40,11 @@ function Img({ sources, label, size, square }: { sources: string[]; label: strin
   );
 }
 
-/** A protocol's logo, e.g. Pharaoh or GMX, by our protocol id. */
-export function ProtocolLogo({ protocol, name, size = 20 }: { protocol: string; name: string; size?: number }) {
+/** A protocol's logo, e.g. Pharaoh or GMX, by our protocol id. Square unless `round`. */
+export function ProtocolLogo({ protocol, name, size = 20, round = false }: { protocol: string; name: string; size?: number; round?: boolean }) {
   const slug = PROTOCOL_SLUG[protocol] ?? protocol;
-  return <Img sources={[`https://icons.llamao.fi/icons/protocols/${slug}?w=48&h=48`]} label={name} size={size} square />;
+  const px = size > 24 ? 96 : 48;
+  return <Img sources={[`https://icons.llamao.fi/icons/protocols/${slug}?w=${px}&h=${px}`]} label={name} size={size} square={!round} />;
 }
 
 /** A C-Chain token's logo by contract address. */

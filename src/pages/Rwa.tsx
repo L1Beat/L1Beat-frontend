@@ -5,7 +5,7 @@ import { ChevronRight, ExternalLink } from 'lucide-react';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary';
-import { Delta, SegmentedControl, Sparkline, StatStrip, UpdatedAgo } from '../components/instrument';
+import { Delta, ProtocolLogo, SegmentedControl, Sparkline, StatStrip, UpdatedAgo } from '../components/instrument';
 import type { StatItem } from '../components/instrument';
 import { getFxRates, getStablecoins } from '../api';
 import type { FxRates, TokenFeed } from '../api';
@@ -211,8 +211,14 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
   const focus = config.stackedChart && focusMembers.length ? focusId : null;
   // With an issuer picked, every number on the page is that issuer's own.
   const scoped = useMemo(() => (focus ? rows.filter((r) => focusMembers.includes(r.issuer)) : rows), [rows, focus, focusMembers]);
+  // The table filters by category itself; the headline and KPIs follow the
+  // chart, so a picked issuer is quoted only for the category on show.
+  const kpiRows = useMemo(
+    () => (focus ? inCategory.filter((r) => focusMembers.includes(r.issuer)) : rows),
+    [rows, inCategory, focus, focusMembers],
+  );
 
-  const priced = useMemo(() => scoped.filter((r) => r.priced), [scoped]);
+  const priced = useMemo(() => kpiRows.filter((r) => r.priced), [kpiRows]);
   const unpriced = useMemo(() => rows.filter((r) => !r.priced), [rows]);
   const allTotal = useMemo(() => sum(rows.map((r) => r.value ?? 0)), [rows]);
 
@@ -225,10 +231,10 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
       supply,
       prev30,
       change30: prev30 > 0 ? ((supply - prev30) / prev30) * 100 : null,
-      holders: sum(scoped.map((r) => r.holders)),
-      issuers: [...new Set(scoped.map((r) => r.issuer))],
+      holders: sum(kpiRows.map((r) => r.holders)),
+      issuers: [...new Set(kpiRows.map((r) => r.issuer))],
     };
-  }, [scoped, priced]);
+  }, [kpiRows, priced]);
 
   const ready = state === 'ready' && allTotal > 0;
   const top = priced[0];
@@ -263,7 +269,7 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
     {
       label: 'Holders',
       value: ready ? totals.holders.toLocaleString('en-US') : '—',
-      sub: ready ? `addresses across ${scoped.length} ${scoped.length === 1 ? noun[0] : noun[1]}` : ' ',
+      sub: ready ? `addresses across ${kpiRows.length} ${kpiRows.length === 1 ? noun[0] : noun[1]}` : ' ',
       tooltip: 'Addresses, not investors: one address can hold for many clients.',
     },
     {
@@ -274,8 +280,8 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
     focus
       ? {
           label: noun[1].charAt(0).toUpperCase() + noun[1].slice(1),
-          value: String(scoped.length),
-          sub: listNames(scoped.map((r) => r.symbol)),
+          value: String(kpiRows.length),
+          sub: listNames(kpiRows.map((r) => r.symbol)),
         }
       : {
           label: 'Issuers',
@@ -314,7 +320,7 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
                         That&apos;s <span className="num">{focusShare.toFixed(0)}%</span> of the <span className="num">{fmtUsd(allTotal)}</span> total,{' '}
                       </>
                     )}
-                    across <span className="num">{scoped.length}</span> {scoped.length === 1 ? noun[0] : noun[1]}.{' '}
+                    across <span className="num">{kpiRows.length}</span> {kpiRows.length === 1 ? noun[0] : noun[1]}.{' '}
                     <button type="button" onClick={() => setFocus(null)} className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
                       Show all issuers
                     </button>
@@ -530,7 +536,22 @@ function groupByPlatform(rows: FundRow[]): PlatformGroup[] {
     .sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || b.rows.length - a.rows.length);
 }
 
+// DefiLlama protocol slugs for each platform's logo; a lettered disc covers the rest.
+const PLATFORM_LOGO: Record<string, string> = {
+  Securitize: 'securitize',
+  Centrifuge: 'centrifuge-protocol',
+  OpenTrade: 'opentrade',
+  Nest: 'nest-credit',
+  'Franklin Templeton': 'franklin-templeton',
+  HiYield: 'hiyield',
+  Tether: 'tether',
+  WisdomTree: 'wisdomtree',
+  Asseto: 'asseto-aoabt',
+};
+
 function PlatformAvatar({ name }: { name: string }) {
+  const slug = PLATFORM_LOGO[name];
+  if (slug) return <ProtocolLogo protocol={slug} name={name} size={32} round />;
   return (
     <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center text-[11px] font-bold shrink-0">
       {name.charAt(0).toUpperCase()}
