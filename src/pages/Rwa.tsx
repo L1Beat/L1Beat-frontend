@@ -60,11 +60,12 @@ function listNames(xs: string[]): string {
   return `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
 }
 
-function FundLogo({ row }: { row: FundRow }) {
+function FundLogo({ row, small = false }: { row: FundRow; small?: boolean }) {
   const [failed, setFailed] = useState(false);
+  const box = small ? 'w-6 h-6' : 'w-8 h-8';
   if (failed) {
     return (
-      <div className="w-8 h-8 rounded-full bg-accent text-foreground flex items-center justify-center text-[11px] font-bold shrink-0">
+      <div className={`${box} rounded-full bg-accent text-foreground flex items-center justify-center text-[10px] font-bold shrink-0`}>
         {row.symbol.charAt(0).toUpperCase()}
       </div>
     );
@@ -76,7 +77,7 @@ function FundLogo({ row }: { row: FundRow }) {
       title={row.symbol}
       loading="lazy"
       onError={() => setFailed(true)}
-      className="w-8 h-8 rounded-full bg-muted object-cover shrink-0"
+      className={`${box} rounded-full bg-muted object-cover shrink-0`}
     />
   );
 }
@@ -578,17 +579,30 @@ function SnowtraceIcon({ r }: { r: FundRow }) {
 }
 
 /** One asset as a table row; nested under its platform when `child`. */
-function AssetRow({ r, rank, child = false }: { r: FundRow; rank: string; child?: boolean }) {
+/** `last` closes a platform's group with the row border. */
+function AssetRow({ r, rank, child = false, last = false }: { r: FundRow; rank: string; child?: boolean; last?: boolean }) {
   return (
-    <tr className={`group border-b border-border/60 hover:bg-accent/40 transition-colors ${child ? 'bg-muted/[0.05]' : 'even:bg-muted/[0.035]'}`}>
-      <td className="px-4 py-3 text-[11px] tabular-nums text-muted-foreground align-middle">{rank}</td>
-      <td className={`px-3 py-3 align-middle ${child ? 'pl-9' : ''}`}>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <FundLogo row={r} />
+    <tr
+      className={`group hover:bg-accent/40 transition-colors ${
+        child ? `bg-accent/20 ${last ? 'border-b border-border/60' : ''}` : 'border-b border-border/60 even:bg-muted/[0.035]'
+      }`}
+    >
+      <td className={`px-4 py-3 text-[11px] tabular-nums align-middle ${child ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>{rank}</td>
+      <td className={`px-3 align-middle ${child ? 'py-2 relative' : 'py-3'}`}>
+        {/* Under a platform: one tree line down from the platform's logo, with
+            a tick to each asset, so the group reads as one. */}
+        {child && (
+          <>
+            <span className={`absolute left-[48px] top-0 w-px bg-muted-foreground/40 ${last ? 'h-1/2' : 'h-full'}`} aria-hidden />
+            <span className="absolute left-[48px] top-1/2 w-3 h-px bg-muted-foreground/40" aria-hidden />
+          </>
+        )}
+        <div className={`flex items-center gap-2.5 min-w-0 ${child ? 'pl-[50px]' : ''}`}>
+          <FundLogo row={r} small={child} />
           <div className="min-w-0">
-            <div className="text-[13px] font-bold text-foreground">{r.symbol}</div>
+            <div className={`${child ? 'text-[12px] font-semibold' : 'text-[13px] font-bold'} text-foreground`}>{r.symbol}</div>
             <div className="text-[11px] text-muted-foreground truncate max-w-[300px]">
-              {r.fund} · {r.issuer}
+              {r.fund} · {child ? `issued by ${r.issuer}` : r.issuer}
             </div>
           </div>
         </div>
@@ -622,7 +636,7 @@ function AssetRow({ r, rank, child = false }: { r: FundRow; rank: string; child?
 }
 
 /** One asset as a phone card. */
-function AssetCard({ r, rank, unitLabel }: { r: FundRow; rank: string; unitLabel: string }) {
+function AssetCard({ r, rank, unitLabel, child = false }: { r: FundRow; rank: string; unitLabel: string; child?: boolean }) {
   return (
     <li className="px-1 py-3.5">
       <div className="flex items-start gap-3">
@@ -634,7 +648,7 @@ function AssetCard({ r, rank, unitLabel }: { r: FundRow; rank: string; unitLabel
             <TypeTag type={r.type} />
           </div>
           <div className="text-[11px] text-muted-foreground truncate">
-            {r.fund} · {r.issuer}
+            {r.fund} · {child ? `issued by ${r.issuer}` : r.issuer}
           </div>
           {r.sharesSeries.length > 1 && (
             <div className="flex items-center gap-2 mt-1.5">
@@ -758,7 +772,7 @@ function FundTable({ rows: allRows, state, config }: { rows: FundRow[]; state: L
                     type="button"
                     onClick={() => toggle(g.platform)}
                     aria-expanded={isOpen}
-                    className="w-full flex items-center gap-3 px-1 py-3.5 text-left"
+                    className={`w-full flex items-center gap-3 px-1 py-3.5 text-left ${isOpen ? 'bg-accent/30' : ''}`}
                   >
                     <span className="text-[11px] tabular-nums text-muted-foreground w-5 shrink-0">{gi + 1}</span>
                     <PlatformAvatar name={g.platform} />
@@ -773,9 +787,9 @@ function FundTable({ rows: allRows, state, config }: { rows: FundRow[]; state: L
                     <ChevronRight className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                   </button>
                   {isOpen && (
-                    <ul className="divide-y divide-border/60 border-t border-border/60 bg-muted/[0.05] pl-4">
+                    <ul className="divide-y divide-border/60 bg-accent/20 ml-2 pl-3 border-l-2 border-border">
                       {g.rows.map((r, i) => (
-                        <AssetCard key={r.token} r={r} rank={String(i + 1)} unitLabel={config.unitLabel} />
+                        <AssetCard key={r.token} r={r} rank={`${gi + 1}.${i + 1}`} unitLabel={config.unitLabel} child />
                       ))}
                     </ul>
                   )}
@@ -809,7 +823,7 @@ function FundTable({ rows: allRows, state, config }: { rows: FundRow[]; state: L
                     <tr
                       key={g.platform}
                       onClick={() => toggle(g.platform)}
-                      className="border-b border-border/60 hover:bg-accent/40 transition-colors cursor-pointer"
+                      className={`hover:bg-accent/40 transition-colors cursor-pointer ${isOpen ? 'bg-accent/30' : 'border-b border-border/60'}`}
                     >
                       <td className="px-4 py-3 text-[11px] tabular-nums text-muted-foreground align-middle">{gi + 1}</td>
                       <td className="px-3 py-3 align-middle">
@@ -856,7 +870,7 @@ function FundTable({ rows: allRows, state, config }: { rows: FundRow[]; state: L
                       </td>
                       <td className="px-3 py-3" />
                     </tr>,
-                    ...(isOpen ? g.rows.map((r, i) => <AssetRow key={r.token} r={r} rank={`${gi + 1}.${i + 1}`} child />) : []),
+                    ...(isOpen ? g.rows.map((r, i) => <AssetRow key={r.token} r={r} rank={`${gi + 1}.${i + 1}`} child last={i === g.rows.length - 1} />) : []),
                   ];
                 })
               : rows.map((r, i) => <AssetRow key={r.token} r={r} rank={String(i + 1)} />)}
