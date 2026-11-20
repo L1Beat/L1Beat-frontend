@@ -239,7 +239,10 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
   const ready = state === 'ready' && allTotal > 0;
   const top = priced[0];
   const topShare = top?.value != null && totals.supply > 0 ? Math.round((top.value / totals.supply) * 100) : null;
-  const focusShare = focus && allTotal > 0 ? (totals.supply / allTotal) * 100 : null;
+  // The share is of what the chart shows: the category on show, or everything.
+  const shownTotal = useMemo(() => sum(inCategory.map((r) => r.value ?? 0)), [inCategory]);
+  const shownLabel = config.categories && category !== 'all' ? `${(CATEGORY_LABEL[category] ?? category).toLowerCase()} total` : 'total';
+  const focusShare = focus && shownTotal > 0 ? (totals.supply / shownTotal) * 100 : null;
   const focusName = focus === OTHERS ? `${focusMembers.length} smaller issuers` : focus;
   // The issuer split in words, as Lending lists each protocol with its amount.
   const split = useMemo(() => {
@@ -317,7 +320,7 @@ export function TokenAssetsPage({ config }: { config: AssetPageConfig }) {
                   <p className="mt-1.5 text-[15px] sm:text-[17px] leading-snug text-foreground/80 max-w-3xl">
                     {focusShare != null && (
                       <>
-                        That&apos;s <span className="num">{focusShare.toFixed(0)}%</span> of the <span className="num">{fmtUsd(allTotal)}</span> total,{' '}
+                        That&apos;s <span className="num">{focusShare.toFixed(0)}%</span> of the <span className="num">{fmtUsd(shownTotal)}</span> {shownLabel},{' '}
                       </>
                     )}
                     across <span className="num">{kpiRows.length}</span> {kpiRows.length === 1 ? noun[0] : noun[1]}.{' '}
