@@ -560,7 +560,7 @@ export function Stablecoins() {
             <IssuerCard
               slices={issuerSlices}
               coins={enriched}
-              total={totals.supply}
+              total={allSupply}
               selected={focus}
               onSelect={(name) => setFocus(focus === name ? null : name)}
             />
