@@ -26,7 +26,7 @@ export const PAGE_SEO = {
     title: 'Real-World Assets on Avalanche',
     description: 'Every tokenized real-world asset on the Avalanche C-Chain: funds like BlackRock BUIDL and Janus Henderson JAAA, company shares and gold, with on-chain prices, supply and holders.',
     url: '/rwa',
-    image: '/og/default.png',
+    image: '/og/rwa.png',
   },
   staking: {
     title: 'Avalanche Staking',
