@@ -216,6 +216,7 @@ const CARDS = [
   { file: 'metrics', path: '/metrics', title: 'Network metrics', sub: 'Transactions, TPS, fees and validators across the Avalanche L1s.', art: bars(['#22b8cf'], 3) },
   { file: 'compare', path: '/compare', title: 'Compare chains', sub: 'Up to four Avalanche L1s side by side, from 7 days to a year.', art: multiLine(['#3987e5', '#d95926', '#8b5cf6', '#d4a017'], 11) },
   { file: 'stablecoins', path: '/stablecoins', title: 'Stablecoins', sub: 'Supply, volume and holders of every stablecoin on the C-Chain.', art: lineChart('#e5e7eb', 5) },
+  { file: 'rwa', path: '/rwa', title: 'Real-world assets', sub: 'Tokenized funds, company shares and gold on the C-Chain, priced on-chain.', art: area(['#3987e5', '#1d4f8f', '#22a6c9', '#52525b'], 31) },
   { file: 'staking', path: '/staking', title: 'Staking', sub: 'AVAX staked on the Primary Network, validator by validator.', art: treemap() },
   { file: 'treasuries', path: '/treasuries', title: 'Treasuries & ETFs', sub: 'AVAX held by public companies and U.S. spot ETFs.', art: hbars() },
   { file: 'trading', path: '/trading', title: 'Trading', sub: 'Daily volume on Avalanche DEXes: LFJ, Pharaoh, Blackhole and more.', art: bars(['#d95926', '#e8508f', '#d4a017', '#6366f1'], 9) },
