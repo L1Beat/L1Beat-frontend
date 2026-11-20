@@ -86,6 +86,7 @@ const PAGES: Result[] = [
   { id: 'page-compare', type: 'page', title: 'Compare chains', subtitle: 'Up to four L1s side by side', to: '/compare' },
   { id: 'page-flows', type: 'page', title: 'Cross-chain flows', subtitle: 'ICM and Teleporter activity, on the Overview', to: '/?view=flows' },
   { id: 'page-stablecoins', type: 'page', title: 'Stablecoins', subtitle: 'Supply, holders, and 24h activity', to: '/stablecoins' },
+  { id: 'page-rwa', type: 'page', title: 'Real-world assets', subtitle: 'Tokenized funds like BUIDL and JAAA, Securitize shares and gold on the C-Chain', to: '/rwa' },
   { id: 'page-staking', type: 'page', title: 'Staking', subtitle: 'AVAX staked, validators, delegations, staking end dates', to: '/staking' },
   { id: 'page-lending', type: 'page', title: 'Lending', subtitle: 'Rates, usage and caps on Aave and BENQI', to: '/lending' },
   { id: 'page-trading', type: 'page', title: 'Trading', subtitle: 'DEX volume, swaps and top pools on the C-Chain', to: '/trading' },

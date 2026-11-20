@@ -18,9 +18,15 @@ export const PAGE_SEO = {
   },
   stablecoins: {
     title: 'Stablecoins on Avalanche',
-    description: 'Supply, volume and holders for every stablecoin on the Avalanche C-Chain: USDC, USDT, BUIDL, EURC and more.',
+    description: 'Supply, volume and holders for every stablecoin on the Avalanche C-Chain: USDC, USDT, EURC and more.',
     url: '/stablecoins',
     image: '/og/stablecoins.png',
+  },
+  rwa: {
+    title: 'Real-World Assets on Avalanche',
+    description: 'Every tokenized real-world asset on the Avalanche C-Chain: funds like BlackRock BUIDL and Janus Henderson JAAA, company shares and gold, with on-chain prices, supply and holders.',
+    url: '/rwa',
+    image: '/og/default.png',
   },
   staking: {
     title: 'Avalanche Staking',

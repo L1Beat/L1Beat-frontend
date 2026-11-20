@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import { PAGE_SEO } from '../utils/pageSeo';
 import { Delta, PairLogos, ProtocolLogo, SegmentedControl, Sparkline, StatStrip } from '../components/instrument';
@@ -54,6 +55,12 @@ const RANGES = [
   { value: '365', label: '1y' },
   { value: '3650', label: 'All' },
 ] as const;
+type Range = (typeof RANGES)[number]['value'];
+// Readable range values for the URL (?range=1y); 90d is the default and stays out of it.
+const RANGE_PARAM: Record<Range, string> = { '30': '30d', '90': '90d', '365': '1y', '3650': 'all' };
+const DEFAULT_RANGE: Range = '90';
+const rangeFromParam = (v: string | null): Range =>
+  (Object.keys(RANGE_PARAM) as Range[]).find((k) => RANGE_PARAM[k] === v?.toLowerCase()) ?? DEFAULT_RANGE;
 const WINDOWS = [
   { value: '1', label: '1d' },
   { value: '7', label: '7d' },
@@ -96,11 +103,22 @@ function useLoad<T>(load: () => Promise<T | null>, deps: unknown[]) {
 }
 
 export function Dex() {
-  const [range, setRange] = useState<'30' | '90' | '365' | '3650'>('90');
+  // The chart range and the DEX picked in the legend or the table live in the URL
+  // (?dex=pangolin-v3&range=1y), so a link opens on that view, like Lending's ?protocol=.
+  const [params, setParams] = useSearchParams();
+  const setParam = (key: string, value: string | null) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true, preventScrollReset: true },
+    );
+  const range = rangeFromParam(params.get('range'));
+  const setRange = (r: Range) => setParam('range', r === DEFAULT_RANGE ? null : RANGE_PARAM[r]);
   const [win, setWin] = useState<'1' | '7' | '30'>('30');
-  // A DEX picked in the legend or the table; its part of every bar is highlighted.
-  const [focus, setFocus] = useState<string | null>(null);
-  const toggleFocus = (id: string) => setFocus((f) => (f === id ? null : id));
   const series = useLoad(() => getDexTimeseries(Number(range)), [range]);
   const summary = useLoad(() => getDexSummary(Number(win)), [win]);
   // The headline describes the chart's range.
@@ -112,6 +130,10 @@ export function Dex() {
   const trend = useLoad(() => getDexTimeseries(30), []);
 
   const m = month.data;
+  // Only a DEX we know; an unknown ?dex= falls back to showing every venue.
+  const dexParam = params.get('dex');
+  const focus = dexParam && (STACK.includes(dexParam) || m?.dexes.some((d) => d.id === dexParam)) ? dexParam : null;
+  const toggleFocus = (id: string) => setParam('dex', focus === id ? null : id);
   // From the loaded data, so the label never runs ahead of the numbers while a new range loads.
   // Reads after "traded $X": "since June 2023", "in the last year", "in the last 90 days".
   const rangeLabel = !m

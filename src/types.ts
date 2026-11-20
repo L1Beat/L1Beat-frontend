@@ -549,6 +549,18 @@ export interface Stablecoin {
   // total would count the same dollars twice, so the net total excludes it.
   // The exclusion list is curated backend-side; never hardcode coins here.
   doublecounted?: boolean;
+  // 'stablecoin', 'tokenized_fund', 'equity' or 'commodity', set by the backend. Absent on
+  // older responses.
+  category?: string;
+  // Tokenized-funds feed only. USD per whole share and the row's USD value,
+  // null when no fresh on-chain price exists. price_source is 'peg' for $1
+  // funds, 'erc4626' or 'erc7540' for a vault's share price read on-chain;
+  // price_at is the read's time, or the vault's NAV time for erc7540 (null
+  // for peg prices).
+  price_usd?: number | null;
+  value_usd?: number | null;
+  price_source?: string | null;
+  price_at?: string | null;
 }
 
 export interface StablecoinsResponse {

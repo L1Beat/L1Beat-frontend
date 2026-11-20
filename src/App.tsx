@@ -34,6 +34,7 @@ const BrandGuidelines = lazy(() => import('./pages/BrandGuidelines').then(m => (
 const Services = lazy(() => import('./pages/Services').then(m => ({ default: m.Services })));
 const APIPlayground = lazy(() => import('./pages/APIPlayground').then(m => ({ default: m.APIPlayground })));
 const Stablecoins = lazy(() => import('./pages/Stablecoins').then(m => ({ default: m.Stablecoins })));
+const Rwa = lazy(() => import('./pages/Rwa').then(m => ({ default: m.Rwa })));
 const Burn = lazy(() => import('./pages/Burn').then(m => ({ default: m.Burn })));
 const Staking = lazy(() => import('./pages/Staking').then(m => ({ default: m.Staking })));
 const Treasuries = lazy(() => import('./pages/Treasuries').then(m => ({ default: m.Treasuries })));
@@ -129,6 +130,7 @@ function App({ pages = lazyPrerendered }: { pages?: PrerenderedPages }) {
         {/* The Flows page folded into the Overview hero; keep old links alive. */}
         <Route path="/flows" element={<Navigate to="/interchain" replace />} />
         <Route path="/stablecoins" element={<Stablecoins />} />
+        <Route path="/rwa" element={<Rwa />} />
         <Route path="/burn" element={<Burn />} />
         <Route path="/staking" element={<Staking />} />
         <Route path="/treasuries" element={<Treasuries />} />
