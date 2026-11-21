@@ -1,4 +1,5 @@
 import { Chain } from '../types';
+import { safeHref } from './safeUrl';
 
 export interface WalletError extends Error {
   code: number;
@@ -122,9 +123,10 @@ export async function addNetworkToWallet(chain: Chain): Promise<boolean> {
   }
 
   // Prefer real RPC URLs from API; fall back to subnetId-based URL if present.
+  // Registry URLs are only passed on when they are http(s); anything else falls through.
   const rpcUrl =
-    chain.rpcUrl ||
-    chain.rpcUrls?.[0] ||
+    safeHref(chain.rpcUrl) ||
+    safeHref(chain.rpcUrls?.[0]) ||
     (chain.subnetId ? generateRpcUrl(chain.subnetId) : undefined) ||
     generateRpcUrl(chain.chainId);
 
@@ -142,8 +144,8 @@ export async function addNetworkToWallet(chain: Chain): Promise<boolean> {
           decimals: chain.networkToken.decimals || 18
         },
         rpcUrls: [rpcUrl],
-        blockExplorerUrls: chain.explorerUrl ? [chain.explorerUrl] : undefined,
-        iconUrls: chain.chainLogoUri ? [chain.chainLogoUri] : undefined
+        blockExplorerUrls: safeHref(chain.explorerUrl) ? [safeHref(chain.explorerUrl)] : undefined,
+        iconUrls: safeHref(chain.chainLogoUri) ? [safeHref(chain.chainLogoUri)] : undefined
       }]
     });
     
