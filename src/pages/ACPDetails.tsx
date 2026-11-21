@@ -29,6 +29,7 @@ import { acpService } from '../services/acpService';
 import { ComplexityDots } from '../components/acp/AcpStatus';
 import { AcpStatusChip } from '../components/acp/AcpStatusChip';
 import type { Author, EnhancedACP } from '../types';
+import { safeHref } from '../utils/safeUrl';
 
 // Lazy-load mermaid (and its diagram renderers + cytoscape) only when an ACP
 // actually contains a diagram. Keeps ~1MB+ out of the main bundle for every
@@ -321,7 +322,8 @@ export default function ACPDetails() {
                 mermaid.initialize({
                   startOnLoad: false,
                   theme: 'base',
-                  securityLevel: 'loose',
+                  // strict: mermaid sanitizes labels and drops click handlers and scripts.
+                  securityLevel: 'strict',
                   fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
                   themeVariables,
                   flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
@@ -331,12 +333,17 @@ export default function ACPDetails() {
                 element.innerHTML = svg;
               } catch (renderError) {
                 console.error('Mermaid render failed:', renderError);
-                element.innerHTML = `
-                  <div class="border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded p-4">
-                    <p class="font-medium mb-2">Failed to render diagram</p>
-                    <pre class="text-xs bg-card p-2 rounded overflow-auto border border-border">${cleanContent}</pre>
-                  </div>
-                `;
+                // Built with DOM nodes so the diagram source shows as text, never as HTML.
+                const box = document.createElement('div');
+                box.className = 'border-2 border-dashed border-red-500/20 bg-red-500/10 text-red-600 rounded p-4';
+                const title = document.createElement('p');
+                title.className = 'font-medium mb-2';
+                title.textContent = 'Failed to render diagram';
+                const source = document.createElement('pre');
+                source.className = 'text-xs bg-card p-2 rounded overflow-auto border border-border';
+                source.textContent = cleanContent;
+                box.append(title, source);
+                element.replaceChildren(box);
               }
             }
           } catch (error) {
@@ -520,7 +527,7 @@ export default function ACPDetails() {
                     <React.Fragment key={index}>
                       {index > 0 && ', '}
                       <a
-                        href={author.url || `https://github.com/${author.github}`}
+                        href={safeHref(author.url) ?? (author.github ? `https://github.com/${encodeURIComponent(author.github)}` : undefined)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-foreground hover:underline underline-offset-4"
@@ -551,9 +558,9 @@ export default function ACPDetails() {
                   <Github className="w-3.5 h-3.5" />
                   GitHub
                 </a>
-                {acp.discussion && (
+                {safeHref(acp.discussion) && (
                   <a
-                    href={acp.discussion}
+                    href={safeHref(acp.discussion)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 h-7 px-3 border border-border rounded text-[12px] font-medium text-foreground hover:bg-accent transition-colors"
@@ -855,9 +862,9 @@ function MetaCard({ acp, rows, githubUrl }: { acp: EnhancedACP; rows: [string, s
             <ReactMarkdown components={{ p: ({ children }) => <>{children}</>, a: ({ href, children }) => <MdLink href={href}>{children}</MdLink> }}>{v}</ReactMarkdown>
           </Row>
         ))}
-        {acp.discussion && (
+        {safeHref(acp.discussion) && (
           <Row label="Discussion">
-            <a href={acp.discussion} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground">
+            <a href={safeHref(acp.discussion)} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground">
               GitHub discussion
             </a>
           </Row>

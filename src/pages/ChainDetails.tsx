@@ -43,6 +43,7 @@ import { formatUnits, parseBaseUnits, unitsToNumber } from '../utils/formatUnits
 import { chartPointerProps } from '../utils/chartPointer';
 import { isStale, missingActivity } from '../utils/activityCoverage';
 import { uptimeFill, uptimeMinimum } from '../utils/uptime';
+import { safeHref } from '../utils/safeUrl';
 
 // Sticky section-nav scroll offset: navbar (56) + section nav (48) + gap (12).
 const NAV_SCROLL_OFFSET = 56 + 48 + 12;
@@ -743,9 +744,9 @@ export function ChainDetails() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {chain.website && (
+              {safeHref(chain.website) && (
                 <a
-                  href={chain.website}
+                  href={safeHref(chain.website)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
@@ -754,9 +755,9 @@ export function ChainDetails() {
                   <Globe className="w-3.5 h-3.5 text-muted-foreground" />
                 </a>
               )}
-              {chain.explorerUrl && (
+              {safeHref(chain.explorerUrl) && (
                 <a
-                  href={chain.explorerUrl}
+                  href={safeHref(chain.explorerUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
@@ -765,12 +766,12 @@ export function ChainDetails() {
                   <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                 </a>
               )}
-              {chain.socials?.slice(0, 3).map((social, index) => {
+              {chain.socials?.filter((social) => safeHref(social.url)).slice(0, 3).map((social, index) => {
                 const Icon = getSocialIcon(social.name);
                 return (
                   <a
                     key={index}
-                    href={social.url}
+                    href={safeHref(social.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center w-7 h-7 rounded border border-border bg-background hover:bg-accent transition-colors"
